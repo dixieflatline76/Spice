@@ -1,0 +1,24 @@
+# Go build output
+bin/
+*.exe
+*.dll
+
+# Go modules
+vendor/
+
+# Editor files
+.vscode/
+
+# OS-generated files
+Thumbs.db
+
+# Temporary files
+*.tmp
+temp/
+
+# Logs (optional)
+logs/
+*.log
+
+# Sensitive configuration (optional - handle with care!)
+config.json 

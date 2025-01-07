@@ -1,0 +1,49 @@
+package main
+
+import (
+	"fmt"
+	"log"
+	"os"
+
+	"github.com/dixieflatline76/wallhavener/config"
+	"github.com/dixieflatline76/wallhavener/service"
+	"golang.org/x/sys/windows/svc"
+)
+
+const serviceName = "WallHavener"
+
+func main() {
+	config.LoadConfig() // Load configuration at startup
+
+	log.Printf("API Key: %v", config.Cfg.APIKey)
+
+	// isIntSess, err := svc.IsAnInteractiveSession()
+	isSrvc, err := svc.IsWindowsService()
+	if err != nil {
+		log.Fatalf("failed to determine if we are running in an interactive session: %v", err)
+	}
+	// if !isIntSess {
+	if isSrvc {
+		service.RunService(serviceName, false)
+		return
+	}
+
+	// Handle command-line arguments for install/remove
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "install":
+			err = service.InstallService(serviceName, "WallHavener")
+		case "remove":
+			err = service.RemoveService(serviceName)
+		default:
+			err = fmt.Errorf("invalid command: %s", os.Args[1])
+		}
+		if err != nil {
+			log.Fatalf("failed to %s %s: %v", os.Args[1], serviceName, err)
+		}
+		return
+	}
+
+	// If no command-line arguments, start the service in debug mode
+	service.RunService(serviceName, true)
+}
