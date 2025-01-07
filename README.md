@@ -1,18 +1,31 @@
-# Spice
-Spice is a desktop background manager for Windows that pays hommage to **[Variety](https://github.com/varietywalls/variety)**. Spice is written completely in Go and utilize Fyne for the limited UI it has such as the system tray icon and menu.
+# Spice - A Windows Desktop Background Manager
 
-Spice is still in its infancy and has a lot of work ahead to even get close to the functionality and polish of Variety. It currently supports only Wallhaven but new wallpaper services will be added in the future.
+Spice is a work-in-progress desktop background manager for Windows, inspired by Variety. Built entirely in Go and using Fyne for its minimalist UI (system tray icon and menu), Spice aims to provide a seamless and customizable wallpaper experience.
 
-Key features:
-* wallhaven.cc support - API key support
-* Multiple image queries support - add one query for scenery and another for people
-* Windows system tray image controls - interactively go to the next image, previous image, or a random image
-* Image cache daily refresh - never get bored with full image cache refreshing every midnight 
-* Ondemand image download - Spice downloads the next page of image when you click next on the final image in the cache
+## Current Features
 
-Spice is tested on Windows 11 only at this time while it is still under heavy developement
+* **Wallhaven.cc support:**  Fetch wallpapers from Wallhaven, with support for API keys.
+* **Multiple image queries:** Define multiple queries to diversify your wallpaper collection (e.g., one for landscapes, another for abstract art).
+* **System tray controls:** Easily navigate through your wallpaper cache with next, previous, and random image options.
+* **Daily image cache refresh:** Keep your wallpapers fresh with automatic cache updates every midnight.
+* **On-demand image download:**  Spice downloads the next batch of images only when needed, optimizing performance.
 
-Todos:
-* Fix Windows Service support
-* Add UI to remove the need to edit config.json
-* Refactor to support other image/wallpaper services
+## Future Plans
+
+Spice is under active development! Here's what's on the roadmap:
+
+* **Expanded wallpaper sources:** Support for more wallpaper services beyond Wallhaven.
+* **User interface improvements:**  A dedicated UI for easier configuration, eliminating the need to manually edit config.json.
+* **Windows Service support:** Improved background service integration.
+
+## Current Status
+
+Spice is currently in its early stages and primarily tested on Windows 11. 
+
+## Contributing
+
+Contributions are welcome! Feel free to open issues, submit pull requests, or share your suggestions.
+
+## License
+
+[Specify your project's license here, e.g., MIT License] 
