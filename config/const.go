@@ -1,3 +1,4 @@
 package config
 
-const ServiceName = "Spice" // Name of the Windows service
+// ServiceName is the name of the service.
+const ServiceName = "Spice"
