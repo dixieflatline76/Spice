@@ -20,7 +20,7 @@ jobs:
           go-version: 'stable'
 
       - name: Install Fyne dependencies
-        run: choco install fyne -y
+        run: choco install fyne-io -y 
 
       - name: Install make
         run: choco install make -y
