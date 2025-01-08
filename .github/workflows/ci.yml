@@ -22,7 +22,7 @@ jobs:
       - name: Install Fyne dependencies
         run: | 
           go install github.com/fyne-io/fyne/v2/cmd/fyne@latest
-          $env:Path = "$env:Path;C:\Users\runneradmin\go\bin"
+          echo "C:\Users\runneradmin\go\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           fyne install
 
       - name: Install make
