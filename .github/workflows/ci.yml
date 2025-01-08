@@ -20,9 +20,7 @@ jobs:
           go-version: 'stable'
 
       - name: Install Fyne dependencies
-        run: | 
-          go install github.com/fyne-io/fyne/v2/cmd/fyne@latest
-          Invoke-Expression "C:\Users\runneradmin\go\bin\fyne.exe install"
+        run: go get fyne.io/fyne/v2/...
 
       - name: Install make
         run: choco install make -y
