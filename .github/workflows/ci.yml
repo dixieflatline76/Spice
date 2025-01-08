@@ -22,7 +22,7 @@ jobs:
       - name: Install Fyne dependencies
         run: | 
           go install github.com/fyne-io/fyne/v2/cmd/fyne@latest
-          C:\Users\runneradmin\go\bin\fyne.exe install
+          Invoke-Expression "C:\Users\runneradmin\go\bin\fyne.exe install"
 
       - name: Install make
         run: choco install make -y
