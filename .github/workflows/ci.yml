@@ -23,11 +23,16 @@ jobs:
       - name: Install GCC
         run: choco install mingw -y
 
+      - name: Install make
+        run: choco install make -y
+
       - name: Install Fyne dependencies
         run: go get fyne.io/fyne/v2/...
 
-      - name: Install make
-        run: choco install make -y
+      - name: Install linters
+        run: |
+          go install golang.org/x/lint/golint@latest
+          go install honnef.co/go/tools/cmd/staticcheck@latest
 
       - name: Run linters
         run: |
@@ -52,11 +57,11 @@ jobs:
       - name: Install GCC
         run: choco install mingw -y
 
-      - name: Install Fyne dependencies
-        run: go get fyne.io/fyne/v2/...
-
       - name: Install make
         run: choco install make -y
+
+      - name: Install Fyne dependencies
+        run: go get fyne.io/fyne/v2/...
 
       - name: Build Application
         run: make build-gui
