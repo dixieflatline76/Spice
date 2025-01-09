@@ -9,7 +9,7 @@ on:
     types: [created]
 
 jobs:
-  setup-environment:
+  test-and-lint:
     runs-on: windows-latest
     steps:
       - name: Checkout code
@@ -29,26 +29,6 @@ jobs:
       - name: Install make
         run: choco install make -y
 
-      - name: Upload environment artifacts
-        uses: actions/upload-artifact@v3
-        with:
-          name: build-env
-          path: |
-            C:\Users\runneradmin\go
-            C:\ProgramData\chocolatey
-    
-  test-and-lint:
-    runs-on: windows-latest
-    needs: setup-environment
-    steps:
-      - uses: actions/download-artifact@v3
-        with:
-          name: build-env
-          path: C:\
-
-      - name: Add Go to PATH
-        run: echo "C:\go\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-
       - name: Run linters
         run: |
           golint ./...
@@ -59,15 +39,23 @@ jobs:
 
   build-and-release:
     runs-on: windows-latest
-    needs: test-and-lint
     steps:
-      - uses: actions/download-artifact@v3
-        with:
-          name: build-env
-          path: C:\
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-      - name: Add Go to PATH
-        run: echo "C:\go\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: 'stable'
+
+      - name: Install GCC
+        run: choco install mingw -y
+
+      - name: Install Fyne dependencies
+        run: go get fyne.io/fyne/v2/...
+
+      - name: Install make
+        run: choco install make -y
 
       - name: Build Application
         run: make build-gui
