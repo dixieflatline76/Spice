@@ -9,55 +9,87 @@ on:
     types: [created]
 
 jobs:
-  test-and-lint:  # New job for tests and lint
+  setup-environment:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up environment
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          install: >-
+            base-devel
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-make
+        env:
+          GO_VERSION: 'stable'
 
       - name: Set up Go
         uses: actions/setup-go@v3
         with:
-          go-version: 'stable'
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Add MSYS2 to PATH
+        run: echo "C:\msys64\mingw64\bin" >> $GITHUB_PATH
 
       - name: Install linters
         run: |
           go install golang.org/x/lint/golint@latest
           go install honnef.co/go/tools/cmd/staticcheck@latest
 
-      - name: Install GCC
-        run: choco install mingw -y
-
-      - name: Install Fyne dependencies
+      - name: Install Fyne
         run: go get fyne.io/fyne/v2/...
 
-      - name: Install make
-        run: choco install make -y
-
-      - name: Run tests and lint
-        run: make test lint  # Run tests and lint
-
-  build-and-release:  # Renamed job for clarity
-    runs-on: windows-latest
-    needs: test-and-lint  # Make this job depend on the test-and-lint job
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Set up Go
-        uses: actions/setup-go@v3
+      - name: Upload build environment
+        uses: actions/upload-artifact@v3
         with:
-          go-version: 'stable'
+          name: build-env
+          path: C:\msys64
+    
+  test-and-lint:
+    needs: setup-environment
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-      - name: Install Fyne dependencies
-        run: | 
-          go install github.com/fyne-io/fyne/v2/cmd/fyne@latest
-          $env:Path = "$env:Path;C:\Users\runneradmin\go\bin"
-          fyne install
+      - name: Download build environment
+        uses: actions/download-artifact@v3
+        with:
+          name: build-env
+          path: C:\msys64
 
-      - name: Install make
-        run: choco install make -y
+      - name: Add MSYS2 to PATH
+        run: echo "C:\msys64\mingw64\bin" >> $GITHUB_PATH
 
-      - name: Build
-        run: make build  # Just build
+      - name: Run linters
+        run: |
+          golint ./...
+          staticcheck ./... 
+
+      - name: Run tests
+        run: go test ./...
+
+  build-and-release:
+    needs: test-and-lint
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Download build environment
+        uses: actions/download-artifact@v3
+        with:
+          name: build-env
+          path: C:\msys64
+
+      - name: Add MSYS2 to PATH
+        run: echo "C:\msys64\mingw64\bin" >> $GITHUB_PATH
+
+      - name: Build Application
+        run: make build-gui
 
       - name: Create Release artifacts
         if: startsWith(github.ref, 'refs/tags/')
