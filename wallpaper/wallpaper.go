@@ -16,33 +16,36 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/dixieflatline76/wallhavener/config"
+	"github.com/dixieflatline76/Spice/config"
+
 	"golang.org/x/sys/windows"
 )
 
 var (
 	ticker          *time.Ticker
-	currentImage    imgSrvcImage
+	currentImage    ImgSrvcImage
 	imageMX         sync.Mutex              // Mutex to protect image data
 	downloadCond    *sync.Cond              // Condition variable to signal download completion
 	imageIndex      int                     // Index of the current image
 	downloadedDir   string                  // Directory to store downloaded images
-	downloadHistory map[string]imgSrvcImage // Map to store downloaded images (URL -> Image)
+	downloadHistory map[string]ImgSrvcImage // Map to store downloaded images (URL -> Image)
 )
 
 func init() {
 	downloadCond = sync.NewCond(&imageMX)
-	downloadHistory = make(map[string]imgSrvcImage)
+	downloadHistory = make(map[string]ImgSrvcImage)
 }
 
-type imgSrvcImage struct {
+// ImgSrvcImage represents an image from the image service.
+type ImgSrvcImage struct {
 	Path     string `json:"path"`
-	Id       string `json:"id"`
+	ID       string `json:"id"`
 	ShortURL string `json:"short_url"`
 }
 
+// imgSrvcResponse represents a response from the image service.
 type imgSrvcResponse struct {
-	Data []imgSrvcImage `json:"data"`
+	Data []ImgSrvcImage `json:"data"`
 	Meta struct {
 		LastPage int `json:"last_page"`
 	} `json:"meta"`
@@ -50,10 +53,10 @@ type imgSrvcResponse struct {
 
 // Windows API constants (defined manually)
 const (
-	SPI_SETDESKWALLPAPER  = 0x0014
-	SPIF_UPDATEINIFILE    = 0x01
-	SPIF_SENDCHANGE       = 0x02
-	SPIF_SENDWININICHANGE = 0x02
+	SPISetDeskWallpaper  = 0x0014
+	SPIFUpdateIniFile    = 0x01
+	SPIFSendChange       = 0x02
+	SPIFSendWinIniChange = 0x02
 )
 
 // setWallpaper sets the wallpaper to the given image file path.
@@ -66,10 +69,10 @@ func setWallpaper(imagePath string) error {
 	user32 := windows.NewLazySystemDLL("user32.dll")
 	systemParametersInfo := user32.NewProc("SystemParametersInfoW")
 	ret, _, err := systemParametersInfo.Call(
-		uintptr(SPI_SETDESKWALLPAPER),
+		uintptr(SPISetDeskWallpaper),
 		uintptr(0),
 		uintptr(unsafe.Pointer(imagePathUTF16)),
-		uintptr(SPIF_UPDATEINIFILE|SPIF_SENDCHANGE),
+		uintptr(SPIFUpdateIniFile|SPIFSendChange),
 	)
 	if ret == 0 {
 		return err
@@ -102,16 +105,17 @@ func RotateWallpapers() {
 	// Download all images from the configured URLs
 	refreshImages()
 
-	ticker = time.NewTicker(config.Cfg.Frequency)
-
 	time.Sleep(5 * time.Second) // Wait a bit for the wallpapers to load
 	SetNextWallpaper()          // Set the initial wallpaper
+
+	ticker = time.NewTicker(config.Cfg.Frequency)
 
 	for range ticker.C {
 		SetNextWallpaper()
 	}
 }
 
+// RefreshImages downloads all images from the configured URLs.
 func refreshImages() {
 	// Clear the downloaded images directory
 	imageMX.Lock()
@@ -131,6 +135,7 @@ func refreshImages() {
 	imageIndex = -1 // Reset the image index
 }
 
+// clear clears the given map.
 func downloadImagesForURL(imgSrvcURL string) {
 	// Construct the API URL
 	u, err := url.Parse(imgSrvcURL)
@@ -160,6 +165,7 @@ func downloadImagesForURL(imgSrvcURL string) {
 		}
 		defer resp.Body.Close()
 
+		// Read the response body
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
 			log.Printf("Failed to read image service response: %v", err)
@@ -195,6 +201,7 @@ func downloadImagesForURL(imgSrvcURL string) {
 	}
 }
 
+// SetNextWallpaper sets the next wallpaper in the list.
 func SetNextWallpaper() {
 	imageMX.Lock()
 	defer imageMX.Unlock()
@@ -203,6 +210,7 @@ func SetNextWallpaper() {
 	setWallpaperAt(imageIndex)
 }
 
+// SetPreviousWallpaper sets the previous wallpaper in the list.
 func SetPreviousWallpaper() {
 	imageMX.Lock()
 	defer imageMX.Unlock()
@@ -211,6 +219,7 @@ func SetPreviousWallpaper() {
 	setWallpaperAt(imageIndex)
 }
 
+// SetRandomWallpaper sets a random wallpaper from the list.
 func SetRandomWallpaper() {
 	imageMX.Lock()
 	defer imageMX.Unlock()
@@ -231,6 +240,7 @@ func SetRandomWallpaper() {
 	setWallpaperAt(randomIndex)
 }
 
+// setWallpaperAt sets the wallpaper at the specified index.
 func setWallpaperAt(index int) {
 	// Get a list of all downloaded image files
 	imageFiles, err := os.ReadDir(downloadedDir)
@@ -273,7 +283,8 @@ func StopRotation() {
 	}
 }
 
-func downloadImage(img imgSrvcImage) (string, error) {
+// clear clears the given map.
+func downloadImage(img ImgSrvcImage) (string, error) {
 	resp, err := http.Get(img.Path)
 	if err != nil {
 		return "", fmt.Errorf("failed to download image: %v", err)
@@ -282,7 +293,7 @@ func downloadImage(img imgSrvcImage) (string, error) {
 
 	// Create a file name using the timestamp and the image ID
 	timestamp := time.Now().UnixNano()
-	tempFile := filepath.Join(downloadedDir, fmt.Sprintf("%d_%s.jpg", timestamp, img.Id))
+	tempFile := filepath.Join(downloadedDir, fmt.Sprintf("%d_%s.jpg", timestamp, img.ID))
 	outFile, err := os.Create(tempFile)
 	if err != nil {
 		return "", fmt.Errorf("failed to create temporary file: %v", err)
@@ -302,6 +313,7 @@ func downloadImage(img imgSrvcImage) (string, error) {
 	return tempFile, nil
 }
 
+// getTempDir returns the system's temporary directory.
 func getTempDir() string {
 	tempDir := os.Getenv("TEMP")
 	if tempDir == "" {
@@ -313,6 +325,7 @@ func getTempDir() string {
 	return tempDir
 }
 
+// clearDownloadedImagesDir clears the downloaded images directory.
 func clearDownloadedImagesDir() error {
 	files, err := os.ReadDir(downloadedDir)
 	if err != nil {
@@ -329,7 +342,8 @@ func clearDownloadedImagesDir() error {
 	return nil
 }
 
-func GetCurrentImage() imgSrvcImage {
+// GetCurrentImage returns the current image.
+func GetCurrentImage() ImgSrvcImage {
 	imageMX.Lock()
 	defer imageMX.Unlock()
 

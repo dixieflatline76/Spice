@@ -1,0 +1,108 @@
+name: CI
+
+on:
+  push:
+    branches-ignore: [ main ] 
+  pull_request:
+    branches: [ main ]
+  release:
+    types: [created]
+
+jobs:
+  test-and-lint:
+    runs-on: windows-latest
+    if: github.event_name == 'push'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Cache Go modules
+        uses: actions/cache@v3
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: 'stable'
+
+      - name: Cache Chocolatey packages
+        uses: actions/cache@v3
+        with:
+          path: ~/AppData/Local/Chocolatey/lib
+          key: ${{ runner.os }}-chocolatey-${{ hashFiles('**/tools.txt') }}  # Assuming you have a tools.txt or similar
+          restore-keys: |
+            ${{ runner.os }}-chocolatey-
+
+      - name: Install GCC (if not cached)
+        run: choco install mingw -y
+
+      - name: Install make (if not cached)
+        run: choco install make -y
+
+      - name: Install Fyne dependencies
+        run: go get fyne.io/fyne/v2/...
+
+      - name: Install linters
+        run: |
+          go install golang.org/x/lint/golint@latest
+          go install honnef.co/go/tools/cmd/staticcheck@latest
+
+      - name: Run linters
+        run: |
+          golint ./...
+          staticcheck ./... 
+
+      - name: Run tests
+        run: go test ./...
+
+  build-and-release:
+    runs-on: windows-latest
+    if: github.event_name == 'pull_request'
+    needs: test-and-lint
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Cache Go modules
+        uses: actions/cache@v3
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: 'stable'
+
+      - name: Cache Chocolatey packages
+        uses: actions/cache@v3
+        with:
+          path: ~/AppData/Local/Chocolatey/lib
+          key: ${{ runner.os }}-chocolatey-${{ hashFiles('**/tools.txt') }} # Assuming you have a tools.txt or similar
+          restore-keys: |
+            ${{ runner.os }}-chocolatey-
+
+      - name: Install GCC (if not cached)
+        run: choco install mingw -y
+
+      - name: Install make (if not cached)
+        run: choco install make -y
+
+      - name: Install Fyne dependencies
+        run: go get fyne.io/fyne/v2/...
+
+      - name: Build Application
+        run: make build-gui
+
+      - name: Create Release artifacts
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: actions/upload-artifact@v3
+        with:
+          name: spice-release-${{ github.ref_name }}
+          path: bin/

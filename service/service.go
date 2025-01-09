@@ -6,7 +6,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/dixieflatline76/wallhavener/wallpaper"
+	"github.com/dixieflatline76/Spice/wallpaper"
+
 	"golang.org/x/sys/windows/svc"
 	"golang.org/x/sys/windows/svc/debug"
 	"golang.org/x/sys/windows/svc/eventlog"
@@ -17,7 +18,9 @@ var elog debug.Log
 
 type myservice struct{}
 
+// Execute is the entry point for the service
 func (m *myservice) Execute(args []string, r <-chan svc.ChangeRequest, changes chan<- svc.Status) (ssec bool, errno uint32) {
+
 	const cmdsAccepted = svc.AcceptStop | svc.AcceptShutdown
 	changes <- svc.Status{State: svc.StartPending}
 	changes <- svc.Status{State: svc.Running, Accepts: cmdsAccepted}
@@ -25,28 +28,26 @@ func (m *myservice) Execute(args []string, r <-chan svc.ChangeRequest, changes c
 	// Start wallpaper rotation
 	go wallpaper.RotateWallpapers()
 
-loop:
-	for {
-		select {
-		case c := <-r:
-			switch c.Cmd {
-			case svc.Interrogate:
-				changes <- c.CurrentStatus
-				time.Sleep(100 * time.Millisecond)
-				changes <- c.CurrentStatus
-			case svc.Stop, svc.Shutdown:
-				// Stop the wallpaper rotation ticker
-				wallpaper.StopRotation()
-				break loop
-			default:
-				elog.Error(1, fmt.Sprintf("unexpected control request #%d", c))
-			}
+	for c := range r { // Use for range here
+		switch c.Cmd {
+		case svc.Interrogate:
+			changes <- c.CurrentStatus
+			time.Sleep(100 * time.Millisecond)
+			changes <- c.CurrentStatus
+		case svc.Stop, svc.Shutdown:
+			// Stop the wallpaper rotation ticker
+			wallpaper.StopRotation()
+			changes <- svc.Status{State: svc.StopPending} // Send stop pending status
+			return                                        // Exit the Execute function
+		default:
+			elog.Error(1, fmt.Sprintf("unexpected control request #%d", c))
 		}
 	}
 	changes <- svc.Status{State: svc.StopPending}
 	return
 }
 
+// RunService runs the service
 func RunService(name string, isDebug bool) {
 	var err error
 	if isDebug {
@@ -72,6 +73,7 @@ func RunService(name string, isDebug bool) {
 	elog.Info(1, fmt.Sprintf("%s service stopped", name))
 }
 
+// InstallService installs the service
 func InstallService(name, displayName string) error {
 	exepath, err := exePath()
 	if err != nil {
@@ -100,6 +102,7 @@ func InstallService(name, displayName string) error {
 	return nil
 }
 
+// RemoveService removes the service
 func RemoveService(name string) error {
 	m, err := mgr.Connect()
 	if err != nil {
@@ -122,6 +125,8 @@ func RemoveService(name string) error {
 	return nil
 }
 
+// ControlService starts the service
+// ControlService starts or stops the service
 func ControlService(name string, c svc.Cmd, to svc.State) error {
 	m, err := mgr.Connect()
 	if err != nil {
@@ -133,24 +138,38 @@ func ControlService(name string, c svc.Cmd, to svc.State) error {
 		return fmt.Errorf("could not access service: %v", err)
 	}
 	defer s.Close()
-	status, err := s.Control(c)
+	_, err = s.Control(c)
 	if err != nil {
 		return fmt.Errorf("could not send control to service: %v", err)
 	}
-	timeout := time.Now().Add(10 * time.Second)
-	for status.State != to {
-		if timeout.Before(time.Now()) {
-			return fmt.Errorf("timeout waiting for service to go to state=%d", to)
+
+	// Use a channel to wait for the service to reach the desired state
+	statusChan := make(chan svc.Status)
+	go func() {
+		for {
+			time.Sleep(300 * time.Millisecond)
+			status, err := s.Query()
+			if err != nil {
+				elog.Error(1, fmt.Sprintf("could not retrieve service status: %v", err))
+				return // Exit the goroutine if there's an error
+			}
+			if status.State == to {
+				statusChan <- status
+				return // Exit the goroutine when the state is reached
+			}
 		}
-		time.Sleep(300 * time.Millisecond)
-		status, err = s.Query()
-		if err != nil {
-			return fmt.Errorf("could not retrieve service status: %v", err)
-		}
+	}()
+
+	// Wait for the status update or a timeout
+	select {
+	case <-statusChan:
+		return nil // Service reached the desired state
+	case <-time.After(10 * time.Second):
+		return fmt.Errorf("timeout waiting for service to go to state=%d", to)
 	}
-	return nil
 }
 
+// exePath returns the path to the executable
 func exePath() (string, error) {
 	prog := os.Args[0]
 	p, err := filepath.Abs(prog)

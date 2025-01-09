@@ -19,6 +19,7 @@ type Config struct {
 	WallpaperStyle int32         `json:"wallpaper_style"`
 }
 
+// ImageURL struct to hold the URL of an image and whether it is active
 type ImageURL struct {
 	URL    string `json:"url"`
 	Active bool   `json:"active"`
