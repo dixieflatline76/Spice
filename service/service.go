@@ -44,6 +44,7 @@ func (m *myservice) Execute(args []string, r <-chan svc.ChangeRequest, changes c
 		}
 	}
 	changes <- svc.Status{State: svc.StopPending}
+
 	return
 }
 
