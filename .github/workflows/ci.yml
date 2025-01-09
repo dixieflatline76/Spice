@@ -19,6 +19,14 @@ jobs:
         with:
           go-version: 'stable'
 
+      - name: Install linters
+        run: |
+          go install golang.org/x/lint/golint@latest
+          go install honnef.co/go/tools/cmd/staticcheck@latest
+
+      - name: Install GCC
+        run: choco install mingw -y
+
       - name: Install Fyne dependencies
         run: go get fyne.io/fyne/v2/...
 
