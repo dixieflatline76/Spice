@@ -24,9 +24,7 @@ jobs:
         run: choco install mingw -y
 
       - name: Install Fyne dependencies
-        run: |
-          go install github.com/fyne-io/fyne/v2/cmd/fyne@latest
-          fyne install
+        run: go get fyne.io/fyne/v2/...
 
       - name: Install make
         run: choco install make -y
@@ -36,8 +34,8 @@ jobs:
         with:
           name: build-env
           path: |
-            C:\Users\runneradmin\go  # Include the Go installation directory
-            C:\Program Files\Fyne      # Include the Fyne installation directory (adjust if needed)
+            C:\Users\runneradmin\go
+            C:\ProgramData\chocolatey
     
   test-and-lint:
     runs-on: windows-latest
