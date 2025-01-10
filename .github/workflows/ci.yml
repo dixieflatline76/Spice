@@ -111,9 +111,15 @@ jobs:
     if: github.event_name == 'release'
     steps:
       - name: Download build artifact
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: spice-release-build
+          run_id: ${{ github.run_id }} 
+        continue-on-error: true  # Continue even if download fails
+
+      - name: Print download URL
+        run: |
+          echo "Download URL was: ${{ steps.download-build-artifact.outputs.download-url }}" 
 
       - name: Upload Release Asset
         id: upload-release-asset 
