@@ -115,19 +115,17 @@ jobs:
         with:
           name: spice-release-build
           run_id: ${{ github.run_id }} 
-        continue-on-error: true  # Continue even if download fails
 
-      - name: Print download URL
-        run: |
-          echo "Download URL was: ${{ steps.download-build-artifact.outputs.download-url }}" 
+      - name: Extract artifact
+        run: unzip spice-release-build.zip
 
       - name: Upload Release Asset
-        id: upload-release-asset 
+        id: upload-release-asset
         uses: actions/upload-release-asset@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}  
+          GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
         with:
-          upload_url: ${{ github.event.release.upload_url }} 
-          asset_path: ./bin/ 
-          asset_name: spice-${{ github.ref_name }}.exe 
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./spice.exe   # Path to the extracted executable
+          asset_name: spice-${{ github.ref_name }}.exe  # Desired name in the release
           asset_content_type: application/octet-stream
