@@ -32,7 +32,7 @@ jobs:
         uses: actions/cache@v3
         with:
           path: ~/AppData/Local/Chocolatey/lib
-          key: ${{ runner.os }}-chocolatey-${{ hashFiles('**/tools.txt') }}  # Assuming you have a tools.txt or similar
+          key: ${{ runner.os }}-chocolatey-${{ hashFiles('**/tools.txt') }} 
           restore-keys: |
             ${{ runner.os }}-chocolatey-
 
@@ -58,10 +58,10 @@ jobs:
       - name: Run tests
         run: go test ./...
 
-  build-and-release:
+  build:
     runs-on: windows-latest
     needs: test-and-lint
-    if: github.event_name == 'pull_request' || github.event_name == 'release'
+    if: github.event_name == 'pull_request' 
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -83,7 +83,7 @@ jobs:
         uses: actions/cache@v3
         with:
           path: ~/AppData/Local/Chocolatey/lib
-          key: ${{ runner.os }}-chocolatey-${{ hashFiles('**/tools.txt') }} # Assuming you have a tools.txt or similar
+          key: ${{ runner.os }}-chocolatey-${{ hashFiles('**/tools.txt') }}
           restore-keys: |
             ${{ runner.os }}-chocolatey-
 
@@ -99,9 +99,29 @@ jobs:
       - name: Build Application
         run: make build-gui
 
-      - name: Create Release artifacts
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Upload build artifact
         uses: actions/upload-artifact@v3
         with:
-          name: spice-release-${{ github.ref_name }}
+          name: spice-release-build
           path: bin/
+
+  release:
+    runs-on: windows-latest
+    needs: build 
+    if: github.event_name == 'release'
+    steps:
+      - name: Download build artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: spice-release-build
+
+      - name: Upload Release Asset
+        id: upload-release-asset 
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}  
+        with:
+          upload_url: ${{ github.event.release.upload_url }} 
+          asset_path: ./bin/ 
+          asset_name: spice-${{ github.ref_name }}.exe 
+          asset_content_type: application/octet-stream
