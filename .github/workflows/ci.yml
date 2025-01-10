@@ -11,7 +11,6 @@ on:
 jobs:
   test-and-lint:
     runs-on: windows-latest
-    if: github.event_name == 'push'
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -61,8 +60,8 @@ jobs:
 
   build-and-release:
     runs-on: windows-latest
-    if: github.event_name == 'pull_request'
     needs: test-and-lint
+    if: github.event_name == 'pull_request' || github.event_name == 'release'
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
