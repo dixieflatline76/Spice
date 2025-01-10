@@ -31,9 +31,8 @@ Spice is currently in its early stages and primarily tested on Windows 11.
 
 **Installation:**
 
-1. Download the latest release from [link to releases page].
-2. Extract the files.
-3. Run `spice.exe`.
+1. Download the spice executable from [latest release](https://github.com/dixieflatline76/Spice/releases/latest).
+2. Run executable and enjoy.
 
 **Configuration:**
 
