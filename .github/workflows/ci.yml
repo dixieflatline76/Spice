@@ -113,7 +113,7 @@ jobs:
       - name: Download build artifact
         uses: actions/download-artifact@v4
         with:
-          name: spice-release-build
+          name: spice-release-build.zip
           run_id: ${{ github.run_id }} 
 
       - name: Extract artifact
