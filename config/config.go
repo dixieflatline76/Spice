@@ -28,8 +28,8 @@ type ImageURL struct {
 // Cfg is the global configuration variable
 var Cfg Config
 
-// configFile returns the path to the user's config file
-func configFile() string {
+// GetFilename returns the path to the user's config file
+func GetFilename() string {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		log.Fatalf("Error getting user home directory: %v", err)
@@ -37,9 +37,18 @@ func configFile() string {
 	return filepath.Join(homeDir, "."+strings.ToLower(ServiceName), "config.json")
 }
 
+// GetPath returns the path to the user's config directory
+func GetPath() string {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		log.Fatalf("Error getting user home directory: %v", err)
+	}
+	return filepath.Join(homeDir, "."+strings.ToLower(ServiceName))
+}
+
 // LoadConfig loads configuration from the user's config file
 func LoadConfig() {
-	cfgFile := configFile()
+	cfgFile := GetFilename()
 	log.Printf("Config file: %v", cfgFile)
 
 	data, err := os.ReadFile(cfgFile)
@@ -73,7 +82,7 @@ func LoadConfig() {
 
 // SaveConfig saves the current configuration to the user's config file
 func SaveConfig() {
-	cfgFile := configFile()
+	cfgFile := GetFilename()
 	err := os.MkdirAll(filepath.Dir(cfgFile), 0700) // Ensure the directory exists
 	if err != nil {
 		log.Fatalf("Error creating config directory: %v", err)
