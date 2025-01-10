@@ -117,7 +117,7 @@ jobs:
           run_id: ${{ github.run_id }}
 
       - name: List files
-        run: ls -lR
+          run: Get-ChildItem -Recurse
 
       - name: Extract artifact
         run: unzip spice-release-build.zip
