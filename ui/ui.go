@@ -18,7 +18,7 @@ import (
 // SpiceApp represents the application
 type SpiceApp struct {
 	app      fyne.App
-	trayIcon fyne.Resource
+	assetMgr *AssetManager
 }
 
 var (
@@ -31,14 +31,10 @@ func GetInstance() *SpiceApp {
 	// Create a new instance of the application if it doesn't exist
 	a := app.NewWithID(config.ServiceName)
 	if _, ok := a.(desktop.App); ok {
-		icon, err := fyne.LoadResourceFromPath(config.GetPath() + "/" + config.ServiceName + ".png")
-		if err != nil {
-			log.Fatalf("Failed to load tray icon: %v", err)
-		}
 		once.Do(func() {
 			instance = &SpiceApp{
 				app:      a,
-				trayIcon: icon,
+				assetMgr: NewAssetManager(),
 			}
 		})
 
@@ -54,31 +50,42 @@ func GetInstance() *SpiceApp {
 func (sa *SpiceApp) CreateTrayMenu() {
 
 	desk := sa.app.(desktop.App)
-	si := fyne.NewMenuItem("Spice", func() {
-		go sa.CreateSplashScreen()
-	})
-	si.Icon = sa.trayIcon
-	m := fyne.NewMenu(config.ServiceName,
-		fyne.NewMenuItem("Next", func() {
+	trayIcon, _ := sa.assetMgr.GetIcon("tray.png")
+	trayMenu := fyne.NewMenu(
+		config.ServiceName,
+		sa.createMenuItem("Set Wallpaper", func() {
 			go wallpaper.SetNextWallpaper()
-		}),
-		fyne.NewMenuItem("Previous", func() {
+		}, "next.png"),
+		sa.createMenuItem("Previous", func() {
 			go wallpaper.SetPreviousWallpaper()
-		}),
-		fyne.NewMenuItem("Random", func() {
+		}, "prev.png"),
+		sa.createMenuItem("Random", func() {
 			go wallpaper.SetRandomWallpaper()
-		}),
+		}, "rand.png"),
 		fyne.NewMenuItemSeparator(), // Divider line
-		si,
+		sa.createMenuItem("Spice", func() {
+			go sa.CreateSplashScreen()
+		}, "tray.png"),
 		fyne.NewMenuItemSeparator(), // Divider line
-		fyne.NewMenuItem("Quit", func() {
+		sa.createMenuItem("Quit", func() {
 			// Stop the service before quitting the application
 			service.ControlService(config.ServiceName, svc.Stop, svc.Stopped)
 			sa.app.Quit()
-		}),
+		}, "quit.png"),
 	)
-	desk.SetSystemTrayMenu(m)
-	desk.SetSystemTrayIcon(sa.trayIcon)
+	desk.SetSystemTrayMenu(trayMenu)
+	desk.SetSystemTrayIcon(trayIcon)
+}
+
+func (sa *SpiceApp) createMenuItem(label string, action func(), iconName string) *fyne.MenuItem {
+	mi := fyne.NewMenuItem(label, action)
+	icon, err := sa.assetMgr.GetIcon(iconName)
+	if err != nil {
+		log.Printf("Failed to load icon: %v", err)
+		return mi
+	}
+	mi.Icon = icon
+	return mi
 }
 
 // CreateSplashScreen creates a splash screen for the application
@@ -93,13 +100,13 @@ func (sa *SpiceApp) CreateSplashScreen() {
 	splashWindow := drv.CreateSplashWindow()
 
 	// Load the splash image
-	splashImg, err := fyne.LoadResourceFromPath(config.GetPath() + "/splash.png") // Assuming "splash.png" is your image
+	splashImg, err := sa.assetMgr.GetImage("splash.png")
 	if err != nil {
 		log.Fatalf("Failed to load splash image: %v", err)
 	}
 
 	// Create an image canvas object
-	img := canvas.NewImageFromResource(splashImg)
+	img := canvas.NewImageFromImage(splashImg)
 	img.FillMode = canvas.ImageFillOriginal // Ensure the image keeps its original size
 
 	// Set the splash window content and show it
