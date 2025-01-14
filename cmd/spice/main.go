@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"log"
-	"os"
 	"syscall"
 
 	"github.com/dixieflatline76/Spice/config"
@@ -11,7 +10,6 @@ import (
 	"github.com/dixieflatline76/Spice/ui"
 
 	"golang.org/x/sys/windows"
-	"golang.org/x/sys/windows/svc"
 )
 
 // CreateMutex creates a new mutex with the given name.
@@ -49,38 +47,12 @@ func main() {
 		return
 	}
 
-	config.LoadConfig()
+	cfg := config.GetConfig()
 	fmt.Println("LoadConfig done")
-	log.Printf("API Key: %v", config.Cfg.APIKey)
-	log.Printf("Frequency: %v", config.Cfg.Frequency)
+	log.Printf("API Key: %v", cfg.APIKey)
+	log.Printf("Frequency: %v", cfg.Frequency)
 
-	isSrvc, err := svc.IsWindowsService()
-	if err != nil {
-		log.Fatalf("failed to determine if we are running in an interactive session: %v", err)
-	}
-
-	if isSrvc {
-		go service.RunService(config.ServiceName, false) // Run the service in the background
-	} else {
-		// Handle command-line arguments for install/remove
-		if len(os.Args) > 1 {
-			switch os.Args[1] {
-			case "install":
-				err = service.InstallService(config.ServiceName, config.ServiceName+" Service")
-			case "remove":
-				err = service.RemoveService(config.ServiceName)
-			default:
-				err = fmt.Errorf("invalid command: %s", os.Args[1])
-			}
-			if err != nil {
-				log.Fatalf("failed to %s %s: %v", os.Args[1], config.ServiceName, err)
-			}
-			return
-		}
-
-		// If no command-line arguments, start the service in debug mode
-		go service.RunService(config.ServiceName, true)
-	}
+	go service.StartWallpaperService(cfg)
 
 	// Create the Fyne application
 	a := ui.GetInstance()

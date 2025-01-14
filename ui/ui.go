@@ -8,17 +8,23 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/canvas"
+	"fyne.io/fyne/v2/widget"
+
+	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/driver/desktop"
+	"github.com/dixieflatline76/Spice/asset"
 	"github.com/dixieflatline76/Spice/config"
+	"github.com/dixieflatline76/Spice/util"
+
 	"github.com/dixieflatline76/Spice/service"
-	"github.com/dixieflatline76/Spice/wallpaper"
-	"golang.org/x/sys/windows/svc"
 )
 
 // SpiceApp represents the application
 type SpiceApp struct {
 	app      fyne.App
-	assetMgr *AssetManager
+	assetMgr *asset.Manager
+	trayMenu *fyne.Menu
 }
 
 var (
@@ -34,12 +40,11 @@ func GetInstance() *SpiceApp {
 		once.Do(func() {
 			instance = &SpiceApp{
 				app:      a,
-				assetMgr: NewAssetManager(),
+				assetMgr: asset.NewManager(),
 			}
+			instance.CreateTrayMenu()
+			instance.verifyEULA()
 		})
-
-		instance.CreateTrayMenu()
-		instance.CreateSplashScreen()
 		return instance
 	}
 	log.Println("Tray icon not supported on this platform")
@@ -48,33 +53,36 @@ func GetInstance() *SpiceApp {
 
 // CreateTrayMenu creates the tray menu for the application
 func (sa *SpiceApp) CreateTrayMenu() {
-
 	desk := sa.app.(desktop.App)
 	trayIcon, _ := sa.assetMgr.GetIcon("tray.png")
 	trayMenu := fyne.NewMenu(
 		config.ServiceName,
-		sa.createMenuItem("Set Wallpaper", func() {
-			go wallpaper.SetNextWallpaper()
+		sa.createMenuItem("Next Wallpaper", func() {
+			go service.SetNextWallpaper()
 		}, "next.png"),
-		sa.createMenuItem("Previous", func() {
-			go wallpaper.SetPreviousWallpaper()
+		sa.createMenuItem("Prev Wallpaper", func() {
+			go service.SetPreviousWallpaper()
 		}, "prev.png"),
-		sa.createMenuItem("Random", func() {
-			go wallpaper.SetRandomWallpaper()
+		sa.createMenuItem("Pick for Me", func() {
+			go service.SetRandomWallpaper()
 		}, "rand.png"),
 		fyne.NewMenuItemSeparator(), // Divider line
-		sa.createMenuItem("Spice", func() {
+		sa.createMenuItem("Image Page", func() {
+			go service.ViewCurrentImageOnWeb(sa.app)
+		}, "view.png"),
+		fyne.NewMenuItemSeparator(), // Divider line
+		sa.createMenuItem("About Spice", func() {
 			go sa.CreateSplashScreen()
 		}, "tray.png"),
 		fyne.NewMenuItemSeparator(), // Divider line
 		sa.createMenuItem("Quit", func() {
 			// Stop the service before quitting the application
-			service.ControlService(config.ServiceName, svc.Stop, svc.Stopped)
 			sa.app.Quit()
 		}, "quit.png"),
 	)
 	desk.SetSystemTrayMenu(trayMenu)
 	desk.SetSystemTrayIcon(trayIcon)
+	sa.trayMenu = trayMenu
 }
 
 func (sa *SpiceApp) createMenuItem(label string, action func(), iconName string) *fyne.MenuItem {
@@ -111,14 +119,64 @@ func (sa *SpiceApp) CreateSplashScreen() {
 
 	// Set the splash window content and show it
 	splashWindow.SetContent(img)
+	splashWindow.Resize(fyne.NewSize(300, 300))
 	splashWindow.CenterOnScreen()
 	splashWindow.Show()
 
-	// Hide the splash screen after 2 seconds
+	// Hide the splash screen after 3 seconds
 	go func() {
 		time.Sleep(3 * time.Second)
 		splashWindow.Close() // Close the splash window
 	}()
+}
+
+// verifyEULA checks if the End User License Agreement has been accepted. If not, it will show the EULA and prompt the user to accept it.
+// If the user declines, the application will quit.
+// If the EULA has been accepted, the application will proceed to setup.
+func (sa *SpiceApp) verifyEULA() {
+	// Check if the EULA has been accepted
+	if util.HasAcceptedEULA() {
+		sa.CreateSplashScreen() // Show the splash screen if the EULA has been accepted
+	} else {
+		sa.displayEULAAcceptance() // Show the EULA if it hasn't been accepted
+	}
+}
+
+// displayEULAAcceptance displays the End User License Agreement and prompts the user
+// to accept it. If the user declines, the application will quit.
+func (sa *SpiceApp) displayEULAAcceptance() {
+	eulaText, err := sa.assetMgr.GetText("eula.txt")
+	if err != nil {
+		log.Fatalf("Error loading EULA: %v", err)
+	}
+
+	// Create a new window for the EULA
+	eulaWindow := sa.app.NewWindow("Spice EULA")
+	eulaWindow.Resize(fyne.NewSize(800, 600))
+	eulaWindow.CenterOnScreen()
+	eulaWindow.SetCloseIntercept(func() {
+		// Prevent the window from being closed
+	})
+
+	// Create a scrollable text widget for the EULA content
+	eulaWdgt := widget.NewRichTextWithText(eulaText)
+	eulaWdgt.Wrapping = fyne.TextWrapWord
+	eulaScroll := container.NewVScroll(eulaWdgt)
+	eulaDialog := dialog.NewCustomConfirm("To continue using Spice, please review and accept the End User License Agreement.", "Accept", "Decline", eulaScroll, func(accepted bool) {
+		if accepted {
+			// Mark the EULA as accepted
+			util.MarkEULAAccepted()
+			eulaWindow.Close()
+			sa.CreateSplashScreen() // Show the splash screen after user accepts the EULA
+		} else {
+			// Stop the service before quitting the application
+			sa.app.Quit()
+		}
+	}, eulaWindow)
+
+	eulaDialog.Resize(fyne.NewSize(795, 595)) // Resize the dialog to fit the window
+	eulaDialog.Show()
+	eulaWindow.Show()
 }
 
 // Run runs the application

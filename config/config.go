@@ -2,21 +2,22 @@ package config
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 )
 
 // Package config provides configuration management for the Wallpaper Downloader service
 
 // Config struct to hold all configuration data
-type Config struct {
-	APIKey         string        `json:"api_key"`
-	Frequency      time.Duration `json:"change_frequency"`
-	ImageURLs      []ImageURL    `json:"query_urls"`
-	WallpaperStyle int32         `json:"wallpaper_style"`
+type Config struct { // You can add "//nolint:golint" here if you prefer
+	APIKey    string        `json:"api_key"`
+	Frequency time.Duration `json:"change_frequency"`
+	ImageURLs []ImageURL    `json:"query_urls"`
 }
 
 // ImageURL struct to hold the URL of an image and whether it is active
@@ -25,8 +26,24 @@ type ImageURL struct {
 	Active bool   `json:"active"`
 }
 
-// Cfg is the global configuration variable
-var Cfg Config
+var (
+	instance *Config
+	once     sync.Once
+)
+
+// GetConfig returns the singleton instance of Config.
+func GetConfig() *Config {
+	once.Do(func() {
+		instance = &Config{}
+		// Load config from file
+		if err := instance.loadFromFile(GetFilename()); err != nil {
+			// Handle error, e.g., log, use defaults
+			fmt.Println("Error loading config:", err)
+			instance.setDefaultValues()
+		}
+	})
+	return instance
+}
 
 // GetFilename returns the path to the user's config file
 func GetFilename() string {
@@ -46,49 +63,37 @@ func GetPath() string {
 	return filepath.Join(homeDir, "."+strings.ToLower(ServiceName))
 }
 
-// LoadConfig loads configuration from the user's config file
-func LoadConfig() {
-	cfgFile := GetFilename()
-	log.Printf("Config file: %v", cfgFile)
-
-	data, err := os.ReadFile(cfgFile)
+// loadFromFile loads configuration from the specified file
+func (c *Config) loadFromFile(filename string) error {
+	data, err := os.ReadFile(filename)
 	if err != nil {
-		log.Printf("Error reading config file: %v", err)
-		if os.IsNotExist(err) {
-			// Config file doesn't exist, use defaults
-			log.Println("Config file not found, using defaults")
-			Cfg = Config{
-				APIKey:         "",
-				Frequency:      30 * time.Minute, // Default frequency
-				WallpaperStyle: 10,               // Default to "fill" (Span)
-			}
-			SaveConfig() // Save the default config to the user's config file
-			return
-		}
-		log.Fatalf("Error reading config file: %v", err)
+		return err // Return the error for handling in GetConfig()
 	}
 
-	err = json.Unmarshal(data, &Cfg)
+	err = json.Unmarshal(data, c)
 	if err != nil {
-		log.Fatalf("Error parsing config file: %v", err)
+		return err
 	}
 
-	// If WallpaperStyle is not set in the config file, set it to the default value
-	if Cfg.WallpaperStyle == 0 {
-		Cfg.WallpaperStyle = 10 // Default to "fill" (Span)
-		log.Printf("Failed to get wallpaper style: %v", err)
-	}
+	return nil
 }
 
-// SaveConfig saves the current configuration to the user's config file
-func SaveConfig() {
+// setDefaultValues sets default values for the configuration
+func (c *Config) setDefaultValues() {
+	c.APIKey = ""
+	c.Frequency = 30 * time.Minute
+	// ... set other defaults
+}
+
+// Save saves the current configuration to the user's config file
+func (c *Config) Save() {
 	cfgFile := GetFilename()
 	err := os.MkdirAll(filepath.Dir(cfgFile), 0700) // Ensure the directory exists
 	if err != nil {
 		log.Fatalf("Error creating config directory: %v", err)
 	}
 
-	data, err := json.MarshalIndent(Cfg, "", "  ") // Use indentation for readability
+	data, err := json.MarshalIndent(c, "", "  ") // Use indentation for readability
 	if err != nil {
 		log.Fatalf("Error encoding config data: %v", err)
 	}

@@ -1,8 +1,10 @@
+VERSION := $(shell sh -c "cat version.txt" 2> /dev/null || cmd /c "type version.txt")
+
 build-gui:
-	go build -o bin/spice.exe -ldflags -H=windowsgui ./cmd/spice
+	go build -o bin/spice.exe -ldflags "-H=windowsgui -X config.AppVersion=$(VERSION)" ./cmd/spice
 
 build-console:
-	go build -o bin/spice-service.exe ./cmd/spice
+	go build -o bin/spice-console.exe -ldflags "-X config.AppVersion=$(VERSION)" ./cmd/spice
 
 lint:
 	gofmt -w .
