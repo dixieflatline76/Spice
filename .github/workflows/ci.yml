@@ -111,15 +111,18 @@ jobs:
           name: spice-release-build
           path: bin/
 
-  update-version: # New job to update version.txt in main
+  update-version:
     runs-on: windows-latest
-    needs: build # Make sure the build job completes first
+    needs: build
     if: github.event_name == 'release'
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
         with:
-          fetch-depth: 0 # Fetch all history to avoid issues with detached head
+          fetch-depth: 0
+
+      - name: Checkout main branch
+        run: git checkout main
 
       - name: Update version.txt
         run: |
@@ -133,7 +136,7 @@ jobs:
           git add version.txt
           git commit -m "Update version.txt to ${{ github.event.release.tag_name }}"
           git push origin main 
-
+          
   release:
     runs-on: windows-latest
     needs: build 
