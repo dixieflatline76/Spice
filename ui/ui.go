@@ -2,8 +2,6 @@ package ui
 
 import (
 	"log"
-	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -17,6 +15,7 @@ import (
 	"fyne.io/fyne/v2/driver/desktop"
 	"github.com/dixieflatline76/Spice/asset"
 	"github.com/dixieflatline76/Spice/config"
+	"github.com/dixieflatline76/Spice/util"
 
 	"github.com/dixieflatline76/Spice/service"
 )
@@ -44,7 +43,7 @@ func GetInstance() *SpiceApp {
 				assetMgr: asset.NewManager(),
 			}
 			instance.CreateTrayMenu()
-			instance.CheckEULA()
+			instance.verifyEULA()
 		})
 		return instance
 	}
@@ -131,28 +130,21 @@ func (sa *SpiceApp) CreateSplashScreen() {
 	}()
 }
 
-// CheckEULA checks if the End User License Agreement has been accepted. If not, it will show the EULA and prompt the user to accept it.
+// verifyEULA checks if the End User License Agreement has been accepted. If not, it will show the EULA and prompt the user to accept it.
 // If the user declines, the application will quit.
 // If the EULA has been accepted, the application will proceed to setup.
-func (sa *SpiceApp) CheckEULA() {
-	eulaAcceptedPath := filepath.Join(config.GetPath(), "eula_accepted")
-
-	// Check if the file exists
-	_, err := os.Stat(eulaAcceptedPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			sa.processEULA() // Show the EULA
-		} else {
-			log.Fatalf("Failed to check EULA acceptance: %v", err) // Should never happen
-		}
-	} else {
+func (sa *SpiceApp) verifyEULA() {
+	// Check if the EULA has been accepted
+	if util.HasAcceptedEULA() {
 		sa.CreateSplashScreen() // Show the splash screen if the EULA has been accepted
+	} else {
+		sa.displayEULAAcceptance() // Show the EULA if it hasn't been accepted
 	}
 }
 
-// processEULA displays the End User License Agreement and prompts the user
+// displayEULAAcceptance displays the End User License Agreement and prompts the user
 // to accept it. If the user declines, the application will quit.
-func (sa *SpiceApp) processEULA() {
+func (sa *SpiceApp) displayEULAAcceptance() {
 	eulaText, err := sa.assetMgr.GetText("eula.txt")
 	if err != nil {
 		log.Fatalf("Error loading EULA: %v", err)
@@ -173,7 +165,7 @@ func (sa *SpiceApp) processEULA() {
 	eulaDialog := dialog.NewCustomConfirm("To continue using Spice, please review and accept the End User License Agreement.", "Accept", "Decline", eulaScroll, func(accepted bool) {
 		if accepted {
 			// Mark the EULA as accepted
-			sa.markEULAAccepted()
+			util.MarkEULAAccepted()
 			eulaWindow.Close()
 			sa.CreateSplashScreen() // Show the splash screen after user accepts the EULA
 		} else {
@@ -185,19 +177,6 @@ func (sa *SpiceApp) processEULA() {
 	eulaDialog.Resize(fyne.NewSize(795, 595)) // Resize the dialog to fit the window
 	eulaDialog.Show()
 	eulaWindow.Show()
-}
-
-// markEULAAccepted marks the EULA as accepted
-func (sa *SpiceApp) markEULAAccepted() {
-	eulaAcceptedPath := filepath.Join(config.GetPath(), "eula_accepted")
-
-	// Create an empty file to mark acceptance
-	file, err := os.Create(eulaAcceptedPath)
-	if err != nil {
-		// Handle the error
-		return
-	}
-	defer file.Close()
 }
 
 // Run runs the application
