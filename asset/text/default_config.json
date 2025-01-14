@@ -1,0 +1,14 @@
+{
+    "api_key": "Add your API key here",
+    "change_frequency": 600000000000,
+    "query_urls": [
+      {
+        "url": "https://wallhaven.cc/api/v1/search?q=&categories=100&purity=100&atleast=2560x1440&ratios=landscape&topRange=3M&sorting=toplist&order=desc&ai_art_filter=1",
+        "active": true
+      },
+      {
+        "url": "https://wallhaven.cc/api/v1/search?q=&categories=001&purity=100&atleast=2560x1440&ratios=landscape&topRange=3M&sorting=toplist&order=desc&ai_art_filter=1",
+        "active": false
+      }
+    ]
+  }

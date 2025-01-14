@@ -1,0 +1,41 @@
+End-User License Agreement (EULA) for Spice
+
+This End-User License Agreement ("EULA") is a legal agreement between you ("User" or "you") and Karl Kwong ("Developer" or "we") for the use of the Spice software application ("Software").
+
+By downloading, installing, or using the Software, you agree to be bound by the terms of this EULA. If you do not agree to the terms of this EULA, do not download, install, or use the Software.
+
+1. Grant of License
+
+The Developer grants you a non-exclusive, non-transferable license to use the Software for personal, non-commercial use on a single computer. You may not:
+
+* Distribute, sublicense, rent, lease, or lend the Software.
+* Modify, reverse engineer, decompile, or disassemble the Software.
+* Use the Software for any illegal or unauthorized purpose.
+
+2. Wallhaven API
+
+The Software utilizes the Wallhaven API to provide wallpaper images. You are solely responsible for obtaining and using your own Wallhaven API key in compliance with Wallhaven's terms of service. The Developer is not responsible for your use of the Wallhaven API or any content obtained through it.
+
+3. Disclaimer of Warranty
+
+The Software is provided "as is" without warranty of any kind, express or implied, including but not limited to the implied warranties of merchantability, fitness for a particular purpose, and non-infringement. The Developer does not warrant that the Software will be error-free or uninterrupted.
+
+4. Limitation of Liability
+
+In no event shall the Developer be liable for any damages whatsoever (including, without limitation, damages for loss of business profits, business interruption, loss of business information, or other pecuniary loss) arising out of the use of or inability to use the Software, even if the Developer has been advised of the possibility of such damages.
+
+5. Termination
+
+This EULA is effective until terminated by either party. You may terminate this EULA at any time by uninstalling the Software. The Developer may terminate this EULA at any time for any reason, including but not limited to your breach of this EULA.
+
+6. Governing Law
+
+This EULA shall be governed by and construed in accordance with the laws of Germany Bavaria.
+
+7. Entire Agreement
+
+This EULA constitutes the entire agreement between the parties with respect to the subject matter hereof and supersedes all prior or contemporaneous communications and proposals, whether oral or written.
+
+8. Contact Information
+
+If you have any questions about this EULA, please contact the Developer at dixieflatline76@gmail.com.
