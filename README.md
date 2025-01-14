@@ -1,6 +1,6 @@
 # Spice - A Windows Desktop Background Manager
 
-Spice is a work-in-progress desktop background manager for Windows, inspired by Variety. Built entirely in Go and using Fyne for its minimalist UI (system tray icon and menu), Spice aims to provide a seamless and customizable wallpaper experience.
+Spice is a work-in-progress desktop background manager for Windows, inspired by the legendarly linux wallpaper manager, [Variety](https://github.com/varietywalls/variety). Built entirely in Go and using Fyne for its minimalist UI (system tray icon and menu), Spice aims to provide a seamless and customizable wallpaper experience.
 
 [Insert a screenshot or GIF of Spice in action here]
 
