@@ -134,6 +134,7 @@ jobs:
         with:
           commit_message: Update version.txt to ${{ github.event.release.tag_name }}
           file_pattern: version.txt
+          token: ${{ secrets.MY_GITHUB_TOKEN }}  
           
   release:
     runs-on: windows-latest
