@@ -1,1 +1,1 @@
-"semver not found. Installing..."; 	go install github.com/coreos/go-semver/cmd/semver@latest; 	semver bump patch v0.0.1  
+v0.0.1
