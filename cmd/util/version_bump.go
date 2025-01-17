@@ -11,10 +11,10 @@ import (
 
 // Version represents a semantic version with major, minor, and patch components.
 type Version struct {
-	Major int
-	Minor int
-	Patch int
-	Raw   string
+	Major  int
+	Minor  int
+	Patch  int
+	Raw    string
 	Prefix string // "v" or ""
 }
 
@@ -77,11 +77,11 @@ func parseVersion(versionString string) (Version, error) {
 	patch, _ := strconv.Atoi(matches[4])
 
 	return Version{
-		Major: major,
-		Minor: minor,
-		Patch: patch,
+		Major:  major,
+		Minor:  minor,
+		Patch:  patch,
 		Prefix: matches[1],
-		Raw:   versionString,
+		Raw:    versionString,
 	}, nil
 }
 

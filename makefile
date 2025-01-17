@@ -1,18 +1,12 @@
-# --- Determine OS-specific commands and settings ---
-ifeq ($(OS),Windows_NT) # Windows
-	RM := del
-	GO_BUILD_ARGS := -ldflags "-H=windowsgui -X config.AppVersion=$(VERSION)"
-else # macOS or Linux
-	RM := rm -f
-	GO_BUILD_ARGS := -ldflags "-X config.AppVersion=$(VERSION)"
-endif
+# --- Extract version needed for EULA hash ---
+VERSION := $(shell sh -c "cat version.txt" 2> /dev/null || cmd /c "type version.txt")
 
 # --- Build targets ---
 build-gui:
-	go build $(GO_BUILD_ARGS) -o bin/spice ./cmd/spice
+	go build -o bin/spice.exe -ldflags "-H=windowsgui -X config.AppVersion=$(VERSION)" ./cmd/spice
 
 build-console:
-	go build -o bin/spice-console -ldflags "-X config.AppVersion=$(VERSION)" ./cmd/spice
+	go build -o bin/spice-console.exe -ldflags "-X config.AppVersion=$(VERSION)" ./cmd/spice
 
 # --- Other targets ---
 lint:
@@ -23,24 +17,19 @@ lint:
 test:
 	go test ./...	
 
-update-patch-deps:
-	go get -u=patch ./...
-	go mod tidy
-
 update-minor-deps:
-	go get -u=minor ./...
+	go get -u ./...
 	go mod tidy
 
 update-major-deps:
-	go get -u ./... 
+	go get -u=patch ./... 
 	go mod tidy
 
-all: update-patch-deps update-minor-deps lint test build-gui build-console
+all: update-minor-deps lint test build-gui build-console
 
 # --- Clean target (cross-platform) ---
 clean:
-	-$(RM) bin/spice.exe bin/spice-service.exe bin/spice bin/spice-console.exe
-	-$(RM) bin/spice-console
+	del /s /q bin\*
 
 .PHONY: bump-patch bump-minor bump-major build-version-bump
 
