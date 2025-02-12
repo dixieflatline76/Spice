@@ -8,7 +8,7 @@ Spice is a work-in-progress desktop background manager for Windows, inspired by 
 
 **Important Notes:**
 
-<img src="images/screen1.png" alt="screenshot 1">
+<img src="images/screen1.png" alt="screenshot of tray menu" height="400">
 * Spice runs in the background. The primary way to interact with Spice is through its icon in the system tray (notification area).
 * **License Agreement:** When running Spice for the first time, you will be presented with the license agreement. You must accept this agreement to continue using Spice.
 * **Wallhaven.cc Account and API Key:** To use Spice with wallhaven.cc, you need a valid wallhaven.cc account. You also need to generate an API key.  Go to [https://wallhaven.cc/settings/account](https://wallhaven.cc/settings/account) to generate an API key for Spice to function properly.
