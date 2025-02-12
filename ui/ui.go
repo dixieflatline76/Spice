@@ -338,23 +338,26 @@ func (sa *SpiceApp) createImageQueryPanel(prefsWindow fyne.Window, parent *fyne.
 		}
 
 		urlEntry.Validator = validation.NewRegexp(service.WallhavenURLRegexp, "Invalid wallhaven image query URL pattern")
-		descEntry.Validator = validation.NewRegexp(service.WallhavenDescRegexp, "Invalid description must be between 5 and 800 characters long")
+		descEntry.Validator = validation.NewRegexp(service.WallhavenDescRegexp, fmt.Sprintf("Description must be between 5 and %d alpha numeric characters long", MaxDescLength))
 
-		urlEntry.OnChanged = func(s string) {
-			if formValidator(urlEntry) {
-				actionButton.Enable()
-			} else {
-				actionButton.Disable()
+		newEntryLengthChecker := func(entry *widget.Entry, maxLen int) func(string) {
+			{
+				return func(s string) {
+					if len(s) > maxLen {
+						entry.SetText(s[:maxLen]) // Truncate to max length
+						return                    // Very important! Stop further processing
+					}
+
+					if formValidator(entry) {
+						actionButton.Enable()
+					} else {
+						actionButton.Disable()
+					}
+				}
 			}
 		}
-
-		descEntry.OnChanged = func(s string) {
-			if formValidator(descEntry) {
-				actionButton.Enable()
-			} else {
-				actionButton.Disable()
-			}
-		}
+		urlEntry.OnChanged = newEntryLengthChecker(urlEntry, MaxURLLength)
+		descEntry.OnChanged = newEntryLengthChecker(descEntry, MaxDescLength)
 
 		c := container.NewVBox()
 		c.Add(createSettingTitleLabel("wallhaven Image Query URL:"))

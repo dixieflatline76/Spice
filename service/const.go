@@ -15,10 +15,10 @@ const SmartFitPrefKey = "smart_fit"
 const WallhavenAPIKeyRegexp = `^[a-zA-Z0-9]{32}$`
 
 // WallhavenURLRegexp is the regular expression used to validate a wallhaven URL
-const WallhavenURLRegexp = `^https:\/\/wallhaven\.cc\/(search|api\/v1\/search)\?[a-zA-Z0-9\-\._\~\:\/\?\#\[\]\@\!\$\&\'\(\)\*\+\,\;\=]{0,775}$`
+const WallhavenURLRegexp = `^https:\/\/wallhaven\.cc\/(?:search|api\/v1\/search)(?:\?[a-zA-Z0-9_\-.~!$&'()*+,;=:@\/?%]*|)$`
 
 // WallhavenDescRegexp is the regular expression used to validate an image query description
-const WallhavenDescRegexp = `^.{5,100}$`
+const WallhavenDescRegexp = `^[^\x00-\x1F\x7F]{5,150}$`
 
 // Service represents a service
 type Service interface {
