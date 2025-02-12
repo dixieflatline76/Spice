@@ -518,50 +518,50 @@ func (ws *wallpaperService) SetRandomWallpaper() {
 }
 
 // StartWallpaperService starts the wallpaper service.
-func StartWallpaperService(cfg *config.Config, prefs fyne.Preferences) {
-	ws := getWallpaperService(cfg, prefs)
+func StartWallpaperService(cfg *config.Config) {
+	ws := getWallpaperService(cfg)
 	ws.Start()
 }
 
 // ChangeWallpaperFrequency changes the wallpaper frequency.
 func ChangeWallpaperFrequency(newFrequency time.Duration) {
-	ws := getWallpaperService(nil, nil)
+	ws := getWallpaperService(nil)
 	ws.changeFrequency(newFrequency)
 }
 
 // SetNextWallpaper sets the next wallpaper.
 func SetNextWallpaper() {
-	ws := getWallpaperService(nil, nil) // Might not need config here
+	ws := getWallpaperService(nil) // Might not need config here
 	ws.SetNextWallpaper()
 }
 
 // SetPreviousWallpaper sets the previous wallpaper.
 func SetPreviousWallpaper() {
-	ws := getWallpaperService(nil, nil)
+	ws := getWallpaperService(nil)
 	ws.SetPreviousWallpaper()
 }
 
 // SetRandomWallpaper sets a random wallpaper.
 func SetRandomWallpaper() {
-	ws := getWallpaperService(nil, nil)
+	ws := getWallpaperService(nil)
 	ws.SetRandomWallpaper()
 }
 
 // StopWallpaperService stops the wallpaper service.
 func StopWallpaperService() {
-	ws := getWallpaperService(nil, nil)
+	ws := getWallpaperService(nil)
 	ws.Stop()
 }
 
 // GetCurrentImage returns the current wallpaper image information.
 func GetCurrentImage() ImgSrvcImage {
-	ws := getWallpaperService(nil, nil)
+	ws := getWallpaperService(nil)
 	return ws.getCurrentImage()
 }
 
 // ViewCurrentImageOnWeb opens the current wallpaper image in the default web browser.
 func ViewCurrentImageOnWeb(app fyne.App) {
-	ws := getWallpaperService(nil, nil)
+	ws := getWallpaperService(nil)
 	url, err := url.Parse(ws.getCurrentImage().ShortURL)
 	if err != nil {
 		log.Printf("Failed to parse URL: %v", err)
@@ -572,7 +572,7 @@ func ViewCurrentImageOnWeb(app fyne.App) {
 
 // RefreshImages discards all downloaded images and fetches new ones.
 func RefreshImages() {
-	ws := getWallpaperService(nil, nil)
+	ws := getWallpaperService(nil)
 	ws.refreshImages()
 	go func() {
 		time.Sleep(5 * time.Second)
@@ -582,7 +582,7 @@ func RefreshImages() {
 
 // SetSmartFitEnabled enables or disables smart cropping.
 func SetSmartFitEnabled(enabled bool) {
-	ws := getWallpaperService(nil, nil)
+	ws := getWallpaperService(nil)
 	ws.prefs.SetBool(SmartFitPrefKey, enabled)
 	ws.fitImage = enabled
 }
@@ -649,7 +649,7 @@ func CovertToAPIURL(queryURL string) string {
 // Returns true if the URL is valid, false otherwise.
 // Also returns an error if any.
 func CheckWallhavenURL(queryURL string) error {
-	ws := getWallpaperService(nil, nil)
+	ws := getWallpaperService(nil)
 	return ws.checkWallhavenURL(CovertToAPIURL(queryURL))
 }
 
@@ -662,6 +662,6 @@ func CheckWallhavenURL(queryURL string) error {
 // Returns:
 //   - A pointer to a url.URL object containing the Wallhaven URL.
 func GetWallhavenURL(apiURL string) *url.URL {
-	ws := getWallpaperService(nil, nil)
+	ws := getWallpaperService(nil)
 	return ws.getWallhavenURL(apiURL)
 }

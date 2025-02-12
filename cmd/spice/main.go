@@ -32,7 +32,7 @@ func main() {
 	cfg := config.GetConfig(a.Preferences())
 	log.Printf("Version: %v", config.AppVersion)
 
-	go service.StartWallpaperService(cfg, a.Preferences())
+	go service.StartWallpaperService(cfg)
 
 	if a != nil {
 		a.Run() // Run the Fyne application

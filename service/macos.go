@@ -10,7 +10,6 @@ import (
 	"strings"
 	"sync"
 
-	"fyne.io/fyne/v2"
 	"github.com/disintegration/imaging"
 	"github.com/dixieflatline76/Spice/config"
 )
@@ -65,10 +64,11 @@ func (m *macOSOS) getDesktopDimension() (int, int, error) {
 }
 
 // getWallpaperService returns the singleton instance of wallpaperService.
-func getWallpaperService(cfg *config.Config, p fyne.Preferences) *wallpaperService {
+func getWallpaperService(cfg *config.Config) *wallpaperService {
 	once.Do(func() {
 		// Initialize the wallpaper service for macOS
 		currentOS := &macOSOS{}
+		p := cfg.GetPreferences()
 
 		// Initialize the wallpaper service
 		wsInstance = &wallpaperService{

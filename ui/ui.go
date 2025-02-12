@@ -503,21 +503,27 @@ func (sa *SpiceApp) createWallpaperPreferences(prefsWindow fyne.Window) *fyne.Co
 	var applyButton *widget.Button
 	applyButton = widget.NewButton("Apply Changes", func() {
 
-		// Disable the apply button immediate as RefreshImages is slow
+		originalText := applyButton.Text
 		applyButton.Disable()
+		applyButton.SetText("Applying changes, please wait...")
+		applyButton.Refresh()
+		go func() {
+			// Change wallpaper frequency
+			if chgFrq {
+				selectedFrequency := service.Frequency(frequencySelect.SelectedIndex())
+				service.ChangeWallpaperFrequency(selectedFrequency.Duration())
+				chgFrq = false
+			}
 
-		// Refresh images if API Key has changed or smart fit has been toggled
-		if refresh {
-			service.RefreshImages()
-			refresh = false
-		}
+			// Refresh images if API Key has changed or smart fit has been toggled
+			if refresh {
+				service.RefreshImages()
+				refresh = false
+			}
 
-		// Change wallpaper frequency
-		if chgFrq {
-			selectedFrequency := service.Frequency(frequencySelect.SelectedIndex())
-			service.ChangeWallpaperFrequency(selectedFrequency.Duration())
-			chgFrq = false
-		}
+			applyButton.SetText(originalText)
+			applyButton.Refresh()
+		}()
 	})
 	applyButton.Disable() // Start as disabled
 

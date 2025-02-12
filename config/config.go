@@ -124,3 +124,13 @@ func (c *Config) save() {
 
 	c.prefs.SetString(wallhavenConfigPrefKey, string(data))
 }
+
+// GetPreferences returns the preferences associated with the Config instance. This is workaround for the time
+// TODO: remove once direct access to fyne preferences has be adapted by config package
+//
+// Returns:
+//
+//	fyne.Preferences: The preferences associated with the Config instance.
+func (c *Config) GetPreferences() fyne.Preferences {
+	return c.prefs
+}
