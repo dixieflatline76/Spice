@@ -3,59 +3,37 @@ package main
 import (
 	"fmt"
 	"log"
-	"syscall"
 
 	"github.com/dixieflatline76/Spice/config"
 	"github.com/dixieflatline76/Spice/service"
 	"github.com/dixieflatline76/Spice/ui"
-
-	"golang.org/x/sys/windows"
 )
 
-// CreateMutex creates a new mutex with the given name.
-func CreateMutex(name string) (*windows.Handle, error) {
-	namePtr, err := syscall.UTF16PtrFromString(name)
-	if err != nil {
-		return nil, err
-	}
+var version = "0.0.0"
 
-	mutex, err := windows.CreateMutex(nil, false, namePtr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create mutex: %w", err)
-	}
-
-	return &mutex, nil
+func init() {
+	config.AppVersion = version
 }
 
 func main() {
-	// Create a mutex to ensure only one instance of the application is running at a time
-	mutex, err := CreateMutex(config.ServiceName + "_SingleInstanceMutex")
+	// Create a mutex to ensure only one instance is running
+	ok, err := acquireLock()
 	if err != nil {
-		log.Fatalf("Another instance of %v is already running.", config.ServiceName)
+		log.Fatalf("Failed to acquire lock: %v", err)
 	}
-	defer windows.ReleaseMutex(*mutex)
-	defer windows.CloseHandle(*mutex)
-
-	// Wait for the mutex to be released
-	waitResult, err := windows.WaitForSingleObject(*mutex, 100)
-	if err != nil {
-		log.Fatalf("Failed to wait for mutex: %v", err)
-	}
-	if waitResult == uint32(windows.WAIT_TIMEOUT) {
-		// Mutex is already held, another instance is running
+	if !ok {
 		fmt.Println("Another instance of Wallhavener is already running.")
 		return
 	}
-
-	cfg := config.GetConfig()
-	fmt.Println("LoadConfig done")
-	log.Printf("API Key: %v", cfg.APIKey)
-	log.Printf("Frequency: %v", cfg.Frequency)
-
-	go service.StartWallpaperService(cfg)
+	defer releaseLock() // Make sure to release the lock when done
 
 	// Create the Fyne application
 	a := ui.GetInstance()
+	cfg := config.GetConfig(a.Preferences())
+	log.Printf("Version: %v", config.AppVersion)
+
+	go service.StartWallpaperService(cfg, a.Preferences())
+
 	if a != nil {
 		a.Run() // Run the Fyne application
 	}
