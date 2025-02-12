@@ -393,7 +393,6 @@ func (ws *wallpaperService) getWallhavenURL(apiURL string) *url.URL {
 	}
 
 	q := url.Query()
-	q.Set("apikey", ws.prefs.StringWithFallback(WallhavenAPIKeyPrefKey, "")) // Add the API key
 
 	// Check for resolutions or atleast parameters
 	if !q.Has("resolutions") && !q.Has("atleast") {
@@ -405,6 +404,7 @@ func (ws *wallpaperService) getWallhavenURL(apiURL string) *url.URL {
 			q.Set("atleast", fmt.Sprintf("%dx%d", width, height))
 		}
 	}
+	url.RawQuery = q.Encode()
 	return url
 }
 
@@ -641,6 +641,7 @@ func CovertToAPIURL(queryURL string) string {
 		q.Del("page")
 	}
 
+	u.RawQuery = q.Encode()
 	return u.String()
 }
 
