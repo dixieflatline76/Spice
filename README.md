@@ -1,13 +1,14 @@
-# Spice - A Windows Desktop Background Manager
-
+# <img src="asset/images/splash.png" alt="spice logo" width="100"> Spice - A Windows Desktop Background Manager 
 Spice transforms your desktop with stunning wallpapers. Download the latest version here: [latest release](https://github.com/dixieflatline76/Spice/releases/latest)
 
 Spice is a work-in-progress desktop background manager for Windows, inspired by the legendary Linux wallpaper manager, [Variety](https://github.com/varietywalls/variety). Built entirely in Go and using Fyne for its minimalist UI (system tray icon and menu), Spice aims to provide a seamless and customizable wallpaper experience.
 
-[Insert a screenshot or GIF of Spice in action here]
+<p align="center">  <img src="images/screen3.png" alt="screenshot 3" width="1000">  <img src="images/screen2.png" alt="screenshot 2" width="1000">
+</p>
 
 **Important Notes:**
 
+<img src="images/screen1.png" alt="screenshot 1">
 * Spice runs in the background. The primary way to interact with Spice is through its icon in the system tray (notification area).
 * **License Agreement:** When running Spice for the first time, you will be presented with the license agreement. You must accept this agreement to continue using Spice.
 * **Wallhaven.cc Account and API Key:** To use Spice with wallhaven.cc, you need a valid wallhaven.cc account. You also need to generate an API key.  Go to [https://wallhaven.cc/settings/account](https://wallhaven.cc/settings/account) to generate an API key for Spice to function properly.
