@@ -12,7 +12,6 @@ import (
 	"strings"
 	"sync"
 
-	"fyne.io/fyne/v2"
 	"github.com/disintegration/imaging"
 	"github.com/dixieflatline76/Spice/config"
 )
@@ -20,23 +19,35 @@ import (
 // linuxOS implements the OS interface for Linux.
 type linuxOS struct{}
 
-// setWallpaper sets the desktop wallpaper on Linux.
+// setWallpaper sets the desktop wallpaper on Linux, supporting X11 and some Wayland compositors.
 func (l *linuxOS) setWallpaper(imagePath string) error {
-	// Determine the desktop environment
 	desktopEnv := os.Getenv("XDG_CURRENT_DESKTOP")
 	if desktopEnv == "" {
 		desktopEnv = os.Getenv("DESKTOP_SESSION")
 	}
+	desktopEnv = strings.ToLower(desktopEnv)
 
-	switch desktopEnv {
-	case "GNOME", "gnome", "Unity", "unity", "Cinnamon", "cinnamon":
-		return l.setWallpaperGNOME(imagePath)
-	case "KDE", "kde":
-		return l.setWallpaperKDE(imagePath)
-	case "Xfce", "xfce":
-		return l.setWallpaperXFCE(imagePath)
-	default:
-		return fmt.Errorf("unsupported desktop environment: %s", desktopEnv)
+	if os.Getenv("WAYLAND_DISPLAY") != "" {
+		// Wayland
+		if strings.Contains(desktopEnv, "gnome") || strings.Contains(desktopEnv, "mutter") {
+			return l.setWallpaperGNOME(imagePath)
+		} else if strings.Contains(desktopEnv, "sway") {
+			return l.setWallpaperSway(imagePath)
+		} else {
+			return fmt.Errorf("unsupported Wayland compositor: %s (KDE Wayland support dropped)", desktopEnv)
+		}
+	} else {
+		// X11
+		switch {
+		case strings.Contains(desktopEnv, "gnome") || strings.Contains(desktopEnv, "unity") || strings.Contains(desktopEnv, "cinnamon"):
+			return l.setWallpaperGNOME(imagePath)
+		case strings.Contains(desktopEnv, "kde"):
+			return l.setWallpaperKDE(imagePath)
+		case strings.Contains(desktopEnv, "xfce"):
+			return l.setWallpaperXFCE(imagePath)
+		default:
+			return fmt.Errorf("unsupported X11 desktop environment: %s", desktopEnv)
+		}
 	}
 }
 
@@ -81,18 +92,18 @@ func (l *linuxOS) setWallpaperKDE(imagePath string) error {
 	plasmashellPID := strings.TrimSpace(string(plasmashellProc))
 
 	dbusSendCmd := fmt.Sprintf(`dbus-send --session \
-		--dest=org.kde.plasmashell \
-		/PlasmaShell,%s \
-		org.kde.PlasmaShell.evaluateScript \
-		'string:
-						var allDesktops = desktops();
-						for (i=0;i<allDesktops.length;i++) {
-								d = allDesktops[i];
-								d.wallpaperPlugin = "org.kde.image";
-								d.currentConfigGroup = Array("Wallpaper", "org.kde.image", "General");
-								d.writeConfig("Image", "file://%s");
-						}
-				'`, plasmashellPID, imagePath)
+        --dest=org.kde.plasmashell \
+        /PlasmaShell,%s \
+        org.kde.PlasmaShell.evaluateScript \
+        'string:
+            var allDesktops = desktops();
+            for (i=0;i<allDesktops.length;i++) {
+                d = allDesktops[i];
+                d.wallpaperPlugin = "org.kde.image";
+                d.currentConfigGroup = Array("Wallpaper", "org.kde.image", "General");
+                d.writeConfig("Image", "file://%s");
+            }
+        '`, plasmashellPID, imagePath)
 
 	cmd := exec.Command("sh", "-c", dbusSendCmd)
 	return cmd.Run()
@@ -126,15 +137,22 @@ func (l *linuxOS) getXFCEDesktopConfigFile() (string, error) {
 	return "", fmt.Errorf("could not find XFCE desktop configuration file")
 }
 
+// setWallpaperSway sets the wallpaper for Sway.
+func (l *linuxOS) setWallpaperSway(imagePath string) error {
+	cmd := exec.Command("swaybg", imagePath) // Make sure swaybg is installed
+	return cmd.Run()
+}
+
 // getWallpaperService returns the singleton instance of wallpaperService.
-func getWallpaperService(cfg *config.Config, p fyne.Preferences) *wallpaperService {
+func getWallpaperService(cfg *config.Config) *wallpaperService {
 	once.Do(func() {
 		// Initialize the wallpaper service for Linux
 		currentOS := &linuxOS{}
+		p := cfg.GetPreferences()
 
 		// Initialize the wallpaper service
 		wsInstance = &wallpaperService{
-			os:              currentOS,                                                                             // Initialize with Linux OS
+			os:              currentOS,
 			imgProcessor:    &smartImageProcessor{os: currentOS, aspectThreshold: 0.9, resampler: imaging.Lanczos}, // Initialize with smartCropper with a lenient threshold
 			cfg:             cfg,
 			prefs:           p,
