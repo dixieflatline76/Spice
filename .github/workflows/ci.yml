@@ -128,6 +128,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
         with:
           upload_url: ${{ github.event.release.upload_url }}
-          asset_path: ./spice.exe   # Path to the extracted executable
-          asset_name: spice-${{ github.ref_name }}.exe  # Desired name in the release
+          asset_path: ./Spice.exe   # Path to the extracted executable
+          asset_name: Spice.exe  # Desired name in the release
           asset_content_type: application/octet-stream

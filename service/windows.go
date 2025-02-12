@@ -1,13 +1,31 @@
+//go:build windows
+// +build windows
+
 package service
 
 import (
-	"os"
-	"path/filepath"
+	"sync"
 	"syscall"
 	"unsafe"
 
+	"fyne.io/fyne/v2"
+	"github.com/disintegration/imaging"
+	"github.com/dixieflatline76/Spice/config"
+
 	"golang.org/x/sys/windows"
 )
+
+var (
+	user32               = syscall.NewLazyDLL("user32.dll")
+	systemParametersInfo = user32.NewProc("SystemParametersInfoW")
+	getSystemMetrics     = user32.NewProc("GetSystemMetrics")
+)
+
+func init() {
+	if user32 == nil {
+		panic("Failed to load user32.dll")
+	}
+}
 
 // windowsOS implements the OS interface for Windows.
 type windowsOS struct{}
@@ -18,17 +36,18 @@ const (
 	SPIFUpdateIniFile    = 0x01
 	SPIFSendChange       = 0x02
 	SPIFSendWinIniChange = 0x02
+	SMCXScreen           = 0
+	SMCYScreen           = 1
 )
 
 // setWallpaper sets the wallpaper to the given image file path.
 func (w *windowsOS) setWallpaper(imagePath string) error {
+	// Convert the image path to UTF-16
 	imagePathUTF16, err := syscall.UTF16PtrFromString(imagePath) // Convert the image path to UTF-16
 	if err != nil {
 		return err
 	}
 
-	user32 := windows.NewLazySystemDLL("user32.dll")
-	systemParametersInfo := user32.NewProc("SystemParametersInfoW")
 	ret, _, err := systemParametersInfo.Call(
 		uintptr(SPISetDeskWallpaper),
 		uintptr(0),
@@ -42,20 +61,41 @@ func (w *windowsOS) setWallpaper(imagePath string) error {
 	return nil
 }
 
-// getTempDir returns the system's temporary directory.
-func (w *windowsOS) getTempDir() string {
-	tempDir := os.Getenv("TEMP")
-	if tempDir == "" {
-		tempDir = os.Getenv("TMP")
+// getDesktopDimension returns the desktop dimension (width and height) in pixels.
+func (w *windowsOS) getDesktopDimension() (int, int, error) {
+
+	var width, height uintptr
+	var err error
+
+	width, _, err = getSystemMetrics.Call(uintptr(SMCXScreen))
+	if err != windows.NOERROR {
+		return 0, 0, err
 	}
-	if tempDir == "" {
-		tempDir = filepath.Join(os.Getenv("USERPROFILE"), "AppData", "Local", "Temp")
+	height, _, err = getSystemMetrics.Call(uintptr(SMCYScreen))
+	if err != windows.NOERROR {
+		return 0, 0, err
 	}
-	return tempDir
+
+	return int(width), int(height), nil
 }
 
-func (w *windowsOS) showNotification(title, message string) error {
-	// ... (Your Windows notification implementation using toast notifications or
-	//      other Windows-specific methods)
-	return nil
+// getWallpaperService returns the singleton instance of wallpaperService.
+func getWallpaperService(cfg *config.Config, p fyne.Preferences) *wallpaperService {
+	once.Do(func() {
+		// Initialize the wallpaper service for Windows
+		currentOS := &windowsOS{}
+
+		// Initialize the wallpaper service
+		wsInstance = &wallpaperService{
+			os:              currentOS,                                                                             // Initialize with Windows OS
+			imgProcessor:    &smartImageProcessor{os: currentOS, aspectThreshold: 0.9, resampler: imaging.Lanczos}, // Initialize with smartCropper with a lenient threshold
+			cfg:             cfg,
+			prefs:           p,
+			downloadMutex:   sync.Mutex{},
+			downloadHistory: make(map[string]ImgSrvcImage),
+			currentPage:     1,                                      // Start with the first page,
+			fitImage:        p.BoolWithFallback("Smart Fit", false), // Initialize with smart fit preference
+		}
+	})
+	return wsInstance
 }

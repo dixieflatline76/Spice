@@ -1,8 +1,10 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"image"
 	"io"
 	"log"
 	"math/rand"
@@ -16,19 +18,28 @@ import (
 
 	"fyne.io/fyne/v2"
 	"github.com/dixieflatline76/Spice/config"
+	"golang.org/x/oauth2"
 )
 
 // OS is an interface for abstracting OS-specific operations.
 type OS interface {
-	setWallpaper(imagePath string) error // Not exported
-	getTempDir() string                  // Not exported
-	showNotification(title, message string) error
+	setWallpaper(imagePath string) error    // Set the desktop wallpaper.
+	getDesktopDimension() (int, int, error) // Get the desktop dimensions.
+}
+
+// ImageProcessor is an interface for image cropping.
+type ImageProcessor interface {
+	FitImage(img image.Image) (image.Image, error)              // Fit the image to the desktop resolution.
+	DecodeImage(imgBytes []byte) (image.Image, string, error)   // Decode an image from a byte slice.
+	EncodeImage(img image.Image, format string) ([]byte, error) // Encode an image to a byte slice.
 }
 
 // wallpaperService manages wallpaper rotation.
 type wallpaperService struct {
 	os              OS
+	imgProcessor    ImageProcessor
 	cfg             *config.Config
+	prefs           fyne.Preferences
 	ticker          *time.Ticker
 	downloadMutex   sync.Mutex // Protects currentPage, downloading, and download operations
 	currentImage    ImgSrvcImage
@@ -36,6 +47,8 @@ type wallpaperService struct {
 	downloadedDir   string
 	downloadHistory map[string]ImgSrvcImage
 	currentPage     int
+	fitImage        bool
+	interrupt       bool
 }
 
 // ImgSrvcImage represents an image from the image service.
@@ -54,28 +67,15 @@ type imgSrvcResponse struct {
 }
 
 var (
-	instance *wallpaperService
-	once     sync.Once
+	wsInstance *wallpaperService
+	once       sync.Once
 )
-
-// getWallpaperService returns the singleton instance of wallpaperService.
-func getWallpaperService(cfg *config.Config) *wallpaperService {
-	once.Do(func() {
-		instance = &wallpaperService{
-			os:              &windowsOS{}, // Initialize with Windows OS
-			cfg:             cfg,
-			downloadMutex:   sync.Mutex{},
-			downloadHistory: make(map[string]ImgSrvcImage),
-			currentPage:     1, // Start with the first page
-		}
-	})
-	return instance
-}
 
 // RefreshImages downloads all images from the configured URLs.
 func (ws *wallpaperService) refreshImages() {
 	// Clear the downloaded images directory
 	ws.downloadMutex.Lock()
+	ws.interrupt = true
 	err := ws.clearDownloadedImagesDir()
 	if err != nil {
 		log.Printf("Error clearing downloaded images directory: %v", err)
@@ -85,12 +85,17 @@ func (ws *wallpaperService) refreshImages() {
 	ws.imageIndex = -1        // Reset the image index
 	ws.downloadMutex.Unlock()
 
+	time.Sleep(time.Second * 2) // Sleep for 2 seconds to allow the download history to clear)
+	ws.downloadMutex.Lock()
+	ws.interrupt = false
+	ws.downloadMutex.Unlock()
+
 	ws.downloadAllImages(ws.currentPage)
 }
 
 // downloadAllImages downloads images from all active URLs for the specified page.
 func (ws *wallpaperService) downloadAllImages(page int) {
-	for _, url := range ws.cfg.ImageURLs {
+	for _, url := range ws.cfg.ImageQueries {
 		if url.Active {
 			go ws.downloadImagesForURL(url.URL, page)
 		}
@@ -107,8 +112,20 @@ func (ws *wallpaperService) downloadImagesForURL(imgSrvcURL string, page int) {
 	}
 
 	q := u.Query()
-	q.Set("apikey", ws.cfg.APIKey)
-	q.Set("page", fmt.Sprint(page))
+	q.Set("apikey", ws.prefs.StringWithFallback(WallhavenAPIKeyPrefKey, "")) // Add the API key
+	q.Set("page", fmt.Sprint(page))                                          // Add the page number
+
+	// Check for resolutions or atleast parameters
+	if !q.Has("resolutions") && !q.Has("atleast") {
+		width, height, err := ws.os.getDesktopDimension()
+		if err != nil {
+			log.Printf("Error getting desktop dimensions: %v", err)
+			// Do NOT set a default resolution. Let the API handle it.
+		} else {
+			q.Set("atleast", fmt.Sprintf("%dx%d", width, height))
+		}
+	}
+
 	u.RawQuery = q.Encode()
 
 	// Fetch the JSON response
@@ -136,7 +153,14 @@ func (ws *wallpaperService) downloadImagesForURL(imgSrvcURL string, page int) {
 
 	// Download images from the current page
 	for _, img := range response.Data {
+		ws.downloadMutex.Lock()
+		if ws.interrupt {
+			ws.downloadMutex.Unlock()
+			log.Printf("Download interrupted returning func")
+			return // Interrupt download
+		}
 		ws.downloadImage(img)
+		ws.downloadMutex.Unlock()
 		time.Sleep(500 * time.Millisecond)
 	}
 }
@@ -149,9 +173,39 @@ func (ws *wallpaperService) downloadImage(img ImgSrvcImage) (string, error) {
 	}
 	defer resp.Body.Close()
 
+	// Read the image bytes
+	imgBytes, err := io.ReadAll(resp.Body) // Read all bytes at once
+	if err != nil {
+		return "", fmt.Errorf("failed to read image bytes: %w", err)
+	}
+
 	// Create a file name using the timestamp and the image ID
 	timestamp := time.Now().UnixNano()
 	tempFile := filepath.Join(ws.downloadedDir, fmt.Sprintf("%d_%s.jpg", timestamp, img.ID))
+
+	if ws.fitImage {
+		// Decode the image
+		img, ext, err := ws.imgProcessor.DecodeImage(imgBytes)
+		if err != nil {
+			log.Printf("Failed to decode image: %v", err)
+			return "", fmt.Errorf("failed to decode image: %v", err)
+		}
+		processedImg, err := ws.imgProcessor.FitImage(img)
+		if err != nil {
+			// Failed to fit image, return the error and continue
+			log.Printf("Failed to fit image: %v", err)
+			return "", err
+		}
+
+		// Encode the processed image
+		processedImgBytes, err := ws.imgProcessor.EncodeImage(processedImg, ext)
+		if err != nil {
+			log.Printf("Failed to encode image: %v", err)
+			return "", fmt.Errorf("failed to encode image: %v", err)
+		}
+		imgBytes = processedImgBytes
+	}
+
 	outFile, err := os.Create(tempFile)
 	if err != nil {
 		return "", fmt.Errorf("failed to create temporary file: %v", err)
@@ -159,14 +213,14 @@ func (ws *wallpaperService) downloadImage(img ImgSrvcImage) (string, error) {
 	defer outFile.Close()
 
 	// Save the image to the temporary file
-	_, err = io.Copy(outFile, resp.Body)
+	_, err = outFile.Write(imgBytes)
 	if err != nil {
 		return "", fmt.Errorf("failed to save image to temporary file: %v", err)
 	}
 
 	// Store the downloaded image in the history
-	ws.downloadMutex.Lock()
-	defer ws.downloadMutex.Unlock()
+	//ws.downloadMutex.Lock()
+	//defer ws.downloadMutex.Unlock()
 	ws.downloadHistory[outFile.Name()] = img
 	return tempFile, nil
 }
@@ -195,8 +249,24 @@ func (ws *wallpaperService) setWallpaperAt(dirIndex int) {
 		}
 	}
 
+	retries := 3
+	for retries > 0 {
+		if len(imageFiles) == 0 {
+			log.Println("No downloaded images found. Retrying...")
+			time.Sleep(3 * time.Second)                    // Wait 3 seconds before trying again
+			imageFiles, err = os.ReadDir(ws.downloadedDir) // Reload imageFiles
+			if err != nil {
+				log.Printf("Failed to read downloaded images directory: %v", err)
+				return
+			}
+			retries--
+		} else {
+			break
+		}
+	}
+
 	if len(imageFiles) == 0 {
-		log.Println("No downloaded images found.")
+		log.Println("No downloaded images found after retries.")
 		return
 	}
 
@@ -238,8 +308,10 @@ func (ws *wallpaperService) clearDownloadedImagesDir() error {
 
 // Start starts the wallpaper rotation service.
 func (ws *wallpaperService) Start() {
+	ws.os.getDesktopDimension()
+
 	// Create the downloaded images directory if it doesn't exist
-	ws.downloadedDir = filepath.Join(ws.os.getTempDir(), strings.ToLower(config.ServiceName)+"_downloads")
+	ws.downloadedDir = filepath.Join(getTempDir(), strings.ToLower(config.ServiceName)+"_downloads")
 	err := os.MkdirAll(ws.downloadedDir, 0755)
 	if err != nil {
 		log.Fatalf("Error creating downloaded images directory: %v", err)
@@ -267,9 +339,33 @@ func (ws *wallpaperService) Start() {
 	ws.SetNextWallpaper()
 
 	// Start the wallpaper rotation ticker
-	ws.ticker = time.NewTicker(ws.cfg.Frequency)
+	freqInt := ws.prefs.IntWithFallback(WallpaperChgFreqPrefKey, int(FrequencyHourly))
+	frequency := Frequency(freqInt)
+	ws.ticker = time.NewTicker(frequency.Duration())
 	for range ws.ticker.C {
 		ws.SetNextWallpaper()
+	}
+}
+
+// changeFrequency changes the wallpaper change frequency.
+func (ws *wallpaperService) changeFrequency(newFrequency time.Duration) {
+	ws.downloadMutex.Lock()
+	defer ws.downloadMutex.Unlock()
+
+	if ws.ticker != nil {
+		ws.ticker.Stop()
+		ws.ticker = time.NewTicker(newFrequency)
+
+		// Reset the ticker channel to immediately trigger
+		go func() {
+			for range ws.ticker.C {
+				ws.SetNextWallpaper()
+			}
+		}()
+
+		log.Printf("Wallpaper change frequency updated to: %v", newFrequency)
+	} else {
+		log.Println("Ticker not initialized. Start the service before changing frequency.")
 	}
 }
 
@@ -288,11 +384,95 @@ func (ws *wallpaperService) getCurrentImage() ImgSrvcImage {
 	return ws.currentImage
 }
 
+func (ws *wallpaperService) getWallhavenURL(apiURL string) *url.URL {
+	// Convert to API URL
+	urlStr := strings.Replace(apiURL, "https://wallhaven.cc/api/v1/search?", "https://wallhaven.cc/search?", 1)
+	url, err := url.Parse(urlStr)
+	if err != nil {
+		return nil
+	}
+
+	q := url.Query()
+	q.Set("apikey", ws.prefs.StringWithFallback(WallhavenAPIKeyPrefKey, "")) // Add the API key
+
+	// Check for resolutions or atleast parameters
+	if !q.Has("resolutions") && !q.Has("atleast") {
+		width, height, err := ws.os.getDesktopDimension()
+		if err != nil {
+			log.Printf("Error getting desktop dimensions: %v", err)
+			// Do NOT set a default resolution. Let the API handle it.
+		} else {
+			q.Set("atleast", fmt.Sprintf("%dx%d", width, height))
+		}
+	}
+	return url
+}
+
+// checkWallhavenURL checks if the given URL is a valid wallhaven URL.
+// Returns true if the URL is valid, false otherwise.
+// Also returns an error if any.
+func (ws *wallpaperService) checkWallhavenURL(queryURL string) error {
+	// Construct the API URL
+	u, err := url.Parse(queryURL)
+	if err != nil {
+		return err
+	}
+
+	q := u.Query()
+	q.Set("apikey", ws.prefs.StringWithFallback(WallhavenAPIKeyPrefKey, "")) // Add the API key
+
+	// Check for resolutions or atleast parameters
+	if !q.Has("resolutions") && !q.Has("atleast") {
+		width, height, err := ws.os.getDesktopDimension()
+		if err != nil {
+			log.Printf("Error getting desktop dimensions: %v", err)
+			// Do NOT set a default resolution. Let the API handle it.
+		} else {
+			q.Set("atleast", fmt.Sprintf("%dx%d", width, height))
+		}
+	}
+
+	u.RawQuery = q.Encode()
+
+	// Fetch the JSON response
+	resp, err := http.Get(u.String())
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	// Read the response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+
+	// Parse the JSON response
+	var response imgSrvcResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return err
+	}
+
+	if len(response.Data) == 0 {
+		return fmt.Errorf("no suitable images found for your current resolution")
+	}
+
+	//
+	return nil // success
+}
+
 // clear clears the given map.
 func clear(m map[string]ImgSrvcImage) {
 	for k := range m {
 		delete(m, k)
 	}
+}
+
+// getTempDir returns the temporary directory.
+func getTempDir() string {
+	tempDir := os.TempDir()
+	return tempDir
 }
 
 // SetNextWallpaper sets the next wallpaper in the list.
@@ -338,48 +518,149 @@ func (ws *wallpaperService) SetRandomWallpaper() {
 }
 
 // StartWallpaperService starts the wallpaper service.
-func StartWallpaperService(cfg *config.Config) {
-	ws := getWallpaperService(cfg)
+func StartWallpaperService(cfg *config.Config, prefs fyne.Preferences) {
+	ws := getWallpaperService(cfg, prefs)
 	ws.Start()
+}
+
+// ChangeWallpaperFrequency changes the wallpaper frequency.
+func ChangeWallpaperFrequency(newFrequency time.Duration) {
+	ws := getWallpaperService(nil, nil)
+	ws.changeFrequency(newFrequency)
 }
 
 // SetNextWallpaper sets the next wallpaper.
 func SetNextWallpaper() {
-	ws := getWallpaperService(nil) // Might not need config here
+	ws := getWallpaperService(nil, nil) // Might not need config here
 	ws.SetNextWallpaper()
 }
 
 // SetPreviousWallpaper sets the previous wallpaper.
 func SetPreviousWallpaper() {
-	ws := getWallpaperService(nil)
+	ws := getWallpaperService(nil, nil)
 	ws.SetPreviousWallpaper()
 }
 
 // SetRandomWallpaper sets a random wallpaper.
 func SetRandomWallpaper() {
-	ws := getWallpaperService(nil)
+	ws := getWallpaperService(nil, nil)
 	ws.SetRandomWallpaper()
 }
 
 // StopWallpaperService stops the wallpaper service.
 func StopWallpaperService() {
-	ws := getWallpaperService(nil)
+	ws := getWallpaperService(nil, nil)
 	ws.Stop()
 }
 
 // GetCurrentImage returns the current wallpaper image information.
 func GetCurrentImage() ImgSrvcImage {
-	ws := getWallpaperService(nil)
+	ws := getWallpaperService(nil, nil)
 	return ws.getCurrentImage()
 }
 
 // ViewCurrentImageOnWeb opens the current wallpaper image in the default web browser.
 func ViewCurrentImageOnWeb(app fyne.App) {
-	ws := getWallpaperService(nil)
+	ws := getWallpaperService(nil, nil)
 	url, err := url.Parse(ws.getCurrentImage().ShortURL)
 	if err != nil {
 		log.Printf("Failed to parse URL: %v", err)
 		return
 	}
 	app.OpenURL(url)
+}
+
+// RefreshImages discards all downloaded images and fetches new ones.
+func RefreshImages() {
+	ws := getWallpaperService(nil, nil)
+	ws.refreshImages()
+	go func() {
+		time.Sleep(5 * time.Second)
+		ws.SetNextWallpaper()
+	}()
+}
+
+// SetSmartFitEnabled enables or disables smart cropping.
+func SetSmartFitEnabled(enabled bool) {
+	ws := getWallpaperService(nil, nil)
+	ws.prefs.SetBool(SmartFitPrefKey, enabled)
+	ws.fitImage = enabled
+}
+
+// CheckWallhavenAPIKey checks if the given API key is valid.
+func CheckWallhavenAPIKey(apiKey string) error {
+	// 1. Configure the OAuth2 HTTP Client
+	// Wallhaven uses API keys as Bearer tokens, which OAuth2 handles nicely.
+	ts := oauth2.StaticTokenSource(
+		&oauth2.Token{AccessToken: apiKey},
+	)
+	client := oauth2.NewClient(context.Background(), ts)
+
+	// 2. Make a Request to a Protected Endpoint
+	// Choose an endpoint that requires authentication.  The 'account' endpoint is a good option.
+	req, err := http.NewRequestWithContext(context.Background(), "GET", "https://wallhaven.cc/api/v1/settings?apikey="+apiKey, nil)
+	if err != nil {
+		return fmt.Errorf("creating request: %w", err)
+	}
+
+	// 3. Execute the Request
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("making request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// 4. Check the Response Status Code
+	if resp.StatusCode == http.StatusOK {
+		return nil // Success!
+	}
+	return fmt.Errorf("API key is invalid")
+}
+
+// CovertToAPIURL converts the given URL to a Wallhaven API URL.
+func CovertToAPIURL(queryURL string) string {
+
+	// Convert to API URL
+	queryURL = strings.Replace(queryURL, "https://wallhaven.cc/search?", "https://wallhaven.cc/api/v1/search?", 1)
+
+	u, err := url.Parse(queryURL)
+	if err != nil {
+		// Not a valid URL
+		return queryURL
+	}
+
+	q := u.Query()
+
+	// Remove API key
+	if q.Has("apikey") {
+		q.Del("apikey")
+	}
+
+	// Remove page
+	if q.Has("page") {
+		q.Del("page")
+	}
+
+	return u.String()
+}
+
+// CheckWallhavenURL checks if the given URL is a valid Wallhaven URL.
+// Returns true if the URL is valid, false otherwise.
+// Also returns an error if any.
+func CheckWallhavenURL(queryURL string) error {
+	ws := getWallpaperService(nil, nil)
+	return ws.checkWallhavenURL(CovertToAPIURL(queryURL))
+}
+
+// GetWallhavenURL retrieves the Wallhaven URL using the provided API URL.
+// It initializes the wallpaper service and calls its getWallhavenURL method.
+//
+// Parameters:
+//   - apiURL: A string representing the API URL to be used.
+//
+// Returns:
+//   - A pointer to a url.URL object containing the Wallhaven URL.
+func GetWallhavenURL(apiURL string) *url.URL {
+	ws := getWallpaperService(nil, nil)
+	return ws.getWallhavenURL(apiURL)
 }

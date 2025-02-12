@@ -8,22 +8,28 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"time"
+
+	"fyne.io/fyne/v2"
+	"github.com/dixieflatline76/Spice/asset"
 )
 
 // Package config provides configuration management for the Wallpaper Downloader service
 
+// wallhavenConfigPrefKey is the string key use for saving and retrieving wallhaven image queries to fyne preferences
+const wallhavenConfigPrefKey = "wallhaven_image_queries"
+
 // Config struct to hold all configuration data
 type Config struct { // You can add "//nolint:golint" here if you prefer
-	APIKey    string        `json:"api_key"`
-	Frequency time.Duration `json:"change_frequency"`
-	ImageURLs []ImageURL    `json:"query_urls"`
+	ImageQueries []ImageQuery `json:"query_urls"`
+	prefs        fyne.Preferences
+	assetMgr     *asset.Manager
 }
 
-// ImageURL struct to hold the URL of an image and whether it is active
-type ImageURL struct {
-	URL    string `json:"url"`
-	Active bool   `json:"active"`
+// ImageQuery struct to hold the URL of an image and whether it is active
+type ImageQuery struct {
+	Description string `json:"desc"`
+	URL         string `json:"url"`
+	Active      bool   `json:"active"`
 }
 
 var (
@@ -32,26 +38,16 @@ var (
 )
 
 // GetConfig returns the singleton instance of Config.
-func GetConfig() *Config {
+func GetConfig(p fyne.Preferences) *Config {
 	once.Do(func() {
-		instance = &Config{}
+		instance = &Config{prefs: p}
 		// Load config from file
-		if err := instance.loadFromFile(GetFilename()); err != nil {
+		if err := instance.loadFromPrefs(); err != nil {
 			// Handle error, e.g., log, use defaults
 			fmt.Println("Error loading config:", err)
-			instance.setDefaultValues()
 		}
 	})
 	return instance
-}
-
-// GetFilename returns the path to the user's config file
-func GetFilename() string {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		log.Fatalf("Error getting user home directory: %v", err)
-	}
-	return filepath.Join(homeDir, "."+strings.ToLower(ServiceName), "config.json")
 }
 
 // GetPath returns the path to the user's config directory
@@ -63,14 +59,15 @@ func GetPath() string {
 	return filepath.Join(homeDir, "."+strings.ToLower(ServiceName))
 }
 
-// loadFromFile loads configuration from the specified file
-func (c *Config) loadFromFile(filename string) error {
-	data, err := os.ReadFile(filename)
+// loadFromPrefs loads configuration from the specified file
+func (c *Config) loadFromPrefs() error {
+	defaultCfg, err := c.assetMgr.GetText("default_config.json")
 	if err != nil {
-		return err // Return the error for handling in GetConfig()
+		return err
 	}
+	cfgText := c.prefs.StringWithFallback(wallhavenConfigPrefKey, defaultCfg)
 
-	err = json.Unmarshal(data, c)
+	err = json.Unmarshal([]byte(cfgText), c)
 	if err != nil {
 		return err
 	}
@@ -78,28 +75,52 @@ func (c *Config) loadFromFile(filename string) error {
 	return nil
 }
 
-// setDefaultValues sets default values for the configuration
-func (c *Config) setDefaultValues() {
-	c.APIKey = ""
-	c.Frequency = 30 * time.Minute
-	// ... set other defaults
+// AddImageQuery adds a new image query to the end of the list
+func (c *Config) AddImageQuery(desc, url string, active bool) {
+	newItem := ImageQuery{desc, url, active}
+	c.ImageQueries = append([]ImageQuery{newItem}, c.ImageQueries...)
+	c.save()
+}
+
+// RemoveImageQuery removes the image query with the specified description
+func (c *Config) RemoveImageQuery(index int) error {
+	if index < 0 || index >= len(c.ImageQueries) {
+		return fmt.Errorf("invalid query index: %d", index)
+	}
+
+	c.ImageQueries = append(c.ImageQueries[:index], c.ImageQueries[index+1:]...)
+	c.save()
+	return nil
+}
+
+// EnableImageQuery enables the image query with the specified description
+func (c *Config) EnableImageQuery(index int) error {
+	if index < 0 || index >= len(c.ImageQueries) {
+		return fmt.Errorf("invalid query index: %d", index)
+	}
+
+	c.ImageQueries[index].Active = true
+	c.save()
+	return nil
+}
+
+// DisableImageQuery disables the image query with the specified description
+func (c *Config) DisableImageQuery(index int) error {
+	if index < 0 || index >= len(c.ImageQueries) {
+		return fmt.Errorf("invalid query index: %d", index)
+	}
+
+	c.ImageQueries[index].Active = false
+	c.save()
+	return nil
 }
 
 // Save saves the current configuration to the user's config file
-func (c *Config) Save() {
-	cfgFile := GetFilename()
-	err := os.MkdirAll(filepath.Dir(cfgFile), 0700) // Ensure the directory exists
-	if err != nil {
-		log.Fatalf("Error creating config directory: %v", err)
-	}
-
+func (c *Config) save() {
 	data, err := json.MarshalIndent(c, "", "  ") // Use indentation for readability
 	if err != nil {
 		log.Fatalf("Error encoding config data: %v", err)
 	}
 
-	err = os.WriteFile(cfgFile, data, 0644) // Use appropriate file permissions
-	if err != nil {
-		log.Fatalf("Error writing config file: %v", err)
-	}
+	c.prefs.SetString(wallhavenConfigPrefKey, string(data))
 }
