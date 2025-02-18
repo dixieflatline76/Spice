@@ -65,44 +65,50 @@ func GetInstance() *SpiceApp {
 	return nil
 }
 
+// SendNotification sends a notification to the user
+func (sa *SpiceApp) SendNotification(title, message string) {
+	// Create a notification
+	notification := fyne.NewNotification(title, message)
+	sa.app.SendNotification(notification)
+}
+
 // CreateTrayMenu creates the tray menu for the application
 func (sa *SpiceApp) CreateTrayMenu() {
 	desk := sa.app.(desktop.App)
 	trayIcon, _ := sa.assetMgr.GetIcon("tray.png")
-	trayMenu := fyne.NewMenu(
-		config.ServiceName,
-		sa.createMenuItem("Next Wallpaper", func() {
-			go service.SetNextWallpaper()
-		}, "next.png"),
-		sa.createMenuItem("Prev Wallpaper", func() {
-			go service.SetPreviousWallpaper()
-		}, "prev.png"),
-		sa.createMenuItem("Pick for Me", func() {
-			go service.SetRandomWallpaper()
-		}, "rand.png"),
-		fyne.NewMenuItemSeparator(), // Divider line
-		sa.createMenuItem("Image Page", func() {
-			go service.ViewCurrentImageOnWeb(sa.app)
-		}, "view.png"),
-		fyne.NewMenuItemSeparator(), // Divider line
-		sa.createMenuItem("Preferences", func() {
-			go sa.CreatePreferencesWindow()
-		}, "prefs.png"),
-		sa.createMenuItem("About Spice", func() {
-			go sa.CreateSplashScreen()
-		}, "tray.png"),
-		fyne.NewMenuItemSeparator(), // Divider line
-		sa.createMenuItem("Quit", func() {
-			// Stop the service before quitting the application
-			sa.app.Quit()
-		}, "quit.png"),
-	)
+	trayMenu := fyne.NewMenu(config.ServiceName)
+
+	trayMenu.Items = append(trayMenu.Items, sa.createMenuItem("Next Wallpaper", func() {
+		go service.SetNextWallpaper()
+	}, "next.png"))
+	trayMenu.Items = append(trayMenu.Items, sa.createMenuItem("Prev Wallpaper", func() {
+		go service.SetPreviousWallpaper()
+	}, "prev.png"))
+	trayMenu.Items = append(trayMenu.Items, sa.createToggleMenuItem("Shuffle Wallpapers", service.SetShuffleImage, "shuffle.png", sa.prefs.BoolWithFallback(service.ImgShufflePrefKey, false), trayMenu))
+	trayMenu.Items = append(trayMenu.Items, fyne.NewMenuItemSeparator())
+	trayMenu.Items = append(trayMenu.Items, sa.createMenuItem("Image Source", func() {
+		go service.ViewCurrentImageOnWeb(sa.app)
+	}, "view.png"))
+	trayMenu.Items = append(trayMenu.Items, sa.createMenuItem("Preferences", func() {
+		go sa.CreatePreferencesWindow()
+	}, "prefs.png"))
+	trayMenu.Items = append(trayMenu.Items, fyne.NewMenuItemSeparator())
+	trayMenu.Items = append(trayMenu.Items, sa.createMenuItem("About Spice", func() {
+		go sa.CreateSplashScreen()
+	}, "tray.png"))
+	trayMenu.Items = append(trayMenu.Items, fyne.NewMenuItemSeparator())
+	trayMenu.Items = append(trayMenu.Items, sa.createMenuItem("Quit", func() {
+		// Stop the service before quitting the application
+		sa.app.Quit()
+	}, "quit.png"))
+
 	desk.SetSystemTrayMenu(trayMenu)
 	desk.SetSystemTrayIcon(trayIcon)
 	sa.app.SetIcon(trayIcon)
 	sa.trayMenu = trayMenu
 }
 
+// createTrayMenu creates the tray menu
 func (sa *SpiceApp) createMenuItem(label string, action func(), iconName string) *fyne.MenuItem {
 	mi := fyne.NewMenuItem(label, action)
 	icon, err := sa.assetMgr.GetIcon(iconName)
@@ -111,6 +117,40 @@ func (sa *SpiceApp) createMenuItem(label string, action func(), iconName string)
 		return mi
 	}
 	mi.Icon = icon
+	return mi
+}
+
+// createToggleMenuItem creates the tray menu either checked or unchecked
+func (sa *SpiceApp) createToggleMenuItem(label string, action func(bool), iconName string, checked bool, parent *fyne.Menu) *fyne.MenuItem {
+
+	mi := fyne.NewMenuItem("", nil)
+
+	if checked {
+		mi.Label = fmt.Sprintf("%s ✔", label)
+	} else {
+		mi.Label = label
+	}
+
+	icon, err := sa.assetMgr.GetIcon(iconName)
+	if err != nil {
+		log.Printf("Failed to load icon: %v", err)
+		return mi
+	}
+
+	mi.Icon = icon
+	mi.Checked = checked
+	mi.Action = func() {
+		newChecked := !mi.Checked
+		if newChecked {
+			mi.Label = fmt.Sprintf("%s ✔", label)
+		} else {
+			mi.Label = label
+		}
+		mi.Checked = newChecked
+		action(newChecked)
+		parent.Refresh()
+	}
+
 	return mi
 }
 
@@ -214,6 +254,7 @@ func createSettingDescriptionLabel(desc string) *widget.Label {
 	return label
 }
 
+// createSettingEntry creates a widget for a setting entry
 func (sa *SpiceApp) createImgQueryList(prefsWindow fyne.Window, refresh *bool, checkAndEnableApply func()) *widget.List {
 
 	var queryList *widget.List
@@ -283,6 +324,7 @@ func (sa *SpiceApp) createImgQueryList(prefsWindow fyne.Window, refresh *bool, c
 	return queryList
 }
 
+// createImgQueryList creates a list of image queries
 func (sa *SpiceApp) createImageQueryPanel(prefsWindow fyne.Window, parent *fyne.Container, refresh *bool, checkAndEnableApply func()) {
 
 	imgQueryList := sa.createImgQueryList(prefsWindow, refresh, checkAndEnableApply)
@@ -511,7 +553,7 @@ func (sa *SpiceApp) createWallpaperPreferences(prefsWindow fyne.Window) *fyne.Co
 			// Change wallpaper frequency
 			if chgFrq {
 				selectedFrequency := service.Frequency(frequencySelect.SelectedIndex())
-				service.ChangeWallpaperFrequency(selectedFrequency.Duration())
+				service.ChangeWallpaperFrequency(selectedFrequency)
 				chgFrq = false
 			}
 
@@ -553,7 +595,7 @@ func (sa *SpiceApp) createWallpaperPreferences(prefsWindow fyne.Window) *fyne.Co
 	smartFitCheck.OnChanged = func(b bool) {
 		if initialSmartFit != b {
 			sa.prefs.SetBool(service.SmartFitPrefKey, b)
-			service.SetSmartFitEnabled(b)
+			service.SetSmartFit(b)
 			refresh = true
 		} else {
 			refresh = false

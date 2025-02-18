@@ -34,6 +34,9 @@ type ImageProcessor interface {
 	EncodeImage(img image.Image, format string) ([]byte, error) // Encode an image to a byte slice.
 }
 
+// NotifierFunc is a function that notifies the user.
+type NotifierFunc func(title, message string)
+
 // wallpaperService manages wallpaper rotation.
 type wallpaperService struct {
 	os              OS
@@ -45,10 +48,15 @@ type wallpaperService struct {
 	currentImage    ImgSrvcImage
 	imageIndex      int
 	downloadedDir   string
-	downloadHistory map[string]ImgSrvcImage
-	currentPage     int
-	fitImage        bool
-	interrupt       bool
+	downloadHistory map[string]ImgSrvcImage // Keep track of downloaded images to quickly access info like image web path
+	seenHistory     map[string]bool         // Keep track of images that have been seen to trigger download of next page
+	prevHistory     []int                   // Keep track of every image set to support the previous wallpaper action
+	imgPulseOp      func()                  // Function to call to pulse the image
+	currentPage     int                     //	Current page of images
+	fitImage        bool                    // Whether to fit the image to the desktop resolution
+	shuffleImage    bool                    // Whether to shuffle the images
+	interrupt       bool                    // Whether to interrupt the image download
+	notifier        NotifierFunc            // Notifier function to show alerts or log events
 }
 
 // ImgSrvcImage represents an image from the image service.
@@ -81,6 +89,8 @@ func (ws *wallpaperService) refreshImages() {
 		log.Printf("Error clearing downloaded images directory: %v", err)
 	}
 	clear(ws.downloadHistory) // Clear the download history
+	clear(ws.seenHistory)     // Clear the seen history)
+	ws.prevHistory = []int{}  // Clear the previous history
 	ws.currentPage = 1        // Reset to the first page
 	ws.imageIndex = -1        // Reset the image index
 	ws.downloadMutex.Unlock()
@@ -95,17 +105,20 @@ func (ws *wallpaperService) refreshImages() {
 
 // downloadAllImages downloads images from all active URLs for the specified page.
 func (ws *wallpaperService) downloadAllImages(page int) {
-	for _, url := range ws.cfg.ImageQueries {
-		if url.Active {
-			go ws.downloadImagesForURL(url.URL, page)
+	var message string
+	for _, query := range ws.cfg.ImageQueries {
+		if query.Active {
+			go ws.downloadImagesForURL(query, page)
+			message += fmt.Sprintf("[%s]\n", query.Description)
 		}
 	}
+	ws.notifier("Downloading Images From:", message)
 }
 
 // downloadImagesForURL downloads images from the given URL for the specified page.
-func (ws *wallpaperService) downloadImagesForURL(imgSrvcURL string, page int) {
+func (ws *wallpaperService) downloadImagesForURL(query config.ImageQuery, page int) {
 	// Construct the API URL
-	u, err := url.Parse(imgSrvcURL)
+	u, err := url.Parse(query.URL)
 	if err != nil {
 		log.Printf("Invalid Image URL: %v", err)
 		return
@@ -156,7 +169,7 @@ func (ws *wallpaperService) downloadImagesForURL(imgSrvcURL string, page int) {
 		ws.downloadMutex.Lock()
 		if ws.interrupt {
 			ws.downloadMutex.Unlock()
-			log.Printf("Download interrupted returning func")
+			log.Printf("Download of '%s' interrupted", query.Description)
 			return // Interrupt download
 		}
 		ws.downloadImage(img)
@@ -219,8 +232,6 @@ func (ws *wallpaperService) downloadImage(img ImgSrvcImage) (string, error) {
 	}
 
 	// Store the downloaded image in the history
-	//ws.downloadMutex.Lock()
-	//defer ws.downloadMutex.Unlock()
 	ws.downloadHistory[outFile.Name()] = img
 	return tempFile, nil
 }
@@ -235,7 +246,7 @@ func (ws *wallpaperService) setWallpaperAt(dirIndex int) {
 	}
 
 	// Check if we need to download the next page
-	if dirIndex >= len(imageFiles)-1 {
+	if len(ws.seenHistory) > PageDownloadOffset && len(ws.seenHistory) >= (len(ws.downloadHistory)-PageDownloadOffset) {
 		ws.currentPage++
 		currentPageToDownload := ws.currentPage
 		ws.downloadAllImages(currentPageToDownload)
@@ -287,6 +298,7 @@ func (ws *wallpaperService) setWallpaperAt(dirIndex int) {
 	// Update current image and index under lock using temporary variables
 	ws.currentImage = ws.downloadHistory[imagePath]
 	ws.imageIndex = safeIndex
+	ws.seenHistory[imagePath] = true
 }
 
 // clearDownloadedImagesDir clears the downloaded images directory.
@@ -333,40 +345,43 @@ func (ws *wallpaperService) Start() {
 		}
 	}()
 
+	SetShuffleImage(ws.prefs.BoolWithFallback(ImgShufflePrefKey, false)) // Set shuffle image preference
+	SetSmartFit(ws.prefs.BoolWithFallback(SmartFitPrefKey, false))       // Set smart fit preference
+
 	// Refresh images and set the first wallpaper
 	go ws.refreshImages()
 	time.Sleep(5 * time.Second)
-	ws.SetNextWallpaper()
+	ws.imgPulseOp()
 
 	// Start the wallpaper rotation ticker
-	freqInt := ws.prefs.IntWithFallback(WallpaperChgFreqPrefKey, int(FrequencyHourly))
-	frequency := Frequency(freqInt)
-	ws.ticker = time.NewTicker(frequency.Duration())
-	for range ws.ticker.C {
-		ws.SetNextWallpaper()
-	}
+	ChangeWallpaperFrequency(Frequency(ws.prefs.IntWithFallback(WallpaperChgFreqPrefKey, int(FrequencyHourly)))) // Set wallpaper change frequency preference
 }
 
 // changeFrequency changes the wallpaper change frequency.
-func (ws *wallpaperService) changeFrequency(newFrequency time.Duration) {
+func (ws *wallpaperService) changeFrequency(newFrequency Frequency) {
 	ws.downloadMutex.Lock()
 	defer ws.downloadMutex.Unlock()
 
+	// Stop the ticker
 	if ws.ticker != nil {
 		ws.ticker.Stop()
-		ws.ticker = time.NewTicker(newFrequency)
-
-		// Reset the ticker channel to immediately trigger
-		go func() {
-			for range ws.ticker.C {
-				ws.SetNextWallpaper()
-			}
-		}()
-
-		log.Printf("Wallpaper change frequency updated to: %v", newFrequency)
-	} else {
-		log.Println("Ticker not initialized. Start the service before changing frequency.")
 	}
+
+	// Check if the frequency is set to never
+	if newFrequency == FrequencyNever {
+		ws.notifier("Wallpaper Change", "Disabled")
+		return
+	}
+
+	ws.ticker = time.NewTicker(newFrequency.Duration())
+
+	// Reset the ticker channel to immediately trigger
+	go func() {
+		for range ws.ticker.C {
+			ws.imgPulseOp()
+		}
+	}()
+	ws.notifier("Wallpaper Change", newFrequency.String())
 }
 
 // Stop stops the wallpaper rotation service and triggers necessary cleanup.
@@ -384,6 +399,7 @@ func (ws *wallpaperService) getCurrentImage() ImgSrvcImage {
 	return ws.currentImage
 }
 
+// getWallhavenURL returns the wallhaven URL for the given API URL.
 func (ws *wallpaperService) getWallhavenURL(apiURL string) *url.URL {
 	// Convert to API URL
 	urlStr := strings.Replace(apiURL, "https://wallhaven.cc/api/v1/search?", "https://wallhaven.cc/search?", 1)
@@ -462,13 +478,6 @@ func (ws *wallpaperService) checkWallhavenURL(queryURL string) error {
 	return nil // success
 }
 
-// clear clears the given map.
-func clear(m map[string]ImgSrvcImage) {
-	for k := range m {
-		delete(m, k)
-	}
-}
-
 // getTempDir returns the temporary directory.
 func getTempDir() string {
 	tempDir := os.TempDir()
@@ -480,6 +489,7 @@ func (ws *wallpaperService) SetNextWallpaper() {
 	ws.downloadMutex.Lock()
 	ws.imageIndex++ // Increment the image index
 	tempIndex := ws.imageIndex
+	ws.prevHistory = append(ws.prevHistory, tempIndex)
 	ws.downloadMutex.Unlock()
 
 	ws.setWallpaperAt(tempIndex)
@@ -488,8 +498,13 @@ func (ws *wallpaperService) SetNextWallpaper() {
 // SetPreviousWallpaper sets the previous wallpaper in the list.
 func (ws *wallpaperService) SetPreviousWallpaper() {
 	ws.downloadMutex.Lock()
-	ws.imageIndex-- // Decrement the image index
-	tempIndex := ws.imageIndex
+	if len(ws.prevHistory) <= 1 {
+		ws.downloadMutex.Unlock()
+		ws.notifier("No Previous Wallpaper", "You are at the beginning.")
+		return // No previous history
+	}
+	ws.prevHistory = ws.prevHistory[:len(ws.prevHistory)-1] // Remove the last element
+	tempIndex := ws.prevHistory[len(ws.prevHistory)-1]      // Get the last element
 	ws.downloadMutex.Unlock()
 
 	ws.setWallpaperAt(tempIndex)
@@ -512,27 +527,31 @@ func (ws *wallpaperService) SetRandomWallpaper() {
 		return
 	}
 	randomIndex := rand.Intn(len(imageFiles) - 1)
+	ws.prevHistory = append(ws.prevHistory, randomIndex)
 	ws.downloadMutex.Unlock()
 
 	ws.setWallpaperAt(randomIndex)
 }
 
 // StartWallpaperService starts the wallpaper service.
-func StartWallpaperService(cfg *config.Config) {
+func StartWallpaperService(cfg *config.Config, notifiers ...NotifierFunc) {
 	ws := getWallpaperService(cfg)
+	if len(notifiers) > 0 {
+		ws.notifier = notifiers[0]
+	}
 	ws.Start()
 }
 
 // ChangeWallpaperFrequency changes the wallpaper frequency.
-func ChangeWallpaperFrequency(newFrequency time.Duration) {
+func ChangeWallpaperFrequency(newFrequency Frequency) {
 	ws := getWallpaperService(nil)
 	ws.changeFrequency(newFrequency)
 }
 
-// SetNextWallpaper sets the next wallpaper.
+// SetNextWallpaper sets the next wallpaper, will respect shuffle toggle
 func SetNextWallpaper() {
-	ws := getWallpaperService(nil) // Might not need config here
-	ws.SetNextWallpaper()
+	ws := getWallpaperService(nil)
+	ws.imgPulseOp()
 }
 
 // SetPreviousWallpaper sets the previous wallpaper.
@@ -580,11 +599,29 @@ func RefreshImages() {
 	}()
 }
 
-// SetSmartFitEnabled enables or disables smart cropping.
-func SetSmartFitEnabled(enabled bool) {
+// SetSmartFit enables or disables smart cropping.
+func SetSmartFit(enabled bool) {
 	ws := getWallpaperService(nil)
 	ws.prefs.SetBool(SmartFitPrefKey, enabled)
 	ws.fitImage = enabled
+}
+
+// SetShuffleImage enables or disables image shuffling.
+func SetShuffleImage(enabled bool) {
+	ws := getWallpaperService(nil)
+
+	ws.shuffleImage = enabled
+	ws.prefs.SetBool(ImgShufflePrefKey, enabled)
+
+	ws.downloadMutex.Lock()
+	defer ws.downloadMutex.Unlock()
+	if ws.shuffleImage {
+		ws.imgPulseOp = ws.SetRandomWallpaper
+		ws.notifier("Wallpaper Shuffling", "Enabled")
+	} else {
+		ws.imgPulseOp = ws.SetNextWallpaper
+		ws.notifier("Wallpaper Shuffling", "Disabled")
+	}
 }
 
 // CheckWallhavenAPIKey checks if the given API key is valid.
@@ -646,21 +683,12 @@ func CovertToAPIURL(queryURL string) string {
 }
 
 // CheckWallhavenURL checks if the given URL is a valid Wallhaven URL.
-// Returns true if the URL is valid, false otherwise.
-// Also returns an error if any.
 func CheckWallhavenURL(queryURL string) error {
 	ws := getWallpaperService(nil)
 	return ws.checkWallhavenURL(CovertToAPIURL(queryURL))
 }
 
-// GetWallhavenURL retrieves the Wallhaven URL using the provided API URL.
-// It initializes the wallpaper service and calls its getWallhavenURL method.
-//
-// Parameters:
-//   - apiURL: A string representing the API URL to be used.
-//
-// Returns:
-//   - A pointer to a url.URL object containing the Wallhaven URL.
+// GetWallhavenURL returns the Wallhaven URL for the given API URL.
 func GetWallhavenURL(apiURL string) *url.URL {
 	ws := getWallpaperService(nil)
 	return ws.getWallhavenURL(apiURL)
