@@ -116,18 +116,53 @@ jobs:
     needs: build 
     if: github.event_name == 'release'
     steps:
-      - name: Download build artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: spice-release-build
+    - name: Download build artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: spice-release-build
 
-      - name: Upload Release Asset
-        id: upload-release-asset
-        uses: actions/upload-release-asset@v1.0.2
-        env:
-          GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: ./Spice.exe   # Path to the extracted executable
-          asset_name: Spice.exe  # Desired name in the release
-          asset_content_type: application/octet-stream
+    - name: Calculate checksums and create.sha256 files
+      run: |
+        for file in *; do
+          certutil -hashfile "$file" SHA256 | findstr /v ":" > "$file.sha256"
+        done
+
+    - name: Create release notes
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const checksums = (await github.rest.repos.getContent({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            path: 'Spice.exe.sha256', // Get the checksum for the main executable
+            ref: context.sha,
+          })).data.content;
+          const decodedChecksums = Buffer.from(checksums, 'base64').toString('utf8');
+
+          github.rest.repos.updateRelease({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            release_id: context.payload.release.id,
+            body: 'Release ${{ github.event.release.tag_name }} - $(date '+%B %d, %Y')\r\n\r\n' + 
+                  '**Checksums:**\r\n\r\n' + '```\n' + decodedChecksums + '\n```'
+          });
+
+    - name: Upload Spice.exe
+      uses: actions/upload-release-asset@v1.0.2
+      env:
+        GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./Spice.exe
+        asset_name: Spice.exe
+        asset_content_type: application/octet-stream
+
+    - name: Upload Spice.exe.sha256
+      uses: actions/upload-release-asset@v1.0.2
+      env:
+        GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./Spice.exe.sha256
+        asset_name: Spice.exe.sha256
+        asset_content_type: application/octet-stream
