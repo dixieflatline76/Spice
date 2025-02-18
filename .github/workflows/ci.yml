@@ -121,11 +121,9 @@ jobs:
       with:
         name: spice-release-build
 
-    - name: Calculate checksums and create.sha256 files
+    - name: Calculate checksum and create.sha256 file
       run: |
-        for file in *; do
-          certutil -hashfile "$file" SHA256 | findstr /v ":" > "$file.sha256"
-        done
+        certutil -hashfile Spice.exe SHA256 | findstr /v ":" > Spice.exe.sha256
 
     - name: Create release notes
       uses: actions/github-script@v6
