@@ -1,6 +1,12 @@
 package service
 
-import "time"
+import (
+	"math"
+	"time"
+)
+
+// PageDownloadOffset is the offset used to retrieve the next page of wallpapers 1 means service will download the next page 1 before the last image
+const PageDownloadOffset = 3
 
 // WallhavenAPIKeyPrefKey is used to set and retrieve the string wallhaven api key
 const WallhavenAPIKeyPrefKey = "wallhaven_api_key"
@@ -10,6 +16,9 @@ const WallpaperChgFreqPrefKey = "wallpaper_chg_freq"
 
 // SmartFitPrefKey is used to set and retrieve the boolean flag for wallpaper smart fit
 const SmartFitPrefKey = "smart_fit"
+
+// ImgShufflePrefKey is used to set and retrieve the boolean flag for wallpaper image shuffle
+const ImgShufflePrefKey = "img_shuffle"
 
 // WallhavenAPIKeyRegexp is the regular expression used to validate a wallhaven API key
 const WallhavenAPIKeyRegexp = `^[a-zA-Z0-9]{32}$`
@@ -34,7 +43,7 @@ type Frequency int
 
 // Frequency constants
 const (
-	Frequency1Minutes Frequency = iota
+	FrequencyNever Frequency = iota
 	Frequency5Minutes
 	Frequency15Minutes
 	Frequency30Minutes
@@ -47,7 +56,7 @@ const (
 
 // FrequencyDurations maps a Frequency to its time.Duration
 var FrequencyDurations = map[Frequency]time.Duration{
-	Frequency1Minutes:  1 * time.Minute,
+	FrequencyNever:     time.Duration(math.MaxInt64),
 	Frequency5Minutes:  5 * time.Minute,
 	Frequency15Minutes: 15 * time.Minute,
 	Frequency30Minutes: 30 * time.Minute,
@@ -60,8 +69,8 @@ var FrequencyDurations = map[Frequency]time.Duration{
 // String returns the string representation of a Frequency
 func (f Frequency) String() string {
 	switch f {
-	case Frequency1Minutes:
-		return "Every Minute"
+	case FrequencyNever:
+		return "Never"
 	case Frequency5Minutes:
 		return "Every 5 Minutes"
 	case Frequency15Minutes:
@@ -89,7 +98,7 @@ func (f Frequency) Duration() time.Duration {
 // GetFrequencies returns a list of all available frequencies
 func GetFrequencies() []Frequency {
 	return []Frequency{
-		Frequency1Minutes,
+		FrequencyNever,
 		Frequency5Minutes,
 		Frequency15Minutes,
 		Frequency30Minutes,

@@ -158,6 +158,7 @@ func getWallpaperService(cfg *config.Config) *wallpaperService {
 			prefs:           p,
 			downloadMutex:   sync.Mutex{},
 			downloadHistory: make(map[string]ImgSrvcImage),
+			seenHistory:     make(map[string]bool),
 			currentPage:     1,                                      // Start with the first page,
 			fitImage:        p.BoolWithFallback("Smart Fit", false), // Initialize with smart fit preference
 		}
