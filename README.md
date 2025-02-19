@@ -1,6 +1,6 @@
 <p align="center"><img src="asset/images/splash.png" height="250" alt="Spice logo" /></p>
 
-<h1 align="center">Spice - A Windows Desktop Background Manager</h1>
+<h1 align="center">Spice - A Windows Wallpaper Background Manager</h1>
 
 Spice transforms your desktop with stunning wallpapers. Download the latest version here: [latest release](https://github.com/dixieflatline76/Spice/releases/latest)
 
