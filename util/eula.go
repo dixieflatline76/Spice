@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/dixieflatline76/Spice/asset"
@@ -43,22 +42,18 @@ func getMachineID() string {
 }
 
 // HasAcceptedEULA checks if the EULA has been accepted
-func HasAcceptedEULA() bool {
-	eulaAcceptedPath := filepath.Join(config.GetPath(), "eula_accepted")
+func HasAcceptedEULA(cfg *config.Config) bool {
+	eulaData := cfg.String(config.EULAPreferenceKey)
 
-	data, err := os.ReadFile(eulaAcceptedPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return false
-		}
-		log.Fatal("Error reading EULA acceptance file:", err) // Handle the error, should never happen
+	if eulaData == "" {
+		return false
 	}
 
 	var acceptance EULAAcceptance
-	err = json.Unmarshal(data, &acceptance)
+	err := json.Unmarshal([]byte(eulaData), &acceptance)
 	if err != nil {
 		// Handle JSON parsing error
-		log.Println("Error parsing EULA acceptance file:", err)
+		log.Println("Error parsing EULA acceptance preference:", err)
 		return false
 	}
 
@@ -74,10 +69,11 @@ func HasAcceptedEULA() bool {
 }
 
 // MarkEULAAccepted marks the EULA as accepted
-func MarkEULAAccepted() {
+func MarkEULAAccepted(cfg *config.Config) {
 	eulaText, _ := assetMgr.GetText("eula.txt")
 	hash := generateEULAHash(eulaText, config.AppVersion)
 
+	// Create the acceptance struct
 	acceptance := EULAAcceptance{
 		EULAVersion:         config.AppVersion,
 		AcceptanceTimestamp: time.Now(),
@@ -86,7 +82,5 @@ func MarkEULAAccepted() {
 
 	jsonData, _ := json.Marshal(acceptance)
 
-	eulaAcceptedPath := filepath.Join(config.GetPath(), "eula_accepted")
-	os.MkdirAll(filepath.Dir(eulaAcceptedPath), 0755)
-	os.WriteFile(eulaAcceptedPath, jsonData, 0644)
+	cfg.SetString(config.EULAPreferenceKey, string(jsonData)) // Save the acceptance data
 }

@@ -68,19 +68,17 @@ func getWallpaperService(cfg *config.Config) *wallpaperService {
 	once.Do(func() {
 		// Initialize the wallpaper service for macOS
 		currentOS := &macOSOS{}
-		p := cfg.GetPreferences()
 
 		// Initialize the wallpaper service
 		wsInstance = &wallpaperService{
 			os:              currentOS,                                                                             // Initialize with macOS OS
 			imgProcessor:    &smartImageProcessor{os: currentOS, aspectThreshold: 0.9, resampler: imaging.Lanczos}, // Initialize with smartCropper with a lenient threshold
 			cfg:             cfg,
-			prefs:           p,
 			downloadMutex:   sync.Mutex{},
 			downloadHistory: make(map[string]ImgSrvcImage),
 			seenHistory:     make(map[string]bool),
-			currentPage:     1,                                      // Start with the first page,
-			fitImage:        p.BoolWithFallback("Smart Fit", false), // Initialize with smart fit preference
+			currentPage:     1,                                        // Start with the first page,
+			fitImage:        cfg.BoolWithFallback("Smart Fit", false), // Initialize with smart fit preference
 		}
 	})
 	return wsInstance

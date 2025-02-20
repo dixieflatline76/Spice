@@ -19,9 +19,9 @@ import (
 const wallhavenConfigPrefKey = "wallhaven_image_queries"
 
 // Config struct to hold all configuration data
-type Config struct { // You can add "//nolint:golint" here if you prefer
+type Config struct { //nolint:golint"
+	fyne.Preferences
 	ImageQueries []ImageQuery `json:"query_urls"`
-	prefs        fyne.Preferences
 	assetMgr     *asset.Manager
 }
 
@@ -40,7 +40,9 @@ var (
 // GetConfig returns the singleton instance of Config.
 func GetConfig(p fyne.Preferences) *Config {
 	once.Do(func() {
-		instance = &Config{prefs: p}
+		instance = &Config{
+			Preferences: p,
+		}
 		// Load config from file
 		if err := instance.loadFromPrefs(); err != nil {
 			// Handle error, e.g., log, use defaults
@@ -65,7 +67,7 @@ func (c *Config) loadFromPrefs() error {
 	if err != nil {
 		return err
 	}
-	cfgText := c.prefs.StringWithFallback(wallhavenConfigPrefKey, defaultCfg)
+	cfgText := c.StringWithFallback(wallhavenConfigPrefKey, defaultCfg)
 
 	err = json.Unmarshal([]byte(cfgText), c)
 	if err != nil {
@@ -122,15 +124,5 @@ func (c *Config) save() {
 		log.Fatalf("Error encoding config data: %v", err)
 	}
 
-	c.prefs.SetString(wallhavenConfigPrefKey, string(data))
-}
-
-// GetPreferences returns the preferences associated with the Config instance. This is workaround for the time
-// TODO: remove once direct access to fyne preferences has be adapted by config package
-//
-// Returns:
-//
-//	fyne.Preferences: The preferences associated with the Config instance.
-func (c *Config) GetPreferences() fyne.Preferences {
-	return c.prefs
+	c.SetString(wallhavenConfigPrefKey, string(data))
 }

@@ -639,7 +639,7 @@ func (sa *SpiceApp) CreatePreferencesWindow() {
 // If the EULA has been accepted, the application will proceed to setup.
 func (sa *SpiceApp) verifyEULA() {
 	// Check if the EULA has been accepted
-	if util.HasAcceptedEULA() {
+	if util.HasAcceptedEULA(sa.cfg) {
 		sa.CreateSplashScreen() // Show the splash screen if the EULA has been accepted
 	} else {
 		sa.displayEULAAcceptance() // Show the EULA if it hasn't been accepted
@@ -669,7 +669,7 @@ func (sa *SpiceApp) displayEULAAcceptance() {
 	eulaDialog := dialog.NewCustomConfirm("To continue using Spice, please review and accept the End User License Agreement.", "Accept", "Decline", eulaScroll, func(accepted bool) {
 		if accepted {
 			// Mark the EULA as accepted
-			util.MarkEULAAccepted()
+			util.MarkEULAAccepted(sa.cfg)
 			eulaWindow.Close()
 			sa.CreateSplashScreen() // Show the splash screen after user accepts the EULA
 		} else {

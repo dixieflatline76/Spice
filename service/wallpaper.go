@@ -42,7 +42,6 @@ type wallpaperService struct {
 	os              OS
 	imgProcessor    ImageProcessor
 	cfg             *config.Config
-	prefs           fyne.Preferences
 	ticker          *time.Ticker
 	downloadMutex   sync.Mutex // Protects currentPage, downloading, and download operations
 	currentImage    ImgSrvcImage
@@ -125,8 +124,8 @@ func (ws *wallpaperService) downloadImagesForURL(query config.ImageQuery, page i
 	}
 
 	q := u.Query()
-	q.Set("apikey", ws.prefs.StringWithFallback(WallhavenAPIKeyPrefKey, "")) // Add the API key
-	q.Set("page", fmt.Sprint(page))                                          // Add the page number
+	q.Set("apikey", ws.cfg.StringWithFallback(WallhavenAPIKeyPrefKey, "")) // Add the API key
+	q.Set("page", fmt.Sprint(page))                                        // Add the page number
 
 	// Check for resolutions or atleast parameters
 	if !q.Has("resolutions") && !q.Has("atleast") {
@@ -345,8 +344,8 @@ func (ws *wallpaperService) Start() {
 		}
 	}()
 
-	SetShuffleImage(ws.prefs.BoolWithFallback(ImgShufflePrefKey, false)) // Set shuffle image preference
-	SetSmartFit(ws.prefs.BoolWithFallback(SmartFitPrefKey, false))       // Set smart fit preference
+	SetShuffleImage(ws.cfg.BoolWithFallback(ImgShufflePrefKey, false)) // Set shuffle image preference
+	SetSmartFit(ws.cfg.BoolWithFallback(SmartFitPrefKey, false))       // Set smart fit preference
 
 	// Refresh images and set the first wallpaper
 	go ws.refreshImages()
@@ -354,7 +353,7 @@ func (ws *wallpaperService) Start() {
 	ws.imgPulseOp()
 
 	// Start the wallpaper rotation ticker
-	ChangeWallpaperFrequency(Frequency(ws.prefs.IntWithFallback(WallpaperChgFreqPrefKey, int(FrequencyHourly)))) // Set wallpaper change frequency preference
+	ChangeWallpaperFrequency(Frequency(ws.cfg.IntWithFallback(WallpaperChgFreqPrefKey, int(FrequencyHourly)))) // Set wallpaper change frequency preference
 }
 
 // changeFrequency changes the wallpaper change frequency.
@@ -435,7 +434,7 @@ func (ws *wallpaperService) checkWallhavenURL(queryURL string) error {
 	}
 
 	q := u.Query()
-	q.Set("apikey", ws.prefs.StringWithFallback(WallhavenAPIKeyPrefKey, "")) // Add the API key
+	q.Set("apikey", ws.cfg.StringWithFallback(WallhavenAPIKeyPrefKey, "")) // Add the API key
 
 	// Check for resolutions or atleast parameters
 	if !q.Has("resolutions") && !q.Has("atleast") {
@@ -602,7 +601,7 @@ func RefreshImages() {
 // SetSmartFit enables or disables smart cropping.
 func SetSmartFit(enabled bool) {
 	ws := getWallpaperService(nil)
-	ws.prefs.SetBool(SmartFitPrefKey, enabled)
+	ws.cfg.SetBool(SmartFitPrefKey, enabled)
 	ws.fitImage = enabled
 }
 
@@ -611,7 +610,7 @@ func SetShuffleImage(enabled bool) {
 	ws := getWallpaperService(nil)
 
 	ws.shuffleImage = enabled
-	ws.prefs.SetBool(ImgShufflePrefKey, enabled)
+	ws.cfg.SetBool(ImgShufflePrefKey, enabled)
 
 	ws.downloadMutex.Lock()
 	defer ws.downloadMutex.Unlock()
