@@ -1,4 +1,4 @@
-package service
+package wallpaper
 
 import (
 	"bytes"
@@ -23,40 +23,38 @@ type smartImageProcessor struct {
 }
 
 // DecodeImage decodes an image from a byte slice, detecting the format.
-func (c *smartImageProcessor) DecodeImage(imgBytes []byte) (image.Image, string, error) {
+func (c *smartImageProcessor) DecodeImage(imgBytes []byte, contentType string) (image.Image, string, error) {
 	var img image.Image
 	var err error
 	var ext string
 
-	// Try PNG first
-	img, err = png.Decode(bytes.NewReader(imgBytes))
-	if err == nil {
-		ext = ".png"
-		return img, ext, nil
-	}
+	switch contentType {
+	case "image/png":
+		img, err = png.Decode(bytes.NewReader(imgBytes))
+		ext = "png"
 
-	// If PNG fails, try JPEG
-	img, err = jpeg.Decode(bytes.NewReader(imgBytes))
-	if err == nil {
-		ext = ".jpg" // or ".jpeg" if you prefer
-		return img, ext, nil
+	case "image/jpeg":
+		img, err = jpeg.Decode(bytes.NewReader(imgBytes))
+		ext = "jpg"
+	default:
+		// Try to detect the image format and decode with best effort
+		img, ext, err = image.Decode(bytes.NewReader(imgBytes))
 	}
-
-	return nil, "", fmt.Errorf("decoding image (PNG or JPEG): %w", err)
+	return img, ext, err
 }
 
-// EncodeImage encodes an image to a byte slice in the specified format.
-func (c *smartImageProcessor) EncodeImage(img image.Image, format string) ([]byte, error) {
+// EncodeImage encodes an image to a byte slice in the specified contentType.
+func (c *smartImageProcessor) EncodeImage(img image.Image, contentType string) ([]byte, error) {
 	var buf bytes.Buffer
 	var err error
 
-	switch format {
-	case ".png":
+	switch contentType {
+	case "image/png":
 		err = png.Encode(&buf, img)
-	case ".jpg", ".jpeg":
+	case "image/jpeg":
 		err = jpeg.Encode(&buf, img, &jpeg.Options{Quality: 95})
 	default:
-		return nil, fmt.Errorf("unsupported format: %s", format)
+		return nil, fmt.Errorf("unsupported format: %s", contentType)
 	}
 
 	if err != nil {

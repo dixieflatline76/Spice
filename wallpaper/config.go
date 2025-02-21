@@ -1,4 +1,4 @@
-package config
+package wallpaper
 
 import (
 	"encoding/json"
@@ -11,6 +11,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"github.com/dixieflatline76/Spice/asset"
+	"github.com/dixieflatline76/Spice/config"
 )
 
 // Package config provides configuration management for the Wallpaper Downloader service
@@ -19,9 +20,9 @@ import (
 const wallhavenConfigPrefKey = "wallhaven_image_queries"
 
 // Config struct to hold all configuration data
-type Config struct { // You can add "//nolint:golint" here if you prefer
+type Config struct { //nolint:golint"
+	fyne.Preferences
 	ImageQueries []ImageQuery `json:"query_urls"`
-	prefs        fyne.Preferences
 	assetMgr     *asset.Manager
 }
 
@@ -33,21 +34,23 @@ type ImageQuery struct {
 }
 
 var (
-	instance *Config
-	once     sync.Once
+	cfgInstance *Config
+	cfgOnce     sync.Once
 )
 
 // GetConfig returns the singleton instance of Config.
 func GetConfig(p fyne.Preferences) *Config {
-	once.Do(func() {
-		instance = &Config{prefs: p}
+	cfgOnce.Do(func() {
+		cfgInstance = &Config{
+			Preferences: p,
+		}
 		// Load config from file
-		if err := instance.loadFromPrefs(); err != nil {
+		if err := cfgInstance.loadFromPrefs(); err != nil {
 			// Handle error, e.g., log, use defaults
 			fmt.Println("Error loading config:", err)
 		}
 	})
-	return instance
+	return cfgInstance
 }
 
 // GetPath returns the path to the user's config directory
@@ -56,7 +59,7 @@ func GetPath() string {
 	if err != nil {
 		log.Fatalf("Error getting user home directory: %v", err)
 	}
-	return filepath.Join(homeDir, "."+strings.ToLower(ServiceName))
+	return filepath.Join(homeDir, "."+strings.ToLower(config.AppName))
 }
 
 // loadFromPrefs loads configuration from the specified file
@@ -65,7 +68,7 @@ func (c *Config) loadFromPrefs() error {
 	if err != nil {
 		return err
 	}
-	cfgText := c.prefs.StringWithFallback(wallhavenConfigPrefKey, defaultCfg)
+	cfgText := c.StringWithFallback(wallhavenConfigPrefKey, defaultCfg)
 
 	err = json.Unmarshal([]byte(cfgText), c)
 	if err != nil {
@@ -122,15 +125,5 @@ func (c *Config) save() {
 		log.Fatalf("Error encoding config data: %v", err)
 	}
 
-	c.prefs.SetString(wallhavenConfigPrefKey, string(data))
-}
-
-// GetPreferences returns the preferences associated with the Config instance. This is workaround for the time
-// TODO: remove once direct access to fyne preferences has be adapted by config package
-//
-// Returns:
-//
-//	fyne.Preferences: The preferences associated with the Config instance.
-func (c *Config) GetPreferences() fyne.Preferences {
-	return c.prefs
+	c.SetString(wallhavenConfigPrefKey, string(data))
 }

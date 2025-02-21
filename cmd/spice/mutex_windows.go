@@ -18,7 +18,7 @@ var (
 
 // acquireLock tries to acquire a single-instance lock (mutex on Windows).
 func acquireLock() (bool, error) {
-	namePtr, err := syscall.UTF16PtrFromString(config.ServiceName + "_SingleInstanceMutex")
+	namePtr, err := syscall.UTF16PtrFromString(config.AppName + "_SingleInstanceMutex")
 	if err != nil {
 		return false, err
 	}

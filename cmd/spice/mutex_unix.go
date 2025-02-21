@@ -19,7 +19,7 @@ var (
 
 // acquireLock tries to acquire a single-instance lock (file lock on Unix).
 func acquireLock() (bool, error) {
-	lockFilePath := filepath.Join(os.TempDir(), config.ServiceName+".lock") // Use a lock file in /tmp
+	lockFilePath := filepath.Join(os.TempDir(), config.AppName+".lock") // Use a lock file in /tmp
 	file, err := os.OpenFile(lockFilePath, os.O_RDWR|os.O_CREATE, 0666)
 	if err != nil {
 		return false, fmt.Errorf("failed to open lock file: %w", err)

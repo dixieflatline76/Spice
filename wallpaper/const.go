@@ -1,9 +1,12 @@
-package service
+package wallpaper
 
 import (
 	"math"
 	"time"
 )
+
+// DefaultWallpaperCacheSize is the maximum number of wallpapers to keep in cache
+const DefaultWallpaperCacheSize = 200
 
 // PageDownloadOffset is the offset used to retrieve the next page of wallpapers 1 means service will download the next page 1 before the last image
 const PageDownloadOffset = 3
@@ -16,6 +19,9 @@ const WallpaperChgFreqPrefKey = "wallpaper_chg_freq"
 
 // SmartFitPrefKey is used to set and retrieve the boolean flag for wallpaper smart fit
 const SmartFitPrefKey = "smart_fit"
+
+// FittedImgDir is the suffix used to identify a fitted image directory
+const FittedImgDir = "fit"
 
 // ImgShufflePrefKey is used to set and retrieve the boolean flag for wallpaper image shuffle
 const ImgShufflePrefKey = "img_shuffle"

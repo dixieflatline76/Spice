@@ -5,7 +5,6 @@ import (
 	"log"
 
 	"github.com/dixieflatline76/Spice/config"
-	"github.com/dixieflatline76/Spice/service"
 	"github.com/dixieflatline76/Spice/ui"
 )
 
@@ -27,20 +26,6 @@ func main() {
 	}
 	defer releaseLock() // Make sure to release the lock when done
 
-	// Create the Fyne application
-	a := ui.GetInstance()
-	cfg := config.GetConfig(a.Preferences())
-	log.Printf("Version: %v", config.AppVersion)
-
-	// Create a function to send notifications to the user
-	notifier := func(title, message string) {
-		a.SendNotification(title, message)
-	}
-
-	// Start the wallpaper service
-	go service.StartWallpaperService(cfg, notifier)
-
-	if a != nil {
-		a.Run() // Run the Fyne application
-	}
+	a := ui.GetInstance() // Get the Fyne application instance
+	a.Run()               // Run the Fyne application
 }

@@ -2,21 +2,23 @@
 VERSION := $(shell sh -c "cat version.txt" 2> /dev/null || cmd /c "type version.txt")
 
 # --- Build targets ---
-build-gui:
+build-win-amd64:
 	set GOOS=windows&& set GOARCH=amd64&& go build -o bin/Spice.exe -ldflags "-H=windowsgui -X main.version=$(VERSION)" ./cmd/spice
 
-build-console:
+build-win-console-amd64:
 	set GOOS=windows&& set GOARCH=amd64&& go build -o bin/Spice-console.exe -ldflags "-X main.version=$(VERSION)" ./cmd/spice
 
+build-win-arm64:
+	set GOOS=windows&& set GOARCH=arm64&& go build -o bin/Spice-arm64.exe -ldflags "-H=windowsgui -X main.version=$(VERSION)" ./cmd/spice
+
 build-linux:
-	GOOS=linux GOARCH=amd64 go build -o bin/Spice -ldflags "-X main.version=$(VERSION)" ./cmd/spice
+	GOOS=linux GOARCH=amd64 go build -o bin/Spice-amd64 -ldflags "-X main.version=$(VERSION)" ./cmd/spice
 
 build-darwin-amd64:
-	GOOS=darwin GOARCH=amd64 go build -o bin/Spice_darwin_amd64 -ldflags "-X main.version=$(VERSION)" ./cmd/spice
+	GOOS=darwin GOARCH=amd64 go build -o bin/Spice-darwin-amd64 -ldflags "-X main.version=$(VERSION)" ./cmd/spice
 
 build-darwin-arm64:
-	GOOS=darwin GOARCH=arm64 go build -o bin/Spice_darwin_arm64 -ldflags "-X main.version=$(VERSION)" ./cmd/spice
-
+	GOOS=darwin GOARCH=arm64 go build -o bin/Spice-darwin-arm64 -ldflags "-X main.version=$(VERSION)" ./cmd/spice
 
 # --- Other targets ---
 lint:
@@ -35,7 +37,7 @@ update-major-deps:
 	go get -u=patch ./... 
 	go mod tidy
 
-all: update-minor-deps lint test build-gui build-console
+all: update-minor-deps lint test build-win-amd64 build-win-console-amd64
 
 # --- Clean target (cross-platform) ---
 clean:
@@ -44,6 +46,7 @@ ifeq ($(OS),Windows_NT)
 else
 	$(RM) -r bin
 endif
+	go clean
 
 # Build rule for the version_bump utility
 build-version-bump:
@@ -64,4 +67,4 @@ bump-major: build-version-bump
 	@echo "Bumping major version..."
 	./bin/util/version_bump major
 
-.PHONY: all build-gui build-console build-linux build-darwin-amd64 build-darwin-arm64 lint test update-minor-deps update-major-deps clean bump-patch bump-minor bump-major build-version-bump
+.PHONY: all build-win-amd64 build-win-console-amd64 build-win-arm64 build-linux build-darwin-amd64 build-darwin-arm64 lint test update-minor-deps update-major-deps clean bump-patch bump-minor bump-major build-version-bump
