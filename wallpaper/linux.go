@@ -1,7 +1,7 @@
 //go:build linux
 // +build linux
 
-package service
+package wallpaper
 
 import (
 	"fmt"
@@ -13,7 +13,6 @@ import (
 	"sync"
 
 	"github.com/disintegration/imaging"
-	"github.com/dixieflatline76/Spice/config"
 )
 
 // linuxOS implements the OS interface for Linux.
@@ -144,8 +143,8 @@ func (l *linuxOS) setWallpaperSway(imagePath string) error {
 }
 
 // getWallpaperService returns the singleton instance of wallpaperService.
-func getWallpaperService(cfg *config.Config) *wallpaperService {
-	once.Do(func() {
+func getWallpaperService(cfg *Config) *wallpaperService {
+	wsOnce.Do(func() {
 		// Initialize the wallpaper service for Linux
 		currentOS := &linuxOS{}
 
@@ -155,7 +154,7 @@ func getWallpaperService(cfg *config.Config) *wallpaperService {
 			imgProcessor:    &smartImageProcessor{os: currentOS, aspectThreshold: 0.9, resampler: imaging.Lanczos}, // Initialize with smartCropper with a lenient threshold
 			cfg:             cfg,
 			downloadMutex:   sync.Mutex{},
-			downloadHistory: make(map[string]ImgSrvcImage),
+			downloadHistory: []ImgSrvcImage{},
 			seenHistory:     make(map[string]bool),
 			currentPage:     1,                                        // Start with the first page,
 			fitImage:        cfg.BoolWithFallback("Smart Fit", false), // Initialize with smart fit preference

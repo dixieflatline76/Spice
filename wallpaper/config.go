@@ -1,4 +1,4 @@
-package config
+package wallpaper
 
 import (
 	"encoding/json"
@@ -11,6 +11,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"github.com/dixieflatline76/Spice/asset"
+	"github.com/dixieflatline76/Spice/config"
 )
 
 // Package config provides configuration management for the Wallpaper Downloader service
@@ -33,23 +34,23 @@ type ImageQuery struct {
 }
 
 var (
-	instance *Config
-	once     sync.Once
+	cfgInstance *Config
+	cfgOnce     sync.Once
 )
 
 // GetConfig returns the singleton instance of Config.
 func GetConfig(p fyne.Preferences) *Config {
-	once.Do(func() {
-		instance = &Config{
+	cfgOnce.Do(func() {
+		cfgInstance = &Config{
 			Preferences: p,
 		}
 		// Load config from file
-		if err := instance.loadFromPrefs(); err != nil {
+		if err := cfgInstance.loadFromPrefs(); err != nil {
 			// Handle error, e.g., log, use defaults
 			fmt.Println("Error loading config:", err)
 		}
 	})
-	return instance
+	return cfgInstance
 }
 
 // GetPath returns the path to the user's config directory
@@ -58,7 +59,7 @@ func GetPath() string {
 	if err != nil {
 		log.Fatalf("Error getting user home directory: %v", err)
 	}
-	return filepath.Join(homeDir, "."+strings.ToLower(ServiceName))
+	return filepath.Join(homeDir, "."+strings.ToLower(config.AppName))
 }
 
 // loadFromPrefs loads configuration from the specified file

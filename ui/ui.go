@@ -26,7 +26,7 @@ import (
 	"github.com/dixieflatline76/Spice/config"
 	"github.com/dixieflatline76/Spice/util"
 
-	"github.com/dixieflatline76/Spice/service"
+	"github.com/dixieflatline76/Spice/wallpaper"
 )
 
 // SpiceApp represents the application
@@ -35,7 +35,7 @@ type SpiceApp struct {
 	assetMgr *asset.Manager
 	trayMenu *fyne.Menu
 	prefs    fyne.Preferences
-	cfg      *config.Config
+	cfg      *wallpaper.Config
 }
 
 var (
@@ -46,8 +46,8 @@ var (
 // GetInstance returns the singleton instance of the application
 func GetInstance() *SpiceApp {
 	// Create a new instance of the application if it doesn't exist
-	a := app.NewWithID(config.ServiceName)
-	c := config.GetConfig(a.Preferences())
+	a := app.NewWithID(config.AppName)
+	c := wallpaper.GetConfig(a.Preferences())
 	if _, ok := a.(desktop.App); ok {
 		once.Do(func() {
 			instance = &SpiceApp{
@@ -76,18 +76,18 @@ func (sa *SpiceApp) SendNotification(title, message string) {
 func (sa *SpiceApp) CreateTrayMenu() {
 	desk := sa.app.(desktop.App)
 	trayIcon, _ := sa.assetMgr.GetIcon("tray.png")
-	trayMenu := fyne.NewMenu(config.ServiceName)
+	trayMenu := fyne.NewMenu(config.AppName)
 
 	trayMenu.Items = append(trayMenu.Items, sa.createMenuItem("Next Wallpaper", func() {
-		go service.SetNextWallpaper()
+		go wallpaper.SetNextWallpaper()
 	}, "next.png"))
 	trayMenu.Items = append(trayMenu.Items, sa.createMenuItem("Prev Wallpaper", func() {
-		go service.SetPreviousWallpaper()
+		go wallpaper.SetPreviousWallpaper()
 	}, "prev.png"))
-	trayMenu.Items = append(trayMenu.Items, sa.createToggleMenuItem("Shuffle Wallpapers", service.SetShuffleImage, "shuffle.png", sa.prefs.BoolWithFallback(service.ImgShufflePrefKey, false), trayMenu))
+	trayMenu.Items = append(trayMenu.Items, sa.createToggleMenuItem("Shuffle Wallpapers", wallpaper.SetShuffleImage, "shuffle.png", sa.prefs.BoolWithFallback(wallpaper.ImgShufflePrefKey, false), trayMenu))
 	trayMenu.Items = append(trayMenu.Items, fyne.NewMenuItemSeparator())
 	trayMenu.Items = append(trayMenu.Items, sa.createMenuItem("Image Source", func() {
-		go service.ViewCurrentImageOnWeb(sa.app)
+		go wallpaper.ViewCurrentImageOnWeb(sa.app)
 	}, "view.png"))
 	trayMenu.Items = append(trayMenu.Items, sa.createMenuItem("Preferences", func() {
 		go sa.CreatePreferencesWindow()
@@ -276,7 +276,7 @@ func (sa *SpiceApp) createImgQueryList(prefsWindow fyne.Window, refresh *bool, c
 			urlLink := c.Objects[0].(*widget.Hyperlink)
 			urlLink.SetText(sa.cfg.ImageQueries[i].Description)
 
-			siteURL := service.GetWallhavenURL(sa.cfg.ImageQueries[i].URL)
+			siteURL := wallpaper.GetWallhavenURL(sa.cfg.ImageQueries[i].URL)
 			if siteURL != nil {
 				urlLink.SetURL(siteURL)
 			} else {
@@ -379,8 +379,8 @@ func (sa *SpiceApp) createImageQueryPanel(prefsWindow fyne.Window, parent *fyne.
 			return false
 		}
 
-		urlEntry.Validator = validation.NewRegexp(service.WallhavenURLRegexp, "Invalid wallhaven image query URL pattern")
-		descEntry.Validator = validation.NewRegexp(service.WallhavenDescRegexp, fmt.Sprintf("Description must be between 5 and %d alpha numeric characters long", MaxDescLength))
+		urlEntry.Validator = validation.NewRegexp(wallpaper.WallhavenURLRegexp, "Invalid wallhaven image query URL pattern")
+		descEntry.Validator = validation.NewRegexp(wallpaper.WallhavenDescRegexp, fmt.Sprintf("Description must be between 5 and %d alpha numeric characters long", MaxDescLength))
 
 		newEntryLengthChecker := func(entry *widget.Entry, maxLen int) func(string) {
 			{
@@ -417,8 +417,8 @@ func (sa *SpiceApp) createImageQueryPanel(prefsWindow fyne.Window, parent *fyne.
 
 		actionButton.OnTapped = func() {
 
-			apiURL := service.CovertToAPIURL(urlEntry.Text)
-			err := service.CheckWallhavenURL(apiURL)
+			apiURL := wallpaper.CovertToAPIURL(urlEntry.Text)
+			err := wallpaper.CheckWallhavenURL(apiURL)
 			if err != nil {
 				formStatus.SetText(err.Error())
 				formStatus.Importance = widget.DangerImportance
@@ -474,12 +474,12 @@ func (sa *SpiceApp) createWallpaperPreferences(prefsWindow fyne.Window) *fyne.Co
 
 	// Change Frequency (using the enum)
 	frequencyOptions := []string{}
-	for _, f := range service.GetFrequencies() {
+	for _, f := range wallpaper.GetFrequencies() {
 		frequencyOptions = append(frequencyOptions, f.String())
 	}
 
-	initialFrequencyInt := sa.prefs.IntWithFallback(service.WallpaperChgFreqPrefKey, int(service.FrequencyHourly)) // Default to hourly
-	intialFrequency := service.Frequency(initialFrequencyInt)
+	initialFrequencyInt := sa.prefs.IntWithFallback(wallpaper.WallpaperChgFreqPrefKey, int(wallpaper.FrequencyHourly)) // Default to hourly
+	intialFrequency := wallpaper.Frequency(initialFrequencyInt)
 
 	frequencySelect := widget.NewSelect(frequencyOptions, func(selected string) {})
 	frequencySelect.SetSelectedIndex(initialFrequencyInt)
@@ -490,7 +490,7 @@ func (sa *SpiceApp) createWallpaperPreferences(prefsWindow fyne.Window) *fyne.Co
 	header.Add(frequencySelect)
 
 	// 3. Smart Fit
-	initialSmartFit := sa.prefs.BoolWithFallback(service.SmartFitPrefKey, false)
+	initialSmartFit := sa.prefs.BoolWithFallback(wallpaper.SmartFitPrefKey, false)
 
 	smartFitCheck := widget.NewCheck("Enable Smart Fit", func(b bool) {})
 	smartFitCheck.SetChecked(initialSmartFit)
@@ -507,18 +507,18 @@ func (sa *SpiceApp) createWallpaperPreferences(prefsWindow fyne.Window) *fyne.Co
 	// wallhaven API Key
 	wallhavenKeyEntry := widget.NewEntry()
 	wallhavenKeyEntry.SetPlaceHolder("Enter your wallhaven.cc API Key")
-	initialKey := sa.prefs.StringWithFallback(service.WallhavenAPIKeyPrefKey, "")
+	initialKey := sa.prefs.StringWithFallback(wallpaper.WallhavenAPIKeyPrefKey, "")
 	wallhavenKeyEntry.SetText(initialKey)
 	statusLabel := widget.NewLabel("")
 
-	wallhavenKeyEntry.Validator = validation.NewRegexp(service.WallhavenAPIKeyRegexp, "wallhaven API keys are 32 alpha numerics characters")
+	wallhavenKeyEntry.Validator = validation.NewRegexp(wallpaper.WallhavenAPIKeyRegexp, "wallhaven API keys are 32 alpha numerics characters")
 	wallhavenKeyEntry.OnChanged = func(s string) {
 		entryErr := wallhavenKeyEntry.Validate()
 		if entryErr != nil {
 			statusLabel.SetText(entryErr.Error())
 			statusLabel.Importance = widget.DangerImportance
 		} else {
-			keyErr := service.CheckWallhavenAPIKey(s)
+			keyErr := wallpaper.CheckWallhavenAPIKey(s)
 			if keyErr != nil {
 				statusLabel.SetText(keyErr.Error())
 				statusLabel.Importance = widget.DangerImportance
@@ -526,7 +526,6 @@ func (sa *SpiceApp) createWallpaperPreferences(prefsWindow fyne.Window) *fyne.Co
 				statusLabel.SetText("API Key OK")
 				statusLabel.Importance = widget.SuccessImportance
 				if initialKey != s {
-					sa.prefs.SetString(service.WallhavenAPIKeyPrefKey, s) // Save immediately
 					refresh = true
 					checkAndEnableApply()
 				}
@@ -552,14 +551,20 @@ func (sa *SpiceApp) createWallpaperPreferences(prefsWindow fyne.Window) *fyne.Co
 		go func() {
 			// Change wallpaper frequency
 			if chgFrq {
-				selectedFrequency := service.Frequency(frequencySelect.SelectedIndex())
-				service.ChangeWallpaperFrequency(selectedFrequency)
+				selectedFrequency := wallpaper.Frequency(frequencySelect.SelectedIndex())
+				wallpaper.ChangeWallpaperFrequency(selectedFrequency)
 				chgFrq = false
 			}
 
 			// Refresh images if API Key has changed or smart fit has been toggled
 			if refresh {
-				service.RefreshImages()
+				wallpaper.SetWallhavenAPIKey(wallhavenKeyEntry.Text) // Set the API key
+				initialKey = wallhavenKeyEntry.Text                  // Update the initial key
+
+				wallpaper.SetSmartFit(smartFitCheck.Checked) // Set the smart fit flag
+				initialSmartFit = smartFitCheck.Checked      // Update the initial smart fit flag
+
+				wallpaper.RefreshImages()
 				refresh = false
 			}
 
@@ -580,9 +585,9 @@ func (sa *SpiceApp) createWallpaperPreferences(prefsWindow fyne.Window) *fyne.Co
 	}
 
 	frequencySelect.OnChanged = func(s string) {
-		for _, f := range service.GetFrequencies() {
+		for _, f := range wallpaper.GetFrequencies() {
 			if f.String() == s && f != intialFrequency {
-				sa.prefs.SetInt(service.WallpaperChgFreqPrefKey, int(f))
+				sa.prefs.SetInt(wallpaper.WallpaperChgFreqPrefKey, int(f))
 				intialFrequency = f
 				// Log the selected frequency and duration
 				chgFrq = true
@@ -594,8 +599,6 @@ func (sa *SpiceApp) createWallpaperPreferences(prefsWindow fyne.Window) *fyne.Co
 
 	smartFitCheck.OnChanged = func(b bool) {
 		if initialSmartFit != b {
-			sa.prefs.SetBool(service.SmartFitPrefKey, b)
-			service.SetSmartFit(b)
 			refresh = true
 		} else {
 			refresh = false
@@ -618,7 +621,7 @@ func (sa *SpiceApp) createWallpaperPreferences(prefsWindow fyne.Window) *fyne.Co
 // The close button closes the preferences window when clicked.
 func (sa *SpiceApp) CreatePreferencesWindow() {
 	// Create a new window for the preferences
-	prefsWindow := sa.app.NewWindow(fmt.Sprintf("%s Preferences", config.ServiceName))
+	prefsWindow := sa.app.NewWindow(fmt.Sprintf("%s Preferences", config.AppName))
 	prefsWindow.Resize(fyne.NewSize(800, 800))
 	prefsWindow.CenterOnScreen()
 
@@ -639,7 +642,7 @@ func (sa *SpiceApp) CreatePreferencesWindow() {
 // If the EULA has been accepted, the application will proceed to setup.
 func (sa *SpiceApp) verifyEULA() {
 	// Check if the EULA has been accepted
-	if util.HasAcceptedEULA(sa.cfg) {
+	if util.HasAcceptedEULA(sa.prefs) {
 		sa.CreateSplashScreen() // Show the splash screen if the EULA has been accepted
 	} else {
 		sa.displayEULAAcceptance() // Show the EULA if it hasn't been accepted
@@ -669,7 +672,7 @@ func (sa *SpiceApp) displayEULAAcceptance() {
 	eulaDialog := dialog.NewCustomConfirm("To continue using Spice, please review and accept the End User License Agreement.", "Accept", "Decline", eulaScroll, func(accepted bool) {
 		if accepted {
 			// Mark the EULA as accepted
-			util.MarkEULAAccepted(sa.cfg)
+			util.MarkEULAAccepted(sa.prefs)
 			eulaWindow.Close()
 			sa.CreateSplashScreen() // Show the splash screen after user accepts the EULA
 		} else {
@@ -690,5 +693,9 @@ func (sa *SpiceApp) Preferences() fyne.Preferences {
 
 // Run runs the application
 func (sa *SpiceApp) Run() {
+	// Start the wallpaper service
+	go wallpaper.StartWallpaperService(sa.cfg, sa.SendNotification)
+
+	// Run the Fyne application
 	sa.app.Run()
 }

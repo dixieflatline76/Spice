@@ -9,11 +9,15 @@ import (
 	"os"
 	"time"
 
+	"fyne.io/fyne/v2"
 	"github.com/dixieflatline76/Spice/asset"
 	"github.com/dixieflatline76/Spice/config"
 )
 
 var assetMgr = asset.NewManager()
+
+// EULAPreferenceKey is the key for the EULA acceptance preference.
+const EULAPreferenceKey = "eula_acceptance"
 
 // EULAAcceptance is the struct for storing the acceptance of the EULA
 type EULAAcceptance struct {
@@ -42,8 +46,8 @@ func getMachineID() string {
 }
 
 // HasAcceptedEULA checks if the EULA has been accepted
-func HasAcceptedEULA(cfg *config.Config) bool {
-	eulaData := cfg.String(config.EULAPreferenceKey)
+func HasAcceptedEULA(prefs fyne.Preferences) bool {
+	eulaData := prefs.String(EULAPreferenceKey)
 
 	if eulaData == "" {
 		return false
@@ -69,7 +73,7 @@ func HasAcceptedEULA(cfg *config.Config) bool {
 }
 
 // MarkEULAAccepted marks the EULA as accepted
-func MarkEULAAccepted(cfg *config.Config) {
+func MarkEULAAccepted(prefs fyne.Preferences) {
 	eulaText, _ := assetMgr.GetText("eula.txt")
 	hash := generateEULAHash(eulaText, config.AppVersion)
 
@@ -82,5 +86,5 @@ func MarkEULAAccepted(cfg *config.Config) {
 
 	jsonData, _ := json.Marshal(acceptance)
 
-	cfg.SetString(config.EULAPreferenceKey, string(jsonData)) // Save the acceptance data
+	prefs.SetString(EULAPreferenceKey, string(jsonData)) // Save the acceptance data
 }
