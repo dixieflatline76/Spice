@@ -127,6 +127,25 @@ jobs:
       with:
         name: spice-release-build
 
+    - name: Login to Azure
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Sign installer with Azure Trusted Signing
+      uses: azure/sign-code@v1
+      with:
+        azure-subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        signing-certificate-name: ${{ secrets.SIGNING_CERTIFICATE_NAME }}
+        files-to-sign: 'bin/Spice-Setup.exe'
+
+    - name: Sign executable with Azure Trusted Signing
+      uses: azure/sign-code@v1
+      with:
+        azure-subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        signing-certificate-name: ${{ secrets.SIGNING_CERTIFICATE_NAME }}
+        files-to-sign: 'bin/Spice.exe'
+
     - name: Calculate checksum and create.sha256 file
       run: |
         certutil -hashfile Spice.exe SHA256 | findstr /v ":" > Spice.exe.sha256
