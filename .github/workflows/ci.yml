@@ -133,14 +133,14 @@ jobs:
         creds: ${{ secrets.AZURE_CREDENTIALS }}
 
     - name: Sign installer with Azure Trusted Signing
-      uses: azure/sign-code@v1
+      uses: azure/trusted-signing-action@v0
       with:
         azure-subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
         signing-certificate-name: ${{ secrets.SIGNING_CERTIFICATE_NAME }}
         files-to-sign: 'bin/Spice-Setup.exe'
 
     - name: Sign executable with Azure Trusted Signing
-      uses: azure/sign-code@v1
+      uses: azure/trusted-signing-action@v0
       with:
         azure-subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
         signing-certificate-name: ${{ secrets.SIGNING_CERTIFICATE_NAME }}
