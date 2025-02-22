@@ -15,11 +15,11 @@ Spice is a work-in-progress desktop background manager for Windows, inspired by 
 
 * **Spice runs in the background:** The primary way to interact with Spice is through its icon in the system tray (notification area).
 * **License Agreement:** When running Spice for the first time, you will be presented with the license agreement. You must accept this agreement to continue using Spice.
-* **Wallhaven.cc Account and API Key:** While a wallhaven API Key is not required to use Spice, an API Key is needed if you are interested in using NSFW images. In the future, we plan on adding wallhaven collection (favorites) support which will also require the API Key. You can generate an API key from wallhaven.cc (logged in) by visiting [https://wallhaven.cc/settings/account](https://wallhaven.cc/settings/account). **Please note that wallhaven may change their API policy in the future, and an API key may become required for all features.**
+* **Wallhaven.cc Account and API Key:** While a wallhaven API Key is not required to use Spice, an API Key is needed if you are interested in using NSFW images. In the future, we plan on adding wallhaven collection (favorites) support which will also require the API Key. You can generate an API key from [wallhaven.cc](https://wallhaven.cc/) (logged in) by visiting [https://wallhaven.cc/settings/account](https://wallhaven.cc/settings/account). **Please note that wallhaven may change their API policy in the future, and an API key may become required for all features.**
 
 ## Features
 
-* **Wallhaven.cc support:** Fetch wallpapers from wallhaven.cc, with support for API keys. Find exactly what you're looking for!
+* **Wallhaven.cc support:** Fetch wallpapers from [wallhaven.cc](https://wallhaven.cc/), with support for API keys. Find exactly what you're looking for!
 * **Multiple image queries:** Define multiple queries to diversify your wallpaper collection (e.g., one for landscapes, another for abstract art). Never run out of fresh options!
 * **System tray controls:** Easily navigate through your wallpaper cache with next, previous, and random image options. Quickly change your wallpaper with a single click.
 * **Daily image cache refresh:** Keep your wallpapers fresh with automatic cache updates every midnight. Set it and forget it!
@@ -99,7 +99,7 @@ Spice is now entirely configured through the preference panel. You can access it
 
 ## Image Page (Attribution and NSFW Content)
 
-When selecting "Image Page" from the tray menu, Spice attempts to open the image's source page on wallhaven.cc. This provides attribution to the image service. **Important:** If the image contains NSFW content, you *must* be signed in to your wallhaven.cc account in your web browser for the page to open correctly.
+When selecting "Image Page" from the tray menu, Spice attempts to open the image's source page on [wallhaven.cc](https://wallhaven.cc/). This provides attribution to the image service. **Important:** If the image contains NSFW content, you *must* be signed in to your wallhaven.cc account in your web browser for the page to open correctly.
 
 ## Keeping Spice's Tray Icon Visible
 
