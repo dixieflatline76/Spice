@@ -141,7 +141,7 @@ jobs:
         endpoint: https://weu.codesigning.azure.net/
         trusted-signing-account-name: SpiceOSS
         certificate-profile-name: Spice
-        files-folder: ${{ github.workspace }}\bin\
+        files-folder: ${{ github.workspace }}
         files-folder-filter: exe
         file-digest: SHA256
         timestamp-rfc3161: http://timestamp.acs.microsoft.com
