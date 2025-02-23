@@ -81,10 +81,6 @@ Spice is currently available for 64bit Windows PCs (amd64) and primarily tested 
 
 Download the latest release of `Spice-Setup.exe` from here: [release page](https://github.com/dixieflatline76/Spice/releases) Once downloaded, just double-clicking `Spice-Setup.exe` either directly from your browser download section or in File Explorer. During the installation, you can choose to have the installer setup Spice to run everytime Windows startup. During the very last step, you can choose to launch Spice after the install is finished.
 
-**Important Note:** When running Spice-Setup.exe on Windows, you will likely encounter a Windows protection dialog stating you are running an unrecognized app. This is because Spice-Setup is not signed with a digital certificate that costs upwards of 500 euros per year. We provided an alternative authenticity and security verification method via the SHA256 signature mentioned in the previous section. Along with the open source nature of Spice, you can safely proceed with installation as shown:
-
-<p align="center"><img src="images/install1.png" alt="Windows protection dialog 1" width="400"> <img src="images/install2.png" alt="Windows protection dialog 2" width="400"></p>
-
 ## Manual Installation
 
 If you opted not to use `Spice-Setup.exe` instead choosing to download `Spice.exe`, it is possible to manually add Spice to Windows startup using the Startup Folder:
