@@ -127,29 +127,25 @@ jobs:
       with:
         name: spice-release-build
 
-    - name: Login to Azure
-      uses: azure/login@v2
-      with:
-        creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-    - name: Sign installer with Azure Trusted Signing
-      uses: azure/trusted-signing-action@v0
-      with:
-        azure-subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-        signing-certificate-name: ${{ secrets.SIGNING_CERTIFICATE_NAME }}
-        files-to-sign: 'bin/Spice-Setup.exe'
-
-    - name: Sign executable with Azure Trusted Signing
-      uses: azure/trusted-signing-action@v0
-      with:
-        azure-subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-        signing-certificate-name: ${{ secrets.SIGNING_CERTIFICATE_NAME }}
-        files-to-sign: 'bin/Spice.exe'
-
     - name: Calculate checksum and create.sha256 file
       run: |
         certutil -hashfile Spice.exe SHA256 | findstr /v ":" > Spice.exe.sha256
         certutil -hashfile Spice-Setup.exe SHA256 | findstr /v ":" > Spice-Setup.exe.sha256
+
+    - name: Sign installer with Azure Trusted Signing
+      uses: azure/trusted-signing-action@v0
+      with:
+        azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+        endpoint: https://weu.codesigning.azure.net/
+        trusted-signing-account-name: SpiceOSS
+        certificate-profile-name: Spice
+        files-folder: ${{ github.workspace }}\bin\
+        files-folder-filter: exe
+        file-digest: SHA256
+        timestamp-rfc3161: http://timestamp.acs.microsoft.com
+        timestamp-digest: SHA256
 
     - name: Upload Spice.exe
       uses: actions/upload-release-asset@v1.0.2
