@@ -5,6 +5,12 @@ import (
 	"time"
 )
 
+// MaxURLLength is the maximum length of a URL
+const MaxURLLength = 1024
+
+// MaxDescLength is the maximum length of an image description
+const MaxDescLength = 105
+
 // DefaultWallpaperCacheSize is the maximum number of wallpapers to keep in cache
 const DefaultWallpaperCacheSize = 200
 

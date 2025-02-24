@@ -18,98 +18,133 @@ import (
 	"golang.org/x/image/math/fixed"
 
 	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/data/validation"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/driver/desktop"
 	"github.com/disintegration/imaging"
 	"github.com/dixieflatline76/Spice/asset"
 	"github.com/dixieflatline76/Spice/config"
+	"github.com/dixieflatline76/Spice/pkg"
 	"github.com/dixieflatline76/Spice/util"
-
-	"github.com/dixieflatline76/Spice/wallpaper"
 )
 
 // SpiceApp represents the application
 type SpiceApp struct {
-	app      fyne.App
-	assetMgr *asset.Manager
-	trayMenu *fyne.Menu
-	prefs    fyne.Preferences
-	cfg      *wallpaper.Config
+	fyne.App
+	assetMgr  *asset.Manager
+	trayMenu  *fyne.Menu
+	notifiers []pkg.Notifier
+	plugins   []pkg.Plugin // List of plugins to activate
 }
 
 var (
-	instance *SpiceApp // Singleton instance of the application
-	once     sync.Once // Ensures the singleton is created only once
+	saInstance *SpiceApp // Singleton instance of the application
+	saOnce     sync.Once // Ensures the singleton is created only once
 )
 
-// GetInstance returns the singleton instance of the application
-func GetInstance() *SpiceApp {
-	// Create a new instance of the application if it doesn't exist
-	a := app.NewWithID(config.AppName)
-	c := wallpaper.GetConfig(a.Preferences())
-	if _, ok := a.(desktop.App); ok {
-		once.Do(func() {
-			instance = &SpiceApp{
-				app:      a,
-				assetMgr: asset.NewManager(),
-				prefs:    a.Preferences(),
-				cfg:      c,
-			}
-			instance.CreateTrayMenu()
-			instance.verifyEULA()
-		})
-		return instance
-	}
-	log.Println("Tray icon not supported on this platform")
-	return nil
+// GetPluginManager returns the singleton instance of the application as a UIPluginManager
+func GetPluginManager() pkg.UIPluginManager {
+	return getInstance()
 }
 
-// SendNotification sends a notification to the user
-func (sa *SpiceApp) SendNotification(title, message string) {
-	// Create a notification
-	notification := fyne.NewNotification(title, message)
-	sa.app.SendNotification(notification)
+// Register registers a plugin with the application
+func (sa *SpiceApp) Register(plugin pkg.Plugin) {
+	sa.plugins = append(sa.plugins, plugin)
+	plugin.Init(sa)
+}
+
+// Deregister deregisters a plugin from the application
+func (sa *SpiceApp) Deregister(plugin pkg.Plugin) {
+	// Implementation for deregistering a plugin
+	for i, p := range sa.plugins {
+		if p == plugin {
+			sa.plugins = append(sa.plugins[:i], sa.plugins[i+1:]...)
+			break
+		}
+	}
+}
+
+// GetPreferences returns the preferences for the application
+func (sa *SpiceApp) GetPreferences() fyne.Preferences {
+	return sa.Preferences()
+}
+
+// RegisterNotifier registers a notifier with the application
+func (sa *SpiceApp) RegisterNotifier(notifier pkg.Notifier) {
+	sa.notifiers = append(sa.notifiers, notifier)
+}
+
+// GetApplication returns the singleton instance of the application
+func GetApplication() pkg.App {
+	return getInstance()
+}
+
+// GetInstance returns the singleton instance of the application
+func getInstance() *SpiceApp {
+	// Create a new instance of the application if it doesn't exist
+	saOnce.Do(func() {
+		a := app.NewWithID(config.AppName)
+		if _, ok := a.(desktop.App); ok {
+
+			saInstance = &SpiceApp{
+				App:      a,
+				assetMgr: asset.NewManager(),
+				trayMenu: fyne.NewMenu(config.AppName),
+				notifiers: []pkg.Notifier{func(title, message string) {
+					a.SendNotification(fyne.NewNotification(title, message))
+				}},
+				plugins: []pkg.Plugin{},
+			}
+			saInstance.verifyEULA()
+		} else {
+			log.Fatal("Spice not supported on this platform")
+		}
+	})
+	return saInstance
+}
+
+// NotifyUser sends a notification to the user via all registered notifiers
+func (sa *SpiceApp) NotifyUser(title, message string) {
+	for _, notify := range sa.notifiers {
+		notify(title, message)
+	}
 }
 
 // CreateTrayMenu creates the tray menu for the application
 func (sa *SpiceApp) CreateTrayMenu() {
-	desk := sa.app.(desktop.App)
+	desk := sa.App.(desktop.App)
 	trayIcon, _ := sa.assetMgr.GetIcon("tray.png")
-	trayMenu := fyne.NewMenu(config.AppName)
+	for i, plugin := range sa.plugins {
+		if i == 0 {
+			sa.trayMenu.Items = append(sa.trayMenu.Items, plugin.CreateTrayMenuItems()...)
+			sa.trayMenu.Items = append(sa.trayMenu.Items, fyne.NewMenuItemSeparator())
+		} else {
+			pluginSubmenu := fyne.NewMenuItem(plugin.Name(), nil)
+			pluginSubmenu.ChildMenu.Label = plugin.Name()
+			pluginSubmenu.ChildMenu.Items = plugin.CreateTrayMenuItems()
+			sa.trayMenu.Items = append(sa.trayMenu.Items, pluginSubmenu)
+		}
+	}
 
-	trayMenu.Items = append(trayMenu.Items, sa.createMenuItem("Next Wallpaper", func() {
-		go wallpaper.SetNextWallpaper()
-	}, "next.png"))
-	trayMenu.Items = append(trayMenu.Items, sa.createMenuItem("Prev Wallpaper", func() {
-		go wallpaper.SetPreviousWallpaper()
-	}, "prev.png"))
-	trayMenu.Items = append(trayMenu.Items, sa.createToggleMenuItem("Shuffle Wallpapers", wallpaper.SetShuffleImage, "shuffle.png", sa.prefs.BoolWithFallback(wallpaper.ImgShufflePrefKey, false), trayMenu))
-	trayMenu.Items = append(trayMenu.Items, fyne.NewMenuItemSeparator())
-	trayMenu.Items = append(trayMenu.Items, sa.createMenuItem("Image Source", func() {
-		go wallpaper.ViewCurrentImageOnWeb(sa.app)
-	}, "view.png"))
-	trayMenu.Items = append(trayMenu.Items, sa.createMenuItem("Preferences", func() {
+	sa.trayMenu.Items = append(sa.trayMenu.Items, sa.CreateMenuItem("Preferences", func() {
 		go sa.CreatePreferencesWindow()
 	}, "prefs.png"))
-	trayMenu.Items = append(trayMenu.Items, fyne.NewMenuItemSeparator())
-	trayMenu.Items = append(trayMenu.Items, sa.createMenuItem("About Spice", func() {
-		go sa.CreateSplashScreen()
+	sa.trayMenu.Items = append(sa.trayMenu.Items, fyne.NewMenuItemSeparator())
+	sa.trayMenu.Items = append(sa.trayMenu.Items, sa.CreateMenuItem("About Spice", func() {
+		go sa.CreateSplashScreen(aboutSplashTime)
 	}, "tray.png"))
-	trayMenu.Items = append(trayMenu.Items, fyne.NewMenuItemSeparator())
-	trayMenu.Items = append(trayMenu.Items, sa.createMenuItem("Quit", func() {
+	sa.trayMenu.Items = append(sa.trayMenu.Items, fyne.NewMenuItemSeparator())
+	sa.trayMenu.Items = append(sa.trayMenu.Items, sa.CreateMenuItem("Quit", func() {
 		// Stop the service before quitting the application
-		sa.app.Quit()
+		sa.Quit()
 	}, "quit.png"))
 
-	desk.SetSystemTrayMenu(trayMenu)
+	desk.SetSystemTrayMenu(sa.trayMenu)
 	desk.SetSystemTrayIcon(trayIcon)
-	sa.app.SetIcon(trayIcon)
-	sa.trayMenu = trayMenu
+	sa.SetIcon(trayIcon)
 }
 
-// createTrayMenu creates the tray menu
-func (sa *SpiceApp) createMenuItem(label string, action func(), iconName string) *fyne.MenuItem {
+// CreateMenuItem creates a menu item with the given label, action, and icon
+func (sa *SpiceApp) CreateMenuItem(label string, action func(), iconName string) *fyne.MenuItem {
 	mi := fyne.NewMenuItem(label, action)
 	icon, err := sa.assetMgr.GetIcon(iconName)
 	if err != nil {
@@ -120,8 +155,8 @@ func (sa *SpiceApp) createMenuItem(label string, action func(), iconName string)
 	return mi
 }
 
-// createToggleMenuItem creates the tray menu either checked or unchecked
-func (sa *SpiceApp) createToggleMenuItem(label string, action func(bool), iconName string, checked bool, parent *fyne.Menu) *fyne.MenuItem {
+// CreateToggleMenuItem creates a toggle menu item with the given label, action, icon, and checked state
+func (sa *SpiceApp) CreateToggleMenuItem(label string, action func(bool), iconName string, checked bool) *fyne.MenuItem {
 
 	mi := fyne.NewMenuItem("", nil)
 
@@ -148,7 +183,7 @@ func (sa *SpiceApp) createToggleMenuItem(label string, action func(bool), iconNa
 		}
 		mi.Checked = newChecked
 		action(newChecked)
-		parent.Refresh()
+		sa.trayMenu.Refresh()
 	}
 
 	return mi
@@ -188,9 +223,9 @@ func (sa *SpiceApp) addVersionWatermark(img image.Image) (image.Image, error) {
 }
 
 // CreateSplashScreen creates a splash screen for the application
-func (sa *SpiceApp) CreateSplashScreen() {
+func (sa *SpiceApp) CreateSplashScreen(seconds int) {
 	// Create a splash screen with the application icon
-	drv, ok := sa.app.Driver().(desktop.Driver)
+	drv, ok := sa.Driver().(desktop.Driver)
 	if !ok {
 		log.Println("Splash screen not supported")
 		return // Splash screen not supported
@@ -222,397 +257,9 @@ func (sa *SpiceApp) CreateSplashScreen() {
 
 	// Hide the splash screen after 3 seconds
 	go func() {
-		time.Sleep(3 * time.Second)
+		time.Sleep(time.Duration(seconds) * time.Second)
 		splashWindow.Close() // Close the splash window
 	}()
-}
-
-// createSectionTitleLabel creates a label for a setting title
-func createSectionTitleLabel(desc string) *widget.Label {
-	label := widget.NewLabel(desc)
-	label.Wrapping = fyne.TextWrapWord
-	label.Importance = widget.HighImportance
-	label.TextStyle = fyne.TextStyle{Bold: true}
-	return label
-}
-
-// createSettingTitleLabel creates a label for a setting title
-func createSettingTitleLabel(desc string) *widget.Label {
-	label := widget.NewLabel(desc)
-	label.Wrapping = fyne.TextWrapWord
-	label.Importance = widget.MediumImportance
-	label.TextStyle = fyne.TextStyle{Bold: true}
-	return label
-}
-
-// createSettingDescriptionLabel creates a label for a setting description
-func createSettingDescriptionLabel(desc string) *widget.Label {
-	label := widget.NewLabel(desc)
-	label.Wrapping = fyne.TextWrapWord
-	label.Importance = widget.LowImportance
-	label.TextStyle = fyne.TextStyle{Italic: true}
-	return label
-}
-
-// createSettingEntry creates a widget for a setting entry
-func (sa *SpiceApp) createImgQueryList(prefsWindow fyne.Window, refresh *bool, checkAndEnableApply func()) *widget.List {
-
-	var queryList *widget.List
-	queryList = widget.NewList(
-		func() int {
-			return len(sa.cfg.ImageQueries)
-		},
-		func() fyne.CanvasObject {
-			urlLink := widget.NewHyperlink("Placeholder", nil) // Placeholder text
-			activeCheck := widget.NewCheck("Active", nil)
-			deleteButton := widget.NewButton("Delete", nil)
-
-			return container.NewHBox(urlLink, layout.NewSpacer(), activeCheck, deleteButton)
-		},
-		func(i int, o fyne.CanvasObject) {
-
-			c := o.(*fyne.Container)
-
-			urlLink := c.Objects[0].(*widget.Hyperlink)
-			urlLink.SetText(sa.cfg.ImageQueries[i].Description)
-
-			siteURL := wallpaper.GetWallhavenURL(sa.cfg.ImageQueries[i].URL)
-			if siteURL != nil {
-				urlLink.SetURL(siteURL)
-			} else {
-				// this should never happen
-				// TODO refactor later
-				urlLink.SetURLFromString(sa.cfg.ImageQueries[i].URL)
-			}
-
-			activeCheck := c.Objects[2].(*widget.Check)
-			deleteButton := c.Objects[3].(*widget.Button)
-
-			activeCheck.SetChecked(sa.cfg.ImageQueries[i].Active)
-			activeCheck.OnChanged = func(b bool) {
-				if b == sa.cfg.ImageQueries[i].Active {
-					return // no change, just return
-				}
-
-				if b {
-					sa.cfg.EnableImageQuery(i)
-				} else {
-					sa.cfg.DisableImageQuery(i)
-				}
-
-				*refresh = true
-				checkAndEnableApply()
-			}
-
-			deleteButton.OnTapped = func() {
-				d := dialog.NewConfirm("Please Confirm", fmt.Sprintf("Are you sure you want to delete %s?", sa.cfg.ImageQueries[i].Description), func(b bool) {
-					if b {
-						if sa.cfg.ImageQueries[i].Active {
-							*refresh = true
-							checkAndEnableApply()
-						}
-
-						sa.cfg.RemoveImageQuery(i)
-						queryList.Refresh()
-					}
-
-				}, prefsWindow)
-				d.Show()
-			}
-		},
-	)
-	return queryList
-}
-
-// createImgQueryList creates a list of image queries
-func (sa *SpiceApp) createImageQueryPanel(prefsWindow fyne.Window, parent *fyne.Container, refresh *bool, checkAndEnableApply func()) {
-
-	imgQueryList := sa.createImgQueryList(prefsWindow, refresh, checkAndEnableApply)
-	var addButton *widget.Button
-	addButton = widget.NewButton("Add Image Query", func() {
-
-		urlEntry := widget.NewEntry()
-		urlEntry.SetPlaceHolder("Cut and paste your wallhaven image query URL here")
-
-		descEntry := widget.NewEntry()
-		descEntry.SetPlaceHolder("Add a description for this query")
-
-		formStatus := widget.NewLabel("")
-		activeBool := widget.NewCheck("Active", nil)
-
-		cancelButton := widget.NewButton("Cancel", nil)
-		actionButton := widget.NewButton("Save", nil)
-		actionButton.Disable() // Save button is only enabled when the URL is valid and min desc has been added
-
-		formValidator := func(who *widget.Entry) bool {
-			urlStrErr := urlEntry.Validate()
-			descStrErr := descEntry.Validate()
-
-			if urlStrErr == nil && descStrErr == nil {
-				formStatus.SetText("Everything looks good")
-				formStatus.Importance = widget.SuccessImportance
-				formStatus.Refresh()
-				return true
-			}
-
-			if who == urlEntry {
-				if urlStrErr != nil {
-					formStatus.SetText(urlStrErr.Error())
-					formStatus.Importance = widget.DangerImportance
-				} else {
-					formStatus.SetText("URL OK")
-					formStatus.Importance = widget.SuccessImportance
-				}
-			}
-
-			if who == descEntry {
-				if descStrErr != nil {
-					formStatus.SetText(descStrErr.Error())
-					formStatus.Importance = widget.DangerImportance
-				} else {
-					formStatus.SetText("Description OK")
-					formStatus.Importance = widget.SuccessImportance
-				}
-			}
-
-			formStatus.Refresh()
-			return false
-		}
-
-		urlEntry.Validator = validation.NewRegexp(wallpaper.WallhavenURLRegexp, "Invalid wallhaven image query URL pattern")
-		descEntry.Validator = validation.NewRegexp(wallpaper.WallhavenDescRegexp, fmt.Sprintf("Description must be between 5 and %d alpha numeric characters long", MaxDescLength))
-
-		newEntryLengthChecker := func(entry *widget.Entry, maxLen int) func(string) {
-			{
-				return func(s string) {
-					if len(s) > maxLen {
-						entry.SetText(s[:maxLen]) // Truncate to max length
-						return                    // Very important! Stop further processing
-					}
-
-					if formValidator(entry) {
-						actionButton.Enable()
-					} else {
-						actionButton.Disable()
-					}
-				}
-			}
-		}
-		urlEntry.OnChanged = newEntryLengthChecker(urlEntry, MaxURLLength)
-		descEntry.OnChanged = newEntryLengthChecker(descEntry, MaxDescLength)
-
-		c := container.NewVBox()
-		c.Add(createSettingTitleLabel("wallhaven Image Query URL:"))
-		c.Add(urlEntry)
-		c.Add(createSettingTitleLabel("Description:"))
-		c.Add(descEntry)
-		c.Add(formStatus)
-		c.Add(widget.NewSeparator())
-		c.Add(activeBool)
-		c.Add(widget.NewSeparator())
-		c.Add(container.NewHBox(cancelButton, layout.NewSpacer(), actionButton))
-
-		d := dialog.NewCustomWithoutButtons("New Image Query", c, prefsWindow)
-		d.Resize(fyne.NewSize(800, 200))
-
-		actionButton.OnTapped = func() {
-
-			apiURL := wallpaper.CovertToAPIURL(urlEntry.Text)
-			err := wallpaper.CheckWallhavenURL(apiURL)
-			if err != nil {
-				formStatus.SetText(err.Error())
-				formStatus.Importance = widget.DangerImportance
-				formStatus.Refresh()
-				return
-			}
-
-			sa.cfg.AddImageQuery(descEntry.Text, apiURL, activeBool.Checked)
-
-			addButton.Enable()
-			imgQueryList.Refresh()
-
-			if activeBool.Checked {
-				*refresh = true
-				checkAndEnableApply()
-			}
-			d.Hide()
-			addButton.Enable()
-		}
-
-		cancelButton.OnTapped = func() {
-			d.Hide()
-			addButton.Enable()
-		}
-
-		d.Show()
-		addButton.Disable()
-		parent.Refresh()
-	})
-
-	header := container.NewVBox()
-	header.Add(widget.NewSeparator())
-	header.Add(createSettingTitleLabel("wallhaven Image Queries"))
-	header.Add(createSettingDescriptionLabel("Manage your wallhaven.cc image queries here. Spice will convert query URL into wallhaven API format."))
-	header.Add(addButton)
-	qpContainer := container.NewBorder(header, nil, nil, nil, imgQueryList)
-	parent.Add(qpContainer)
-	parent.Refresh()
-}
-
-// CreateWallpaperPreferences creates a preferences widget for wallpaper settings
-func (sa *SpiceApp) createWallpaperPreferences(prefsWindow fyne.Window) *fyne.Container {
-	header := container.NewVBox()
-	footer := container.NewVBox()
-
-	prefsPanel := container.NewBorder(header, footer, nil, nil)
-
-	header.Add(createSectionTitleLabel("Wallpaper Preferences"))
-	header.Add(createSettingDescriptionLabel("Following settings control the general behavior of wallpaper changes across all image services."))
-
-	var checkAndEnableApply func()  // Function to check if any setting has changed and enable/disable the apply button
-	refresh, chgFrq := false, false // Flags to track if the wallpaper settings have changed
-
-	// Change Frequency (using the enum)
-	frequencyOptions := []string{}
-	for _, f := range wallpaper.GetFrequencies() {
-		frequencyOptions = append(frequencyOptions, f.String())
-	}
-
-	initialFrequencyInt := sa.prefs.IntWithFallback(wallpaper.WallpaperChgFreqPrefKey, int(wallpaper.FrequencyHourly)) // Default to hourly
-	intialFrequency := wallpaper.Frequency(initialFrequencyInt)
-
-	frequencySelect := widget.NewSelect(frequencyOptions, func(selected string) {})
-	frequencySelect.SetSelectedIndex(initialFrequencyInt)
-
-	header.Add(widget.NewSeparator())
-	header.Add(createSettingTitleLabel("Change Frequency:"))
-	header.Add(createSettingDescriptionLabel("Select how often you want your wallpaper to change."))
-	header.Add(frequencySelect)
-
-	// 3. Smart Fit
-	initialSmartFit := sa.prefs.BoolWithFallback(wallpaper.SmartFitPrefKey, false)
-
-	smartFitCheck := widget.NewCheck("Enable Smart Fit", func(b bool) {})
-	smartFitCheck.SetChecked(initialSmartFit)
-
-	header.Add(widget.NewSeparator())
-	header.Add(createSettingTitleLabel("Smart Fit:"))
-	header.Add(createSettingDescriptionLabel("Enable Smart Fit to automatically scale and crop the wallpaper to fit your screen resolution."))
-	header.Add(smartFitCheck)
-
-	//wallhaven service section
-	header.Add(createSectionTitleLabel("wallhaven Service Preferences"))
-	header.Add(createSettingDescriptionLabel("Following settings are only used for wallhaven.cc image service."))
-
-	// wallhaven API Key
-	wallhavenKeyEntry := widget.NewEntry()
-	wallhavenKeyEntry.SetPlaceHolder("Enter your wallhaven.cc API Key")
-	initialKey := sa.prefs.StringWithFallback(wallpaper.WallhavenAPIKeyPrefKey, "")
-	wallhavenKeyEntry.SetText(initialKey)
-	statusLabel := widget.NewLabel("")
-
-	wallhavenKeyEntry.Validator = validation.NewRegexp(wallpaper.WallhavenAPIKeyRegexp, "wallhaven API keys are 32 alpha numerics characters")
-	wallhavenKeyEntry.OnChanged = func(s string) {
-		entryErr := wallhavenKeyEntry.Validate()
-		if entryErr != nil {
-			statusLabel.SetText(entryErr.Error())
-			statusLabel.Importance = widget.DangerImportance
-		} else {
-			keyErr := wallpaper.CheckWallhavenAPIKey(s)
-			if keyErr != nil {
-				statusLabel.SetText(keyErr.Error())
-				statusLabel.Importance = widget.DangerImportance
-			} else {
-				statusLabel.SetText("API Key OK")
-				statusLabel.Importance = widget.SuccessImportance
-				if initialKey != s {
-					refresh = true
-					checkAndEnableApply()
-				}
-			}
-		}
-		statusLabel.Refresh()
-	}
-
-	header.Add(widget.NewSeparator())
-	header.Add(createSettingTitleLabel("wallhaven API Key:"))
-	header.Add(createSettingDescriptionLabel("Enter your API Key from wallhaven.cc to enable wallpaper downloads from this source."))
-	header.Add(wallhavenKeyEntry)
-	header.Add(statusLabel)
-
-	// Apply Button (Initially Disabled)
-	var applyButton *widget.Button
-	applyButton = widget.NewButton("Apply Changes", func() {
-
-		originalText := applyButton.Text
-		applyButton.Disable()
-		applyButton.SetText("Applying changes, please wait...")
-		applyButton.Refresh()
-		go func() {
-			// Change wallpaper frequency
-			if chgFrq {
-				selectedFrequency := wallpaper.Frequency(frequencySelect.SelectedIndex())
-				wallpaper.ChangeWallpaperFrequency(selectedFrequency)
-				chgFrq = false
-			}
-
-			// Refresh images if API Key has changed or smart fit has been toggled
-			if refresh {
-				wallpaper.SetWallhavenAPIKey(wallhavenKeyEntry.Text) // Set the API key
-				initialKey = wallhavenKeyEntry.Text                  // Update the initial key
-
-				wallpaper.SetSmartFit(smartFitCheck.Checked) // Set the smart fit flag
-				initialSmartFit = smartFitCheck.Checked      // Update the initial smart fit flag
-
-				wallpaper.RefreshImages()
-				refresh = false
-			}
-
-			applyButton.SetText(originalText)
-			applyButton.Refresh()
-		}()
-	})
-	applyButton.Disable() // Start as disabled
-
-	// Function to check if any setting has changed and enable/disable the apply button
-	checkAndEnableApply = func() {
-		if refresh || chgFrq {
-			applyButton.Enable()
-		} else {
-			applyButton.Disable()
-		}
-		applyButton.Refresh()
-	}
-
-	frequencySelect.OnChanged = func(s string) {
-		for _, f := range wallpaper.GetFrequencies() {
-			if f.String() == s && f != intialFrequency {
-				sa.prefs.SetInt(wallpaper.WallpaperChgFreqPrefKey, int(f))
-				intialFrequency = f
-				// Log the selected frequency and duration
-				chgFrq = true
-				break
-			}
-		}
-		checkAndEnableApply()
-	}
-
-	smartFitCheck.OnChanged = func(b bool) {
-		if initialSmartFit != b {
-			refresh = true
-		} else {
-			refresh = false
-		}
-		checkAndEnableApply()
-	}
-
-	sa.createImageQueryPanel(prefsWindow, prefsPanel, &refresh, checkAndEnableApply)
-
-	footer.Add(widget.NewSeparator())
-	footer.Add(applyButton)
-
-	//return wallpaperPrefs
-	return prefsPanel
 }
 
 // CreatePreferencesWindow creates and displays a new window for the application's preferences.
@@ -621,17 +268,20 @@ func (sa *SpiceApp) createWallpaperPreferences(prefsWindow fyne.Window) *fyne.Co
 // The close button closes the preferences window when clicked.
 func (sa *SpiceApp) CreatePreferencesWindow() {
 	// Create a new window for the preferences
-	prefsWindow := sa.app.NewWindow(fmt.Sprintf("%s Preferences", config.AppName))
+	prefsWindow := sa.NewWindow(fmt.Sprintf("%s Preferences", config.AppName))
 	prefsWindow.Resize(fyne.NewSize(800, 800))
 	prefsWindow.CenterOnScreen()
 
-	// Main Wallpaper Plugin Container
-	wallpaperPrefs := sa.createWallpaperPreferences(prefsWindow)
+	prefsContainers := []fyne.CanvasObject{}
+	for _, plugin := range sa.plugins {
+		prefsContainers = append(prefsContainers, plugin.CreatePrefsPanel(prefsWindow))
+	}
+
 	closeButton := widget.NewButton("Close", func() {
 		prefsWindow.Close()
 	})
 
-	prefsWindowLayout := container.NewBorder(nil, container.NewHBox(layout.NewSpacer(), closeButton), nil, nil, wallpaperPrefs)
+	prefsWindowLayout := container.NewBorder(nil, container.NewHBox(layout.NewSpacer(), closeButton), nil, nil, prefsContainers...)
 
 	prefsWindow.SetContent(prefsWindowLayout)
 	prefsWindow.Show()
@@ -642,8 +292,8 @@ func (sa *SpiceApp) CreatePreferencesWindow() {
 // If the EULA has been accepted, the application will proceed to setup.
 func (sa *SpiceApp) verifyEULA() {
 	// Check if the EULA has been accepted
-	if util.HasAcceptedEULA(sa.prefs) {
-		sa.CreateSplashScreen() // Show the splash screen if the EULA has been accepted
+	if util.HasAcceptedEULA(sa.Preferences()) {
+		sa.CreateSplashScreen(startupSplashTime) // Show the splash screen if the EULA has been accepted
 	} else {
 		sa.displayEULAAcceptance() // Show the EULA if it hasn't been accepted
 	}
@@ -658,7 +308,7 @@ func (sa *SpiceApp) displayEULAAcceptance() {
 	}
 
 	// Create a new window for the EULA
-	eulaWindow := sa.app.NewWindow("Spice EULA")
+	eulaWindow := sa.NewWindow("Spice EULA")
 	eulaWindow.Resize(fyne.NewSize(800, 600))
 	eulaWindow.CenterOnScreen()
 	eulaWindow.SetCloseIntercept(func() {
@@ -672,12 +322,12 @@ func (sa *SpiceApp) displayEULAAcceptance() {
 	eulaDialog := dialog.NewCustomConfirm("To continue using Spice, please review and accept the End User License Agreement.", "Accept", "Decline", eulaScroll, func(accepted bool) {
 		if accepted {
 			// Mark the EULA as accepted
-			util.MarkEULAAccepted(sa.prefs)
+			util.MarkEULAAccepted(sa.Preferences())
 			eulaWindow.Close()
-			sa.CreateSplashScreen() // Show the splash screen after user accepts the EULA
+			sa.CreateSplashScreen(startupSplashTime) // Show the splash screen after user accepts the EULA
 		} else {
 			// Stop the service before quitting the application
-			sa.app.Quit()
+			sa.Quit()
 		}
 	}, eulaWindow)
 
@@ -686,16 +336,21 @@ func (sa *SpiceApp) displayEULAAcceptance() {
 	eulaWindow.Show()
 }
 
-// Preferences returns the preferences for the application
-func (sa *SpiceApp) Preferences() fyne.Preferences {
-	return sa.prefs
-}
+// Bam activates all plugins and runs the Fyne application
+func (sa *SpiceApp) Bam() {
 
-// Run runs the application
-func (sa *SpiceApp) Run() {
-	// Start the wallpaper service
-	go wallpaper.StartWallpaperService(sa.cfg, sa.SendNotification)
+	// Create the tray menu
+	saInstance.CreateTrayMenu()
+
+	// Activate all plugins
+	go func() {
+		time.Sleep(500 * time.Millisecond) // Wait for the tray menu to be created and the ui to be ready
+		for _, plugin := range sa.plugins {
+			plugin.Activate()
+			log.Printf("Activated plugin: %s", plugin.Name())
+		}
+	}()
 
 	// Run the Fyne application
-	sa.app.Run()
+	sa.Run()
 }
