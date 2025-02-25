@@ -27,6 +27,7 @@ func main() {
 		return
 	}
 	defer releaseLock()             // Make sure to release the lock when done
+	
 	spiceApp := ui.GetApplication() // Create a new Fyne application
 	wallpaper.LoadPlugin()          // Initialize the wallpaper plugin
 	spiceApp.Bam()                  // Run the application
