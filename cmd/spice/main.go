@@ -2,7 +2,8 @@ package main
 
 import (
 	"fmt"
-	"log"
+
+	"github.com/dixieflatline76/Spice/util/log"
 
 	"github.com/dixieflatline76/Spice/config"
 	"github.com/dixieflatline76/Spice/ui"
@@ -26,9 +27,9 @@ func main() {
 		fmt.Println("Another instance of Wallhavener is already running.")
 		return
 	}
-	defer releaseLock()             // Make sure to release the lock when done
-	
+	defer releaseLock() // Make sure to release the lock when done
+
 	spiceApp := ui.GetApplication() // Create a new Fyne application
 	wallpaper.LoadPlugin()          // Initialize the wallpaper plugin
-	spiceApp.Bam()                  // Run the application
+	spiceApp.Start()                // Run the application
 }

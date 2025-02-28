@@ -10,5 +10,7 @@
       "url": "https://wallhaven.cc/api/v1/search?q=-video-games+-pattern+-flower+-fabric+-vehicle+-car+-folding-screen+-suicide+-typography+-mosaic+-artwork+-logo+-TV-series+-asian+-men+-cartoon+-plants+-abstract+-cgi+-huge-breasts+-humor+-group-of-women+-statue+-DC-Comics+-Star-Wars+-latex+-BDSM+-gore+-painting+-dark-skin+-weapon+-feet+-Marvel-Comics+-video-game-characters+-furry+-gun+-blood+-books+-screen-shot+-bullet+-text+-drawing+-illustration+-military+-war+-Korean+-motorcycle+-banner+-children+-movie+-baby+-riot+-Ukraine&categories=100&purity=100&ratios=landscape&sorting=random&order=desc&ai_art_filter=1",
       "active": false
     }
-  ]
+  ],
+  "avoid_set": {
+  }
 }

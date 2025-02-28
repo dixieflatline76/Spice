@@ -5,9 +5,10 @@ import (
 	"embed"
 	"image"
 	_ "image/png" // Register PNG decoder
-	"log"
 
 	"fyne.io/fyne/v2"
+
+	"github.com/dixieflatline76/Spice/util/log"
 )
 
 //go:embed images/* icons/* text/*

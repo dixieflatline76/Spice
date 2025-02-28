@@ -5,8 +5,9 @@ package main
 
 import (
 	"errors"
-	"log"
 	"syscall"
+
+	"github.com/dixieflatline76/Spice/util/log"
 
 	"github.com/dixieflatline76/Spice/config"
 	"golang.org/x/sys/windows"

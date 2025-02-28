@@ -3,11 +3,12 @@ package wallpaper
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+
+	"github.com/dixieflatline76/Spice/util/log"
 
 	"fyne.io/fyne/v2"
 	"github.com/dixieflatline76/Spice/asset"
@@ -22,8 +23,9 @@ const wallhavenConfigPrefKey = "wallhaven_image_queries"
 // Config struct to hold all configuration data
 type Config struct { //nolint:golint"
 	fyne.Preferences
-	ImageQueries []ImageQuery `json:"query_urls"`
-	assetMgr     *asset.Manager
+	ImageQueries []ImageQuery    `json:"query_urls"` // List of image queries
+	assetMgr     *asset.Manager  // Asset manager
+	AvoidSet     map[string]bool `json:"avoid_set"` // Set of image URLs to avoid
 }
 
 // ImageQuery struct to hold the URL of an image and whether it is active
@@ -42,7 +44,10 @@ var (
 func GetConfig(p fyne.Preferences) *Config {
 	cfgOnce.Do(func() {
 		cfgInstance = &Config{
-			Preferences: p,
+			Preferences:  p,
+			ImageQueries: make([]ImageQuery, 0),
+			assetMgr:     asset.NewManager(),
+			AvoidSet:     make(map[string]bool),
 		}
 		// Load config from file
 		if err := cfgInstance.loadFromPrefs(); err != nil {
@@ -116,6 +121,24 @@ func (c *Config) DisableImageQuery(index int) error {
 	c.ImageQueries[index].Active = false
 	c.save()
 	return nil
+}
+
+// InAvoidSet checks if the given ID is in the avoid set
+func (c *Config) InAvoidSet(id string) bool {
+	_, found := c.AvoidSet[id]
+	return found
+}
+
+// AddToAvoidSet adds the given ID to the avoid set
+func (c *Config) AddToAvoidSet(id string) {
+	c.AvoidSet[id] = true
+	c.save()
+}
+
+// ResetAvoidSet clears the avoid set
+func (c *Config) ResetAvoidSet() {
+	c.AvoidSet = make(map[string]bool)
+	c.save()
 }
 
 // Save saves the current configuration to the user's config file

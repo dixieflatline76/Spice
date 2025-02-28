@@ -4,9 +4,10 @@ import (
 	"fmt"
 	"image"
 	"image/color"
-	"log"
 	"sync"
 	"time"
+
+	"github.com/dixieflatline76/Spice/util/log"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
@@ -32,8 +33,8 @@ type SpiceApp struct {
 	fyne.App
 	assetMgr  *asset.Manager
 	trayMenu  *fyne.Menu
-	notifiers []pkg.Notifier
-	plugins   []pkg.Plugin // List of plugins to activate
+	notifiers []pkg.Notifier // List of notifiers to activate
+	plugins   []pkg.Plugin   // List of plugins to activate
 }
 
 var (
@@ -336,8 +337,8 @@ func (sa *SpiceApp) displayEULAAcceptance() {
 	eulaWindow.Show()
 }
 
-// Bam activates all plugins and runs the Fyne application
-func (sa *SpiceApp) Bam() {
+// Start activates all plugins and runs the Fyne application
+func (sa *SpiceApp) Start() {
 
 	// Create the tray menu
 	saInstance.CreateTrayMenu()

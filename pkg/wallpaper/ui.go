@@ -24,6 +24,9 @@ func (wp *wallpaperPlugin) CreateTrayMenuItems() []*fyne.MenuItem {
 	items = append(items, wp.manager.CreateMenuItem("Image Source", func() {
 		go wp.ViewCurrentImageOnWeb()
 	}, "view.png"))
+	items = append(items, wp.manager.CreateMenuItem("Delete and Block Image", func() {
+		go wp.DeleteCurrentImage()
+	}, "delete.png"))
 	return items
 }
 
@@ -360,7 +363,7 @@ func (wp *wallpaperPlugin) CreatePrefsPanel(prefsWindow fyne.Window) *fyne.Conta
 				wp.SetSmartFit(smartFitCheck.Checked)   // Set the smart fit flag
 				initialSmartFit = smartFitCheck.Checked // Update the initial smart fit flag
 
-				wp.RefreshImages()
+				wp.RefreshImagesAndPulse()
 				refresh = false
 			}
 

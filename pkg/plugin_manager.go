@@ -22,3 +22,8 @@ type UIPluginManager interface {
 	OpenURL(*url.URL) error                                               // Opens a URL.
 	GetPreferences() fyne.Preferences                                     // Returns the preferences.
 }
+
+// App is the interface that must be implemented by all applications.
+type App interface {
+	Start() // Bam starts the Spice application.
+}

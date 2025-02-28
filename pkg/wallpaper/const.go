@@ -5,6 +5,15 @@ import (
 	"time"
 )
 
+// MinLocalImageBeforePulse is the minimum number of images to keep in local before pulsing
+const MinLocalImageBeforePulse = 2
+
+// MaxImageWaitRetry is the maximum number of retries to wait for an image to be downloaded
+const MaxImageWaitRetry = 3
+
+// ImageWaitRetryDelay is the delay between retries to wait for an image to be downloaded
+const ImageWaitRetryDelay = 2 * time.Second
+
 // MaxURLLength is the maximum length of a URL
 const MaxURLLength = 1024
 
@@ -40,6 +49,9 @@ const WallhavenURLRegexp = `^https:\/\/wallhaven\.cc\/(?:search|api\/v1\/search)
 
 // WallhavenDescRegexp is the regular expression used to validate an image query description
 const WallhavenDescRegexp = `^[^\x00-\x1F\x7F]{5,150}$`
+
+// WallhavenTestAPIKeyURL is the URL used to test a wallhaven API key
+const WallhavenTestAPIKeyURL = "https://wallhaven.cc/api/v1/settings?apikey="
 
 // Service represents a service
 type Service interface {

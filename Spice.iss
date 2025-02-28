@@ -37,6 +37,7 @@ Root: HKCU; Subkey: "SOFTWARE\Microsoft\Windows\CurrentVersion\Run"; ValueType: 
 [UninstallDelete]
 Type: files; Name: "{userappdata}\fyne\Spice\preferences.json"
 Type: filesandordirs; Name: "{localappdata}\Temp\spice_downloads"
+Type: filesandordirs; Name: "{localappdata}\Spice"
 Type: filesandordirs; Name: "{commonstartup}\Spice"
 
 [Run]
