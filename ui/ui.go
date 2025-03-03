@@ -7,8 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dixieflatline76/Spice/util/log"
-
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/canvas"
@@ -26,6 +24,7 @@ import (
 	"github.com/dixieflatline76/Spice/config"
 	"github.com/dixieflatline76/Spice/pkg"
 	"github.com/dixieflatline76/Spice/util"
+	"github.com/dixieflatline76/Spice/util/log"
 )
 
 // SpiceApp represents the application

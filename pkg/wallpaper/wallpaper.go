@@ -70,13 +70,13 @@ type wallpaperPlugin struct {
 	workerCount         *util.SafeInt  // Number of concurrent image download workers
 
 	// Display related fields
-	currentImage  ImgSrvcImage    // Current image being displayed
-	localImgIndex util.SafeInt    // Index of the current image in the download history
-	seenImages    map[string]bool // Keep track of images that have been seen to trigger download of next page
-	prevLocalImgs []int           // Keep track of every image set to support the previous wallpaper action
-	imgPulseOp    func()          // Function to call to pulse the image
-	fitImage      *util.SafeBool  // Whether to fit the image to the desktop resolution
-	shuffleImage  *util.SafeBool  // Whether to shuffle the images
+	currentImage     ImgSrvcImage    // Current image being displayed
+	localImgIndex    util.SafeInt    // Index of the current image in the download history
+	seenImages       map[string]bool // Keep track of images that have been seen to trigger download of next page
+	prevLocalImgs    []int           // Keep track of every image set to support the previous wallpaper action
+	imgPulseOp       func()          // Function to call to pulse the image
+	fitImageFlag     *util.SafeBool  // Whether to fit the image to the desktop resolution
+	shuffleImageFlag *util.SafeBool  // Whether to shuffle the images
 
 	// Plugin related fields
 	manager pkg.UIPluginManager // Plugin manager
@@ -101,12 +101,12 @@ func getWallpaperPlugin() *wallpaperPlugin {
 			interrupt:           util.NewSafeBoolWithValue(false),
 			workerCount:         util.NewSafeIntWithValue(0),
 
-			localImgIndex: *util.NewSafeIntWithValue(-1),
-			seenImages:    make(map[string]bool),
-			prevLocalImgs: []int{},
-			imgPulseOp:    wpInstance.SetNextWallpaper,
-			fitImage:      util.NewSafeBoolWithValue(false), // Initialize with smart fit preference
-			shuffleImage:  util.NewSafeBoolWithValue(false),
+			localImgIndex:    *util.NewSafeIntWithValue(-1),
+			seenImages:       make(map[string]bool),
+			prevLocalImgs:    []int{},
+			imgPulseOp:       wpInstance.SetNextWallpaper,
+			fitImageFlag:     util.NewSafeBoolWithValue(false), // Initialize with smart fit preference
+			shuffleImageFlag: util.NewSafeBoolWithValue(false),
 		}
 	})
 	return wpInstance
@@ -120,7 +120,7 @@ func (wp *wallpaperPlugin) Init(manager pkg.UIPluginManager) {
 
 // Name returns the name of the plugin.
 func (wp *wallpaperPlugin) Name() string {
-	return "Wallpaper"
+	return pluginName
 }
 
 // RefreshImages downloads all images from the configured URLs.
@@ -175,8 +175,8 @@ func (wp *wallpaperPlugin) downloadImagesForURL(query ImageQuery, page int) {
 	}
 
 	q := u.Query()
-	q.Set("apikey", wp.cfg.StringWithFallback(WallhavenAPIKeyPrefKey, "")) // Add the API key
-	q.Set("page", fmt.Sprint(page))                                        // Add the page number
+	q.Set("apikey", wp.cfg.GetWallhavenAPIKey()) // Add the API key
+	q.Set("page", fmt.Sprint(page))              // Add the page number
 
 	// Check for resolutions or atleast parameters
 	if !q.Has("resolutions") && !q.Has("atleast") {
@@ -229,7 +229,7 @@ func (wp *wallpaperPlugin) downloadImagesForURL(query ImageQuery, page int) {
 
 // getDownloadedDir returns the downloaded images directory.
 func (wp *wallpaperPlugin) getDownloadedDir() string {
-	if wp.fitImage.Value() {
+	if wp.fitImageFlag.Value() {
 		return filepath.Join(wp.downloadedDir, FittedImgDir) // Use a sub directory for fitted images
 	}
 	return wp.downloadedDir
@@ -239,7 +239,7 @@ func (wp *wallpaperPlugin) getDownloadedDir() string {
 func (wp *wallpaperPlugin) downloadImage(isi ImgSrvcImage) (string, error) {
 
 	if wp.cfg.InAvoidSet(isi.ID) {
-		log.Printf("Skipping image '%s' as it is in the avoid set", isi.ID)
+		log.Printf("Skipping download, image '%s' in avoid set", isi.ID)
 		return "", nil // Skip this image
 	}
 
@@ -248,7 +248,7 @@ func (wp *wallpaperPlugin) downloadImage(isi ImgSrvcImage) (string, error) {
 	_, err := os.Stat(tempFile)
 	if !os.IsNotExist(err) {
 		wp.localImgRecs = append(wp.localImgRecs, isi)
-		log.Printf("Image '%s' already exists, skipping download. downloadHistory length: %d", isi.ID, len(wp.localImgRecs))
+		log.Printf("Skipping download, image '%s' in cache", isi.ID)
 		return tempFile, nil // Image already exists
 	}
 
@@ -264,7 +264,7 @@ func (wp *wallpaperPlugin) downloadImage(isi ImgSrvcImage) (string, error) {
 		return "", fmt.Errorf("failed to read image bytes: %w", err)
 	}
 
-	if wp.fitImage.Value() {
+	if wp.fitImageFlag.Value() {
 		// Decode the image
 		wp.downloadMutex.Unlock() // Unlock before fitting, decoding and encoding
 		img, _, err := wp.imgProcessor.DecodeImage(imgBytes, isi.FileType)
@@ -358,16 +358,16 @@ func (wp *wallpaperPlugin) DeleteCurrentImage() {
 	wp.downloadMutex.Lock()
 	currentPos := wp.localImgIndex.Value()
 
-	// Remove the image from the slices and maps
+	// Remove the image from the slices and maps and add to avoid list
 	wp.localImgRecs = append(wp.localImgRecs[:currentPos], wp.localImgRecs[currentPos+1:]...)
-	wp.prevLocalImgs = wp.prevLocalImgs[:len(wp.prevLocalImgs)-1] // Remove the last element from the slice
+	wp.prevLocalImgs = wp.prevLocalImgs[:len(wp.prevLocalImgs)-1]
 	delete(wp.seenImages, imagePath)
+	wp.cfg.AddToAvoidSet(wp.currentImage.ID)
 
 	wp.localImgIndex.Decrement() // Decrement the index to reflect the removal
 	wp.downloadMutex.Unlock()    // Unlock the critical section as SetNextWallpaper will lock it again
 
-	wp.SetNextWallpaper()                    // Set the next wallpaper immediately after deletion
-	wp.cfg.AddToAvoidSet(wp.currentImage.ID) // Add the image to the avoid set to prevent it from being shown again
+	wp.SetNextWallpaper() // Set the next wallpaper immediately after deletion
 
 	if err := os.Remove(imagePath); err != nil {
 		log.Printf("Failed to delete blocked image: %v", err)
@@ -401,7 +401,7 @@ func (wp *wallpaperPlugin) cleanupImageCache() error {
 	})
 
 	// 3. Delete excess files.
-	excess := len(files) - DefaultWallpaperCacheSize
+	excess := len(files) - wp.cfg.GetCacheSize().Size()
 	if excess > 0 {
 		for i := 0; i < excess; i++ {
 			err := os.Remove(files[i].path)
@@ -417,7 +417,7 @@ func (wp *wallpaperPlugin) cleanupImageCache() error {
 // setupImageDirs sets up the downloaded images directories.
 func (wp *wallpaperPlugin) setupImageDirs() {
 	// Create the downloaded images directory if it doesn't exist
-	wp.downloadedDir = filepath.Join(os.TempDir(), strings.ToLower(config.AppName)+"_downloads")
+	wp.downloadedDir = filepath.Join(config.GetWorkingDir(), strings.ToLower(pluginName)+"_downloads")
 	fittedDir := filepath.Join(wp.downloadedDir, FittedImgDir)
 	err := os.MkdirAll(wp.downloadedDir, 0755)
 	if err != nil {
@@ -451,8 +451,8 @@ func (wp *wallpaperPlugin) Activate() {
 		}
 	}()
 
-	wp.SetShuffleImage(wp.cfg.BoolWithFallback(ImgShufflePrefKey, false)) // Set shuffle image preference
-	wp.SetSmartFit(wp.cfg.BoolWithFallback(SmartFitPrefKey, false))       // Set smart fit preference
+	wp.SetShuffleImage(wp.cfg.GetImgShuffle()) // Set shuffle image preference
+	wp.SetSmartFit(wp.cfg.GetSmartFit())       // Set smart fit preference
 
 	// Refresh images and set the first wallpaper
 	go wp.refreshImages()
@@ -461,12 +461,12 @@ func (wp *wallpaperPlugin) Activate() {
 	for i := 0; len(wp.localImgRecs) < MinLocalImageBeforePulse && i < MaxImageWaitRetry; i++ {
 		// Wait for images to be downloaded
 		time.Sleep(ImageWaitRetryDelay)
-		log.Printf("waiting for images to be downloaded... retry:%d downloadHistory size: %d", i, len(wp.localImgRecs))
 	}
 	wp.imgPulseOp()
 
 	// Start the wallpaper rotation ticker
-	wp.ChangeWallpaperFrequency(Frequency(wp.cfg.IntWithFallback(WallpaperChgFreqPrefKey, int(FrequencyHourly)))) // Set wallpaper change frequency preference
+
+	wp.ChangeWallpaperFrequency(wp.cfg.GetWallpaperChangeFrequency()) // Set wallpaper change frequency preference
 }
 
 // changeFrequency changes the wallpaper change frequency.
@@ -548,7 +548,7 @@ func (wp *wallpaperPlugin) checkWallhavenURL(queryURL string) error {
 	}
 
 	q := u.Query()
-	q.Set("apikey", wp.cfg.StringWithFallback(WallhavenAPIKeyPrefKey, "")) // Add the API key
+	q.Set("apikey", wp.cfg.GetWallhavenAPIKey()) // Add the API key
 
 	// Check for resolutions or atleast parameters
 	if !q.Has("resolutions") && !q.Has("atleast") {
@@ -611,6 +611,9 @@ func (wp *wallpaperPlugin) setRandomWallpaper() {
 	randomIndex := 0
 	if len(wp.localImgRecs) > 1 {
 		randomIndex = rand.Intn(len(wp.localImgRecs) - 1)
+		if randomIndex == wp.localImgIndex.Value() { // Ensure the new index is different from the current one
+			randomIndex = rand.Intn(len(wp.localImgRecs) - 1)
+		}
 	}
 
 	wp.prevLocalImgs = append(wp.prevLocalImgs, randomIndex)
@@ -675,27 +678,21 @@ func (wp *wallpaperPlugin) RefreshImagesAndPulse() {
 	}()
 }
 
-// SetWallhavenAPIKey sets the Wallhaven API key.
-func (wp *wallpaperPlugin) SetWallhavenAPIKey(apiKey string) {
-	wp.cfg.SetString(WallhavenAPIKeyPrefKey, apiKey)
-}
-
 // SetSmartFit enables or disables smart cropping.
 func (wp *wallpaperPlugin) SetSmartFit(enabled bool) {
-	wp.fitImage.Set(enabled)                 // Update the smart fit preference
-	wp.cfg.SetBool(SmartFitPrefKey, enabled) // Save the preference to the config file
+	wp.fitImageFlag.Set(enabled) // Update the local smart fit flag
 }
 
 // SetShuffleImage enables or disables image shuffling.
 func (wp *wallpaperPlugin) SetShuffleImage(enabled bool) {
 	// Set the shuffle image preference and update the image pulse operation
-	wp.shuffleImage.Set(enabled)
-	wp.cfg.SetBool(ImgShufflePrefKey, enabled)
+	wp.shuffleImageFlag.Set(enabled)
+	wp.cfg.SetImgShuffle(enabled)
 
 	wp.downloadMutex.Lock()
 	defer wp.downloadMutex.Unlock()
 
-	if wp.shuffleImage.Value() {
+	if wp.shuffleImageFlag.Value() {
 		wp.imgPulseOp = wp.SetRandomWallpaper
 		wp.manager.NotifyUser("Wallpaper Shuffling", "Enabled")
 	} else {

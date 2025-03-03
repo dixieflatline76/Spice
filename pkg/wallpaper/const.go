@@ -5,62 +5,28 @@ import (
 	"time"
 )
 
-// MinLocalImageBeforePulse is the minimum number of images to keep in local before pulsing
-const MinLocalImageBeforePulse = 2
+// pluginName is the name of the wallpaper plugin
+const pluginName = "wallpaper"
 
-// MaxImageWaitRetry is the maximum number of retries to wait for an image to be downloaded
-const MaxImageWaitRetry = 3
+// Preference keys for wallpaper
+const (
+	pluginPrefix            = pluginName + "_"
+	SmartFitPrefKey         = pluginPrefix + "smart_fit_key"          // SmartFitPrefKey is used to set and retrieve the boolean flag for wallpaper smart fit
+	CacheSizePrefKey        = pluginPrefix + "cache_size_key"         // WallpaperCacheSizePrefKey is used to set and retrieve the int wallpaper cache size
+	WallpaperChgFreqPrefKey = pluginPrefix + "wallpaper_chg_freq_key" // WallpaperChgFreqPrefKey is used to set and retrieve the int change frequency for wallpapers
+	ImgShufflePrefKey       = pluginPrefix + "img_shuffle_key"        // ImgShufflePrefKey is used to set and retrieve the boolean flag for wallpaper image shuffle
+)
 
-// ImageWaitRetryDelay is the delay between retries to wait for an image to be downloaded
-const ImageWaitRetryDelay = 2 * time.Second
-
-// MaxURLLength is the maximum length of a URL
-const MaxURLLength = 1024
-
-// MaxDescLength is the maximum length of an image description
-const MaxDescLength = 105
-
-// DefaultWallpaperCacheSize is the maximum number of wallpapers to keep in cache
-const DefaultWallpaperCacheSize = 200
-
-// PageDownloadOffset is the offset used to retrieve the next page of wallpapers 1 means service will download the next page 1 before the last image
-const PageDownloadOffset = 3
-
-// WallhavenAPIKeyPrefKey is used to set and retrieve the string wallhaven api key
-const WallhavenAPIKeyPrefKey = "wallhaven_api_key"
-
-// WallpaperChgFreqPrefKey is used to set and retrieve the int change frequency for wallpapers
-const WallpaperChgFreqPrefKey = "wallpaper_chg_freq"
-
-// SmartFitPrefKey is used to set and retrieve the boolean flag for wallpaper smart fit
-const SmartFitPrefKey = "smart_fit"
-
-// FittedImgDir is the suffix used to identify a fitted image directory
-const FittedImgDir = "fit"
-
-// ImgShufflePrefKey is used to set and retrieve the boolean flag for wallpaper image shuffle
-const ImgShufflePrefKey = "img_shuffle"
-
-// WallhavenAPIKeyRegexp is the regular expression used to validate a wallhaven API key
-const WallhavenAPIKeyRegexp = `^[a-zA-Z0-9]{32}$`
-
-// WallhavenURLRegexp is the regular expression used to validate a wallhaven URL
-const WallhavenURLRegexp = `^https:\/\/wallhaven\.cc\/(?:search|api\/v1\/search)(?:\?[a-zA-Z0-9_\-.~!$&'()*+,;=:@\/?%]*|)$`
-
-// WallhavenDescRegexp is the regular expression used to validate an image query description
-const WallhavenDescRegexp = `^[^\x00-\x1F\x7F]{5,150}$`
-
-// WallhavenTestAPIKeyURL is the URL used to test a wallhaven API key
-const WallhavenTestAPIKeyURL = "https://wallhaven.cc/api/v1/settings?apikey="
-
-// Service represents a service
-type Service interface {
-	Name() string
-	Description() string
-	Run()
-	Stop()
-	Frequency() Frequency
-}
+// Default values for wallpaper
+const (
+	MinLocalImageBeforePulse = 2               // MinLocalImageBeforePulse is the minimum number of images to keep in local before pulsing
+	MaxImageWaitRetry        = 3               // MaxImageWaitRetry is the maximum number of retries to wait for an image to be downloaded
+	ImageWaitRetryDelay      = 2 * time.Second // ImageWaitRetryDelay is the delay between retries to wait for an image to be downloaded
+	MaxURLLength             = 1024            // MaxURLLength is the maximum length of a URL
+	MaxDescLength            = 105             // MaxDescLength is the maximum length of an image description
+	PageDownloadOffset       = 3               // PageDownloadOffset is the offset used to retrieve the next page of wallpapers 1 means service will download the next page 1 before the last image
+	FittedImgDir             = "fit"           // FittedImgDir is the suffix used to identify a fitted image directory
+)
 
 // Frequency represents the frequency of a service
 type Frequency int
@@ -130,5 +96,65 @@ func GetFrequencies() []Frequency {
 		Frequency3Hours,
 		Frequency6Hours,
 		FrequencyDaily,
+	}
+}
+
+// CacheSize represents the predefined cache sizes (in number of images).
+type CacheSize int
+
+// CacheSize constants
+const (
+	CacheNone CacheSize = iota
+	Cache100Images
+	Cache200Images
+	Cache300Images
+	Cache500Images
+	Cache1000Images
+)
+
+// CacheSizeValues maps CacheSize to its integer representation.
+var CacheSizeValues = map[CacheSize]int{
+	CacheNone:       0,
+	Cache100Images:  100,
+	Cache200Images:  200,
+	Cache300Images:  300,
+	Cache500Images:  500,
+	Cache1000Images: 1000,
+}
+
+// String returns the string representation of a CacheSize.
+func (cs CacheSize) String() string {
+	switch cs {
+	case CacheNone:
+		return "None"
+	case Cache100Images:
+		return "100 Images"
+	case Cache200Images:
+		return "200 Images"
+	case Cache300Images:
+		return "300 Images"
+	case Cache500Images:
+		return "500 Images"
+	case Cache1000Images:
+		return "1000 Images"
+	default:
+		return "Unknown"
+	}
+}
+
+// Size returns the integer value of a CacheSize.
+func (cs CacheSize) Size() int {
+	return CacheSizeValues[cs]
+}
+
+// GetCacheSizes returns a list of all available cache sizes.
+func GetCacheSizes() []CacheSize {
+	return []CacheSize{
+		CacheNone,
+		Cache100Images,
+		Cache200Images,
+		Cache300Images,
+		Cache500Images,
+		Cache1000Images,
 	}
 }

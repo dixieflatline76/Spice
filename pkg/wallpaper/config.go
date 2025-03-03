@@ -13,12 +13,12 @@ import (
 	"fyne.io/fyne/v2"
 	"github.com/dixieflatline76/Spice/asset"
 	"github.com/dixieflatline76/Spice/config"
+	"github.com/zalando/go-keyring"
 )
 
 // Package config provides configuration management for the Wallpaper Downloader service
-
-// wallhavenConfigPrefKey is the string key use for saving and retrieving wallhaven image queries to fyne preferences
-const wallhavenConfigPrefKey = "wallhaven_image_queries"
+// TODO: Explore moving all preferences Set/Get into this file
+// TODO: Explore tradeoffs of using a single JSON string preference vs multiple preferences
 
 // Config struct to hold all configuration data
 type Config struct { //nolint:golint"
@@ -138,6 +138,66 @@ func (c *Config) AddToAvoidSet(id string) {
 // ResetAvoidSet clears the avoid set
 func (c *Config) ResetAvoidSet() {
 	c.AvoidSet = make(map[string]bool)
+	c.save()
+}
+
+// GetCacheSize returns the cache size enumeration from the config, or the default value if not set or invalid
+func (c *Config) GetCacheSize() CacheSize {
+	return CacheSize(c.IntWithFallback(CacheSizePrefKey, int(Cache200Images))) // Default to 200 images
+}
+
+// SetCacheSize sets the cache size enumeration and saves it
+func (c *Config) SetCacheSize(size CacheSize) {
+	c.SetInt(CacheSizePrefKey, int(size))
+	c.save()
+}
+
+// GetSmartFit returns the smart fit preference from the config.
+func (c *Config) GetSmartFit() bool {
+	return c.BoolWithFallback(SmartFitPrefKey, false) // Default to false
+}
+
+// SetSmartFit sets the smart fit preference.
+func (c *Config) SetSmartFit(enabled bool) {
+	c.SetBool(SmartFitPrefKey, enabled) // Save the preference to the config file
+	c.save()
+}
+
+// GetWallpaperChangeFrequency returns the wallpaper change frequency enumeration from the config, or the default value if not set or invalid
+func (c *Config) GetWallpaperChangeFrequency() Frequency {
+	return Frequency(c.IntWithFallback(WallpaperChgFreqPrefKey, int(FrequencyHourly))) // Default to hourly
+}
+
+// SetWallpaperChangeFrequency sets the frequency enumeration for wallpaper changes and saves it
+func (c *Config) SetWallpaperChangeFrequency(frequency Frequency) {
+	c.SetInt(WallpaperChgFreqPrefKey, int(frequency))
+	c.save()
+}
+
+// GetImgShuffle returns the image shuffle preference from the config.
+func (c *Config) GetImgShuffle() bool {
+	return c.BoolWithFallback(ImgShufflePrefKey, false)
+}
+
+// SetImgShuffle sets the image shuffle preference.
+func (c *Config) SetImgShuffle(enabled bool) {
+	c.SetBool(ImgShufflePrefKey, enabled)
+	c.save()
+}
+
+// GetWallhavenAPIKey returns the Wallhaven API key from the config.
+func (c *Config) GetWallhavenAPIKey() string {
+	apiKey, err := keyring.Get(serviceName, WallhavenAPIKeyPrefKey) // Try to get the API key from the keyring
+	if err != nil {
+		log.Printf("failed to retrieve Wallhaven API key from keyring: %v", err)
+		return "" // Return an empty string if the keyring lookup fails
+	}
+	return apiKey // Return the API key from the keyring
+}
+
+// SetWallhavenAPIKey sets the Wallhaven API key.
+func (c *Config) SetWallhavenAPIKey(apiKey string) {
+	keyring.Set(serviceName, WallhavenAPIKeyPrefKey, apiKey) // Save the API key to the keyring
 	c.save()
 }
 
