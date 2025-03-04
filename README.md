@@ -27,7 +27,8 @@ Spice is a work-in-progress desktop background manager for Windows, inspired by 
 * **Smart Fit:** Enjoy perfectly framed wallpapers every time. Smart Fit intelligently crops and pans images to best fit your desktop resolution, ensuring they look fantastic on any screen. Say goodbye to awkwardly stretched or cropped images! This feature is powered by the excellent work of [muesli/smartcrop](https://github.com/muesli/smartcrop) and [jwagner/smartcrop.js](https://github.com/jwagner/smartcrop.js).
 * **Shuffle:** Toggle Shuffle Wallpapers directly from the tray menu to add even more variety to your desktop.
 * **App Notifications:** Spice will inform you of key events like downloading of new images or changing of key configurations via system notifications.
-* **Image cache** Spice now caches downloaded images and will only download new images it cannot find in the cache. In the future we will let you take control of how many images Spice will keep. In this release it is set to 200. This means Spice will hold up to 200 of the most recent images for future use.
+* **Image cache** Spice can cache downloaded images and will only download new images it cannot find in the cache. Control how many images you would like Spice to keep or turn off caching completely via the preference panel.
+* **Delete Wallpaper** Don't like the current wallpaper? Delete it via the tray menu. Spice will also add the image to a blocklist ensuring it will not be downloaded again. You can reset the block list via the preference panel. In the future, we plan on adding more fine grained control where you can delete individual images on the block list.
 
 ## Known Issues
 
