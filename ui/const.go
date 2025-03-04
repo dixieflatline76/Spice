@@ -1,7 +1,7 @@
 package ui
 
-// MaxURLLength is the maximum length of a URL
-const MaxURLLength = 1024
+// startupSplashTime is the time in seconds the splash screen is shown
+const startupSplashTime = 10 // seconds
 
-// MaxDescLength is the maximum length of an image description
-const MaxDescLength = 105
+// aboutSplashTime is the time in seconds the about screen is shown
+const aboutSplashTime = 3 // seconds

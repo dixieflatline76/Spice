@@ -10,9 +10,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
-
-	"github.com/disintegration/imaging"
 )
 
 // linuxOS implements the OS interface for Linux.
@@ -142,23 +139,7 @@ func (l *linuxOS) setWallpaperSway(imagePath string) error {
 	return cmd.Run()
 }
 
-// getWallpaperService returns the singleton instance of wallpaperService.
-func getWallpaperService(cfg *Config) *wallpaperService {
-	wsOnce.Do(func() {
-		// Initialize the wallpaper service for Linux
-		currentOS := &linuxOS{}
-
-		// Initialize the wallpaper service
-		wsInstance = &wallpaperService{
-			os:              currentOS,
-			imgProcessor:    &smartImageProcessor{os: currentOS, aspectThreshold: 0.9, resampler: imaging.Lanczos}, // Initialize with smartCropper with a lenient threshold
-			cfg:             cfg,
-			downloadMutex:   sync.Mutex{},
-			downloadHistory: []ImgSrvcImage{},
-			seenHistory:     make(map[string]bool),
-			currentPage:     1,                                        // Start with the first page,
-			fitImage:        cfg.BoolWithFallback("Smart Fit", false), // Initialize with smart fit preference
-		}
-	})
-	return wsInstance
+// getOS returns a new instance of the linuxOS struct.
+func getOS() OS {
+	return &linuxOS{}
 }

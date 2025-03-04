@@ -3,22 +3,32 @@ VERSION := $(shell sh -c "cat version.txt" 2> /dev/null || cmd /c "type version.
 
 # --- Build targets ---
 build-win-amd64:
-	set GOOS=windows&& set GOARCH=amd64&& go build -o bin/Spice.exe -ldflags "-H=windowsgui -X main.version=$(VERSION)" ./cmd/spice
+	set GOOS=windows&& set GOARCH=amd64&& go build -tags release -o bin/Spice.exe -ldflags "-H=windowsgui -X main.version=$(VERSION)" ./cmd/spice
 
 build-win-console-amd64:
-	set GOOS=windows&& set GOARCH=amd64&& go build -o bin/Spice-console.exe -ldflags "-X main.version=$(VERSION)" ./cmd/spice
+	set GOOS=windows&& set GOARCH=amd64&& go build -tags release -o bin/Spice-console.exe -ldflags "-X main.version=$(VERSION)" ./cmd/spice
 
 build-win-arm64:
-	set GOOS=windows&& set GOARCH=arm64&& go build -o bin/Spice-arm64.exe -ldflags "-H=windowsgui -X main.version=$(VERSION)" ./cmd/spice
+	set GOOS=windows&& set GOARCH=arm64&& go build -tags release -o bin/Spice-arm64.exe -ldflags "-H=windowsgui -X main.version=$(VERSION)" ./cmd/spice
 
-build-linux:
-	GOOS=linux GOARCH=amd64 go build -o bin/Spice-amd64 -ldflags "-X main.version=$(VERSION)" ./cmd/spice
+build-linux-amd64:
+	GOOS=linux GOARCH=amd64 go build -tags release -o bin/Spice-amd64 -ldflags "-X main.version=$(VERSION)" ./cmd/spice
 
 build-darwin-amd64:
-	GOOS=darwin GOARCH=amd64 go build -o bin/Spice-darwin-amd64 -ldflags "-X main.version=$(VERSION)" ./cmd/spice
+	GOOS=darwin GOARCH=amd64 go build -tags release -o bin/Spice-darwin-amd64 -ldflags "-X main.version=$(VERSION)" ./cmd/spice
 
 build-darwin-arm64:
-	GOOS=darwin GOARCH=arm64 go build -o bin/Spice-darwin-arm64 -ldflags "-X main.version=$(VERSION)" ./cmd/spice
+	GOOS=darwin GOARCH=arm64 go build -tags release -o bin/Spice-darwin-arm64 -ldflags "-X main.version=$(VERSION)" ./cmd/spice
+
+# --- Development build targets ---
+build-win-amd64-dev:
+	set GOOS=windows&& set GOARCH=amd64&& go build -o bin/Spice.exe -ldflags "-H=windowsgui -X main.version=$(VERSION)" ./cmd/spice
+
+build-win-console-amd64-dev:
+	set GOOS=windows&& set GOARCH=amd64&& go build -o bin/Spice-console.exe -ldflags "-X main.version=$(VERSION)" ./cmd/spice
+
+build-linux-amd64-dev:
+	GOOS=linux GOARCH=amd64 go build -o bin/Spice-amd64 -ldflags "-X main.version=$(VERSION)" ./cmd/spice
 
 # --- Other targets ---
 lint:
@@ -37,7 +47,14 @@ update-major-deps:
 	go get -u=patch ./... 
 	go mod tidy
 
+# --- Convenience targets defaults to win amd64 ---
 all: update-minor-deps lint test build-win-amd64 build-win-console-amd64
+
+dev: update-minor-deps lint test build-win-amd64-dev build-win-console-amd64-dev
+
+all-linux: update-minor-deps lint test build-linux-amd64 build-win-console-amd64
+
+dev-linux: update-minor-deps lint test build-linux-amd64-dev build-win-console-amd64-dev
 
 # --- Clean target (cross-platform) ---
 clean:
@@ -67,4 +84,4 @@ bump-major: build-version-bump
 	@echo "Bumping major version..."
 	./bin/util/version_bump major
 
-.PHONY: all build-win-amd64 build-win-console-amd64 build-win-arm64 build-linux build-darwin-amd64 build-darwin-arm64 lint test update-minor-deps update-major-deps clean bump-patch bump-minor bump-major build-version-bump
+.PHONY: all build-win-amd64 build-win-console-amd64 build-win-arm64 build-linux-amd64 build-darwin-amd64 build-darwin-arm64 lint test update-minor-deps update-major-deps clean bump-patch bump-minor bump-major build-version-bump build-win-amd64-dev build-win-console-amd64-dev build-linux-amd64-dev all-linux dev-linux

@@ -6,8 +6,9 @@ import (
 	"image"
 	"image/jpeg"
 	"image/png"
-	"log"
 	"math"
+
+	"github.com/dixieflatline76/Spice/util/log"
 
 	"github.com/disintegration/imaging"
 	"github.com/muesli/smartcrop"

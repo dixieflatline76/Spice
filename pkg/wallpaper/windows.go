@@ -4,11 +4,8 @@
 package wallpaper
 
 import (
-	"sync"
 	"syscall"
 	"unsafe"
-
-	"github.com/disintegration/imaging"
 
 	"golang.org/x/sys/windows"
 )
@@ -77,23 +74,7 @@ func (w *windowsOS) getDesktopDimension() (int, int, error) {
 	return int(width), int(height), nil
 }
 
-// getWallpaperService returns the singleton instance of wallpaperService.
-func getWallpaperService(cfg *Config) *wallpaperService {
-	wsOnce.Do(func() {
-		// Initialize the wallpaper service for Windows
-		currentOS := &windowsOS{}
-
-		// Initialize the wallpaper service
-		wsInstance = &wallpaperService{
-			os:              currentOS,                                                                             // Initialize with Windows OS
-			imgProcessor:    &smartImageProcessor{os: currentOS, aspectThreshold: 0.9, resampler: imaging.Lanczos}, // Initialize with smartCropper with a lenient threshold
-			cfg:             cfg,
-			downloadMutex:   sync.Mutex{},
-			downloadHistory: []ImgSrvcImage{},
-			seenHistory:     make(map[string]bool),
-			currentPage:     1,                                        // Start with the first page,
-			fitImage:        cfg.BoolWithFallback("Smart Fit", false), // Initialize with smart fit preference
-		}
-	})
-	return wsInstance
+// getOS returns a new instance of the windowsOS struct.
+func getOS() OS {
+	return &windowsOS{}
 }

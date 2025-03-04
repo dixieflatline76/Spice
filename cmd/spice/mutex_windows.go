@@ -4,9 +4,10 @@
 package main
 
 import (
-	"fmt"
-	"log"
+	"errors"
 	"syscall"
+
+	"github.com/dixieflatline76/Spice/util/log"
 
 	"github.com/dixieflatline76/Spice/config"
 	"golang.org/x/sys/windows"
@@ -29,7 +30,7 @@ func acquireLock() (bool, error) {
 		if windows.GetLastError() == windows.ERROR_ALREADY_EXISTS {
 			return false, nil // Another instance is running
 		}
-		return false, fmt.Errorf("failed to create mutex: %w", err)
+		return false, errors.New("another instance is already running")
 	}
 
 	return true, nil

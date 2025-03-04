@@ -5,9 +5,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"time"
+
+	"github.com/dixieflatline76/Spice/util/log"
 
 	"fyne.io/fyne/v2"
 	"github.com/dixieflatline76/Spice/asset"

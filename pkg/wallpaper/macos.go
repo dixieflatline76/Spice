@@ -8,9 +8,6 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
-	"sync"
-
-	"github.com/disintegration/imaging"
 )
 
 // macOSOS implements the OS interface for macOS.
@@ -62,23 +59,7 @@ func (m *macOSOS) getDesktopDimension() (int, int, error) {
 	return 0, 0, fmt.Errorf("failed to parse screen resolution")
 }
 
-// getWallpaperService returns the singleton instance of wallpaperService.
-func getWallpaperService(cfg *Config) *wallpaperService {
-	wsOnce.Do(func() {
-		// Initialize the wallpaper service for macOS
-		currentOS := &macOSOS{}
-
-		// Initialize the wallpaper service
-		wsInstance = &wallpaperService{
-			os:              currentOS,                                                                             // Initialize with macOS OS
-			imgProcessor:    &smartImageProcessor{os: currentOS, aspectThreshold: 0.9, resampler: imaging.Lanczos}, // Initialize with smartCropper with a lenient threshold
-			cfg:             cfg,
-			downloadMutex:   sync.Mutex{},
-			downloadHistory: []ImgSrvcImage{},
-			seenHistory:     make(map[string]bool),
-			currentPage:     1,                                        // Start with the first page,
-			fitImage:        cfg.BoolWithFallback("Smart Fit", false), // Initialize with smart fit preference
-		}
-	})
-	return wsInstance
+// getOS returns a new instance of the macOSOS struct.
+func getOS() OS {
+	return &macOSOS{}
 }

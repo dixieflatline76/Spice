@@ -5,7 +5,6 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -22,7 +21,7 @@ func acquireLock() (bool, error) {
 	lockFilePath := filepath.Join(os.TempDir(), config.AppName+".lock") // Use a lock file in /tmp
 	file, err := os.OpenFile(lockFilePath, os.O_RDWR|os.O_CREATE, 0666)
 	if err != nil {
-		return false, fmt.Errorf("failed to open lock file: %w", err)
+		return false, errors.New("another instance is already running")
 	}
 
 	//Try to get an exclusive lock. FcntlFlock implements a simple file locker.
@@ -40,7 +39,7 @@ func acquireLock() (bool, error) {
 			return false, nil
 		}
 		file.Close()
-		return false, fmt.Errorf("failed to acquire lock: %w", err)
+		return false, errors.New("another instance is already running")
 	}
 
 	lockFile = file
