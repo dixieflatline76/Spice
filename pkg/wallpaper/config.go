@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/user"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -26,6 +27,7 @@ type Config struct { //nolint:golint"
 	ImageQueries []ImageQuery    `json:"query_urls"` // List of image queries
 	assetMgr     *asset.Manager  // Asset manager
 	AvoidSet     map[string]bool `json:"avoid_set"` // Set of image URLs to avoid
+	userid       string
 }
 
 // ImageQuery struct to hold the URL of an image and whether it is active
@@ -43,11 +45,16 @@ var (
 // GetConfig returns the singleton instance of Config.
 func GetConfig(p fyne.Preferences) *Config {
 	cfgOnce.Do(func() {
+		u, e := user.Current()
+		if e != nil {
+			log.Fatalf("failed to initialize %s: %s", config.AppName, e)
+		}
 		cfgInstance = &Config{
 			Preferences:  p,
 			ImageQueries: make([]ImageQuery, 0),
 			assetMgr:     asset.NewManager(),
 			AvoidSet:     make(map[string]bool),
+			userid:       u.Uid,
 		}
 		// Load config from file
 		if err := cfgInstance.loadFromPrefs(); err != nil {
@@ -187,7 +194,7 @@ func (c *Config) SetImgShuffle(enabled bool) {
 
 // GetWallhavenAPIKey returns the Wallhaven API key from the config.
 func (c *Config) GetWallhavenAPIKey() string {
-	apiKey, err := keyring.Get(serviceName, WallhavenAPIKeyPrefKey) // Try to get the API key from the keyring
+	apiKey, err := keyring.Get(WallhavenAPIKeyPrefKey, c.userid) // Try to get the API key from the keyring
 	if err != nil {
 		log.Printf("failed to retrieve Wallhaven API key from keyring: %v", err)
 		return "" // Return an empty string if the keyring lookup fails
@@ -197,7 +204,7 @@ func (c *Config) GetWallhavenAPIKey() string {
 
 // SetWallhavenAPIKey sets the Wallhaven API key.
 func (c *Config) SetWallhavenAPIKey(apiKey string) {
-	keyring.Set(serviceName, WallhavenAPIKeyPrefKey, apiKey) // Save the API key to the keyring
+	keyring.Set(WallhavenAPIKeyPrefKey, c.userid, apiKey) // Save the API key to the keyring
 	c.save()
 }
 

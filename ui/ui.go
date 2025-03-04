@@ -138,9 +138,9 @@ func (sa *SpiceApp) CreateTrayMenu() {
 		sa.Quit()
 	}, "quit.png"))
 
+	sa.SetIcon(trayIcon)
 	desk.SetSystemTrayMenu(sa.trayMenu)
 	desk.SetSystemTrayIcon(trayIcon)
-	sa.SetIcon(trayIcon)
 }
 
 // CreateMenuItem creates a menu item with the given label, action, and icon
