@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"image"
 	"io"
+	"math"
 	"math/rand"
 	"net/http"
 	"net/url"
@@ -90,9 +91,12 @@ func getWallpaperPlugin() *wallpaperPlugin {
 
 		// Initialize the wallpaper service
 		wpInstance = &wallpaperPlugin{
-			os:           currentOS,                                                                             // Initialize with Windows OS
-			imgProcessor: &smartImageProcessor{os: currentOS, aspectThreshold: 0.9, resampler: imaging.Lanczos}, // Initialize with smartCropper with a lenient threshold
-			cfg:          nil,
+			os: currentOS, // Initialize with Windows OS
+			imgProcessor: &smartImageProcessor{
+				os:              currentOS,
+				aspectThreshold: 0.9,
+				resampler:       imaging.Lanczos}, // Initialize with smartCropper with a lenient threshold
+			cfg: nil,
 
 			downloadMutex:       sync.Mutex{},
 			currentDownloadPage: util.NewSafeIntWithValue(1), // Start with the first page,
@@ -313,7 +317,11 @@ func (wp *wallpaperPlugin) downloadImage(isi ImgSrvcImage) (string, error) {
 func (wp *wallpaperPlugin) setWallpaperAt(imageIndex int) {
 
 	// Check if we need to download the next page
-	if len(wp.seenImages) > PageDownloadOffset && len(wp.seenImages) >= (len(wp.localImgRecs)-PageDownloadOffset) {
+	seenCount := len(wp.seenImages)
+	localRecsCount := float64(len(wp.localImgRecs))
+	threshold := int(math.Round(PrcntSeenTillDownload * localRecsCount))
+	log.Printf("Seen count: %d, threshold: %d", seenCount, threshold)
+	if seenCount > MinSeenImagesForDownload && seenCount >= threshold {
 		wp.currentDownloadPage.Increment()
 		wp.downloadAllImages(wp.currentDownloadPage.Value())
 	}
@@ -358,7 +366,7 @@ func (wp *wallpaperPlugin) DeleteCurrentImage() {
 	wp.downloadMutex.Lock()
 	currentPos := wp.localImgIndex.Value()
 
-	// Remove the image from the slices and maps and add to avoid list
+	// Remove the image from the slices and maps and add to avoid set
 	wp.localImgRecs = append(wp.localImgRecs[:currentPos], wp.localImgRecs[currentPos+1:]...)
 	wp.prevLocalImgs = wp.prevLocalImgs[:len(wp.prevLocalImgs)-1]
 	delete(wp.seenImages, imagePath)
