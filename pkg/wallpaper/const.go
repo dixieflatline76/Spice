@@ -25,7 +25,7 @@ const (
 	MaxURLLength             = 1024            // MaxURLLength is the maximum length of a URL
 	MaxDescLength            = 105             // MaxDescLength is the maximum length of an image description
 	MinSeenImagesForDownload = 3               // MinSeenImagesForDownload is the minimum number of images seen before downloading (3 / 4)
-	PrcntSeenTillDownload    = 0.50            // PrcntSeenTillDownload is the percentage of images seen before downloading (50%)
+	PrcntSeenTillDownload    = 0.80            // PrcntSeenTillDownload is the percentage of images seen before downloading (50%)
 	FittedImgDir             = "fit"           // FittedImgDir is the suffix used to identify a fitted image directory
 )
 
