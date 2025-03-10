@@ -20,8 +20,8 @@ import (
 
 	"github.com/disintegration/imaging"
 	"github.com/dixieflatline76/Spice/config"
-	"github.com/dixieflatline76/Spice/pkg"
-	"github.com/dixieflatline76/Spice/ui"
+	"github.com/dixieflatline76/Spice/pkg/ui"
+	app "github.com/dixieflatline76/Spice/ui"
 	"github.com/dixieflatline76/Spice/util"
 )
 
@@ -33,7 +33,7 @@ var (
 // LoadPlugin creates a new instance of the wallpaper plugin and registers it with the plugin manager.
 func LoadPlugin() {
 	wp := getWallpaperPlugin() // Get the wallpaper plugin instance
-	ui.GetPluginManager().Register(wp)
+	app.GetPluginManager().Register(wp)
 }
 
 // OS is an interface for abstracting OS-specific operations.
@@ -82,7 +82,7 @@ type wallpaperPlugin struct {
 	shuffleImageFlag     *util.SafeBool  // Whether to shuffle the images
 
 	// Plugin related fields
-	manager pkg.UIPluginManager // Plugin manager
+	manager ui.PluginManager // Plugin manager
 }
 
 // getWallpaperPlugin returns the wallpaper plugin instance.
@@ -121,7 +121,7 @@ func getWallpaperPlugin() *wallpaperPlugin {
 }
 
 // InitPlugin initializes the wallpaper plugin.
-func (wp *wallpaperPlugin) Init(manager pkg.UIPluginManager) {
+func (wp *wallpaperPlugin) Init(manager ui.PluginManager) {
 	wp.manager = manager
 	wp.cfg = GetConfig(manager.GetPreferences())
 }

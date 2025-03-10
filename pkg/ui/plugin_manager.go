@@ -1,4 +1,4 @@
-package pkg
+package ui
 
 import (
 	"net/url"
@@ -6,15 +6,10 @@ import (
 	"fyne.io/fyne/v2"
 )
 
-// PluginManager is the interface that must be implemented by all plugin managers.
+// PluginManager is the interface that must be implemented by all UI plugin managers.
 type PluginManager interface {
-	Register(Plugin)   // Registers a plugin.
-	Deregister(Plugin) // Deregisters a plugin.
-}
-
-// UIPluginManager is the interface that must be implemented by all UI plugin managers.
-type UIPluginManager interface {
-	PluginManager
+	Register(Plugin)                                                      // Registers a plugin.
+	Deregister(Plugin)                                                    // Deregisters a plugin.
 	NotifyUser(string, string)                                            // Notifies the user.
 	RegisterNotifier(Notifier)                                            // Registers a notifier.
 	CreateMenuItem(string, func(), string) *fyne.MenuItem                 // Creates a menu item.

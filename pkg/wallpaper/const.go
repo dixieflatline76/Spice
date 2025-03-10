@@ -1,6 +1,7 @@
 package wallpaper
 
 import (
+	"fmt"
 	"math"
 	"time"
 )
@@ -86,9 +87,9 @@ func (f Frequency) Duration() time.Duration {
 	return FrequencyDurations[f]
 }
 
-// GetFrequencies returns a list of all available frequencies
-func GetFrequencies() []Frequency {
-	return []Frequency{
+// GetFrequencies returns a list of all available frequencies AS fmt.Stringer
+func GetFrequencies() []fmt.Stringer {
+	frequencies := []Frequency{
 		FrequencyNever,
 		Frequency5Minutes,
 		Frequency15Minutes,
@@ -98,6 +99,11 @@ func GetFrequencies() []Frequency {
 		Frequency6Hours,
 		FrequencyDaily,
 	}
+	stringers := make([]fmt.Stringer, len(frequencies))
+	for i, f := range frequencies {
+		stringers[i] = f // This is the key: assign to the interface type
+	}
+	return stringers
 }
 
 // CacheSize represents the predefined cache sizes (in number of images).
@@ -148,9 +154,9 @@ func (cs CacheSize) Size() int {
 	return CacheSizeValues[cs]
 }
 
-// GetCacheSizes returns a list of all available cache sizes.
-func GetCacheSizes() []CacheSize {
-	return []CacheSize{
+// GetCacheSizes returns a list of all available cache sizes AS fmt.Stringer.
+func GetCacheSizes() []fmt.Stringer {
+	cacheSizes := []CacheSize{
 		CacheNone,
 		Cache100Images,
 		Cache200Images,
@@ -158,4 +164,9 @@ func GetCacheSizes() []CacheSize {
 		Cache500Images,
 		Cache1000Images,
 	}
+	stringers := make([]fmt.Stringer, len(cacheSizes))
+	for i, cs := range cacheSizes {
+		stringers[i] = cs // Assign to the interface type
+	}
+	return stringers
 }

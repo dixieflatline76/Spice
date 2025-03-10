@@ -6,7 +6,7 @@ import (
 )
 
 // CreateSectionTitleLabel creates a label for a setting title
-func CreateSectionTitleLabel(desc string) *widget.Label {
+func (sm *SettingsManager) CreateSectionTitleLabel(desc string) *widget.Label {
 	label := widget.NewLabel(desc)
 	label.Wrapping = fyne.TextWrapWord
 	label.Importance = widget.HighImportance
@@ -15,7 +15,7 @@ func CreateSectionTitleLabel(desc string) *widget.Label {
 }
 
 // CreateSettingTitleLabel creates a label for a setting title
-func CreateSettingTitleLabel(desc string) *widget.Label {
+func (sm *SettingsManager) CreateSettingTitleLabel(desc string) *widget.Label {
 	label := widget.NewLabel(desc)
 	label.Wrapping = fyne.TextWrapWord
 	label.Importance = widget.MediumImportance
@@ -24,7 +24,7 @@ func CreateSettingTitleLabel(desc string) *widget.Label {
 }
 
 // CreateSettingDescriptionLabel creates a label for a setting description
-func CreateSettingDescriptionLabel(desc string) *widget.Label {
+func (sm *SettingsManager) CreateSettingDescriptionLabel(desc string) *widget.Label {
 	label := widget.NewLabel(desc)
 	label.Wrapping = fyne.TextWrapWord
 	label.Importance = widget.LowImportance

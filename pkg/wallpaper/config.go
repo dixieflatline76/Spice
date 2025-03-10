@@ -156,7 +156,6 @@ func (c *Config) GetCacheSize() CacheSize {
 // SetCacheSize sets the cache size enumeration and saves it
 func (c *Config) SetCacheSize(size CacheSize) {
 	c.SetInt(CacheSizePrefKey, int(size))
-	c.save()
 }
 
 // GetSmartFit returns the smart fit preference from the config.
@@ -167,7 +166,6 @@ func (c *Config) GetSmartFit() bool {
 // SetSmartFit sets the smart fit preference.
 func (c *Config) SetSmartFit(enabled bool) {
 	c.SetBool(SmartFitPrefKey, enabled) // Save the preference to the config file
-	c.save()
 }
 
 // GetWallpaperChangeFrequency returns the wallpaper change frequency enumeration from the config, or the default value if not set or invalid
@@ -178,7 +176,6 @@ func (c *Config) GetWallpaperChangeFrequency() Frequency {
 // SetWallpaperChangeFrequency sets the frequency enumeration for wallpaper changes and saves it
 func (c *Config) SetWallpaperChangeFrequency(frequency Frequency) {
 	c.SetInt(WallpaperChgFreqPrefKey, int(frequency))
-	c.save()
 }
 
 // GetImgShuffle returns the image shuffle preference from the config.
@@ -189,7 +186,6 @@ func (c *Config) GetImgShuffle() bool {
 // SetImgShuffle sets the image shuffle preference.
 func (c *Config) SetImgShuffle(enabled bool) {
 	c.SetBool(ImgShufflePrefKey, enabled)
-	c.save()
 }
 
 // GetWallhavenAPIKey returns the Wallhaven API key from the config.
@@ -205,7 +201,6 @@ func (c *Config) GetWallhavenAPIKey() string {
 // SetWallhavenAPIKey sets the Wallhaven API key.
 func (c *Config) SetWallhavenAPIKey(apiKey string) {
 	keyring.Set(WallhavenAPIKeyPrefKey, c.userid, apiKey) // Save the API key to the keyring
-	c.save()
 }
 
 // Save saves the current configuration to the user's config file
