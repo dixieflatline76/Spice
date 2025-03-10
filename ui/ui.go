@@ -22,7 +22,7 @@ import (
 	"github.com/disintegration/imaging"
 	"github.com/dixieflatline76/Spice/asset"
 	"github.com/dixieflatline76/Spice/config"
-	"github.com/dixieflatline76/Spice/pkg"
+	"github.com/dixieflatline76/Spice/pkg/ui"
 	"github.com/dixieflatline76/Spice/util"
 	"github.com/dixieflatline76/Spice/util/log"
 )
@@ -32,8 +32,8 @@ type SpiceApp struct {
 	fyne.App
 	assetMgr  *asset.Manager
 	trayMenu  *fyne.Menu
-	notifiers []pkg.Notifier // List of notifiers to activate
-	plugins   []pkg.Plugin   // List of plugins to activate
+	notifiers []ui.Notifier // List of notifiers to activate
+	plugins   []ui.Plugin   // List of plugins to activate
 }
 
 var (
@@ -42,18 +42,18 @@ var (
 )
 
 // GetPluginManager returns the singleton instance of the application as a UIPluginManager
-func GetPluginManager() pkg.UIPluginManager {
+func GetPluginManager() ui.PluginManager {
 	return getInstance()
 }
 
 // Register registers a plugin with the application
-func (sa *SpiceApp) Register(plugin pkg.Plugin) {
+func (sa *SpiceApp) Register(plugin ui.Plugin) {
 	sa.plugins = append(sa.plugins, plugin)
 	plugin.Init(sa)
 }
 
 // Deregister deregisters a plugin from the application
-func (sa *SpiceApp) Deregister(plugin pkg.Plugin) {
+func (sa *SpiceApp) Deregister(plugin ui.Plugin) {
 	// Implementation for deregistering a plugin
 	for i, p := range sa.plugins {
 		if p == plugin {
@@ -69,12 +69,12 @@ func (sa *SpiceApp) GetPreferences() fyne.Preferences {
 }
 
 // RegisterNotifier registers a notifier with the application
-func (sa *SpiceApp) RegisterNotifier(notifier pkg.Notifier) {
+func (sa *SpiceApp) RegisterNotifier(notifier ui.Notifier) {
 	sa.notifiers = append(sa.notifiers, notifier)
 }
 
 // GetApplication returns the singleton instance of the application
-func GetApplication() pkg.App {
+func GetApplication() ui.App {
 	return getInstance()
 }
 
@@ -89,10 +89,10 @@ func getInstance() *SpiceApp {
 				App:      a,
 				assetMgr: asset.NewManager(),
 				trayMenu: fyne.NewMenu(config.AppName),
-				notifiers: []pkg.Notifier{func(title, message string) {
+				notifiers: []ui.Notifier{func(title, message string) {
 					a.SendNotification(fyne.NewNotification(title, message))
 				}},
-				plugins: []pkg.Plugin{},
+				plugins: []ui.Plugin{},
 			}
 			saInstance.verifyEULA()
 		} else {
@@ -138,9 +138,9 @@ func (sa *SpiceApp) CreateTrayMenu() {
 		sa.Quit()
 	}, "quit.png"))
 
+	sa.SetIcon(trayIcon)
 	desk.SetSystemTrayMenu(sa.trayMenu)
 	desk.SetSystemTrayIcon(trayIcon)
-	sa.SetIcon(trayIcon)
 }
 
 // CreateMenuItem creates a menu item with the given label, action, and icon
@@ -269,19 +269,21 @@ func (sa *SpiceApp) CreateSplashScreen(seconds int) {
 func (sa *SpiceApp) CreatePreferencesWindow() {
 	// Create a new window for the preferences
 	prefsWindow := sa.NewWindow(fmt.Sprintf("%s Preferences", config.AppName))
-	prefsWindow.Resize(fyne.NewSize(800, 800))
+	prefsWindow.Resize(fyne.NewSize(800, 600))
 	prefsWindow.CenterOnScreen()
+	sm := NewSettingsManager(prefsWindow)
 
 	prefsContainers := []fyne.CanvasObject{}
 	for _, plugin := range sa.plugins {
-		prefsContainers = append(prefsContainers, plugin.CreatePrefsPanel(prefsWindow))
+		prefsContainers = append(prefsContainers, plugin.CreatePrefsPanel(sm))
 	}
+	// prefsContainers = append(prefsContainers, container.NewHBox(layout.NewSpacer(), sm.GetApplySettingsButton()))
 
 	closeButton := widget.NewButton("Close", func() {
 		prefsWindow.Close()
 	})
 
-	prefsWindowLayout := container.NewBorder(nil, container.NewHBox(layout.NewSpacer(), closeButton), nil, nil, prefsContainers...)
+	prefsWindowLayout := container.NewBorder(nil, container.NewVBox(sm.GetApplySettingsButton(), container.NewHBox(layout.NewSpacer(), closeButton)), nil, nil, prefsContainers...)
 
 	prefsWindow.SetContent(prefsWindowLayout)
 	prefsWindow.Show()

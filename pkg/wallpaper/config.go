@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/user"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -26,6 +27,7 @@ type Config struct { //nolint:golint"
 	ImageQueries []ImageQuery    `json:"query_urls"` // List of image queries
 	assetMgr     *asset.Manager  // Asset manager
 	AvoidSet     map[string]bool `json:"avoid_set"` // Set of image URLs to avoid
+	userid       string
 }
 
 // ImageQuery struct to hold the URL of an image and whether it is active
@@ -43,11 +45,16 @@ var (
 // GetConfig returns the singleton instance of Config.
 func GetConfig(p fyne.Preferences) *Config {
 	cfgOnce.Do(func() {
+		u, e := user.Current()
+		if e != nil {
+			log.Fatalf("failed to initialize %s: %s", config.AppName, e)
+		}
 		cfgInstance = &Config{
 			Preferences:  p,
 			ImageQueries: make([]ImageQuery, 0),
 			assetMgr:     asset.NewManager(),
 			AvoidSet:     make(map[string]bool),
+			userid:       u.Uid,
 		}
 		// Load config from file
 		if err := cfgInstance.loadFromPrefs(); err != nil {
@@ -149,7 +156,6 @@ func (c *Config) GetCacheSize() CacheSize {
 // SetCacheSize sets the cache size enumeration and saves it
 func (c *Config) SetCacheSize(size CacheSize) {
 	c.SetInt(CacheSizePrefKey, int(size))
-	c.save()
 }
 
 // GetSmartFit returns the smart fit preference from the config.
@@ -160,7 +166,6 @@ func (c *Config) GetSmartFit() bool {
 // SetSmartFit sets the smart fit preference.
 func (c *Config) SetSmartFit(enabled bool) {
 	c.SetBool(SmartFitPrefKey, enabled) // Save the preference to the config file
-	c.save()
 }
 
 // GetWallpaperChangeFrequency returns the wallpaper change frequency enumeration from the config, or the default value if not set or invalid
@@ -171,7 +176,6 @@ func (c *Config) GetWallpaperChangeFrequency() Frequency {
 // SetWallpaperChangeFrequency sets the frequency enumeration for wallpaper changes and saves it
 func (c *Config) SetWallpaperChangeFrequency(frequency Frequency) {
 	c.SetInt(WallpaperChgFreqPrefKey, int(frequency))
-	c.save()
 }
 
 // GetImgShuffle returns the image shuffle preference from the config.
@@ -182,12 +186,11 @@ func (c *Config) GetImgShuffle() bool {
 // SetImgShuffle sets the image shuffle preference.
 func (c *Config) SetImgShuffle(enabled bool) {
 	c.SetBool(ImgShufflePrefKey, enabled)
-	c.save()
 }
 
 // GetWallhavenAPIKey returns the Wallhaven API key from the config.
 func (c *Config) GetWallhavenAPIKey() string {
-	apiKey, err := keyring.Get(serviceName, WallhavenAPIKeyPrefKey) // Try to get the API key from the keyring
+	apiKey, err := keyring.Get(WallhavenAPIKeyPrefKey, c.userid) // Try to get the API key from the keyring
 	if err != nil {
 		log.Printf("failed to retrieve Wallhaven API key from keyring: %v", err)
 		return "" // Return an empty string if the keyring lookup fails
@@ -197,8 +200,7 @@ func (c *Config) GetWallhavenAPIKey() string {
 
 // SetWallhavenAPIKey sets the Wallhaven API key.
 func (c *Config) SetWallhavenAPIKey(apiKey string) {
-	keyring.Set(serviceName, WallhavenAPIKeyPrefKey, apiKey) // Save the API key to the keyring
-	c.save()
+	keyring.Set(WallhavenAPIKeyPrefKey, c.userid, apiKey) // Save the API key to the keyring
 }
 
 // Save saves the current configuration to the user's config file

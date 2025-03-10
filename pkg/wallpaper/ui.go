@@ -3,6 +3,8 @@ package wallpaper
 import (
 	"fmt"
 	"net/url"
+	"strconv"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -10,11 +12,8 @@ import (
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
-	"github.com/dixieflatline76/Spice/ui"
+	"github.com/dixieflatline76/Spice/pkg/ui/setting"
 )
-
-// TODO: Major refactor needed, this is more of a proof of concept, optimally we move the apply logic and the status maps to the plugin manager
-// TODO: Should make use of structs to minimize parameter passing
 
 // CreateTrayMenuItems creates the menu items for the tray menu
 func (wp *wallpaperPlugin) CreateTrayMenuItems() []*fyne.MenuItem {
@@ -37,7 +36,7 @@ func (wp *wallpaperPlugin) CreateTrayMenuItems() []*fyne.MenuItem {
 }
 
 // createSettingEntry creates a widget for a setting entry
-func (wp *wallpaperPlugin) createImgQueryList(prefsWindow fyne.Window, chgPrefsCallbacks *map[string]func(), refresh *map[string]bool, checkAndEnableApply func()) *widget.List {
+func (wp *wallpaperPlugin) createImgQueryList(sm setting.SettingsManager) *widget.List {
 
 	var queryList *widget.List
 	queryList = widget.NewList(
@@ -75,35 +74,34 @@ func (wp *wallpaperPlugin) createImgQueryList(prefsWindow fyne.Window, chgPrefsC
 			activeCheck.SetChecked(initialActive)
 			activeCheck.OnChanged = func(b bool) {
 				if b != initialActive { // only add callback if the value has changed
-					(*chgPrefsCallbacks)[queryKey] = func() {
+					sm.SetSettingChangedCallback(queryKey, func() {
 						if b {
 							wp.cfg.EnableImageQuery(i)
 						} else {
 							wp.cfg.DisableImageQuery(i)
 						}
 						initialActive = b // update initial value
-					}
-					(*refresh)[queryKey] = true // mark for refresh
+					})
+					sm.SetRefreshFlag(queryKey)
 				} else {
-					delete(*chgPrefsCallbacks, queryKey) // remove callback
-					delete(*refresh, queryKey)           // remove refresh
+					sm.RemoveSettingChangedCallback(queryKey)
+					sm.UnsetRefreshFlag(queryKey)
 				}
-				checkAndEnableApply()
+				sm.GetCheckAndEnableApplyFunc()()
 			}
 
 			deleteButton.OnTapped = func() {
 				d := dialog.NewConfirm("Please Confirm", fmt.Sprintf("Are you sure you want to delete %s?", wp.cfg.ImageQueries[i].Description), func(b bool) {
 					if b {
 						if wp.cfg.ImageQueries[i].Active {
-							(*refresh)[queryKey] = true
-							checkAndEnableApply()
+							sm.SetRefreshFlag(queryKey)
+							sm.GetCheckAndEnableApplyFunc()()
 						}
-
 						wp.cfg.RemoveImageQuery(i)
 						queryList.Refresh()
 					}
 
-				}, prefsWindow)
+				}, sm.GetSettingsWindow())
 				d.Show()
 			}
 		},
@@ -112,11 +110,16 @@ func (wp *wallpaperPlugin) createImgQueryList(prefsWindow fyne.Window, chgPrefsC
 }
 
 // createImgQueryList creates a list of image queries
-func (wp *wallpaperPlugin) createImageQueryPanel(prefsWindow fyne.Window, parent *fyne.Container, chgPrefsCallbacks *map[string]func(), refresh *map[string]bool, checkAndEnableApply func()) {
+func (wp *wallpaperPlugin) createImageQueryPanel(sm setting.SettingsManager) *fyne.Container {
 
-	imgQueryList := wp.createImgQueryList(prefsWindow, chgPrefsCallbacks, refresh, checkAndEnableApply)
+	imgQueryList := wp.createImgQueryList(sm)
 	var addButton *widget.Button
+	var queryKey string
+
 	addButton = widget.NewButton("Add Image Query", func() {
+
+		addID := time.Now()
+		queryKey = strconv.FormatInt(addID.UnixNano(), 10)
 
 		urlEntry := widget.NewEntry()
 		urlEntry.SetPlaceHolder("Cut and paste your wallhaven image query URL here")
@@ -189,20 +192,19 @@ func (wp *wallpaperPlugin) createImageQueryPanel(prefsWindow fyne.Window, parent
 		descEntry.OnChanged = newEntryLengthChecker(descEntry, MaxDescLength)
 
 		c := container.NewVBox()
-		c.Add(ui.CreateSettingTitleLabel("wallhaven Image Query URL:"))
+		c.Add(sm.CreateSettingTitleLabel("wallhaven Image Query URL:"))
 		c.Add(urlEntry)
-		c.Add(ui.CreateSettingTitleLabel("Description:"))
+		c.Add(sm.CreateSettingTitleLabel("Description:"))
 		c.Add(descEntry)
 		c.Add(formStatus)
 		c.Add(activeBool)
 		c.Add(widget.NewSeparator())
 		c.Add(container.NewHBox(cancelButton, layout.NewSpacer(), saveButton))
 
-		d := dialog.NewCustomWithoutButtons("New Image Query", c, prefsWindow)
+		d := dialog.NewCustomWithoutButtons("New Image Query", c, sm.GetSettingsWindow())
 		d.Resize(fyne.NewSize(800, 200))
 
 		saveButton.OnTapped = func() {
-			newQueryKey := "newQuery"
 
 			apiURL := CovertToAPIURL(urlEntry.Text)
 			err := wp.CheckWallhavenURL(apiURL)
@@ -219,8 +221,10 @@ func (wp *wallpaperPlugin) createImageQueryPanel(prefsWindow fyne.Window, parent
 			imgQueryList.Refresh()
 
 			if activeBool.Checked {
-				(*refresh)[newQueryKey] = true
-				checkAndEnableApply()
+				sm.SetRefreshFlag(queryKey)
+				sm.GetCheckAndEnableApplyFunc()()
+			} else {
+				sm.UnsetRefreshFlag(queryKey)
 			}
 			d.Hide()
 			addButton.Enable()
@@ -233,232 +237,106 @@ func (wp *wallpaperPlugin) createImageQueryPanel(prefsWindow fyne.Window, parent
 
 		d.Show()
 		addButton.Disable()
-		parent.Refresh()
 	})
 
 	header := container.NewVBox()
-	header.Add(ui.CreateSettingTitleLabel("wallhaven Image Queries"))
-	header.Add(ui.CreateSettingDescriptionLabel("Manage your wallhaven.cc image queries here. Spice will convert query URL into wallhaven API format."))
+	header.Add(sm.CreateSettingTitleLabel("wallhaven Image Queries"))
+	header.Add(sm.CreateSettingDescriptionLabel("Manage your wallhaven.cc image queries here. Spice will convert query URL into wallhaven API format."))
 	header.Add(addButton)
 	qpContainer := container.NewBorder(header, nil, nil, nil, imgQueryList)
-	parent.Add(qpContainer)
-	parent.Refresh()
+	return qpContainer
 }
 
 // CreateWallpaperPreferences creates a preferences widget for wallpaper settings
-func (wp *wallpaperPlugin) CreatePrefsPanel(prefsWindow fyne.Window) *fyne.Container {
+func (wp *wallpaperPlugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 	header := container.NewVBox()
 	footer := container.NewVBox()
-
 	prefsPanel := container.NewBorder(header, footer, nil, nil)
-	header.Add(ui.CreateSectionTitleLabel("Wallpaper Preferences"))
 
-	var checkAndEnableApply func()               // Function to check if any setting has changed and enable/disable the apply button
-	chgPrefsCallbacks := make(map[string]func()) // Map to store the changed settings and their corresponding apply functions
-	refreshNeeded := make(map[string]bool)       // Map to track if a refresh is needed after applying settings
+	header.Add(sm.CreateSectionTitleLabel("Wallpaper Preferences"))
 
-	// Change Frequency (using the enum)
-	frequencyOptions := []string{}
-	frequencyKey := "changeFrequency"
-	for _, f := range GetFrequencies() {
-		frequencyOptions = append(frequencyOptions, f.String())
+	// Change Frequency
+	frequencyConfig := setting.SelectConfig{
+		Name:         "changeFrequency",
+		Options:      setting.StringOptions(GetFrequencies()),
+		InitialValue: int(wp.cfg.GetWallpaperChangeFrequency()),
+		Label:        sm.CreateSettingTitleLabel("Wallpaper Change Frequency:"),
+		HelpContent:  sm.CreateSettingDescriptionLabel("Set how often the wallpaper changes. The default is hourly. Set to never to disable wallpaper changes."),
+		ApplyFunc: func(val interface{}) {
+			selectedFrequency := Frequency(val.(int))
+			wp.cfg.SetWallpaperChangeFrequency(selectedFrequency)
+			wp.ChangeWallpaperFrequency(selectedFrequency)
+		},
 	}
-	initialFrequency := wp.cfg.GetWallpaperChangeFrequency()
-	frequencySelect := widget.NewSelect(frequencyOptions, func(selected string) {})
-	frequencySelect.SetSelectedIndex(int(initialFrequency))
-	header.Add(ui.NewSplitRow(ui.CreateSettingTitleLabel("Wallpaper Change Frequency:"), frequencySelect, ui.SplitProportion.OneThird))
-	header.Add(ui.CreateSettingDescriptionLabel("Set how often the wallpaper changes. The default is hourly. Set to never to disable wallpaper changes."))
-	frequencySelect.OnChanged = func(s string) {
-		for _, f := range GetFrequencies() {
-			if f.String() == s && f != initialFrequency {
-				chgPrefsCallbacks[frequencyKey] = func() {
-					selectedFrequency := Frequency(frequencySelect.SelectedIndex())
-					if selectedFrequency != initialFrequency {
-						wp.cfg.SetWallpaperChangeFrequency(selectedFrequency)
-						wp.ChangeWallpaperFrequency(selectedFrequency) // Change the frequency
-						initialFrequency = selectedFrequency           // Update the initial frequency
-					}
-				}
-				break
-			} else {
-				delete(chgPrefsCallbacks, frequencyKey)
-			}
-		}
-		checkAndEnableApply()
-	}
+	sm.CreateSelectSetting(frequencyConfig, header)
 
 	// Cache Size
-	cacheSizeOptions := []string{}
-	cacheSizeKey := "cacheSize"
-	for _, f := range GetCacheSizes() {
-		cacheSizeOptions = append(cacheSizeOptions, f.String())
+	cacheSizeConfig := setting.SelectConfig{
+		Name:         "cacheSize",
+		Options:      setting.StringOptions(GetCacheSizes()), // Correctly calling GetCacheSizes
+		InitialValue: int(wp.cfg.GetCacheSize()),
+		Label:        sm.CreateSettingTitleLabel("Cache Size:"),
+		HelpContent:  sm.CreateSettingDescriptionLabel("Set how many images to cache for faster startup and less network usage. The default is 200. Set to none to disable caching."),
+		ApplyFunc: func(val interface{}) {
+			selectedCacheSize := CacheSize(val.(int))
+			wp.cfg.SetCacheSize(selectedCacheSize)
+		},
 	}
-	initialCacheSize := wp.cfg.GetCacheSize()
-	cacheSizeSelect := widget.NewSelect(cacheSizeOptions, func(selected string) {})
-	cacheSizeSelect.SetSelectedIndex(int(initialCacheSize))
-	header.Add(ui.NewSplitRow(ui.CreateSettingTitleLabel("Cache Size:"), cacheSizeSelect, ui.SplitProportion.OneThird))
-	header.Add(ui.CreateSettingDescriptionLabel("Set how many images to cache for faster startup and less network usage. The default is 200. Set to none to disable caching."))
-	cacheSizeSelect.OnChanged = func(s string) {
-		for _, f := range GetCacheSizes() {
-			if f.String() == s && f != initialCacheSize {
-				chgPrefsCallbacks[cacheSizeKey] = func() {
-					selectedCacheSize := CacheSize(cacheSizeSelect.SelectedIndex())
-					if selectedCacheSize != initialCacheSize {
-						wp.cfg.SetCacheSize(selectedCacheSize) // Save the cache size
-						initialCacheSize = selectedCacheSize   // Update the initial cache size
-					}
-				}
-				break
-			} else {
-				delete(chgPrefsCallbacks, cacheSizeKey) // Remove the selected frequency and duration from the map
-			}
-		}
-		checkAndEnableApply()
-	}
+	sm.CreateSelectSetting(cacheSizeConfig, header)
 
+	// ... (rest of your CreatePrefsPanel function, exactly as before) ...
 	// Smart Fit
-	initialSmartFit := wp.cfg.GetSmartFit()
-	smartFitKey := "smartFit"
-	smartFitCheck := widget.NewCheck("Enable Smart Fit", func(b bool) {})
-	smartFitCheck.SetChecked(initialSmartFit)
-	header.Add(ui.NewSplitRow(ui.CreateSettingTitleLabel("Scale Wallpaper to Fit Screen:"), smartFitCheck, ui.SplitProportion.OneThird))
-	header.Add(ui.CreateSettingDescriptionLabel("Smart Fit analizes wallpapers to find best way to scale and crop them to fit your screen. This is disabled by default."))
-	smartFitCheck.OnChanged = func(b bool) {
-		if initialSmartFit != b {
-			chgPrefsCallbacks[smartFitKey] = func() {
-				selectedSmartFit := smartFitCheck.Checked
-				if selectedSmartFit != initialSmartFit {
-					wp.cfg.SetSmartFit(selectedSmartFit)  // Save the smart fit flag
-					wp.SetSmartFit(smartFitCheck.Checked) // Set the smart fit flag
-					initialSmartFit = selectedSmartFit    // Update the initial smart fit flag
-				}
-			}
-			refreshNeeded[smartFitKey] = true
-		} else {
-			delete(chgPrefsCallbacks, smartFitKey)
-			delete(refreshNeeded, smartFitKey)
-		}
-		checkAndEnableApply()
+	smartFitConfig := setting.BoolConfig{
+		Name:         "smartFit",
+		InitialValue: wp.cfg.GetSmartFit(),
+		Label:        sm.CreateSettingTitleLabel("Scale Wallpaper to Fit Screen:"),
+		HelpContent:  sm.CreateSettingDescriptionLabel("Smart Fit analizes wallpapers to find best way to scale and crop them to fit your screen. This is disabled by default."),
+		ApplyFunc: func(b bool) {
+			wp.cfg.SetSmartFit(b)
+			wp.SetSmartFit(b)
+		},
+		NeedsRefresh: true,
 	}
+	sm.CreateBoolSetting(smartFitConfig, header) // Use the SettingsManager
 
 	// Reset Blocked Images
-	clearBlckLstBtn := widget.NewButton("Reset", func() {
-		d := dialog.NewConfirm("Please Confirm", "This cannot be undone. Are you sure? ", func(b bool) {
-			if b {
-				wp.cfg.ResetAvoidSet()
-			}
-		}, prefsWindow)
-		d.Show()
-	})
-	header.Add(
-		ui.NewSplitRow(
-			ui.CreateSettingTitleLabel("Blocked Images:"),
-			clearBlckLstBtn,
-			ui.SplitProportion.OneThird))
-	header.Add(
-		ui.CreateSettingDescriptionLabel("Clear the blocked images list. Blocked images may be downloaded next time wallpapers are refreshed."))
+	resetButtonConfig := setting.ButtonWithConfirmationConfig{
+		Label:          sm.CreateSettingTitleLabel("Blocked Images:"),
+		HelpContent:    sm.CreateSettingDescriptionLabel("Clear the blocked images list. Blocked images may be downloaded next time wallpapers are refreshed."),
+		ButtonText:     "Reset",
+		ConfirmTitle:   "Please Confirm",
+		ConfirmMessage: "This cannot be undone. Are you sure?",
+		OnPressed:      wp.cfg.ResetAvoidSet,
+	}
+	sm.CreateButtonWithConfirmationSetting(resetButtonConfig, header) // Use the SettingsManager
 
-	//wallhaven service section
+	// wallhaven service section
 	header.Add(widget.NewSeparator())
-	header.Add(ui.CreateSectionTitleLabel("wallhaven.cc Image Service Preferences"))
+	header.Add(sm.CreateSectionTitleLabel("wallhaven.cc Image Service Preferences"))
 
-	// wallhaven API Key
-	wallhavenAPIKeyKey := "wallhavenAPIKey"
-	wallhavenKeyEntry := widget.NewEntry()
-	wallhavenKeyEntry.SetPlaceHolder("Enter your wallhaven.cc API Key")
-	initialKey := wp.cfg.GetWallhavenAPIKey()
-	wallhavenKeyEntry.SetText(initialKey)
-	apiKeyStatus := widget.NewLabel("")
-	wallhavenKeyEntry.Validator = validation.NewRegexp(WallhavenAPIKeyRegexp, "32 alphanumeric characters required")
-	header.Add(
-		ui.NewSplitRow(
-			ui.CreateSettingTitleLabel("wallhaven API Key:"),
-			wallhavenKeyEntry,
-			ui.SplitProportion.OneThird))
+	// Wallhaven API Key
 	whURL, _ := url.Parse("https://wallhaven.cc/settings/account")
-	header.Add(
-		ui.NewSplitRowWithAlignment(
-			widget.NewHyperlink("Restricted content requires an API key. Get one here.", whURL),
-			apiKeyStatus,
-			ui.SplitProportion.TwoThirds,
-			ui.SplitAlign.Opposed))
-	wallhavenKeyEntry.OnChanged = func(s string) {
-		entryErr := wallhavenKeyEntry.Validate()
-		if entryErr != nil {
-			apiKeyStatus.SetText(entryErr.Error())
-			apiKeyStatus.Importance = widget.DangerImportance
-			delete(chgPrefsCallbacks, wallhavenAPIKeyKey)
-			delete(refreshNeeded, wallhavenAPIKeyKey)
-			checkAndEnableApply()
-		} else {
-			keyErr := CheckWallhavenAPIKey(s)
-			if keyErr != nil {
-				apiKeyStatus.SetText(keyErr.Error())
-				apiKeyStatus.Importance = widget.DangerImportance
-				delete(chgPrefsCallbacks, wallhavenAPIKeyKey)
-				delete(refreshNeeded, wallhavenAPIKeyKey)
-				checkAndEnableApply()
-			} else {
-				apiKeyStatus.SetText("API Key OK")
-				apiKeyStatus.Importance = widget.SuccessImportance
-				if initialKey != s {
-					chgPrefsCallbacks[wallhavenAPIKeyKey] = func() {
-						enteredAPIKey := wallhavenKeyEntry.Text
-						if enteredAPIKey != initialKey {
-							wp.cfg.SetWallhavenAPIKey(enteredAPIKey) // Save the API key
-							initialKey = enteredAPIKey               // Update the initial key
-						}
-					}
-					refreshNeeded[wallhavenAPIKeyKey] = true
-					checkAndEnableApply()
-				}
-			}
-		}
-		apiKeyStatus.Refresh()
+	wallhavenAPIKeyConfig := setting.TextEntrySettingConfig{
+		Name:              "wallhavenAPIKey",
+		InitialValue:      wp.cfg.GetWallhavenAPIKey(),
+		PlaceHolder:       "Enter your wallhaven.cc API Key",
+		Label:             sm.CreateSettingTitleLabel("wallhaven API Key:"),
+		HelpContent:       widget.NewHyperlink("Restricted content requires an API key. Get one here.", whURL),
+		Validator:         validation.NewRegexp(WallhavenAPIKeyRegexp, "32 alphanumeric characters required"),
+		ApplyFunc:         wp.cfg.SetWallhavenAPIKey,
+		NeedsRefresh:      true,
+		DisplayStatus:     true,
+		PostValidateCheck: CheckWallhavenAPIKey,
 	}
+	sm.CreateTextEntrySetting(wallhavenAPIKeyConfig, header) // Use the SettingsManager
 
-	// Apply Button (Initially Disabled)
-	var applyButton *widget.Button
-	applyButton = widget.NewButton("Apply Changes", func() {
-
-		originalText := applyButton.Text
-		applyButton.Disable()
-		applyButton.SetText("Applying changes, please wait...")
-		applyButton.Refresh()
-		go func() {
-			// Change wallpaper frequency
-			if len(chgPrefsCallbacks) > 0 {
-				for _, callback := range chgPrefsCallbacks {
-					callback()
-				}
-				chgPrefsCallbacks = make(map[string]func()) // Reset the flag
-			}
-			// Refresh images if API Key has changed or smart fit has been toggled
-			if len(refreshNeeded) > 0 {
-				wp.RefreshImagesAndPulse()
-				refreshNeeded = map[string]bool{}
-			}
-			applyButton.SetText(originalText)
-			applyButton.Refresh()
-		}()
-	})
-	applyButton.Disable() // Disable the apply button again after the changes have been applied
-
-	// Function to check if any setting has changed and enable/disable the apply button
-	checkAndEnableApply = func() {
-		if len(refreshNeeded) > 0 || len(chgPrefsCallbacks) > 0 {
-			applyButton.Enable()
-		} else {
-			applyButton.Disable()
-		}
-		applyButton.Refresh()
-	}
-
-	wp.createImageQueryPanel(prefsWindow, prefsPanel, &chgPrefsCallbacks, &refreshNeeded, checkAndEnableApply)
+	qp := wp.createImageQueryPanel(sm) // Create image query panel
+	prefsPanel.Add(qp)                 // Add image query panel to preferences panel
 
 	footer.Add(widget.NewSeparator())
-	footer.Add(applyButton)
+	sm.RegisterRefreshFunc(func() {
+		wp.RefreshImagesAndPulse()
+	})
 
-	//return wallpaperPrefs
 	return prefsPanel
 }

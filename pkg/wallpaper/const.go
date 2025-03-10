@@ -1,6 +1,7 @@
 package wallpaper
 
 import (
+	"fmt"
 	"math"
 	"time"
 )
@@ -24,7 +25,8 @@ const (
 	ImageWaitRetryDelay      = 2 * time.Second // ImageWaitRetryDelay is the delay between retries to wait for an image to be downloaded
 	MaxURLLength             = 1024            // MaxURLLength is the maximum length of a URL
 	MaxDescLength            = 105             // MaxDescLength is the maximum length of an image description
-	PageDownloadOffset       = 3               // PageDownloadOffset is the offset used to retrieve the next page of wallpapers 1 means service will download the next page 1 before the last image
+	MinSeenImagesForDownload = 3               // MinSeenImagesForDownload is the minimum number of images seen before downloading (3 / 4)
+	PrcntSeenTillDownload    = 0.80            // PrcntSeenTillDownload is the percentage of images seen before downloading (50%)
 	FittedImgDir             = "fit"           // FittedImgDir is the suffix used to identify a fitted image directory
 )
 
@@ -85,9 +87,9 @@ func (f Frequency) Duration() time.Duration {
 	return FrequencyDurations[f]
 }
 
-// GetFrequencies returns a list of all available frequencies
-func GetFrequencies() []Frequency {
-	return []Frequency{
+// GetFrequencies returns a list of all available frequencies AS fmt.Stringer
+func GetFrequencies() []fmt.Stringer {
+	frequencies := []Frequency{
 		FrequencyNever,
 		Frequency5Minutes,
 		Frequency15Minutes,
@@ -97,6 +99,11 @@ func GetFrequencies() []Frequency {
 		Frequency6Hours,
 		FrequencyDaily,
 	}
+	stringers := make([]fmt.Stringer, len(frequencies))
+	for i, f := range frequencies {
+		stringers[i] = f // This is the key: assign to the interface type
+	}
+	return stringers
 }
 
 // CacheSize represents the predefined cache sizes (in number of images).
@@ -147,9 +154,9 @@ func (cs CacheSize) Size() int {
 	return CacheSizeValues[cs]
 }
 
-// GetCacheSizes returns a list of all available cache sizes.
-func GetCacheSizes() []CacheSize {
-	return []CacheSize{
+// GetCacheSizes returns a list of all available cache sizes AS fmt.Stringer.
+func GetCacheSizes() []fmt.Stringer {
+	cacheSizes := []CacheSize{
 		CacheNone,
 		Cache100Images,
 		Cache200Images,
@@ -157,4 +164,9 @@ func GetCacheSizes() []CacheSize {
 		Cache500Images,
 		Cache1000Images,
 	}
+	stringers := make([]fmt.Stringer, len(cacheSizes))
+	for i, cs := range cacheSizes {
+		stringers[i] = cs // Assign to the interface type
+	}
+	return stringers
 }
