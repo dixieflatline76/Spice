@@ -13,11 +13,7 @@ import (
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
 	"github.com/dixieflatline76/Spice/pkg/ui/setting"
-	"github.com/dixieflatline76/Spice/util/log"
 )
-
-// TODO: Major refactor needed, this is more of a proof of concept, optimally we move the apply logic and the status maps to the plugin manager
-// TODO: Should make use of structs to minimize parameter passing
 
 // CreateTrayMenuItems creates the menu items for the tray menu
 func (wp *wallpaperPlugin) CreateTrayMenuItems() []*fyne.MenuItem {
@@ -227,10 +223,8 @@ func (wp *wallpaperPlugin) createImageQueryPanel(sm setting.SettingsManager) *fy
 			if activeBool.Checked {
 				sm.SetRefreshFlag(queryKey)
 				sm.GetCheckAndEnableApplyFunc()()
-				log.Printf("Refresh flag set for %s", queryKey)
 			} else {
 				sm.UnsetRefreshFlag(queryKey)
-				log.Printf("Refresh flag set for %s", queryKey)
 			}
 			d.Hide()
 			addButton.Enable()
@@ -243,7 +237,6 @@ func (wp *wallpaperPlugin) createImageQueryPanel(sm setting.SettingsManager) *fy
 
 		d.Show()
 		addButton.Disable()
-		//parent.Refresh()
 	})
 
 	header := container.NewVBox()
