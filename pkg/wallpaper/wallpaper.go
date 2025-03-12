@@ -458,7 +458,7 @@ func (wp *wallpaperPlugin) Activate() {
 			time.Sleep(timeUntilMidnight)
 
 			// Refresh all images
-			wp.refreshImages()
+			wp.RefreshImagesAndPulse() // Refresh all images
 		}
 	}()
 
