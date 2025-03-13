@@ -66,23 +66,23 @@ type wallpaperPlugin struct {
 
 	// Download related fields
 	downloadMutex       sync.Mutex         // Protects currentPage, downloading, and download operations
-	currentDownloadPage *util.SafeInt      // Current page of images
+	currentDownloadPage *util.SafeCounter  // Current page of images
 	downloadedDir       string             // Directory where downloaded images are stored
 	localImgRecs        []ImgSrvcImage     // Keep track of downloaded images to quickly access info like image web path
-	interrupt           *util.SafeBool     // Whether to interrupt the image download
-	workerCount         *util.SafeInt      // Number of concurrent image download workers
+	interrupt           *util.SafeFlag     // Whether to interrupt the image download
 	cancel              context.CancelFunc // Cancel function for the context
+	downloadWaitGroup   *sync.WaitGroup    // Wait group for image download workers
 
 	// Display related fields
-	currentImage         ImgSrvcImage    // Current image being displayed
-	localImgIndex        util.SafeInt    // Index of the current image in the download history
-	randomizedIndexes    []int           // Keep track of randomized indexes for image selection
-	randomizedIndexesPos int             // Position in the randomizedIndexes slice for image selection
-	seenImages           map[string]bool // Keep track of images that have been seen to trigger download of next page
-	prevLocalImgs        []int           // Keep track of every image set to support the previous wallpaper action
-	imgPulseOp           func()          // Function to call to pulse the image
-	fitImageFlag         *util.SafeBool  // Whether to fit the image to the desktop resolution
-	shuffleImageFlag     *util.SafeBool  // Whether to shuffle the images
+	currentImage         ImgSrvcImage     // Current image being displayed
+	localImgIndex        util.SafeCounter // Index of the current image in the download history
+	randomizedIndexes    []int            // Keep track of randomized indexes for image selection
+	randomizedIndexesPos int              // Position in the randomizedIndexes slice for image selection
+	seenImages           map[string]bool  // Keep track of images that have been seen to trigger download of next page
+	prevLocalImgs        []int            // Keep track of every image set to support the previous wallpaper action
+	imgPulseOp           func()           // Function to call to pulse the image
+	fitImageFlag         *util.SafeFlag   // Whether to fit the image to the desktop resolution
+	shuffleImageFlag     *util.SafeFlag   // Whether to shuffle the images
 
 	// Plugin related fields
 	manager ui.PluginManager // Plugin manager
@@ -108,7 +108,6 @@ func getWallpaperPlugin() *wallpaperPlugin {
 			downloadedDir:       "",
 			localImgRecs:        []ImgSrvcImage{},
 			interrupt:           util.NewSafeBoolWithValue(false),
-			workerCount:         util.NewSafeIntWithValue(0),
 
 			localImgIndex:        *util.NewSafeIntWithValue(-1),
 			randomizedIndexes:    []int{},
@@ -145,11 +144,10 @@ func (wp *wallpaperPlugin) refreshImages() {
 	}
 
 	// Wait for all download goroutines to finish.
-	for wp.workerCount.Value() > 0 {
+	if wp.downloadWaitGroup != nil {
 		log.Print("Waiting for download goroutines to finish...")
-		time.Sleep(100 * time.Millisecond)
+		wp.downloadWaitGroup.Wait() // Wait for all download goroutines to finish.
 	}
-	wp.cancel = nil // Reset the cancel function after cleanup.
 
 	wp.downloadMutex.Lock()
 	err := wp.cleanupImageCache()
@@ -171,13 +169,14 @@ func (wp *wallpaperPlugin) downloadAllImages(page int) {
 	// Create a top-level context with a timeout (adjust as needed).
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	wp.cancel = cancel
+	wp.downloadWaitGroup = &sync.WaitGroup{}
 
 	var message string
 	for _, query := range wp.cfg.ImageQueries {
 		if query.Active {
-			wp.workerCount.Increment()
+			wp.downloadWaitGroup.Add(1)
 			go func(q ImageQuery) {
-				defer wp.workerCount.Decrement()
+				defer wp.downloadWaitGroup.Done()
 				wp.downloadImagesForURL(ctx, q, page) // Pass the derived context.
 			}(query) // Pass the query to the closure.
 
@@ -189,25 +188,12 @@ func (wp *wallpaperPlugin) downloadAllImages(page int) {
 	// Goroutine to wait for workerCount and then cancel the context.
 	go func() {
 		defer func() {
-			cancel()        // Ensure cancellation on exit
-			wp.cancel = nil // Reset cancel *inside* the goroutine.
+			cancel()                   // Ensure cancellation on exit
+			wp.cancel = nil            // Reset cancel *inside* the goroutine.
+			wp.downloadWaitGroup = nil // Reset downloadWaitGroup *inside* the goroutine.
 		}()
 
-		for {
-			select {
-			case <-ctx.Done(): // Check for cancellation FIRST.
-				if ctx.Err() == context.Canceled {
-					log.Println("downloadAllImages was canceled")
-				} // No else needed; cancellation is the expected behavior.
-				return
-			default: // Non-blocking check
-				if wp.workerCount.Value() == 0 {
-					log.Println("downloadAllImages completed (workerCount reached 0)")
-					return // Exit the loop and trigger deferred cancel().
-				}
-				time.Sleep(100 * time.Millisecond) // Check periodically.
-			}
-		}
+		wp.downloadWaitGroup.Wait() // Wait for all goroutines to finish
 	}()
 }
 
