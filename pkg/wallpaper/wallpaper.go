@@ -193,7 +193,9 @@ func (wp *wallpaperPlugin) downloadAllImages(page int) {
 			wp.downloadWaitGroup = nil // Reset downloadWaitGroup *inside* the goroutine.
 		}()
 
-		wp.downloadWaitGroup.Wait() // Wait for all goroutines to finish
+		if wp.downloadWaitGroup != nil {
+			wp.downloadWaitGroup.Wait() // Wait for all goroutines to finish
+		}
 	}()
 }
 
@@ -345,14 +347,13 @@ func (wp *wallpaperPlugin) downloadImage(ctx context.Context, isi ImgSrvcImage) 
 		wp.downloadMutex.Unlock() // Unlock before fitting, decoding and encoding
 		img, _, err := wp.imgProcessor.DecodeImage(ctx, imgBytes, isi.FileType)
 		if err != nil {
-			log.Printf("failed to decode image: %v", err)
 			wp.downloadMutex.Lock() // Lock again before returning
 			return "", fmt.Errorf("failed to decode image: %v", err)
 		}
+
+		// Fit the image
 		processedImg, err := wp.imgProcessor.FitImage(ctx, img)
 		if err != nil {
-			// Failed to fit image, return the error and continue
-			log.Printf("unable to fit image %s: %v", isi.ID, err)
 			wp.downloadMutex.Lock() // Lock again before returning
 			return "", err
 		}
@@ -360,7 +361,6 @@ func (wp *wallpaperPlugin) downloadImage(ctx context.Context, isi ImgSrvcImage) 
 		// Encode the processed image
 		processedImgBytes, err := wp.imgProcessor.EncodeImage(ctx, processedImg, isi.FileType)
 		if err != nil {
-			log.Printf("failed to encode image: %v", err)
 			wp.downloadMutex.Lock() // Lock again before returning
 			return "", fmt.Errorf("failed to encode image: %v", err)
 		}
@@ -711,6 +711,9 @@ func (wp *wallpaperPlugin) SetPreviousWallpaper() {
 	}
 	wp.prevLocalImgs = wp.prevLocalImgs[:len(wp.prevLocalImgs)-1] // Remove the last element
 	tempIndex := wp.prevLocalImgs[len(wp.prevLocalImgs)-1]        // Get the last element
+	if wp.shuffleImageFlag.Value() {
+		wp.randomizedIndexesPos--
+	}
 	wp.downloadMutex.Unlock()
 
 	wp.setWallpaperAt(tempIndex)
