@@ -1,6 +1,8 @@
 package wallpaper
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"image"
@@ -42,11 +44,11 @@ type OS interface {
 	getDesktopDimension() (int, int, error) // Get the desktop dimensions.
 }
 
-// ImageProcessor is an interface for image cropping.
+// ImageProcessor interface now includes context in all methods.
 type ImageProcessor interface {
-	FitImage(img image.Image) (image.Image, error)                                // Fit the image to the desktop resolution.
-	DecodeImage(imgBytes []byte, contentType string) (image.Image, string, error) // Decode an image from a byte slice.
-	EncodeImage(img image.Image, contentType string) ([]byte, error)              // Encode an image to a byte slice.
+	FitImage(ctx context.Context, img image.Image) (image.Image, error)
+	DecodeImage(ctx context.Context, imgBytes []byte, contentType string) (image.Image, string, error)
+	EncodeImage(ctx context.Context, img image.Image, contentType string) ([]byte, error)
 }
 
 // fileInfo struct to store file path and modification time.
@@ -63,23 +65,24 @@ type wallpaperPlugin struct {
 	ticker       *time.Ticker
 
 	// Download related fields
-	downloadMutex       sync.Mutex     // Protects currentPage, downloading, and download operations
-	currentDownloadPage *util.SafeInt  // Current page of images
-	downloadedDir       string         // Directory where downloaded images are stored
-	localImgRecs        []ImgSrvcImage // Keep track of downloaded images to quickly access info like image web path
-	interrupt           *util.SafeBool // Whether to interrupt the image download
-	workerCount         *util.SafeInt  // Number of concurrent image download workers
+	downloadMutex       sync.Mutex         // Protects currentPage, downloading, and download operations
+	currentDownloadPage *util.SafeCounter  // Current page of images
+	downloadedDir       string             // Directory where downloaded images are stored
+	localImgRecs        []ImgSrvcImage     // Keep track of downloaded images to quickly access info like image web path
+	interrupt           *util.SafeFlag     // Whether to interrupt the image download
+	cancel              context.CancelFunc // Cancel function for the context
+	downloadWaitGroup   *sync.WaitGroup    // Wait group for image download workers
 
 	// Display related fields
-	currentImage         ImgSrvcImage    // Current image being displayed
-	localImgIndex        util.SafeInt    // Index of the current image in the download history
-	randomizedIndexes    []int           // Keep track of randomized indexes for image selection
-	randomizedIndexesPos int             // Position in the randomizedIndexes slice for image selection
-	seenImages           map[string]bool // Keep track of images that have been seen to trigger download of next page
-	prevLocalImgs        []int           // Keep track of every image set to support the previous wallpaper action
-	imgPulseOp           func()          // Function to call to pulse the image
-	fitImageFlag         *util.SafeBool  // Whether to fit the image to the desktop resolution
-	shuffleImageFlag     *util.SafeBool  // Whether to shuffle the images
+	currentImage         ImgSrvcImage     // Current image being displayed
+	localImgIndex        util.SafeCounter // Index of the current image in the download history
+	randomizedIndexes    []int            // Keep track of randomized indexes for image selection
+	randomizedIndexesPos int              // Position in the randomizedIndexes slice for image selection
+	seenImages           map[string]bool  // Keep track of images that have been seen to trigger download of next page
+	prevLocalImgs        []int            // Keep track of every image set to support the previous wallpaper action
+	imgPulseOp           func()           // Function to call to pulse the image
+	fitImageFlag         *util.SafeFlag   // Whether to fit the image to the desktop resolution
+	shuffleImageFlag     *util.SafeFlag   // Whether to shuffle the images
 
 	// Plugin related fields
 	manager ui.PluginManager // Plugin manager
@@ -105,7 +108,6 @@ func getWallpaperPlugin() *wallpaperPlugin {
 			downloadedDir:       "",
 			localImgRecs:        []ImgSrvcImage{},
 			interrupt:           util.NewSafeBoolWithValue(false),
-			workerCount:         util.NewSafeIntWithValue(0),
 
 			localImgIndex:        *util.NewSafeIntWithValue(-1),
 			randomizedIndexes:    []int{},
@@ -124,6 +126,9 @@ func getWallpaperPlugin() *wallpaperPlugin {
 func (wp *wallpaperPlugin) Init(manager ui.PluginManager) {
 	wp.manager = manager
 	wp.cfg = GetConfig(manager.GetPreferences())
+	if wp.cfg == nil {
+		log.Fatal("Failed to initialize wallpaper configuration.")
+	}
 }
 
 // Name returns the name of the plugin.
@@ -133,13 +138,15 @@ func (wp *wallpaperPlugin) Name() string {
 
 // RefreshImages downloads all images from the configured URLs.
 func (wp *wallpaperPlugin) refreshImages() {
-	// Signal all download goroutines to stop
-	wp.interrupt.Set(true)
+	// Cancel any ongoing downloads.
+	if wp.cancel != nil {
+		wp.cancel() // Cancel the existing context.
+	}
 
-	// Wait for all download goroutines to finish
-	for wp.workerCount.Value() > 0 {
+	// Wait for all download goroutines to finish.
+	if wp.downloadWaitGroup != nil {
 		log.Print("Waiting for download goroutines to finish...")
-		time.Sleep(time.Second * 1)
+		wp.downloadWaitGroup.Wait() // Wait for all download goroutines to finish.
 	}
 
 	wp.downloadMutex.Lock()
@@ -147,12 +154,11 @@ func (wp *wallpaperPlugin) refreshImages() {
 	if err != nil {
 		log.Printf("error clearing downloaded images directory: %v", err)
 	}
-	wp.localImgRecs = []ImgSrvcImage{} // Clear the download history
-	clear(wp.seenImages)               // Clear the seen history)
-	wp.prevLocalImgs = []int{}         // Clear the previous history
-	wp.currentDownloadPage.Set(1)      // Reset to the first page
+	wp.localImgRecs = []ImgSrvcImage{} // Clear the download history.
+	clear(wp.seenImages)               // Clear the seen history.
+	wp.prevLocalImgs = []int{}         // Clear the previous history.
+	wp.currentDownloadPage.Set(1)      // Reset to the first page.
 	wp.localImgIndex.Set(-1)
-	wp.interrupt.Set(false)
 	wp.downloadMutex.Unlock()
 
 	wp.downloadAllImages(wp.currentDownloadPage.Value())
@@ -160,20 +166,41 @@ func (wp *wallpaperPlugin) refreshImages() {
 
 // downloadAllImages downloads images from all active URLs for the specified page.
 func (wp *wallpaperPlugin) downloadAllImages(page int) {
+	// Create a top-level context with a timeout (adjust as needed).
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	wp.cancel = cancel
+	wp.downloadWaitGroup = &sync.WaitGroup{}
+
 	var message string
 	for _, query := range wp.cfg.ImageQueries {
 		if query.Active {
-			go wp.downloadImagesForURL(query, page)
+			wp.downloadWaitGroup.Add(1)
+			go func(q ImageQuery) {
+				defer wp.downloadWaitGroup.Done()
+				wp.downloadImagesForURL(ctx, q, page) // Pass the derived context.
+			}(query) // Pass the query to the closure.
+
 			message += fmt.Sprintf("[%s]\n", query.Description)
 		}
 	}
 	wp.manager.NotifyUser("Downloading Images From:", message)
+
+	// Goroutine to wait for workerCount and then cancel the context.
+	go func() {
+		defer func() {
+			cancel()                   // Ensure cancellation on exit
+			wp.cancel = nil            // Reset cancel *inside* the goroutine.
+			wp.downloadWaitGroup = nil // Reset downloadWaitGroup *inside* the goroutine.
+		}()
+
+		if wp.downloadWaitGroup != nil {
+			wp.downloadWaitGroup.Wait() // Wait for all goroutines to finish
+		}
+	}()
 }
 
 // downloadImagesForURL downloads images from the given URL for the specified page.
-func (wp *wallpaperPlugin) downloadImagesForURL(query ImageQuery, page int) {
-	wp.workerCount.Increment()
-	defer wp.workerCount.Decrement()
+func (wp *wallpaperPlugin) downloadImagesForURL(ctx context.Context, query ImageQuery, page int) {
 
 	// Construct the API URL
 	u, err := url.Parse(query.URL)
@@ -199,20 +226,38 @@ func (wp *wallpaperPlugin) downloadImagesForURL(query ImageQuery, page int) {
 
 	u.RawQuery = q.Encode()
 
-	// Fetch the JSON response
-	resp, err := http.Get(u.String())
+	// Fetch the JSON response (using context)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
+		log.Printf("Failed to create request: %v", err)
+		return
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		if ctx.Err() != nil {
+			log.Printf("Request canceled: %v", ctx.Err()) // Log context cancellation
+			return
+		}
 		log.Printf("Failed to fetch from image service: %v", err)
 		return
 	}
 	defer resp.Body.Close()
 
-	// Read the response body
-	body, err := io.ReadAll(resp.Body)
+	// Read the response body (with context)
+	var buf bytes.Buffer
+	limitedReader := &io.LimitedReader{R: resp.Body, N: 1024 * 1024 * 100} // 100MB limit
+	_, err = io.Copy(&buf, limitedReader)                                  // io.Copy respects context
+
 	if err != nil {
+		if ctx.Err() != nil {
+			log.Printf("Response body read canceled: %v", ctx.Err()) //Log context cancellation
+			return
+		}
 		log.Printf("Failed to read image service response: %v", err)
 		return
 	}
+	body := buf.Bytes()
 
 	// Parse the JSON response
 	var response imgSrvcResponse
@@ -225,12 +270,20 @@ func (wp *wallpaperPlugin) downloadImagesForURL(query ImageQuery, page int) {
 	// Download images from the current page
 	for _, isi := range response.Data {
 		wp.downloadMutex.Lock()
-		if wp.interrupt.Value() {
+		if wp.interrupt.Value() || ctx.Err() != nil { // Check both interrupt and context
 			wp.downloadMutex.Unlock()
-			log.Printf("Download of '%s' interrupted", query.Description)
+			if ctx.Err() != nil {
+				log.Printf("Download of '%s' interrupted by context: %v", query.Description, ctx.Err())
+			} else {
+				log.Printf("Download of '%s' interrupted", query.Description)
+			}
 			return // Interrupt download
 		}
-		wp.downloadImage(isi)
+		// Pass the context to downloadImage
+		_, err := wp.downloadImage(ctx, isi)
+		if err != nil {
+			log.Printf("Error downloading image %s: %v", isi.ID, err) // Log individual image errors
+		}
 		wp.downloadMutex.Unlock()
 	}
 }
@@ -243,8 +296,7 @@ func (wp *wallpaperPlugin) getDownloadedDir() string {
 	return wp.downloadedDir
 }
 
-// downloadImage downloads a single image.
-func (wp *wallpaperPlugin) downloadImage(isi ImgSrvcImage) (string, error) {
+func (wp *wallpaperPlugin) downloadImage(ctx context.Context, isi ImgSrvcImage) (string, error) {
 
 	if wp.cfg.InAvoidSet(isi.ID) {
 		// log.Printf("Skipping download, image '%s' in avoid set", isi.ID)
@@ -260,39 +312,55 @@ func (wp *wallpaperPlugin) downloadImage(isi ImgSrvcImage) (string, error) {
 		return tempFile, nil // Image already exists
 	}
 
-	resp, err := http.Get(isi.Path)
+	// 1. Create an HTTP request with context
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, isi.Path, nil)
 	if err != nil {
-		return "", fmt.Errorf("failed to download image: %v", err)
+		return "", fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// 2. Perform the request using a client (you might have a client already)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		// Check for context cancellation
+		if ctx.Err() != nil {
+			return "", fmt.Errorf("request canceled: %w", ctx.Err())
+		}
+		return "", fmt.Errorf("failed to download image: %w", err)
 	}
 	defer resp.Body.Close()
 
-	// Read the image bytes
-	imgBytes, err := io.ReadAll(resp.Body) // Read all bytes at once
+	// 3. Read with context (using io.Copy with a limited reader)
+	var buf bytes.Buffer
+	limitedReader := &io.LimitedReader{R: resp.Body, N: 100 * 1024 * 1024} // Limit to 100MB, adjust as needed
+	_, err = io.Copy(&buf, limitedReader)                                  // io.Copy checks for context cancellation internally!
+
 	if err != nil {
+		if ctx.Err() != nil {
+			return "", fmt.Errorf("image read canceled: %w", ctx.Err())
+		}
 		return "", fmt.Errorf("failed to read image bytes: %w", err)
 	}
+	imgBytes := buf.Bytes()
 
 	if wp.fitImageFlag.Value() {
 		// Decode the image
 		wp.downloadMutex.Unlock() // Unlock before fitting, decoding and encoding
-		img, _, err := wp.imgProcessor.DecodeImage(imgBytes, isi.FileType)
+		img, _, err := wp.imgProcessor.DecodeImage(ctx, imgBytes, isi.FileType)
 		if err != nil {
-			log.Printf("failed to decode image: %v", err)
 			wp.downloadMutex.Lock() // Lock again before returning
 			return "", fmt.Errorf("failed to decode image: %v", err)
 		}
-		processedImg, err := wp.imgProcessor.FitImage(img)
+
+		// Fit the image
+		processedImg, err := wp.imgProcessor.FitImage(ctx, img)
 		if err != nil {
-			// Failed to fit image, return the error and continue
-			log.Printf("unable to fit image %s: %v", isi.ID, err)
 			wp.downloadMutex.Lock() // Lock again before returning
 			return "", err
 		}
 
 		// Encode the processed image
-		processedImgBytes, err := wp.imgProcessor.EncodeImage(processedImg, isi.FileType)
+		processedImgBytes, err := wp.imgProcessor.EncodeImage(ctx, processedImg, isi.FileType)
 		if err != nil {
-			log.Printf("failed to encode image: %v", err)
 			wp.downloadMutex.Lock() // Lock again before returning
 			return "", fmt.Errorf("failed to encode image: %v", err)
 		}
@@ -458,7 +526,7 @@ func (wp *wallpaperPlugin) Activate() {
 			time.Sleep(timeUntilMidnight)
 
 			// Refresh all images
-			wp.refreshImages()
+			wp.RefreshImagesAndPulse() // Refresh all images
 		}
 	}()
 
@@ -643,6 +711,9 @@ func (wp *wallpaperPlugin) SetPreviousWallpaper() {
 	}
 	wp.prevLocalImgs = wp.prevLocalImgs[:len(wp.prevLocalImgs)-1] // Remove the last element
 	tempIndex := wp.prevLocalImgs[len(wp.prevLocalImgs)-1]        // Get the last element
+	if wp.shuffleImageFlag.Value() {
+		wp.randomizedIndexesPos--
+	}
 	wp.downloadMutex.Unlock()
 
 	wp.setWallpaperAt(tempIndex)

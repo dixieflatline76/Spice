@@ -28,6 +28,7 @@ type Config struct { //nolint:golint"
 	assetMgr     *asset.Manager  // Asset manager
 	AvoidSet     map[string]bool `json:"avoid_set"` // Set of image URLs to avoid
 	userid       string
+	mu           sync.RWMutex // Mutex for thread-safe access
 }
 
 // ImageQuery struct to hold the URL of an image and whether it is active
@@ -76,6 +77,9 @@ func GetPath() string {
 
 // loadFromPrefs loads configuration from the specified file
 func (c *Config) loadFromPrefs() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	defaultCfg, err := c.assetMgr.GetText("default_config.json")
 	if err != nil {
 		return err
@@ -92,6 +96,8 @@ func (c *Config) loadFromPrefs() error {
 
 // AddImageQuery adds a new image query to the end of the list
 func (c *Config) AddImageQuery(desc, url string, active bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	newItem := ImageQuery{desc, url, active}
 	c.ImageQueries = append([]ImageQuery{newItem}, c.ImageQueries...)
 	c.save()
@@ -99,6 +105,8 @@ func (c *Config) AddImageQuery(desc, url string, active bool) {
 
 // RemoveImageQuery removes the image query with the specified description
 func (c *Config) RemoveImageQuery(index int) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if index < 0 || index >= len(c.ImageQueries) {
 		return fmt.Errorf("invalid query index: %d", index)
 	}
@@ -110,6 +118,8 @@ func (c *Config) RemoveImageQuery(index int) error {
 
 // EnableImageQuery enables the image query with the specified description
 func (c *Config) EnableImageQuery(index int) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if index < 0 || index >= len(c.ImageQueries) {
 		return fmt.Errorf("invalid query index: %d", index)
 	}
@@ -121,6 +131,8 @@ func (c *Config) EnableImageQuery(index int) error {
 
 // DisableImageQuery disables the image query with the specified description
 func (c *Config) DisableImageQuery(index int) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if index < 0 || index >= len(c.ImageQueries) {
 		return fmt.Errorf("invalid query index: %d", index)
 	}
@@ -132,64 +144,88 @@ func (c *Config) DisableImageQuery(index int) error {
 
 // InAvoidSet checks if the given ID is in the avoid set
 func (c *Config) InAvoidSet(id string) bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	_, found := c.AvoidSet[id]
 	return found
 }
 
 // AddToAvoidSet adds the given ID to the avoid set
 func (c *Config) AddToAvoidSet(id string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.AvoidSet[id] = true
 	c.save()
 }
 
 // ResetAvoidSet clears the avoid set
 func (c *Config) ResetAvoidSet() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.AvoidSet = make(map[string]bool)
 	c.save()
 }
 
 // GetCacheSize returns the cache size enumeration from the config, or the default value if not set or invalid
 func (c *Config) GetCacheSize() CacheSize {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	return CacheSize(c.IntWithFallback(CacheSizePrefKey, int(Cache200Images))) // Default to 200 images
 }
 
 // SetCacheSize sets the cache size enumeration and saves it
 func (c *Config) SetCacheSize(size CacheSize) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.SetInt(CacheSizePrefKey, int(size))
 }
 
 // GetSmartFit returns the smart fit preference from the config.
 func (c *Config) GetSmartFit() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	return c.BoolWithFallback(SmartFitPrefKey, false) // Default to false
 }
 
 // SetSmartFit sets the smart fit preference.
 func (c *Config) SetSmartFit(enabled bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.SetBool(SmartFitPrefKey, enabled) // Save the preference to the config file
 }
 
 // GetWallpaperChangeFrequency returns the wallpaper change frequency enumeration from the config, or the default value if not set or invalid
 func (c *Config) GetWallpaperChangeFrequency() Frequency {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	return Frequency(c.IntWithFallback(WallpaperChgFreqPrefKey, int(FrequencyHourly))) // Default to hourly
 }
 
 // SetWallpaperChangeFrequency sets the frequency enumeration for wallpaper changes and saves it
 func (c *Config) SetWallpaperChangeFrequency(frequency Frequency) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.SetInt(WallpaperChgFreqPrefKey, int(frequency))
 }
 
 // GetImgShuffle returns the image shuffle preference from the config.
 func (c *Config) GetImgShuffle() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	return c.BoolWithFallback(ImgShufflePrefKey, false)
 }
 
 // SetImgShuffle sets the image shuffle preference.
 func (c *Config) SetImgShuffle(enabled bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.SetBool(ImgShufflePrefKey, enabled)
 }
 
 // GetWallhavenAPIKey returns the Wallhaven API key from the config.
 func (c *Config) GetWallhavenAPIKey() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	apiKey, err := keyring.Get(WallhavenAPIKeyPrefKey, c.userid) // Try to get the API key from the keyring
 	if err != nil {
 		log.Printf("failed to retrieve Wallhaven API key from keyring: %v", err)
@@ -200,11 +236,14 @@ func (c *Config) GetWallhavenAPIKey() string {
 
 // SetWallhavenAPIKey sets the Wallhaven API key.
 func (c *Config) SetWallhavenAPIKey(apiKey string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	keyring.Set(WallhavenAPIKeyPrefKey, c.userid, apiKey) // Save the API key to the keyring
 }
 
 // Save saves the current configuration to the user's config file
 func (c *Config) save() {
+	// Don't lock the mutex here because we're already holding it in all calling functions
 	data, err := json.MarshalIndent(c, "", "  ") // Use indentation for readability
 	if err != nil {
 		log.Fatalf("Error encoding config data: %v", err)
