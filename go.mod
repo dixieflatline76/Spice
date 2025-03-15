@@ -2,7 +2,7 @@ module github.com/dixieflatline76/Spice
 
 go 1.23.3
 
-require fyne.io/fyne/v2 v2.5.4
+require fyne.io/fyne/v2 v2.5.5
 
 require (
 	al.essio.dev/pkg/shellescape v1.6.0 // indirect

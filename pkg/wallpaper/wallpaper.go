@@ -136,20 +136,44 @@ func (wp *wallpaperPlugin) Name() string {
 	return pluginName
 }
 
-// RefreshImages downloads all images from the configured URLs.
-func (wp *wallpaperPlugin) refreshImages() {
+// stopAllWorkers stops all workers and cancels any ongoing downloads. It blocks until all workers have stopped.
+// It also clears the download wait group, cancel func, and sets the interrupt flag to false.
+func (wp *wallpaperPlugin) stopAllWorkers() {
+	wp.downloadMutex.Lock()
+	defer func() {
+		wp.cancel = nil            // Cancel called, clearing it here for clarity
+		wp.downloadWaitGroup = nil // All downloads finished, clear it here for clarity
+		wp.interrupt.Set(false)    // Interrupt flag set to false, indicating no more downloads are needed.
+		wp.downloadMutex.Unlock()  // Unlock after setting interrupt flag to false.
+		log.Printf("Clean up completed. Ready to start new downloads.")
+	}()
+
+	log.Print("Stopping all all workers...")
+
+	// Set interrupt flag to true to stop all workers.
+	wp.interrupt.Set(true)
+
 	// Cancel any ongoing downloads.
 	if wp.cancel != nil {
 		wp.cancel() // Cancel the existing context.
+
 	}
 
 	// Wait for all download goroutines to finish.
 	if wp.downloadWaitGroup != nil {
-		log.Print("Waiting for download goroutines to finish...")
-		wp.downloadWaitGroup.Wait() // Wait for all download goroutines to finish.
+		log.Print("Waiting for all downloads to stop...")
+		wg := wp.downloadWaitGroup // Copy the wait group before unlocking.
+		wp.downloadMutex.Unlock()  // Unlock before waiting.
+		wg.Wait()                  // Wait for all download goroutines to finish.
+		wp.downloadMutex.Lock()    // Lock before clearing.
+		log.Printf("All downloads stopped.")
 	}
+}
 
+// resetPluginState clears all state related to image downloads and resets the plugin. It also cleans up any downloaded images from the cache directory.
+func (wp *wallpaperPlugin) resetPluginState() {
 	wp.downloadMutex.Lock()
+	defer wp.downloadMutex.Unlock() // Unlock before clearing.
 	err := wp.cleanupImageCache()
 	if err != nil {
 		log.Printf("error clearing downloaded images directory: %v", err)
@@ -158,48 +182,58 @@ func (wp *wallpaperPlugin) refreshImages() {
 	clear(wp.seenImages)               // Clear the seen history.
 	wp.prevLocalImgs = []int{}         // Clear the previous history.
 	wp.currentDownloadPage.Set(1)      // Reset to the first page.
-	wp.localImgIndex.Set(-1)
-	wp.downloadMutex.Unlock()
-
-	wp.downloadAllImages(wp.currentDownloadPage.Value())
 }
 
 // downloadAllImages downloads images from all active URLs for the specified page.
-func (wp *wallpaperPlugin) downloadAllImages(page int) {
+func (wp *wallpaperPlugin) downloadAllImages() {
+	wp.stopAllWorkers() // Stop all workers before starting new ones. Blocks until all workers are stopped.
+	if wp.currentDownloadPage.Value() <= 1 {
+		// If page is 1, reset plugin state to start fresh.
+		wp.resetPluginState()
+	}
+
 	// Create a top-level context with a timeout (adjust as needed).
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	wp.downloadMutex.Lock()
 	wp.cancel = cancel
 	wp.downloadWaitGroup = &sync.WaitGroup{}
+	queries := wp.cfg.ImageQueries // Take a copy of the queries slice to avoid concurrent modification.
+	wp.downloadMutex.Unlock()
 
 	var message string
-	for _, query := range wp.cfg.ImageQueries {
+	for _, query := range queries {
 		if query.Active {
 			wp.downloadWaitGroup.Add(1)
 			go func(q ImageQuery) {
 				defer wp.downloadWaitGroup.Done()
-				wp.downloadImagesForURL(ctx, q, page) // Pass the derived context.
+				wp.downloadImagesForURL(ctx, q, wp.currentDownloadPage.Value()) // Pass the derived context.
 			}(query) // Pass the query to the closure.
 
 			message += fmt.Sprintf("[%s]\n", query.Description)
 		}
 	}
-	wp.manager.NotifyUser("Downloading Images From:", message)
+	wp.manager.NotifyUser("Downloading: ", message)
 
 	// Goroutine to wait for workerCount and then cancel the context.
 	go func() {
-		defer func() {
-			cancel()                   // Ensure cancellation on exit
-			wp.cancel = nil            // Reset cancel *inside* the goroutine.
-			wp.downloadWaitGroup = nil // Reset downloadWaitGroup *inside* the goroutine.
-		}()
-
+		wp.downloadMutex.Lock()
+		defer wp.downloadMutex.Unlock()
 		if wp.downloadWaitGroup != nil {
-			wp.downloadWaitGroup.Wait() // Wait for all goroutines to finish
+			wg := wp.downloadWaitGroup
+			log.Print("Waiting for all downloads to finish...")
+			wp.downloadMutex.Unlock()
+			wg.Wait() // Wait for all goroutines to finish
+			wp.downloadMutex.Lock()
+			log.Print("All downloads finished.")
 		}
+		cancel()                   // Ensure cancellation on exit
+		wp.cancel = nil            // Reset cancel *inside* the goroutine.
+		wp.downloadWaitGroup = nil // Reset downloadWaitGroup *inside* the goroutine.
 	}()
 }
 
-// downloadImagesForURL downloads images from the given URL for the specified page.
+// downloadImagesForURL downloads images from the given URL for the specified page. This function purposely serialize the download process per query
+// and per page to prevent overwhelming the API server. This is a design choice as there's no need to maximize download speed.
 func (wp *wallpaperPlugin) downloadImagesForURL(ctx context.Context, query ImageQuery, page int) {
 
 	// Construct the API URL
@@ -279,12 +313,12 @@ func (wp *wallpaperPlugin) downloadImagesForURL(ctx context.Context, query Image
 			}
 			return // Interrupt download
 		}
-		// Pass the context to downloadImage
+		// Download the image and handle errors. Purposely serialize download calls to avoid rate limiting
 		_, err := wp.downloadImage(ctx, isi)
+		wp.downloadMutex.Unlock()
 		if err != nil {
 			log.Printf("Error downloading image %s: %v", isi.ID, err) // Log individual image errors
 		}
-		wp.downloadMutex.Unlock()
 	}
 }
 
@@ -299,7 +333,6 @@ func (wp *wallpaperPlugin) getDownloadedDir() string {
 func (wp *wallpaperPlugin) downloadImage(ctx context.Context, isi ImgSrvcImage) (string, error) {
 
 	if wp.cfg.InAvoidSet(isi.ID) {
-		// log.Printf("Skipping download, image '%s' in avoid set", isi.ID)
 		return "", nil // Skip this image
 	}
 
@@ -307,7 +340,6 @@ func (wp *wallpaperPlugin) downloadImage(ctx context.Context, isi ImgSrvcImage) 
 	tempFile := filepath.Join(wp.getDownloadedDir(), extractFilenameFromURL(isi.Path))
 	_, err := os.Stat(tempFile)
 	if !os.IsNotExist(err) {
-		// log.Printf("Skipping download, image '%s' in cache", isi.ID)
 		wp.localImgRecs = append(wp.localImgRecs, isi)
 		return tempFile, nil // Image already exists
 	}
@@ -386,15 +418,20 @@ func (wp *wallpaperPlugin) downloadImage(ctx context.Context, isi ImgSrvcImage) 
 
 // setWallpaperAt sets the wallpaper at the specified index.
 func (wp *wallpaperPlugin) setWallpaperAt(imageIndex int) {
+	wp.downloadMutex.Lock()
+	defer wp.downloadMutex.Unlock()
 
 	// Check if we need to download the next page
 	seenCount := len(wp.seenImages)
 	localRecsCount := float64(len(wp.localImgRecs))
 	threshold := int(math.Round(PrcntSeenTillDownload * localRecsCount))
 
+	// If we have seen enough images and the threshold is met, start downloading the next page.
 	if seenCount > MinSeenImagesForDownload && seenCount >= threshold {
+		wp.downloadMutex.Unlock() // Unlock to give critical section control to download coordinator
 		wp.currentDownloadPage.Increment()
-		wp.downloadAllImages(wp.currentDownloadPage.Value())
+		wp.downloadAllImages()
+		wp.downloadMutex.Lock()
 	}
 
 	// Check if we have any downloaded images
@@ -409,9 +446,6 @@ func (wp *wallpaperPlugin) setWallpaperAt(imageIndex int) {
 	imagePath := filepath.Join(wp.getDownloadedDir(), extractFilenameFromURL(isi.Path))
 
 	// Set the wallpaper
-	wp.downloadMutex.Lock()
-	defer wp.downloadMutex.Unlock()
-
 	if err := wp.os.setWallpaper(imagePath); err != nil {
 		log.Printf("failed to set wallpaper: %v", err)
 		return // Or handle the error in a way that makes sense for your application
@@ -534,17 +568,9 @@ func (wp *wallpaperPlugin) Activate() {
 	wp.SetSmartFit(wp.cfg.GetSmartFit())       // Set smart fit preference
 
 	// Refresh images and set the first wallpaper
-	go wp.refreshImages()
-
-	// Set the first wallpaper
-	for i := 0; len(wp.localImgRecs) <= MinLocalImageBeforePulse && i < MaxImageWaitRetry; i++ {
-		// Wait for images to be downloaded
-		time.Sleep(ImageWaitRetryDelay)
-	}
-	wp.imgPulseOp()
+	wp.RefreshImagesAndPulse()
 
 	// Start the wallpaper rotation ticker
-
 	wp.ChangeWallpaperFrequency(wp.cfg.GetWallpaperChangeFrequency()) // Set wallpaper change frequency preference
 }
 
@@ -751,7 +777,8 @@ func (wp *wallpaperPlugin) ViewCurrentImageOnWeb() {
 
 // RefreshImagesAndPulse refreshes the list of images and pulses the image.
 func (wp *wallpaperPlugin) RefreshImagesAndPulse() {
-	wp.refreshImages()
+	wp.currentDownloadPage.Set(1) // Reset the current download page to 1
+	wp.downloadAllImages()
 	go func() {
 		for i := 0; len(wp.localImgRecs) < MinLocalImageBeforePulse && i < MaxImageWaitRetry; i++ {
 			time.Sleep(ImageWaitRetryDelay)
