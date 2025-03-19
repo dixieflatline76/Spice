@@ -256,7 +256,8 @@ func (wp *wallpaperPlugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Co
 	header.Add(sm.CreateSectionTitleLabel("Wallpaper Preferences"))
 
 	// Change Frequency
-	frequencyConfig := setting.SelectConfig{
+	var frequencyConfig setting.SelectConfig
+	frequencyConfig = setting.SelectConfig{
 		Name:         "changeFrequency",
 		Options:      setting.StringOptions(GetFrequencies()),
 		InitialValue: int(wp.cfg.GetWallpaperChangeFrequency()),
@@ -264,14 +265,16 @@ func (wp *wallpaperPlugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Co
 		HelpContent:  sm.CreateSettingDescriptionLabel("Set how often the wallpaper changes. The default is hourly. Set to never to disable wallpaper changes."),
 		ApplyFunc: func(val interface{}) {
 			selectedFrequency := Frequency(val.(int))
-			wp.cfg.SetWallpaperChangeFrequency(selectedFrequency)
-			wp.ChangeWallpaperFrequency(selectedFrequency)
+			wp.cfg.SetWallpaperChangeFrequency(selectedFrequency) // Persists new frequency in configuration
+			wp.ChangeWallpaperFrequency(selectedFrequency)        // Activate the new frequency in wallpaper plugin
+			frequencyConfig.InitialValue = int(selectedFrequency) // Update initial value for frequency
 		},
 	}
-	sm.CreateSelectSetting(frequencyConfig, header)
+	sm.CreateSelectSetting(&frequencyConfig, header)
 
 	// Cache Size
-	cacheSizeConfig := setting.SelectConfig{
+	var cacheSizeConfig setting.SelectConfig
+	cacheSizeConfig = setting.SelectConfig{
 		Name:         "cacheSize",
 		Options:      setting.StringOptions(GetCacheSizes()), // Correctly calling GetCacheSizes
 		InitialValue: int(wp.cfg.GetCacheSize()),
@@ -279,25 +282,28 @@ func (wp *wallpaperPlugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Co
 		HelpContent:  sm.CreateSettingDescriptionLabel("Set how many images to cache for faster startup and less network usage. The default is 200. Set to none to disable caching."),
 		ApplyFunc: func(val interface{}) {
 			selectedCacheSize := CacheSize(val.(int))
-			wp.cfg.SetCacheSize(selectedCacheSize)
+			wp.cfg.SetCacheSize(selectedCacheSize)                // Persists new cache size in configuration
+			cacheSizeConfig.InitialValue = int(selectedCacheSize) // Update initial value for cache size
 		},
 	}
-	sm.CreateSelectSetting(cacheSizeConfig, header)
+	sm.CreateSelectSetting(&cacheSizeConfig, header)
 
 	// ... (rest of your CreatePrefsPanel function, exactly as before) ...
 	// Smart Fit
-	smartFitConfig := setting.BoolConfig{
+	var smartFitConfig setting.BoolConfig
+	smartFitConfig = setting.BoolConfig{
 		Name:         "smartFit",
 		InitialValue: wp.cfg.GetSmartFit(),
 		Label:        sm.CreateSettingTitleLabel("Scale Wallpaper to Fit Screen:"),
 		HelpContent:  sm.CreateSettingDescriptionLabel("Smart Fit analizes wallpapers to find best way to scale and crop them to fit your screen. This is disabled by default."),
 		ApplyFunc: func(b bool) {
-			wp.cfg.SetSmartFit(b)
-			wp.SetSmartFit(b)
+			wp.cfg.SetSmartFit(b)           // Persists the setting in wp.cfg and updates the UI
+			wp.SetSmartFit(b)               // Activates smart fit in the wallpaper engine
+			smartFitConfig.InitialValue = b // Update the initial value to reflect the new state of smart fit
 		},
 		NeedsRefresh: true,
 	}
-	sm.CreateBoolSetting(smartFitConfig, header) // Use the SettingsManager
+	sm.CreateBoolSetting(&smartFitConfig, header) // Use the SettingsManager
 
 	// Reset Blocked Images
 	resetButtonConfig := setting.ButtonWithConfirmationConfig{
@@ -308,7 +314,7 @@ func (wp *wallpaperPlugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Co
 		ConfirmMessage: "This cannot be undone. Are you sure?",
 		OnPressed:      wp.cfg.ResetAvoidSet,
 	}
-	sm.CreateButtonWithConfirmationSetting(resetButtonConfig, header) // Use the SettingsManager
+	sm.CreateButtonWithConfirmationSetting(&resetButtonConfig, header) // Use the SettingsManager
 
 	// wallhaven service section
 	header.Add(widget.NewSeparator())
@@ -316,19 +322,23 @@ func (wp *wallpaperPlugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Co
 
 	// Wallhaven API Key
 	whURL, _ := url.Parse("https://wallhaven.cc/settings/account")
-	wallhavenAPIKeyConfig := setting.TextEntrySettingConfig{
-		Name:              "wallhavenAPIKey",
-		InitialValue:      wp.cfg.GetWallhavenAPIKey(),
-		PlaceHolder:       "Enter your wallhaven.cc API Key",
-		Label:             sm.CreateSettingTitleLabel("wallhaven API Key:"),
-		HelpContent:       widget.NewHyperlink("Restricted content requires an API key. Get one here.", whURL),
-		Validator:         validation.NewRegexp(WallhavenAPIKeyRegexp, "32 alphanumeric characters required"),
-		ApplyFunc:         wp.cfg.SetWallhavenAPIKey,
+	var wallhavenAPIKeyConfig setting.TextEntrySettingConfig
+	wallhavenAPIKeyConfig = setting.TextEntrySettingConfig{
+		Name:         "wallhavenAPIKey",
+		InitialValue: wp.cfg.GetWallhavenAPIKey(),
+		PlaceHolder:  "Enter your wallhaven.cc API Key",
+		Label:        sm.CreateSettingTitleLabel("wallhaven API Key:"),
+		HelpContent:  widget.NewHyperlink("Restricted content requires an API key. Get one here.", whURL),
+		Validator:    validation.NewRegexp(WallhavenAPIKeyRegexp, "32 alphanumeric characters required"),
+		ApplyFunc: func(s string) {
+			wp.cfg.SetWallhavenAPIKey(s)           // Update the wallpaper configuration with the new API key
+			wallhavenAPIKeyConfig.InitialValue = s // Update the initial value of the text entry setting with the new API key
+		},
 		NeedsRefresh:      true,
 		DisplayStatus:     true,
 		PostValidateCheck: CheckWallhavenAPIKey,
 	}
-	sm.CreateTextEntrySetting(wallhavenAPIKeyConfig, header) // Use the SettingsManager
+	sm.CreateTextEntrySetting(&wallhavenAPIKeyConfig, header) // Use the SettingsManager
 
 	qp := wp.createImageQueryPanel(sm) // Create image query panel
 	prefsPanel.Add(qp)                 // Add image query panel to preferences panel
