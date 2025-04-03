@@ -567,8 +567,12 @@ func (wp *wallpaperPlugin) Activate() {
 	wp.SetShuffleImage(wp.cfg.GetImgShuffle()) // Set shuffle image preference
 	wp.SetSmartFit(wp.cfg.GetSmartFit())       // Set smart fit preference
 
-	// Refresh images and set the first wallpaper
-	wp.RefreshImagesAndPulse()
+	if wp.cfg.GetChgImgOnStart() { // Check if change image on start preference is enabled
+		wp.RefreshImagesAndPulse() // Refresh all images and set the first wallpaper
+	} else {
+		wp.currentDownloadPage.Set(1) // Reset the current download page to 1
+		wp.downloadAllImages()
+	}
 
 	// Start the wallpaper rotation ticker
 	wp.ChangeWallpaperFrequency(wp.cfg.GetWallpaperChangeFrequency()) // Set wallpaper change frequency preference
@@ -767,6 +771,10 @@ func (wp *wallpaperPlugin) ChangeWallpaperFrequency(newFrequency Frequency) {
 
 // ViewCurrentImageOnWeb opens the current wallpaper image in the default web browser.
 func (wp *wallpaperPlugin) ViewCurrentImageOnWeb() {
+	if wp.getCurrentImage().ShortURL == "" {
+		wp.manager.NotifyUser("No Image Details", "Wallpaper not set during this session.")
+		return
+	}
 	url, err := url.Parse(wp.getCurrentImage().ShortURL)
 	if err != nil {
 		log.Printf("failed to parse URL: %v", err)

@@ -288,7 +288,6 @@ func (wp *wallpaperPlugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Co
 	}
 	sm.CreateSelectSetting(&cacheSizeConfig, header)
 
-	// ... (rest of your CreatePrefsPanel function, exactly as before) ...
 	// Smart Fit
 	var smartFitConfig setting.BoolConfig
 	smartFitConfig = setting.BoolConfig{
@@ -304,6 +303,21 @@ func (wp *wallpaperPlugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Co
 		NeedsRefresh: true,
 	}
 	sm.CreateBoolSetting(&smartFitConfig, header) // Use the SettingsManager
+
+	// Smart Fit
+	var chgImgOnStartConfig setting.BoolConfig
+	chgImgOnStartConfig = setting.BoolConfig{
+		Name:         "chgImgOnStart",
+		InitialValue: wp.cfg.GetChgImgOnStart(),
+		Label:        sm.CreateSettingTitleLabel("Change wallpaper on start:"),
+		HelpContent:  sm.CreateSettingDescriptionLabel("Disable if you prefer the wallpaper to change only based on its timer or a manual refresh. This is enabled by default."),
+		ApplyFunc: func(b bool) {
+			wp.cfg.SetChgImgOnStart(b)           // Persists the setting in wp.cfg and updates the UI
+			chgImgOnStartConfig.InitialValue = b // Update the initial value to reflect the new state of smart fit
+		},
+		NeedsRefresh: false,
+	}
+	sm.CreateBoolSetting(&chgImgOnStartConfig, header) // Use the SettingsManager
 
 	// Reset Blocked Images
 	resetButtonConfig := setting.ButtonWithConfirmationConfig{
