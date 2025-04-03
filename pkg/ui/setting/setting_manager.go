@@ -75,10 +75,10 @@ func StringOptions(options []fmt.Stringer) []string {
 type SettingsManager interface {
 	SettingsHelper
 
-	CreateSelectSetting(cfg SelectConfig, header *fyne.Container)                                 // Create a select setting widget.
-	CreateBoolSetting(cfg BoolConfig, header *fyne.Container)                                     // Create a boolean setting widget.
-	CreateTextEntrySetting(cfg TextEntrySettingConfig, header *fyne.Container)                    // Create a text entry setting widget.
-	CreateButtonWithConfirmationSetting(cfg ButtonWithConfirmationConfig, header *fyne.Container) // Create a button setting with confirmation dialog widget.
+	CreateSelectSetting(cfg *SelectConfig, header *fyne.Container)                                 // Create a select setting widget.
+	CreateBoolSetting(cfg *BoolConfig, header *fyne.Container)                                     // Create a boolean setting widget.
+	CreateTextEntrySetting(cfg *TextEntrySettingConfig, header *fyne.Container)                    // Create a text entry setting widget.
+	CreateButtonWithConfirmationSetting(cfg *ButtonWithConfirmationConfig, header *fyne.Container) // Create a button setting with confirmation dialog widget.
 
 	GetApplySettingsButton() *widget.Button                        //GetApplySettingsButton returns the Apply Changes button from the SettingsManager to be used in the UI.
 	SetSettingChangedCallback(settingName string, callback func()) // Set a callback function to be called when a setting changes.

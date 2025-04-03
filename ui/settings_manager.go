@@ -86,7 +86,7 @@ func (sm *SettingsManager) GetApplySettingsButton() *widget.Button {
 }
 
 // CreateSelectSetting creates a reusable select widget.
-func (sm *SettingsManager) CreateSelectSetting(cfg setting.SelectConfig, header *fyne.Container) {
+func (sm *SettingsManager) CreateSelectSetting(cfg *setting.SelectConfig, header *fyne.Container) {
 	selectWidget := widget.NewSelect(cfg.Options, func(selected string) {})
 	selectWidget.SetSelectedIndex(cfg.InitialValue.(int))
 
@@ -118,7 +118,7 @@ func (sm *SettingsManager) CreateSelectSetting(cfg setting.SelectConfig, header 
 }
 
 // CreateBoolSetting creates a reusable boolean check setting.
-func (sm *SettingsManager) CreateBoolSetting(cfg setting.BoolConfig, header *fyne.Container) {
+func (sm *SettingsManager) CreateBoolSetting(cfg *setting.BoolConfig, header *fyne.Container) {
 	check := widget.NewCheck("", func(b bool) {}) // Use empty string, label is CanvasObject
 	check.SetChecked(cfg.InitialValue)
 
@@ -149,7 +149,7 @@ func (sm *SettingsManager) CreateBoolSetting(cfg setting.BoolConfig, header *fyn
 }
 
 // CreateTextEntrySetting creates a reusable text entry setting.
-func (sm *SettingsManager) CreateTextEntrySetting(cfg setting.TextEntrySettingConfig, header *fyne.Container) {
+func (sm *SettingsManager) CreateTextEntrySetting(cfg *setting.TextEntrySettingConfig, header *fyne.Container) {
 	entry := widget.NewEntry()
 	entry.SetPlaceHolder(cfg.PlaceHolder)
 	entry.SetText(cfg.InitialValue)
@@ -218,7 +218,7 @@ func (sm *SettingsManager) CreateTextEntrySetting(cfg setting.TextEntrySettingCo
 }
 
 // CreateButtonWithConfirmationSetting creates a reusable button setting with confirmation dialog.
-func (sm *SettingsManager) CreateButtonWithConfirmationSetting(cfg setting.ButtonWithConfirmationConfig, header *fyne.Container) {
+func (sm *SettingsManager) CreateButtonWithConfirmationSetting(cfg *setting.ButtonWithConfirmationConfig, header *fyne.Container) {
 	button := widget.NewButton(cfg.ButtonText, func() {
 		if cfg.ConfirmTitle != "" && cfg.ConfirmMessage != "" {
 			d := dialog.NewConfirm(cfg.ConfirmTitle, cfg.ConfirmMessage, func(b bool) {

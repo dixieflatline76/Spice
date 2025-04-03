@@ -241,6 +241,20 @@ func (c *Config) SetWallhavenAPIKey(apiKey string) {
 	keyring.Set(WallhavenAPIKeyPrefKey, c.userid, apiKey) // Save the API key to the keyring
 }
 
+// SetChgImgOnStart returns the change image on start preference.
+func (c *Config) SetChgImgOnStart(enable bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.SetBool(ChgImgOnStartPrefKey, enable)
+}
+
+// GetChgImgOnStart returns the change image on start preference.
+func (c *Config) GetChgImgOnStart() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.BoolWithFallback(ChgImgOnStartPrefKey, true) // Return the change image on start preference with a fallback value of true if not set
+}
+
 // Save saves the current configuration to the user's config file
 func (c *Config) save() {
 	// Don't lock the mutex here because we're already holding it in all calling functions
