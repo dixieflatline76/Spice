@@ -57,7 +57,7 @@ func CheckWallhavenAPIKey(apiKey string) error {
 	return fmt.Errorf("API key is invalid")
 }
 
-// CovertWebToAPIURL converts a web URL to an API URL. validates input, transforms to API format, determines type,
+// ConvertWebToAPIURL converts a web URL to an API URL. validates input, transforms to API format, determines type,
 // cleans parameters, and returns the cleaned API URL suitable for saving.
 func CovertWebToAPIURL(webURL string) (finalAPIURL string, queryType URLType, err error) {
 	trimmedURL := strings.TrimSpace(webURL)
