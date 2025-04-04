@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/dixieflatline76/Spice/util/log"
 	"golang.org/x/oauth2"
 )
 
@@ -56,30 +57,71 @@ func CheckWallhavenAPIKey(apiKey string) error {
 	return fmt.Errorf("API key is invalid")
 }
 
-// CovertToAPIURL converts the given URL to a Wallhaven API URL.
-func CovertToAPIURL(queryURL string) string {
+// CovertWebToAPIURL converts a web URL to an API URL. validates input, transforms to API format, determines type,
+// cleans parameters, and returns the cleaned API URL suitable for saving.
+func CovertWebToAPIURL(webURL string) (finalAPIURL string, queryType URLType, err error) {
+	trimmedURL := strings.TrimSpace(webURL)
+	var baseURL string
+	queryType = Unknown // Default state
 
-	// Convert to API URL
-	queryURL = strings.Replace(queryURL, "https://wallhaven.cc/search?", "https://wallhaven.cc/api/v1/search?", 1)
+	// --- Transformation and Type Detection using constants ---
+	switch {
+	case UserFavoritesRegex.MatchString(trimmedURL):
+		matches := UserFavoritesRegex.FindStringSubmatch(trimmedURL)
+		// matches[0]=Full, matches[1]=Username, matches[2]=ID
+		baseURL = fmt.Sprintf(WallhavenAPICollectionURL, matches[1], matches[2])
+		queryType = Favorites
 
-	u, err := url.Parse(queryURL)
-	if err != nil {
-		// Not a valid URL
-		return queryURL
+	case SearchRegex.MatchString(trimmedURL):
+		matches := SearchRegex.FindStringSubmatch(trimmedURL)
+		// matches[0]=Full match, matches[1]=Base ("https://wallhaven.cc/"), matches[2]=Query part ("?q=...") or empty string
+		apiSearchBase := WallhavenAPISearchURL
+		if len(matches) == 3 && matches[2] != "" { // Check if query part was captured
+			baseURL = apiSearchBase + matches[2] // Append the captured query part
+		} else {
+			baseURL = apiSearchBase // No query part found
+		}
+		queryType = Search
+
+	case APICollectionRegex.MatchString(trimmedURL):
+		baseURL = trimmedURL // Already API format
+		queryType = Favorites
+
+	case APISearchRegex.MatchString(trimmedURL):
+		baseURL = trimmedURL // Already API format
+		queryType = Search
+
+	default:
+		// This path should ideally not be reached if the Fyne validator uses WallhavenURLRegexpStr
+		err = fmt.Errorf("entered URL is currently not supported: %s", trimmedURL)
+		return // Return early
 	}
 
-	q := u.Query()
-
-	// Remove API key
+	// --- Parameter Cleaning (for the URL to be *saved*) ---
+	parsedURL, parseErr := url.Parse(baseURL)
+	if parseErr != nil {
+		err = fmt.Errorf("internal error parsing transformed URL '%s': %w", baseURL, parseErr)
+		return
+	}
+	q := parsedURL.Query()
+	paramsChanged := false
+	// Clean API key (don't store in saved query)
 	if q.Has("apikey") {
 		q.Del("apikey")
+		paramsChanged = true
 	}
-
-	// Remove page
+	// Clean page (don't store pagination in base query)
 	if q.Has("page") {
 		q.Del("page")
+		paramsChanged = true
 	}
 
-	u.RawQuery = q.Encode()
-	return u.String()
+	if paramsChanged {
+		parsedURL.RawQuery = q.Encode()
+	}
+	finalAPIURL = parsedURL.String() // This is the cleaned URL suitable for saving
+
+	// Return the cleaned URL, the detected type, and nil error if successful so far
+	log.Printf("Transformed URL to: %s (Type: %s)", finalAPIURL, queryType)
+	return
 }

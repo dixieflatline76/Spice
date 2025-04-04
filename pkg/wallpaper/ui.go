@@ -116,16 +116,16 @@ func (wp *wallpaperPlugin) createImageQueryPanel(sm setting.SettingsManager) *fy
 	var addButton *widget.Button
 	var queryKey string
 
-	addButton = widget.NewButton("Add Image Query", func() {
+	addButton = widget.NewButton("Add wallhaven URL", func() {
 
 		addID := time.Now()
 		queryKey = strconv.FormatInt(addID.UnixNano(), 10)
 
 		urlEntry := widget.NewEntry()
-		urlEntry.SetPlaceHolder("Cut and paste your wallhaven image query URL here")
+		urlEntry.SetPlaceHolder("Cut and paste a wallhaven search or collection URL from your browser to here")
 
 		descEntry := widget.NewEntry()
-		descEntry.SetPlaceHolder("Add a description for this query")
+		descEntry.SetPlaceHolder("Add a description for these images")
 
 		formStatus := widget.NewLabel("")
 		activeBool := widget.NewCheck("Active", nil)
@@ -192,7 +192,7 @@ func (wp *wallpaperPlugin) createImageQueryPanel(sm setting.SettingsManager) *fy
 		descEntry.OnChanged = newEntryLengthChecker(descEntry, MaxDescLength)
 
 		c := container.NewVBox()
-		c.Add(sm.CreateSettingTitleLabel("wallhaven Image Query URL:"))
+		c.Add(sm.CreateSettingTitleLabel("wallhaven Search or Collection (Favorites) URL:"))
 		c.Add(urlEntry)
 		c.Add(sm.CreateSettingTitleLabel("Description:"))
 		c.Add(descEntry)
@@ -206,8 +206,15 @@ func (wp *wallpaperPlugin) createImageQueryPanel(sm setting.SettingsManager) *fy
 
 		saveButton.OnTapped = func() {
 
-			apiURL := CovertToAPIURL(urlEntry.Text)
-			err := wp.CheckWallhavenURL(apiURL)
+			apiURL, queryType, err := CovertWebToAPIURL(urlEntry.Text) // Convert web URL to API URL
+			if err != nil {
+				formStatus.SetText(err.Error())
+				formStatus.Importance = widget.DangerImportance
+				formStatus.Refresh()
+				return
+			}
+
+			err = wp.CheckWallhavenURL(apiURL, queryType) // Check if the API URL is valid
 			if err != nil {
 				formStatus.SetText(err.Error())
 				formStatus.Importance = widget.DangerImportance
@@ -240,8 +247,8 @@ func (wp *wallpaperPlugin) createImageQueryPanel(sm setting.SettingsManager) *fy
 	})
 
 	header := container.NewVBox()
-	header.Add(sm.CreateSettingTitleLabel("wallhaven Image Queries"))
-	header.Add(sm.CreateSettingDescriptionLabel("Manage your wallhaven.cc image queries here. Spice will convert query URL into wallhaven API format."))
+	header.Add(sm.CreateSettingTitleLabel("wallhaven Queries and Collections (Favorites)"))
+	header.Add(sm.CreateSettingDescriptionLabel("Manage your wallhaven.cc image queries and collections here. Paste your image search or collection URL and Spice will take care of the rest."))
 	header.Add(addButton)
 	qpContainer := container.NewBorder(header, nil, nil, nil, imgQueryList)
 	return qpContainer
