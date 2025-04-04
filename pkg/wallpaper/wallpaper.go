@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"image"
 	"io"
@@ -646,60 +647,6 @@ func (wp *wallpaperPlugin) getWallhavenURL(apiURL string) *url.URL {
 	return url
 }
 
-// checkWallhavenURL checks if the given URL is a valid wallhaven URL.
-// Returns true if the URL is valid, false otherwise.
-// Also returns an error if any.
-func (wp *wallpaperPlugin) checkWallhavenURL(queryURL string) error {
-	// Construct the API URL
-	u, err := url.Parse(queryURL)
-	if err != nil {
-		return err
-	}
-
-	q := u.Query()
-	q.Set("apikey", wp.cfg.GetWallhavenAPIKey()) // Add the API key
-
-	// Check for resolutions or atleast parameters
-	if !q.Has("resolutions") && !q.Has("atleast") {
-		width, height, err := wp.os.getDesktopDimension()
-		if err != nil {
-			log.Printf("error getting desktop dimensions: %v", err)
-			// Do NOT set a default resolution. Let the API handle it.
-		} else {
-			q.Set("atleast", fmt.Sprintf("%dx%d", width, height))
-		}
-	}
-
-	u.RawQuery = q.Encode()
-
-	// Fetch the JSON response
-	resp, err := http.Get(u.String())
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	// Read the response body
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
-
-	// Parse the JSON response
-	var response imgSrvcResponse
-	err = json.Unmarshal(body, &response)
-	if err != nil {
-		return err
-	}
-
-	if len(response.Data) == 0 {
-		return fmt.Errorf("no suitable images found for your current resolution")
-	}
-
-	//
-	return nil // success
-}
-
 // SetNextWallpaper sets the next wallpaper in the list.
 func (wp *wallpaperPlugin) setNextWallpaper() {
 	// Increment the index and add it to the history
@@ -818,9 +765,111 @@ func (wp *wallpaperPlugin) SetShuffleImage(enabled bool) {
 	}
 }
 
+// checkWallhavenURL takes a transformed API URL and its type, performs a network check
+// for reachability and results, returning an error on failure.
+func (wp *wallpaperPlugin) checkWallhavenURL(apiURL string, queryType URLType) error {
+	// --- Prepare URL specifically for the check ---
+	checkURLParsed, err := url.Parse(apiURL) // Start from the clean API URL from transform step
+	if err != nil {
+		// Should not happen if transform succeeded, but check defensively
+		return fmt.Errorf("internal error parsing API URL for check '%s': %w", apiURL, err)
+	}
+	checkQuery := checkURLParsed.Query()
+
+	// Add API Key for the check itself
+	apiKey := wp.cfg.GetWallhavenAPIKey() // TODO: Ensure this method exists and works
+	if apiKey != "" {
+		checkQuery.Set("apikey", apiKey)
+	} else {
+		log.Println("Warning: Checking Wallhaven URL without an API key.") // May fail for private collections etc.
+	}
+
+	// Conditionally add 'atleast' ONLY for Search type queries
+	if queryType == Search {
+		if !checkQuery.Has("resolutions") && !checkQuery.Has("atleast") {
+			// TODO: Ensure wp.os.getDesktopDimension() exists and works
+			width, height, dimErr := wp.os.getDesktopDimension()
+			if dimErr != nil {
+				log.Printf("checkWallhavenURL: error getting dimensions: %v. Proceeding without 'atleast'.", dimErr)
+			} else if width > 0 && height > 0 { // Basic sanity check on dimensions
+				checkQuery.Set("atleast", fmt.Sprintf("%dx%d", width, height))
+				log.Printf("checkWallhavenURL: Added 'atleast=%dx%d' parameter for check.", width, height)
+			}
+		}
+	}
+	checkURLParsed.RawQuery = checkQuery.Encode()
+	urlToCheck := checkURLParsed.String()
+
+	// --- Perform the HTTP Check ---
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second) // Use timeout
+	defer cancel()
+
+	req, reqErr := http.NewRequestWithContext(ctx, "GET", urlToCheck, nil)
+	if reqErr != nil {
+		return fmt.Errorf("failed to create check request: %w", reqErr)
+	}
+
+	// Set a User-Agent (Good Practice!) - Replace YourVersion appropriately
+	req.Header.Set("User-Agent", "SpiceWallpaperManager/v0.1.0") // Example
+
+	log.Printf("Checking Wallhaven URL (type: %s): %s", queryType, urlToCheck)
+	resp, doErr := http.DefaultClient.Do(req)
+	if doErr != nil {
+		if errors.Is(doErr, context.DeadlineExceeded) {
+			return fmt.Errorf("checking URL timed out after 15s: %w", doErr)
+		}
+		return fmt.Errorf("failed to fetch URL for check: %w", doErr)
+	}
+	defer resp.Body.Close()
+
+	// Check HTTP Status Code for non-success (not 2xx)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		// Try to read body for more info, but don't fail the check if reading fails
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		bodyStr := string(bodyBytes)
+		log.Printf("Wallhaven API check failed [status %d]. URL: %s | Response: %s", resp.StatusCode, urlToCheck, bodyStr)
+
+		switch resp.StatusCode {
+		case 401:
+			return fmt.Errorf("check failed: Unauthorized (API key invalid or missing?) [status %d]", resp.StatusCode)
+		case 404:
+			return fmt.Errorf("check failed: Resource not found (invalid query/collection ID?) [status %d]", resp.StatusCode)
+		case 429:
+			return fmt.Errorf("check failed: Too many requests (rate limited) [status %d]", resp.StatusCode)
+		default:
+			return fmt.Errorf("check failed with HTTP status: %d", resp.StatusCode)
+		}
+	}
+
+	// Read the successful response body
+	body, readErr := io.ReadAll(resp.Body)
+	if readErr != nil {
+		log.Printf("Error reading response body after successful status: %v", readErr)
+		return fmt.Errorf("failed to read check response body: %w", readErr)
+	}
+
+	// Parse JSON minimally to check for empty data
+	var responseData imgSrvcResponse
+	jsonErr := json.Unmarshal(body, &responseData)
+	if jsonErr != nil {
+		log.Printf("Failed to parse Wallhaven JSON check response. Status: %d, Body: %s", resp.StatusCode, string(body))
+		return fmt.Errorf("failed to parse API check response: %w", jsonErr)
+	}
+
+	// Check if data array is empty
+	if len(responseData.Data) == 0 {
+		log.Printf("Wallhaven query returned no results. URL: %s | Response Meta: %+v", urlToCheck, responseData.Meta)
+		return fmt.Errorf("query is valid but returned no images (check filters/permissions?)")
+	}
+
+	// If all checks passed
+	log.Printf("Wallhaven URL check successful for %s (Type: %s)", apiURL, queryType)
+	return nil // Success
+}
+
 // CheckWallhavenURL checks if the given URL is a valid Wallhaven URL.
-func (wp *wallpaperPlugin) CheckWallhavenURL(queryURL string) error {
-	return wp.checkWallhavenURL(CovertToAPIURL(queryURL))
+func (wp *wallpaperPlugin) CheckWallhavenURL(queryURL string, queryType URLType) error {
+	return wp.checkWallhavenURL(queryURL, queryType)
 }
 
 // GetWallhavenURL returns the Wallhaven URL for the given API URL.
