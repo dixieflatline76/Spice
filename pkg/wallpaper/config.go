@@ -255,6 +255,20 @@ func (c *Config) GetChgImgOnStart() bool {
 	return c.BoolWithFallback(ChgImgOnStartPrefKey, true) // Return the change image on start preference with a fallback value of true if not set
 }
 
+// SetNightlyRefresh sets the nightly refresh preference.
+func (c *Config) SetNightlyRefresh(enable bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.SetBool(NightlyRefreshPrefKey, enable)
+}
+
+// GetNightlyRefresh returns the nightly refresh preference.
+func (c *Config) GetNightlyRefresh() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.BoolWithFallback(NightlyRefreshPrefKey, true) // Return the change image on start preference with a fallback value of true if not set
+}
+
 // Save saves the current configuration to the user's config file
 func (c *Config) save() {
 	// Don't lock the mutex here because we're already holding it in all calling functions

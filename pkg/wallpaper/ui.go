@@ -269,7 +269,7 @@ func (wp *wallpaperPlugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Co
 		Options:      setting.StringOptions(GetFrequencies()),
 		InitialValue: int(wp.cfg.GetWallpaperChangeFrequency()),
 		Label:        sm.CreateSettingTitleLabel("Wallpaper Change Frequency:"),
-		HelpContent:  sm.CreateSettingDescriptionLabel("Set how often the wallpaper changes. The default is hourly. Set to never to disable wallpaper changes."),
+		HelpContent:  sm.CreateSettingDescriptionLabel("Set how often the wallpaper changes. Set to never to disable wallpaper changes."),
 		ApplyFunc: func(val interface{}) {
 			selectedFrequency := Frequency(val.(int))
 			wp.cfg.SetWallpaperChangeFrequency(selectedFrequency) // Persists new frequency in configuration
@@ -286,7 +286,7 @@ func (wp *wallpaperPlugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Co
 		Options:      setting.StringOptions(GetCacheSizes()), // Correctly calling GetCacheSizes
 		InitialValue: int(wp.cfg.GetCacheSize()),
 		Label:        sm.CreateSettingTitleLabel("Cache Size:"),
-		HelpContent:  sm.CreateSettingDescriptionLabel("Set how many images to cache for faster startup and less network usage. The default is 200. Set to none to disable caching."),
+		HelpContent:  sm.CreateSettingDescriptionLabel("Set how many images to cache for faster startup and less network usage. Set to none to disable caching."),
 		ApplyFunc: func(val interface{}) {
 			selectedCacheSize := CacheSize(val.(int))
 			wp.cfg.SetCacheSize(selectedCacheSize)                // Persists new cache size in configuration
@@ -301,7 +301,7 @@ func (wp *wallpaperPlugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Co
 		Name:         "smartFit",
 		InitialValue: wp.cfg.GetSmartFit(),
 		Label:        sm.CreateSettingTitleLabel("Scale Wallpaper to Fit Screen:"),
-		HelpContent:  sm.CreateSettingDescriptionLabel("Smart Fit analizes wallpapers to find best way to scale and crop them to fit your screen. This is disabled by default."),
+		HelpContent:  sm.CreateSettingDescriptionLabel("Smart Fit analizes wallpapers to find best way to scale and crop them to fit your screen."),
 		ApplyFunc: func(b bool) {
 			wp.cfg.SetSmartFit(b)           // Persists the setting in wp.cfg and updates the UI
 			wp.SetSmartFit(b)               // Activates smart fit in the wallpaper engine
@@ -311,20 +311,35 @@ func (wp *wallpaperPlugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Co
 	}
 	sm.CreateBoolSetting(&smartFitConfig, header) // Use the SettingsManager
 
-	// Smart Fit
+	// Change Wallpaper on Start
 	var chgImgOnStartConfig setting.BoolConfig
 	chgImgOnStartConfig = setting.BoolConfig{
 		Name:         "chgImgOnStart",
 		InitialValue: wp.cfg.GetChgImgOnStart(),
 		Label:        sm.CreateSettingTitleLabel("Change wallpaper on start:"),
-		HelpContent:  sm.CreateSettingDescriptionLabel("Disable if you prefer the wallpaper to change only based on its timer or a manual refresh. This is enabled by default."),
+		HelpContent:  sm.CreateSettingDescriptionLabel("Disable if you prefer the wallpaper to change only based on its timer or a manual refresh."),
 		ApplyFunc: func(b bool) {
 			wp.cfg.SetChgImgOnStart(b)           // Persists the setting in wp.cfg and updates the UI
-			chgImgOnStartConfig.InitialValue = b // Update the initial value to reflect the new state of smart fit
+			chgImgOnStartConfig.InitialValue = b // Update the initial value to reflect the new state of change wallpaper on start
 		},
 		NeedsRefresh: false,
 	}
 	sm.CreateBoolSetting(&chgImgOnStartConfig, header) // Use the SettingsManager
+
+	// Nightly Refresh
+	var nightlyRefreshConfig setting.BoolConfig
+	nightlyRefreshConfig = setting.BoolConfig{
+		Name:         "nightlyRefresh",
+		InitialValue: wp.cfg.GetChgImgOnStart(),
+		Label:        sm.CreateSettingTitleLabel("Refresh wallpapers nightly:"),
+		HelpContent:  sm.CreateSettingDescriptionLabel("Useful when using image queries with random elements. Requires application restart to take effect."),
+		ApplyFunc: func(b bool) {
+			wp.cfg.SetNightlyRefresh(b)           // Persists the setting in wp.cfg and updates the UI
+			nightlyRefreshConfig.InitialValue = b // Update the initial value to reflect the new state of nightly refresh
+		},
+		NeedsRefresh: false,
+	}
+	sm.CreateBoolSetting(&nightlyRefreshConfig, header) // Use the SettingsManager
 
 	// Reset Blocked Images
 	resetButtonConfig := setting.ButtonWithConfirmationConfig{

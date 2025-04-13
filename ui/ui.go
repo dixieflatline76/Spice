@@ -126,11 +126,15 @@ func (sa *SpiceApp) CreateTrayMenu() {
 	}
 
 	sa.trayMenu.Items = append(sa.trayMenu.Items, sa.CreateMenuItem("Preferences", func() {
-		go sa.CreatePreferencesWindow()
+		fyne.Do(func() {
+			sa.CreatePreferencesWindow()
+		})
 	}, "prefs.png"))
 	sa.trayMenu.Items = append(sa.trayMenu.Items, fyne.NewMenuItemSeparator())
 	sa.trayMenu.Items = append(sa.trayMenu.Items, sa.CreateMenuItem("About Spice", func() {
-		go sa.CreateSplashScreen(aboutSplashTime)
+		fyne.Do(func() {
+			sa.CreateSplashScreen(aboutSplashTime)
+		})
 	}, "tray.png"))
 	sa.trayMenu.Items = append(sa.trayMenu.Items, fyne.NewMenuItemSeparator())
 	sa.trayMenu.Items = append(sa.trayMenu.Items, sa.CreateMenuItem("Quit", func() {
@@ -256,10 +260,10 @@ func (sa *SpiceApp) CreateSplashScreen(seconds int) {
 	splashWindow.Show()
 
 	// Hide the splash screen after 3 seconds
-	go func() {
+	fyne.Do(func() {
 		time.Sleep(time.Duration(seconds) * time.Second)
 		splashWindow.Close() // Close the splash window
-	}()
+	})
 }
 
 // CreatePreferencesWindow creates and displays a new window for the application's preferences.
@@ -269,7 +273,7 @@ func (sa *SpiceApp) CreateSplashScreen(seconds int) {
 func (sa *SpiceApp) CreatePreferencesWindow() {
 	// Create a new window for the preferences
 	prefsWindow := sa.NewWindow(fmt.Sprintf("%s Preferences", config.AppName))
-	prefsWindow.Resize(fyne.NewSize(800, 600))
+	prefsWindow.Resize(fyne.NewSize(800, 1000)) // TODO: make this size a ratio of the screen size
 	prefsWindow.CenterOnScreen()
 	sm := NewSettingsManager(prefsWindow)
 
@@ -277,7 +281,6 @@ func (sa *SpiceApp) CreatePreferencesWindow() {
 	for _, plugin := range sa.plugins {
 		prefsContainers = append(prefsContainers, plugin.CreatePrefsPanel(sm))
 	}
-	// prefsContainers = append(prefsContainers, container.NewHBox(layout.NewSpacer(), sm.GetApplySettingsButton()))
 
 	closeButton := widget.NewButton("Close", func() {
 		prefsWindow.Close()
