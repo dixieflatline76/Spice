@@ -174,15 +174,16 @@ func (wp *wallpaperPlugin) stopAllWorkers() {
 // resetPluginState clears all state related to image downloads and resets the plugin. It also cleans up any downloaded images from the cache directory.
 func (wp *wallpaperPlugin) resetPluginState() {
 	wp.downloadMutex.Lock()
-	defer wp.downloadMutex.Unlock() // Unlock before clearing.
-	err := wp.cleanupImageCache()
-	if err != nil {
-		log.Printf("error clearing downloaded images directory: %v", err)
-	}
 	wp.localImgRecs = []ImgSrvcImage{} // Clear the download history.
 	clear(wp.seenImages)               // Clear the seen history.
 	wp.prevLocalImgs = []int{}         // Clear the previous history.
 	wp.currentDownloadPage.Set(1)      // Reset to the first page.
+	wp.localImgIndex.Set(-1)           // Reset the current image index.
+	wp.downloadMutex.Unlock()          // Unlock before clearing.
+	err := wp.cleanupImageCache()
+	if err != nil {
+		log.Printf("error clearing downloaded images directory: %v", err)
+	}
 }
 
 // downloadAllImages downloads images from all active URLs for the specified page.
@@ -549,21 +550,25 @@ func (wp *wallpaperPlugin) Activate() {
 	// Setup the downloaded images directories
 	wp.setupImageDirs()
 
-	// Goroutine to refresh images daily at midnight
-	go func() {
-		for {
-			// Calculate time until next midnight
-			now := time.Now()
-			nextMidnight := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, now.Location())
-			timeUntilMidnight := time.Until(nextMidnight)
+	// Setup nightly refresh if configured
+	if wp.cfg.GetNightlyRefresh() {
+		log.Print("Setting up nightly refresh...")
+		go func() {
+			for {
+				// Calculate time until next midnight
+				now := time.Now()
+				nextMidnight := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, now.Location())
+				timeUntilMidnight := time.Until(nextMidnight)
 
-			// Wait until midnight
-			time.Sleep(timeUntilMidnight)
+				// Wait until midnight
+				time.Sleep(timeUntilMidnight)
 
-			// Refresh all images
-			wp.RefreshImagesAndPulse() // Refresh all images
-		}
-	}()
+				log.Print("Running nightly refresh...")
+				wp.currentDownloadPage.Set(1) // Reset the current download page to 1
+				wp.downloadAllImages()
+			}
+		}()
+	}
 
 	wp.SetShuffleImage(wp.cfg.GetImgShuffle()) // Set shuffle image preference
 	wp.SetSmartFit(wp.cfg.GetSmartFit())       // Set smart fit preference
