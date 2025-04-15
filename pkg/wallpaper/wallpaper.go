@@ -224,28 +224,17 @@ func (wp *wallpaperPlugin) checkAndRunRefresh(now time.Time, lastRefreshDay int,
 
 	if isInitialCheck {
 		log.Printf("Initial refresh check at %s", now.Format(time.RFC3339))
-		// --- Corrected Initial Check Logic ---
-		// On the VERY first check (lastRefreshDay == -1), ONLY run
-		// if we started/woke up just past midnight (e.g., 00:00 to 00:05:59).
+
 		if lastRefreshDay == -1 && now.Hour() == 0 && now.Minute() < 6 {
 			shouldRun = true
 			reason = "Initial check detected start/wake-up shortly after midnight."
-			// lastRefreshDay will be updated after the run below
 		} else if lastRefreshDay == -1 {
-			// If starting at any other time (like 9 PM), just record today's date
-			// so the refresh runs correctly *later* when midnight actually passes.
 			reason = fmt.Sprintf("Initial check: Current time (%s) is not post-midnight. Setting last refresh day to %d.", now.Format(time.Kitchen), today)
 			log.Print(reason)
 			lastRefreshDay = today // IMPORTANT: Set lastRefreshDay here for non-midnight starts
-			// shouldRun remains false
 		}
-		// If lastRefreshDay != -1, it means Activate was called again, handle normally below.
-		// --- End Corrected Initial Check Logic ---
 	}
 
-	// --- Subsequent Ticker or Day Change Check Logic ---
-	// Run if the day has changed since the last recorded refresh day.
-	// This handles both normal ticker checks and potential initial checks after re-activation.
 	if today != lastRefreshDay {
 		// Avoid running again if the initial check already decided to run
 		if !shouldRun {
@@ -253,9 +242,7 @@ func (wp *wallpaperPlugin) checkAndRunRefresh(now time.Time, lastRefreshDay int,
 			reason = fmt.Sprintf("Detected day change (%d -> %d at %s).", lastRefreshDay, today, now.Format(time.RFC3339))
 		}
 	}
-	// --- End Subsequent Check Logic ---
 
-	// --- Run Refresh Action (if shouldRun is true) ---
 	if shouldRun {
 		log.Printf("Decision: Refresh needed. Reason: %s", reason) // Log why it's running
 
@@ -284,13 +271,11 @@ func (wp *wallpaperPlugin) checkAndRunRefresh(now time.Time, lastRefreshDay int,
 
 // isNetworkAvailable checks if the device has a stable internet connection by attempting to connect to a public endpoint.
 func (wp *wallpaperPlugin) isNetworkAvailable() bool {
-	// Use a URL specifically designed for captive portal / connectivity checks.
+
 	// These typically return HTTP 204 No Content quickly if successful.
 	checkURL := "https://connectivitycheck.gstatic.com/generate_204"
 	// Alternative public check endpoint (less standard): "https://httpbin.org/status/200"
 
-	// Set a short timeout for the entire operation (e.g., 3-5 seconds)
-	// This prevents the check itself from hanging if the network is down or very slow.
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
 
