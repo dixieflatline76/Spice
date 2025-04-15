@@ -73,6 +73,7 @@ type wallpaperPlugin struct {
 	interrupt           *util.SafeFlag     // Whether to interrupt the image download
 	cancel              context.CancelFunc // Cancel function for the context
 	downloadWaitGroup   *sync.WaitGroup    // Wait group for image download workers
+	stopNightlyRefresh  chan struct{}      // Channel to signal nightly refresh goroutine to stop
 
 	// Display related fields
 	currentImage         ImgSrvcImage     // Current image being displayed
@@ -116,8 +117,9 @@ func getWallpaperPlugin() *wallpaperPlugin {
 			seenImages:           make(map[string]bool),
 			prevLocalImgs:        []int{},
 			imgPulseOp:           wpInstance.SetNextWallpaper,
-			fitImageFlag:         util.NewSafeBoolWithValue(false), // Initialize with smart fit preference
+			fitImageFlag:         util.NewSafeBoolWithValue(false),
 			shuffleImageFlag:     util.NewSafeBoolWithValue(false),
+			stopNightlyRefresh:   make(chan struct{}), // Initialize the channel for nightly refresh
 		}
 	})
 	return wpInstance
@@ -184,6 +186,137 @@ func (wp *wallpaperPlugin) resetPluginState() {
 	if err != nil {
 		log.Printf("error clearing downloaded images directory: %v", err)
 	}
+}
+
+// startNightlyRefresher runs a goroutine that periodically checks if a nightly refresh is due.
+// It should be run as a goroutine.
+func (wp *wallpaperPlugin) startNightlyRefresher() {
+	log.Print("Starting nightly refresh checker...")
+
+	// Check roughly every 5 minutes
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+
+	var lastRefreshDay int = -1 // Initialize to -1 to ensure the first check works correctly
+
+	// Perform an initial check immediately on start, in case we started/woke up after midnight
+	now := time.Now()
+	lastRefreshDay = wp.checkAndRunRefresh(now, lastRefreshDay, true) // Force check on startup
+
+	for {
+		select {
+		case now = <-ticker.C:
+			// Periodically check if the day changed
+			lastRefreshDay = wp.checkAndRunRefresh(now, lastRefreshDay, false) // Normal periodic check
+
+		case <-wp.stopNightlyRefresh:
+			log.Print("Stopping nightly refresh checker.")
+			return // Exit the goroutine
+		}
+	}
+}
+
+// checkAndRunRefresh determines if a nightly refresh should be performed based on the current day and time.
+func (wp *wallpaperPlugin) checkAndRunRefresh(now time.Time, lastRefreshDay int, isInitialCheck bool) int {
+	today := now.Day()
+	shouldRun := false
+	reason := "" // For logging clarity
+
+	if isInitialCheck {
+		log.Printf("Initial refresh check at %s", now.Format(time.RFC3339))
+		// --- Corrected Initial Check Logic ---
+		// On the VERY first check (lastRefreshDay == -1), ONLY run
+		// if we started/woke up just past midnight (e.g., 00:00 to 00:05:59).
+		if lastRefreshDay == -1 && now.Hour() == 0 && now.Minute() < 6 {
+			shouldRun = true
+			reason = "Initial check detected start/wake-up shortly after midnight."
+			// lastRefreshDay will be updated after the run below
+		} else if lastRefreshDay == -1 {
+			// If starting at any other time (like 9 PM), just record today's date
+			// so the refresh runs correctly *later* when midnight actually passes.
+			reason = fmt.Sprintf("Initial check: Current time (%s) is not post-midnight. Setting last refresh day to %d.", now.Format(time.Kitchen), today)
+			log.Print(reason)
+			lastRefreshDay = today // IMPORTANT: Set lastRefreshDay here for non-midnight starts
+			// shouldRun remains false
+		}
+		// If lastRefreshDay != -1, it means Activate was called again, handle normally below.
+		// --- End Corrected Initial Check Logic ---
+	}
+
+	// --- Subsequent Ticker or Day Change Check Logic ---
+	// Run if the day has changed since the last recorded refresh day.
+	// This handles both normal ticker checks and potential initial checks after re-activation.
+	if today != lastRefreshDay {
+		// Avoid running again if the initial check already decided to run
+		if !shouldRun {
+			shouldRun = true
+			reason = fmt.Sprintf("Detected day change (%d -> %d at %s).", lastRefreshDay, today, now.Format(time.RFC3339))
+		}
+	}
+	// --- End Subsequent Check Logic ---
+
+	// --- Run Refresh Action (if shouldRun is true) ---
+	if shouldRun {
+		log.Printf("Decision: Refresh needed. Reason: %s", reason) // Log why it's running
+
+		// Network Check
+		if !wp.isNetworkAvailable() {
+			log.Print("Nightly refresh check: Network appears to be unavailable. Skipping refresh cycle.")
+			// Return original day, allowing retry on the next tick
+			return lastRefreshDay
+		}
+		log.Print("Nightly refresh check: Network available. Proceeding with refresh...")
+
+		// It's crucial to update the last refresh day *before* the download starts.
+		updatedLastRefreshDay := today
+
+		log.Print("Running nightly refresh action...") // Clarify log message
+		wp.currentDownloadPage.Set(1)
+		wp.downloadAllImages() // This calls stopAllWorkers internally
+
+		log.Print("Nightly refresh action finished.")
+		return updatedLastRefreshDay // Return the new day
+	}
+
+	// No run needed, return the potentially updated lastRefreshDay (from initial check)
+	return lastRefreshDay
+}
+
+// isNetworkAvailable checks if the device has a stable internet connection by attempting to connect to a public endpoint.
+func (wp *wallpaperPlugin) isNetworkAvailable() bool {
+	// Use a URL specifically designed for captive portal / connectivity checks.
+	// These typically return HTTP 204 No Content quickly if successful.
+	checkURL := "https://connectivitycheck.gstatic.com/generate_204"
+	// Alternative public check endpoint (less standard): "https://httpbin.org/status/200"
+
+	// Set a short timeout for the entire operation (e.g., 3-5 seconds)
+	// This prevents the check itself from hanging if the network is down or very slow.
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+
+	// Create a new HTTP HEAD request. HEAD is lighter as it doesn't fetch the body.
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, checkURL, nil)
+	if err != nil {
+		// Should be rare for a valid URL and method, but handle defensively.
+		log.Printf("isNetworkAvailable: Error creating request: %v", err)
+		return false
+	}
+
+	// Execute the request using the default HTTP client.
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		log.Printf("isNetworkAvailable: Network check failed: %v", err)
+		return false
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		log.Printf("isNetworkAvailable: Network check successful (Status: %d)", resp.StatusCode)
+		return true
+	}
+
+	log.Printf("isNetworkAvailable: Network check returned non-success status: %d", resp.StatusCode)
+	return false
 }
 
 // downloadAllImages downloads images from all active URLs for the specified page.
@@ -552,22 +685,13 @@ func (wp *wallpaperPlugin) Activate() {
 
 	// Setup nightly refresh if configured
 	if wp.cfg.GetNightlyRefresh() {
-		log.Print("Setting up nightly refresh...")
-		go func() {
-			for {
-				// Calculate time until next midnight
-				now := time.Now()
-				nextMidnight := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, now.Location())
-				timeUntilMidnight := time.Until(nextMidnight)
-
-				// Wait until midnight
-				time.Sleep(timeUntilMidnight)
-
-				log.Print("Running nightly refresh...")
-				wp.currentDownloadPage.Set(1) // Reset the current download page to 1
-				wp.downloadAllImages()
-			}
-		}()
+		wp.downloadMutex.Lock() // Protect channel access/recreation
+		if wp.stopNightlyRefresh == nil {
+			wp.stopNightlyRefresh = make(chan struct{})
+			log.Print("Recreated nightly refresh stop channel.")
+		}
+		go wp.startNightlyRefresher() // Start the checker in its own goroutine
+		wp.downloadMutex.Unlock()
 	}
 
 	wp.SetShuffleImage(wp.cfg.GetImgShuffle()) // Set shuffle image preference
@@ -613,10 +737,25 @@ func (wp *wallpaperPlugin) changeFrequency(newFrequency Frequency) {
 
 // Stop stops the wallpaper rotation, any active downloads, and cleans up.
 func (wp *wallpaperPlugin) Deactivate() {
-	if wp.ticker != nil {
-		wp.ticker.Stop() // Stop the ticker
+	log.Print("Deactivating wallpaper plugin...")
+
+	// Stop Nightly Refresher
+	wp.downloadMutex.Lock()
+	if wp.stopNightlyRefresh != nil {
+		close(wp.stopNightlyRefresh) // Close the channel to signal the goroutine to stop
+		wp.stopNightlyRefresh = nil  // Set to nil so Activate knows to recreate it if needed, preventing double close
+		log.Print("Nightly refresh stop signal sent and channel cleared.")
 	}
-	wp.interrupt.Set(true) // Interrupt any ongoing downloads
+	wp.downloadMutex.Unlock()
+
+	if wp.ticker != nil {
+		wp.ticker.Stop() // Stop the wallpaper change ticker
+		log.Print("Wallpaper change ticker stopped.")
+	}
+	wp.interrupt.Set(true) // Interrupt any ongoing downloads via the existing flag
+	wp.stopAllWorkers()
+
+	log.Print("Wallpaper plugin deactivated.")
 }
 
 // GetCurrentImage returns the current image.
