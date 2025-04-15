@@ -330,7 +330,7 @@ func (wp *wallpaperPlugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Co
 	var nightlyRefreshConfig setting.BoolConfig
 	nightlyRefreshConfig = setting.BoolConfig{
 		Name:         "nightlyRefresh",
-		InitialValue: wp.cfg.GetChgImgOnStart(),
+		InitialValue: wp.cfg.GetNightlyRefresh(),
 		Label:        sm.CreateSettingTitleLabel("Refresh wallpapers nightly:"),
 		HelpContent:  sm.CreateSettingDescriptionLabel("Useful when using image queries with random elements. Requires application restart to take effect."),
 		ApplyFunc: func(b bool) {
