@@ -32,6 +32,7 @@ type SpiceApp struct {
 	fyne.App
 	assetMgr  *asset.Manager
 	trayMenu  *fyne.Menu
+	splash    fyne.Window   // Splash window for initial setup
 	notifiers []ui.Notifier // List of notifiers to activate
 	plugins   []ui.Plugin   // List of plugins to activate
 }
@@ -228,41 +229,46 @@ func (sa *SpiceApp) addVersionWatermark(img image.Image) (image.Image, error) {
 
 // CreateSplashScreen creates a splash screen for the application
 func (sa *SpiceApp) CreateSplashScreen(seconds int) {
-	// Create a splash screen with the application icon
-	drv, ok := sa.Driver().(desktop.Driver)
-	if !ok {
-		log.Println("Splash screen not supported")
-		return // Splash screen not supported
+	if sa.splash == nil {
+		// Create a splash screen with the application icon
+		drv, ok := sa.Driver().(desktop.Driver)
+		if !ok {
+			log.Println("Splash screen not supported")
+			return // Splash screen not supported
+		}
+
+		splashWindow := drv.CreateSplashWindow()
+
+		// Load the splash image
+		splashImg, err := sa.assetMgr.GetImage("splash.png")
+		if err != nil {
+			log.Fatalf("Failed to load splash image: %v", err)
+		}
+
+		// Create a watermark image
+		watermarkSplashImg, err := sa.addVersionWatermark(splashImg)
+		if err == nil {
+			splashImg = watermarkSplashImg
+		}
+
+		// Create an image canvas object
+		img := canvas.NewImageFromImage(splashImg)
+		img.FillMode = canvas.ImageFillOriginal // Ensure the image keeps its original size
+
+		// Set the splash window content and show it
+		splashWindow.SetContent(img)
+		splashWindow.Resize(fyne.NewSize(300, 300))
+		splashWindow.CenterOnScreen()
+		sa.splash = splashWindow
 	}
 
-	splashWindow := drv.CreateSplashWindow()
-
-	// Load the splash image
-	splashImg, err := sa.assetMgr.GetImage("splash.png")
-	if err != nil {
-		log.Fatalf("Failed to load splash image: %v", err)
-	}
-
-	// Create a watermark image
-	watermarkSplashImg, err := sa.addVersionWatermark(splashImg)
-	if err == nil {
-		splashImg = watermarkSplashImg
-	}
-
-	// Create an image canvas object
-	img := canvas.NewImageFromImage(splashImg)
-	img.FillMode = canvas.ImageFillOriginal // Ensure the image keeps its original size
-
-	// Set the splash window content and show it
-	splashWindow.SetContent(img)
-	splashWindow.Resize(fyne.NewSize(300, 300))
-	splashWindow.CenterOnScreen()
-	splashWindow.Show()
+	// Show the splash screen immediately after creation
+	sa.splash.Show()
 
 	// Hide the splash screen after 3 seconds
 	fyne.Do(func() {
 		time.Sleep(time.Duration(seconds) * time.Second)
-		splashWindow.Close() // Close the splash window
+		sa.splash.Hide() // Close the splash window
 	})
 }
 
