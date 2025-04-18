@@ -22,5 +22,5 @@ logs/
 *.log
 
 # Sensitive configuration (optional - handle with care!)
-config.json
+config.json 
 .DS_Store
