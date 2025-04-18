@@ -37,6 +37,14 @@ build-darwin-arm64:
 	@echo "Modifying Info.plist to set LSUIElement=true..."
 	plutil -insert LSUIElement -bool true Spice.app/Contents/Info.plist
 
+	@echo "Signing the application bundle..."
+	# SIGNING_IDENTITY will be provided by the GitHub Actions workflow
+	codesign --force --deep --options=runtime --sign "${SIGNING_IDENTITY}" --timestamp Spice.app
+
+	@echo "Creating DMG..."
+	mkdir -p dist
+	hdiutil create -volname "Spice" -srcfolder "Spice.app" -ov -format UDZO "dist/Spice-$(VERSION)-arm64.dmg"
+
 	@echo "Moving final Spice.app to ./bin/..."
 	rm -rf ./bin/Spice.app && mv Spice.app ./bin/
 
@@ -156,4 +164,9 @@ bump-major: build-version-bump
 	@echo "Bumping major version..."
 	./bin/util/version_bump major
 
-.PHONY: build-win-amd64 build-win-console-amd64 build-win-arm64 build-linux-amd64 build-darwin-amd64 build-darwin-arm64 build-win-amd64-dev build-win-console-amd64-dev build-linux-amd64-dev lint test update-patch-deps update-minor-deps list-updates win-amd64 win-amd64-dev linux-amd64 linux-amd64-dev darwin-amd64 darwin-amd64-dev darwin-arm64 darwin-arm64-dev clean build-version-bump bump-patch bump-minor bump-major
+notarize-mac-arm64:
+	@echo "Uploading DMG for notarization..."
+	# AC_PASSWORD is a keychain profile we will set up in the GitHub Action
+	xcrun notarytool submit "dist/Spice-$(VERSION)-arm64.dmg" --keychain-profile "AC_PASSWORD" --wait
+
+.PHONY: build-win-amd64 build-win-console-amd64 build-win-arm64 build-linux-amd64 build-darwin-amd64 build-darwin-arm64 build-win-amd64-dev build-win-console-amd64-dev build-linux-amd64-dev lint test update-patch-deps update-minor-deps list-updates win-amd64 win-amd64-dev linux-amd64 linux-amd64-dev darwin-amd64 darwin-amd64-dev darwin-arm64 darwin-arm64-dev clean build-version-bump bump-patch bump-minor bump-major notarize-mac-arm64
