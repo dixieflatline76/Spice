@@ -39,6 +39,10 @@ lint:
 test:
 	go test ./...	
 
+update-patch-deps:
+	go get -u=patch ./... 
+	go mod tidy
+
 update-minor-deps:
 	go get -u ./...
 	go mod tidy
@@ -48,13 +52,13 @@ update-major-deps:
 	go mod tidy
 
 # --- Convenience targets defaults to win amd64 ---
-all: update-minor-deps lint test build-win-amd64 build-win-console-amd64
+all: update-patch-deps lint test build-win-amd64 build-win-console-amd64
 
-dev: update-minor-deps lint test build-win-amd64-dev build-win-console-amd64-dev
+dev: update-patch-deps lint test build-win-amd64-dev build-win-console-amd64-dev
 
-all-linux: update-minor-deps lint test build-linux-amd64 build-win-console-amd64
+all-linux: update-patch-deps lint test build-linux-amd64 build-win-console-amd64
 
-dev-linux: update-minor-deps lint test build-linux-amd64-dev build-win-console-amd64-dev
+dev-linux: update-patch-deps lint test build-linux-amd64-dev build-win-console-amd64-dev
 
 # --- Clean target (cross-platform) ---
 clean:

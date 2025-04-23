@@ -36,17 +36,20 @@ func acquireLock() (bool, error) {
 	return true, nil
 }
 
-// releaseLock releases the single-instance lock.
+// releaseLock releases the single-instance lock handle.
 func releaseLock() {
-	if mutex != 0 { // Important check to avoid panicking if mutex wasn't created
-		err := windows.ReleaseMutex(mutex)
-		if err != nil {
-			log.Printf("Failed to release mutex %v", err)
-		}
-		err = windows.CloseHandle(mutex)
+	if mutex != 0 { // Important check
+		// Remove this call - ReleaseMutex is not needed when only using CreateMutex for existence check
+		/*
+		   err := windows.ReleaseMutex(mutex)
+		   if err != nil {
+		       log.Printf("Failed to release mutex %v", err)
+		   }
+		*/
+		err := windows.CloseHandle(mutex) // This is the important cleanup call
 		if err != nil {
 			log.Printf("Failed to close mutex handle: %v", err)
 		}
-
+		mutex = 0 // Optional: Clear the handle variable after closing
 	}
 }
