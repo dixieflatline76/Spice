@@ -127,15 +127,11 @@ func (sa *SpiceApp) CreateTrayMenu() {
 	}
 
 	sa.trayMenu.Items = append(sa.trayMenu.Items, sa.CreateMenuItem("Preferences", func() {
-		fyne.Do(func() {
-			sa.CreatePreferencesWindow()
-		})
+		sa.CreatePreferencesWindow()
 	}, "prefs.png"))
 	sa.trayMenu.Items = append(sa.trayMenu.Items, fyne.NewMenuItemSeparator())
 	sa.trayMenu.Items = append(sa.trayMenu.Items, sa.CreateMenuItem("About Spice", func() {
-		fyne.Do(func() {
-			sa.CreateSplashScreen(aboutSplashTime)
-		})
+		sa.CreateSplashScreen(aboutSplashTime)
 	}, "tray.png"))
 	sa.trayMenu.Items = append(sa.trayMenu.Items, fyne.NewMenuItemSeparator())
 	sa.trayMenu.Items = append(sa.trayMenu.Items, sa.CreateMenuItem("Quit", func() {
@@ -266,10 +262,10 @@ func (sa *SpiceApp) CreateSplashScreen(seconds int) {
 	sa.splash.Show()
 
 	// Hide the splash screen after 3 seconds
-	fyne.Do(func() {
+	go func() {
 		time.Sleep(time.Duration(seconds) * time.Second)
 		sa.splash.Hide() // Close the splash window
-	})
+	}()
 }
 
 // CreatePreferencesWindow creates and displays a new window for the application's preferences.
