@@ -15,10 +15,30 @@ build-linux-amd64:
 	GOOS=linux GOARCH=amd64 go build -tags release -o bin/Spice-amd64 -ldflags "-X main.version=$(VERSION)" ./cmd/spice
 
 build-darwin-amd64:
+	@echo "Building Go executable for darwin/amd64..."
 	GOOS=darwin GOARCH=amd64 go build -tags release -o bin/Spice-darwin-amd64 -ldflags "-X main.version=$(VERSION)" ./cmd/spice
 
+	@echo "Packaging Spice.app..."
+	fyne package -os darwin --executable ./bin/Spice-darwin-amd64 -icon asset/icons/tray.png -name Spice
+
+	@echo "Modifying Info.plist to set LSUIElement=true..."
+	plutil -insert LSUIElement -bool true Spice.app/Contents/Info.plist
+
+	@echo "Moving final Spice.app to ./bin/..."
+	rm -rf ./bin/Spice.app && mv Spice.app ./bin/
+
 build-darwin-arm64:
+	@echo "Building Go executable for darwin/arm64..."
 	GOOS=darwin GOARCH=arm64 go build -tags release -o bin/Spice-darwin-arm64 -ldflags "-X main.version=$(VERSION)" ./cmd/spice
+
+	@echo "Packaging Spice.app..."
+	fyne package -os darwin --executable ./bin/Spice-darwin-arm64 -icon asset/icons/tray.png -name Spice
+
+	@echo "Modifying Info.plist to set LSUIElement=true..."
+	plutil -insert LSUIElement -bool true Spice.app/Contents/Info.plist
+
+	@echo "Moving final Spice.app to ./bin/..."
+	rm -rf ./bin/Spice.app && mv Spice.app ./bin/
 
 # --- Development build targets ---
 build-win-amd64-dev:
@@ -29,6 +49,32 @@ build-win-console-amd64-dev:
 
 build-linux-amd64-dev:
 	GOOS=linux GOARCH=amd64 go build -o bin/Spice-amd64 -ldflags "-X main.version=$(VERSION)" ./cmd/spice
+
+build-darwin-amd64-dev:
+	@echo "Building Go executable for darwin/amd64..."
+	GOOS=darwin GOARCH=amd64 go build -o bin/Spice-darwin-amd64 -ldflags "-X main.version=$(VERSION)" ./cmd/spice
+
+	@echo "Packaging Spice.app..."
+	fyne package -os darwin --executable ./bin/Spice-darwin-amd64 -icon asset/icons/tray.png -name Spice
+
+	@echo "Modifying Info.plist to set LSUIElement=true..."
+	plutil -insert LSUIElement -bool true Spice.app/Contents/Info.plist
+
+	@echo "Moving final Spice.app to ./bin/..."
+	rm -rf ./bin/Spice.app && mv Spice.app ./bin/
+
+build-darwin-arm64-dev:
+	@echo "Building Go executable for darwin/arm64..."
+	GOOS=darwin GOARCH=arm64 go build -o bin/Spice-darwin-arm64 -ldflags "-X main.version=$(VERSION)" ./cmd/spice
+
+	@echo "Packaging Spice.app..."
+	fyne package -os darwin --executable ./bin/Spice-darwin-arm64 -icon asset/icons/tray.png -name Spice
+
+	@echo "Modifying Info.plist to set LSUIElement=true..."
+	plutil -insert LSUIElement -bool true Spice.app/Contents/Info.plist
+
+	@echo "Moving final Spice.app to ./bin/..."
+	rm -rf ./bin/Spice.app && mv Spice.app ./bin/
 
 # --- Other targets ---
 lint:
@@ -47,18 +93,27 @@ update-minor-deps:
 	go get -u ./...
 	go mod tidy
 
-update-major-deps:
-	go get -u=patch ./... 
-	go mod tidy
+list-updates:
+	@echo "Checking for all available updates (including major)..."
+	go list -m -u all
+	@echo "Review the list above. Update major versions manually using 'go get module/vX@latest'."
 
-# --- Convenience targets defaults to win amd64 ---
-all: update-patch-deps lint test build-win-amd64 build-win-console-amd64
+# --- Main build targets ---
+win-amd64: update-patch-deps lint test build-win-amd64 build-win-console-amd64
 
-dev: update-patch-deps lint test build-win-amd64-dev build-win-console-amd64-dev
+win-amd64-dev: update-patch-deps lint test build-win-amd64-dev build-win-console-amd64-dev
 
-all-linux: update-patch-deps lint test build-linux-amd64 build-win-console-amd64
+linux-amd64: update-patch-deps lint test build-linux-amd64
 
-dev-linux: update-patch-deps lint test build-linux-amd64-dev build-win-console-amd64-dev
+linux-amd64-dev: update-patch-deps lint test build-linux-amd64-dev
+
+darwin-amd64: update-patch-deps lint test build-darwin-amd64
+
+darwin-amd64-dev: update-patch-deps lint test build-darwin-amd64-dev
+
+darwin-arm64: update-patch-deps lint test build-darwin-arm64
+
+darwin-arm64-dev: update-patch-deps lint test build-darwin-arm64-dev
 
 # --- Clean target (cross-platform) ---
 clean:
@@ -69,11 +124,24 @@ else
 endif
 	go clean
 
+# Define the command based on OS
+# Default for Linux/macOS
+CREATE_DIR_CMD := mkdir -p bin/util
+
+# Override for Windows
+ifeq ($(OS),Windows_NT)
+  # Use cmd /c for native Windows commands. Use backslashes inside the cmd string for safety.
+  CREATE_DIR_CMD := cmd /c "(if not exist bin mkdir bin) && (if not exist bin\util mkdir bin\util)"
+endif
+
 # Build rule for the version_bump utility
-build-version-bump:
+bin/util/version_bump: ./cmd/util/version_bump.go
 	@echo "Building version_bump utility..."
-	@if not exist bin\util mkdir bin\util
-	go build -o bin/util/version_bump ./cmd/util/version_bump.go
+	$(CREATE_DIR_CMD)
+	go build -o $@ $<
+
+build-version-bump: bin/util/version_bump
+	@echo "version_bump utility is up-to-date."
 
 # Bump rules, now depending on build-version-bump
 bump-patch: build-version-bump
@@ -88,4 +156,4 @@ bump-major: build-version-bump
 	@echo "Bumping major version..."
 	./bin/util/version_bump major
 
-.PHONY: all build-win-amd64 build-win-console-amd64 build-win-arm64 build-linux-amd64 build-darwin-amd64 build-darwin-arm64 lint test update-minor-deps update-major-deps clean bump-patch bump-minor bump-major build-version-bump build-win-amd64-dev build-win-console-amd64-dev build-linux-amd64-dev all-linux dev-linux
+.PHONY: build-win-amd64 build-win-console-amd64 build-win-arm64 build-linux-amd64 build-darwin-amd64 build-darwin-arm64 build-win-amd64-dev build-win-console-amd64-dev build-linux-amd64-dev lint test update-patch-deps update-minor-deps list-updates win-amd64 win-amd64-dev linux-amd64 linux-amd64-dev darwin-amd64 darwin-amd64-dev darwin-arm64 darwin-arm64-dev clean build-version-bump bump-patch bump-minor bump-major

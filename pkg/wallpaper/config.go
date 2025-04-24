@@ -184,7 +184,7 @@ func (c *Config) SetCacheSize(size CacheSize) {
 func (c *Config) GetSmartFit() bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return c.BoolWithFallback(SmartFitPrefKey, false) // Default to false
+	return c.BoolWithFallback(SmartFitPrefKey, true) // Default to true
 }
 
 // SetSmartFit sets the smart fit preference.

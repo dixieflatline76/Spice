@@ -916,7 +916,6 @@ func (wp *wallpaperPlugin) checkWallhavenURL(apiURL string, queryType URLType) e
 	// Conditionally add 'atleast' ONLY for Search type queries
 	if queryType == Search {
 		if !checkQuery.Has("resolutions") && !checkQuery.Has("atleast") {
-			// TODO: Ensure wp.os.getDesktopDimension() exists and works
 			width, height, dimErr := wp.os.getDesktopDimension()
 			if dimErr != nil {
 				log.Printf("checkWallhavenURL: error getting dimensions: %v. Proceeding without 'atleast'.", dimErr)
@@ -941,7 +940,6 @@ func (wp *wallpaperPlugin) checkWallhavenURL(apiURL string, queryType URLType) e
 	// Set a User-Agent (Good Practice!) - Replace YourVersion appropriately
 	req.Header.Set("User-Agent", "SpiceWallpaperManager/v0.1.0") // Example
 
-	log.Printf("Checking Wallhaven URL (type: %s): %s", queryType, urlToCheck)
 	resp, doErr := http.DefaultClient.Do(req)
 	if doErr != nil {
 		if errors.Is(doErr, context.DeadlineExceeded) {
