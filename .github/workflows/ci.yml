@@ -99,10 +99,6 @@ jobs:
           echo ${{ github.event.release.tag_name }} > version.txt
           cat version.txt
 
-      - name: Clean previous build artifacts
-        run: make clean
-        shell: cmd 
-
       - name: Build Application
         run: make build-win-amd64  
 
