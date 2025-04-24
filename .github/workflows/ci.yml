@@ -46,9 +46,6 @@ jobs:
       - name: Install make (if not cached)
         run: choco install make -y
 
-      - name: Install Fyne dependencies
-        run: go get fyne.io/fyne/v2/...
-
       - name: Install linters
         run: |
           go install golang.org/x/lint/golint@latest
@@ -104,9 +101,18 @@ jobs:
 
       - name: Clean previous build artifacts
         run: make clean
+        shell: cmd 
 
       - name: Build Application
         run: make build-win-amd64  
+
+      - name: Verify Built Exe # Recommended diagnostic step
+        run: |
+          echo "--- Checking ./bin/Spice.exe ---"
+          dir .\bin\Spice.exe # <-- CHANGE 'ls -l' to 'dir' (use backslash for cmd)
+          certutil -hashfile .\bin\Spice.exe SHA256 # <-- Use backslash for consistency
+          # .\bin\Spice.exe --version || echo "Version flag failed or not implemented"
+        shell: cmd
 
       - name: Build Setup
         uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
