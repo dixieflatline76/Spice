@@ -1,15 +1,5 @@
-# Default command for Linux/macOS
-READ_VERSION_CMD := sh -c "cat version.txt 2> /dev/null"
-
-# Override for Windows
-ifeq ($(OS),Windows_NT)
-  # On Windows, try 'type' directly. Redirect its stderr using NUL.
-  # Note: If version.txt is missing, VERSION will be empty, and no error shown.
-  READ_VERSION_CMD := cmd /c "type version.txt 2> NUL"
-endif
-
 # --- Extract version needed for EULA hash ---
-VERSION := $(strip $(shell $(READ_VERSION_CMD)))
+VERSION := $(shell sh -c "cat version.txt" 2> /dev/null || cmd /c "type version.txt")
 
 # --- Build targets ---
 build-win-amd64:
