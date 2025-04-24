@@ -96,14 +96,14 @@ jobs:
       - name: Install make (if not cached)
         run: choco install make -y
 
-      - name: Install Fyne dependencies
-        run: go get fyne.io/fyne/v2/...
-
       - name: Update version.txt (if release)
         if: github.event_name == 'release'
         run: |
           echo ${{ github.event.release.tag_name }} > version.txt
           cat version.txt
+
+      - name: Clean previous build artifacts
+        run: make clean
 
       - name: Build Application
         run: make build-win-amd64  
