@@ -2,14 +2,14 @@ name: CI
 
 on:
   push:
-    branches-ignore: [ main ] 
+    branches-ignore: [ main ]
   pull_request:
     branches: [ main ]
   release:
     types: [created]
 
 permissions:
-  contents: write
+  contents: write # Needed for softprops/action-gh-release
 
 jobs:
   test-and-lint:
@@ -17,10 +17,10 @@ jobs:
     if: github.event_name == 'pull_request' || github.event_name == 'push'
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4 # Use latest checkout action
 
       - name: Cache Go modules
-        uses: actions/cache@v3
+        uses: actions/cache@v4 # Use latest cache action
         with:
           path: ~/go/pkg/mod
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
@@ -28,46 +28,51 @@ jobs:
             ${{ runner.os }}-go-
 
       - name: Set up Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v5 # Use latest setup-go action
         with:
-          go-version: 'stable'
+          go-version: 'stable' # Or pin to a specific version e.g., '1.22.x'
 
       - name: Cache Chocolatey packages
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
-          path: ~/AppData/Local/Chocolatey/lib
-          key: ${{ runner.os }}-chocolatey-${{ hashFiles('**/tools.txt') }} 
+          path: C:\ProgramData\chocolatey\lib # Correct default Chocolatey lib path
+          key: ${{ runner.os }}-chocolatey-${{ hashFiles('**/tools.txt') }} # Assuming you might have a tools.txt
           restore-keys: |
             ${{ runner.os }}-chocolatey-
 
       - name: Install GCC (if not cached)
-        run: choco install mingw -y
+        run: choco install mingw -y --no-progress
 
       - name: Install make (if not cached)
-        run: choco install make -y
+        run: choco install make -y --no-progress
+
+      # Removed redundant 'go get fyne...' step here
 
       - name: Install linters
         run: |
           go install golang.org/x/lint/golint@latest
           go install honnef.co/go/tools/cmd/staticcheck@latest
+        shell: pwsh # Explicitly use pwsh for consistency if needed
 
       - name: Run linters
         run: |
           golint ./...
-          staticcheck ./... 
+          staticcheck ./...
+        shell: pwsh # Explicitly use pwsh for consistency if needed
 
       - name: Run tests
         run: go test ./...
+        shell: pwsh # Explicitly use pwsh for consistency if needed
 
   build:
     runs-on: windows-latest
     if: github.event_name == 'pull_request' || github.event_name == 'release'
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Cache Go modules
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/go/pkg/mod
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
@@ -75,76 +80,109 @@ jobs:
             ${{ runner.os }}-go-
 
       - name: Set up Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v5
         with:
-          go-version: 'stable'
+          go-version: 'stable' # Or pin to a specific version e.g., '1.22.x'
 
       - name: Cache Chocolatey packages
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
-          path: ~/AppData/Local/Chocolatey/lib
-          key: ${{ runner.os }}-chocolatey-${{ hashFiles('**/tools.txt') }}
+          path: C:\ProgramData\chocolatey\lib # Correct default Chocolatey lib path
+          key: ${{ runner.os }}-chocolatey-${{ hashFiles('**/tools.txt') }} # Assuming you might have a tools.txt
           restore-keys: |
             ${{ runner.os }}-chocolatey-
 
       - name: Install GCC (if not cached)
-        run: choco install mingw -y
+        run: choco install mingw -y --no-progress
 
       - name: Install make (if not cached)
-        run: choco install make -y
+        run: choco install make -y --no-progress
 
       - name: Update version.txt (if release)
         if: github.event_name == 'release'
         run: |
-          echo ${{ github.event.release.tag_name }} > version.txt
-          cat version.txt
+          echo "${{ github.event.release.tag_name }}" | Out-File -Encoding UTF8 version.txt
+          Get-Content version.txt
+        shell: pwsh # Use PowerShell for file writing
+
+      - name: Extract version number (if release)
+        id: get_version
+        if: github.event_name == 'release'
+        run: |
+          $tagName = '${{ github.event.release.tag_name }}'
+          # Use PowerShell's -replace operator (regex) to remove leading 'v'
+          $appVersion = $tagName -replace '^v'
+          echo "APP_VERSION=$appVersion" >> $env:GITHUB_OUTPUT
+        shell: pwsh # Use native PowerShell string replacement
 
       - name: Build Application
-        run: make build-win-amd64  
+        # Assuming Makefile's build-win-amd64 outputs to bin/Spice.exe
+        # And Makefile doesn't need -v anymore
+        run: make build-win-amd64
 
-      - name: Verify Build Output State # Step name updated for clarity
+      - name: Verify Build Output File
         run: |
-          echo "--- Current Directory ---"
-          dir .
-          echo "--- Bin Directory ---"
-          dir .\bin
-          echo "--- Checking Spice.exe ---"
+          echo "--- Verifying Spice.exe exists ---"
           dir .\bin\Spice.exe
-          echo "--- CertUtil ---"
+          echo "--- Calculating SHA256 ---"
           certutil -hashfile .\bin\Spice.exe SHA256
-          echo "--- Version Check (Commented Out) ---"
-          REM .\bin\Spice.exe --version || echo "Version flag failed or not implemented" # <-- USE 'REM' HERE
-        shell: cmd
-        continue-on-error: true # Keep this for now
+        shell: cmd # Use cmd for dir and certutil
 
-      - name: Build Setup
+      - name: Build Setup (if release)
+        if: github.event_name == 'release'
         uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
         with:
           path: Spice.iss
-          options: /Q   
+          # Pass defines using native PowerShell variables from previous step
+          options: /Q /DMyAppVersion=${{ steps.get_version.outputs.APP_VERSION }} /DMyAppPlatform=amd64
 
-      - name: Upload build artifact
+      - name: Upload build artifact (contains Spice.exe and maybe Spice-Setup-*.exe)
         uses: actions/upload-artifact@v4
         with:
           name: spice-release-build
-          path: bin/
-          
+          path: bin/ # Uploads contents of bin directory
+
   release:
     runs-on: windows-latest
-    needs: build 
-    if: github.event_name == 'release'
+    needs: build
+    if: github.event_name == 'release' # Only run this job for release events
+    env: # Set environment variables for easy reuse
+      # Use native PowerShell replacement directly here as well
+      APP_VERSION: ${{ github.event.release.tag_name.Substring(1) }} # Assumes tag ALWAYS starts with 'v'
+      APP_PLATFORM: amd64
     steps:
     - name: Download build artifact
       uses: actions/download-artifact@v4
       with:
         name: spice-release-build
+        # This downloads the contents of the 'bin' dir from the artifact
+        # into the current workspace directory (e.g., Spice.exe, Spice-Setup-*.exe)
 
-    - name: Calculate checksum and create.sha256 file
+    - name: Define filenames
+      id: filenames
       run: |
-        certutil -hashfile Spice.exe SHA256 | findstr /v ":" > Spice.exe.sha256
-        certutil -hashfile Spice-Setup.exe SHA256 | findstr /v ":" > Spice-Setup.exe.sha256
+        # Define the expected names based on environment variables
+        $exeName = "Spice.exe"
+        $setupName = "Spice-Setup-${{ env.APP_VERSION }}-${{ env.APP_PLATFORM }}.exe"
+        echo "EXE_NAME=$exeName" >> $env:GITHUB_OUTPUT
+        echo "SETUP_NAME=$setupName" >> $env:GITHUB_OUTPUT
+        echo "Expected files:"
+        echo "* $exeName"
+        echo "* $setupName"
+      shell: pwsh
 
-    - name: Sign installer with Azure Trusted Signing
+    - name: List downloaded files # Diagnostic step
+      run: dir .
+      shell: cmd
+
+    - name: Calculate checksums and create .sha256 files
+      # This step assumes both files exist in the current directory after download
+      run: |
+        certutil -hashfile "${{ steps.filenames.outputs.EXE_NAME }}" SHA256 | findstr /V /B /C:"CertUtil" /C:"SHA256" > "${{ steps.filenames.outputs.EXE_NAME }}.sha256"
+        certutil -hashfile "${{ steps.filenames.outputs.SETUP_NAME }}" SHA256 | findstr /V /B /C:"CertUtil" /C:"SHA256" > "${{ steps.filenames.outputs.SETUP_NAME }}.sha256"
+      shell: cmd # Use cmd for certutil and findstr piping
+
+    - name: Sign executables with Azure Trusted Signing
       uses: azure/trusted-signing-action@v0
       with:
         azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -153,20 +191,24 @@ jobs:
         endpoint: https://weu.codesigning.azure.net/
         trusted-signing-account-name: SpiceOSS
         certificate-profile-name: Spice
-        files-folder: ${{ github.workspace }}
-        files-folder-filter: exe
+        files-folder: ${{ github.workspace }} # Sign files in the root workspace
+        # Sign both the raw exe and the setup exe
+        files-folder-filter: "${{ steps.filenames.outputs.EXE_NAME }},${{ steps.filenames.outputs.SETUP_NAME }}"
         file-digest: SHA256
         timestamp-rfc3161: http://timestamp.acs.microsoft.com
         timestamp-digest: SHA256
 
-    - name: Upload binaries to release
+    - name: Upload binaries to GitHub Release
       uses: softprops/action-gh-release@v2
       env:
-        GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
-      if: startsWith(github.ref, 'refs/tags/')
+        # Use the default GITHUB_TOKEN unless MY_GITHUB_TOKEN is specifically needed
+        # GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }} # Keep if you need specific permissions
+      # No need for explicit 'if' here, job level 'if' handles it
       with:
+        # List the files to upload using the dynamic names
         files: |
-          Spice.exe
-          Spice.exe.sha256
-          Spice-Setup.exe
-          Spice-Setup.exe.sha256
+          ${{ steps.filenames.outputs.EXE_NAME }}
+          ${{ steps.filenames.outputs.EXE_NAME }}.sha256
+          ${{ steps.filenames.outputs.SETUP_NAME }}
+          ${{ steps.filenames.outputs.SETUP_NAME }}.sha256
