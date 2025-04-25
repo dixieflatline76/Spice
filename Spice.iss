@@ -1,6 +1,14 @@
 #define VerFileNum FileOpen("version.txt")
 #define MyAppVersion Trim(StringChange(FileRead(VerFileNum),"v",""))
 
+// Define platform based on command-line define from CI (or default)
+#ifndef MyAppPlatform
+  #define MyAppPlatform "amd64" // Default if not provided via /DMyAppPlatform
+#endif
+
+// Construct the dynamic base filename using the defined variables
+#define MyBaseFilename "Spice-Setup-" + MyAppVersion + "-" + MyAppPlatform
+
 [Setup]
 AppMutex=Spice_SingleInstanceMutex
 AppName=Spice
@@ -8,8 +16,8 @@ AppVersion={#MyAppVersion}
 ArchitecturesAllowed=x64compatible and not arm64
 DefaultDirName={commonpf64}\Spice
 DefaultGroupName=Spice
-OutputBaseFilename=Spice-Setup
-AppPublisher=Karl Kwong
+OutputBaseFilename={#MyBaseFilename}
+AppPublisher=dixieflatline76/Spice
 SetupIconFile=Spice.ico
 Compression=lzma2
 SolidCompression=yes
