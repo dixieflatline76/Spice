@@ -105,16 +105,6 @@ jobs:
           Get-Content version.txt
         shell: pwsh # Use PowerShell for file writing
 
-      - name: Extract version number (if release)
-        id: get_version
-        if: github.event_name == 'release'
-        run: |
-          $tagName = '${{ github.event.release.tag_name }}'
-          # Use PowerShell's -replace operator (regex) to remove leading 'v'
-          $appVersion = $tagName -replace '^v'
-          echo "APP_VERSION=$appVersion" >> $env:GITHUB_OUTPUT
-        shell: pwsh # Use native PowerShell string replacement
-
       - name: Build Application
         # Assuming Makefile's build-win-amd64 outputs to bin/Spice.exe
         # And Makefile doesn't need -v anymore
@@ -134,7 +124,7 @@ jobs:
         with:
           path: Spice.iss
           # Pass defines using native PowerShell variables from previous step
-          options: /Q /DMyAppVersion=${{ steps.get_version.outputs.APP_VERSION }} /DMyAppPlatform=amd64
+          options: /Q /DMyAppPlatform=amd64
 
       - name: Upload build artifact (contains Spice.exe and maybe Spice-Setup-*.exe)
         uses: actions/upload-artifact@v4
