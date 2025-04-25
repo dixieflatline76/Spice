@@ -146,10 +146,7 @@ jobs:
     runs-on: windows-latest
     needs: build
     if: github.event_name == 'release' # Only run this job for release events
-    env: # Set environment variables for easy reuse
-      # Use native PowerShell replacement directly here as well
-      APP_VERSION: ${{ github.event.release.tag_name.Substring(1) }} # Assumes tag ALWAYS starts with 'v'
-      APP_PLATFORM: amd64
+    # Removed invalid 'env:' block that caused the error
     steps:
     - name: Download build artifact
       uses: actions/download-artifact@v4
@@ -161,11 +158,20 @@ jobs:
     - name: Define filenames
       id: filenames
       run: |
-        # Define the expected names based on environment variables
+        # Extract version number from tag using PowerShell
+        $tagName = '${{ github.event.release.tag_name }}'
+        $appVersion = $tagName -replace '^v' # Remove leading 'v'
+        $appPlatform = "amd64" # Define platform
+
+        # Define the expected names based on extracted/defined variables
         $exeName = "Spice.exe"
-        $setupName = "Spice-Setup-${{ env.APP_VERSION }}-${{ env.APP_PLATFORM }}.exe"
+        $setupName = "Spice-Setup-${appVersion}-${appPlatform}.exe"
+
+        # Set step outputs
         echo "EXE_NAME=$exeName" >> $env:GITHUB_OUTPUT
         echo "SETUP_NAME=$setupName" >> $env:GITHUB_OUTPUT
+
+        # Optional: Log expected names
         echo "Expected files:"
         echo "* $exeName"
         echo "* $setupName"
@@ -192,7 +198,7 @@ jobs:
         trusted-signing-account-name: SpiceOSS
         certificate-profile-name: Spice
         files-folder: ${{ github.workspace }} # Sign files in the root workspace
-        # Sign both the raw exe and the setup exe
+        # Sign both the raw exe and the setup exe using the step outputs
         files-folder-filter: "${{ steps.filenames.outputs.EXE_NAME }},${{ steps.filenames.outputs.SETUP_NAME }}"
         file-digest: SHA256
         timestamp-rfc3161: http://timestamp.acs.microsoft.com
@@ -206,7 +212,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }} # Keep if you need specific permissions
       # No need for explicit 'if' here, job level 'if' handles it
       with:
-        # List the files to upload using the dynamic names
+        # List the files to upload using the dynamic names from step outputs
         files: |
           ${{ steps.filenames.outputs.EXE_NAME }}
           ${{ steps.filenames.outputs.EXE_NAME }}.sha256
