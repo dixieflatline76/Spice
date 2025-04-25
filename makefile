@@ -3,7 +3,7 @@ VERSION := $(shell sh -c "cat version.txt" 2> /dev/null || cmd /c "type version.
 
 # --- Build targets ---
 build-win-amd64:
-	set GOOS=windows&& set GOARCH=amd64&& go build -v -tags release -o bin/Spice.exe -ldflags "-H=windowsgui -X main.version=$(VERSION)" ./cmd/spice
+	set GOOS=windows&& set GOARCH=amd64&& go build -tags release -o bin/Spice.exe -ldflags "-H=windowsgui -X main.version=$(VERSION)" ./cmd/spice
 
 build-win-console-amd64:
 	set GOOS=windows&& set GOARCH=amd64&& go build -tags release -o bin/Spice-console.exe -ldflags "-X main.version=$(VERSION)" ./cmd/spice
