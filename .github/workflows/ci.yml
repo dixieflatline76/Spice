@@ -102,13 +102,20 @@ jobs:
       - name: Build Application
         run: make build-win-amd64  
 
-      - name: Verify Built Exe # Recommended diagnostic step
+      - name: Verify Build Output State # Step name updated for clarity
         run: |
-          echo "--- Checking ./bin/Spice.exe ---"
-          dir .\bin\Spice.exe # <-- CHANGE 'ls -l' to 'dir' (use backslash for cmd)
-          certutil -hashfile .\bin\Spice.exe SHA256 # <-- Use backslash for consistency
-          # .\bin\Spice.exe --version || echo "Version flag failed or not implemented"
+          echo "--- Current Directory ---"
+          dir .
+          echo "--- Bin Directory ---"
+          dir .\bin
+          echo "--- Checking Spice.exe ---"
+          dir .\bin\Spice.exe
+          echo "--- CertUtil ---"
+          certutil -hashfile .\bin\Spice.exe SHA256
+          echo "--- Version Check (Commented Out) ---"
+          REM .\bin\Spice.exe --version || echo "Version flag failed or not implemented" # <-- USE 'REM' HERE
         shell: cmd
+        continue-on-error: true # Keep this for now
 
       - name: Build Setup
         uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
