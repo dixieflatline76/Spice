@@ -55,8 +55,7 @@ func createApplyButton(sm *SettingsManager) *widget.Button {
 		sm.applyButton.Disable()
 		sm.applyButton.SetText("Applying changes, please wait...")
 		sm.applyButton.Refresh()
-		//fyne.Do(func() {
-		go func() {
+		fyne.Do(func() {
 			defer func() {
 				sm.applyButton.SetText(originalText)
 				sm.applyButton.Refresh()
@@ -75,8 +74,7 @@ func createApplyButton(sm *SettingsManager) *widget.Button {
 				}
 				sm.refreshFlags = make(map[string]bool)
 			}
-			//})
-		}()
+		})
 	})
 	applyButton.Disable()
 	return applyButton

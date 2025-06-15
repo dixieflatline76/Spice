@@ -3,7 +3,7 @@
 
 // Define platform based on command-line define from CI (or default)
 #ifndef MyAppPlatform
-  #define MyAppPlatform "amd64" // Default if not provided via /DMyAppPlatform
+  #define MyAppPlatform "amd64"
 #endif
 
 // Construct the dynamic base filename using the defined variables
