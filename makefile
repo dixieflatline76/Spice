@@ -42,6 +42,8 @@ build-darwin-arm64:
 	codesign --force --deep --options=runtime --sign "${SIGNING_IDENTITY}" --timestamp Spice.app
 
 	@echo "Creating styled DMG..."
+	mkdir -p dist
+
 	create-dmg \
 		--volname "Spice Installer" \
 		--background "images/Spice-dmg-bg.png" \
