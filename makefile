@@ -41,9 +41,18 @@ build-darwin-arm64:
 	# SIGNING_IDENTITY will be provided by the GitHub Actions workflow
 	codesign --force --deep --options=runtime --sign "${SIGNING_IDENTITY}" --timestamp Spice.app
 
-	@echo "Creating DMG..."
-	mkdir -p dist
-	hdiutil create -volname "Spice" -srcfolder "Spice.app" -ov -format UDZO "dist/Spice-$(VERSION)-arm64.dmg"
+	@echo "Creating styled DMG..."
+	create-dmg \
+		--volname "Spice Installer" \
+		--background "images/Spice-dmg-bg.png" \
+		--window-pos 200 120 \
+		--window-size 640 480 \
+		--icon-size 130 \
+		--icon "Spice.app" 175 200 \
+		--hide-extension "Spice.app" \
+		--app-drop-link 465 200 \
+		"dist/Spice-$(VERSION)-arm64.dmg" \
+		"Spice.app/"
 
 	@echo "Moving final Spice.app to ./bin/..."
 	rm -rf ./bin/Spice.app && mv Spice.app ./bin/
@@ -166,7 +175,8 @@ bump-major: build-version-bump
 
 notarize-mac-arm64:
 	@echo "Uploading DMG for notarization..."
-	# AC_PASSWORD is a keychain profile we will set up in the GitHub Action
 	xcrun notarytool submit "dist/Spice-$(VERSION)-arm64.dmg" --keychain-profile "AC_PASSWORD" --wait
+	@echo "Stapling notarization ticket to DMG..."
+	xcrun stapler staple "dist/Spice-$(VERSION)-arm64.dmg"
 
 .PHONY: build-win-amd64 build-win-console-amd64 build-win-arm64 build-linux-amd64 build-darwin-amd64 build-darwin-arm64 build-win-amd64-dev build-win-console-amd64-dev build-linux-amd64-dev lint test update-patch-deps update-minor-deps list-updates win-amd64 win-amd64-dev linux-amd64 linux-amd64-dev darwin-amd64 darwin-amd64-dev darwin-arm64 darwin-arm64-dev clean build-version-bump bump-patch bump-minor bump-major notarize-mac-arm64
