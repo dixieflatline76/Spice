@@ -262,10 +262,11 @@ func (sa *SpiceApp) CreateSplashScreen(seconds int) {
 	sa.splash.Show()
 
 	// Hide the splash screen after 3 seconds
-	go func() {
-		time.Sleep(time.Duration(seconds) * time.Second)
-		sa.splash.Hide() // Close the splash window
-	}()
+	fyne.Do(
+		func() {
+			time.Sleep(time.Duration(seconds) * time.Second)
+			sa.splash.Hide() // Close the splash window
+	})
 }
 
 // CreatePreferencesWindow creates and displays a new window for the application's preferences.

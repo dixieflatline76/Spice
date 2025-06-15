@@ -70,6 +70,7 @@ func HasAcceptedEULA(prefs fyne.Preferences) bool {
 		return true
 	}
 	// EULA not accepted or has been tampered with
+	log.Printf("EULA check failed - saved hash: %s, current hash: %s, saved version: %s, current version: %s", acceptance.Hash, currentHash, acceptance.EULAVersion, config.AppVersion)
 	return false
 }
 
