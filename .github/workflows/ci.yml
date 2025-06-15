@@ -209,7 +209,7 @@ jobs:
           ${{ steps.filenames.outputs.SETUP_NAME }}
           ${{ steps.filenames.outputs.SETUP_NAME }}.sha256
 
-  build-and-release-mac:
+build-and-release-mac:
     runs-on: macos-latest
     if: github.event_name == 'release'
     steps:
@@ -219,6 +219,10 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: 'stable'
+
+      - name: Install Fyne CLI
+        run: go install fyne.io/fyne/v2/cmd/fyne@latest
+
       - name: Update version.txt from release tag
         run: echo "${{ github.event.release.tag_name }}" > version.txt
       - name: Import Apple Certificate
