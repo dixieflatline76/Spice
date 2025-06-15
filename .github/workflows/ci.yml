@@ -209,7 +209,7 @@ jobs:
           ${{ steps.filenames.outputs.SETUP_NAME }}
           ${{ steps.filenames.outputs.SETUP_NAME }}.sha256
 
-build-and-release-mac:
+  build-and-release-mac:
     runs-on: macos-latest
     if: github.event_name == 'release'
     steps:
