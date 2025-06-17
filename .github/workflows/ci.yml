@@ -215,19 +215,23 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: 'stable'
+          # Pinned to your exact local version
+          go-version: '1.24.2'
 
       - name: Install create-dmg
         run: brew install create-dmg
 
       - name: Install Fyne CLI
-        run: go install fyne.io/tools/cmd/fyne@latest
+        # Pinned to your exact local version
+        run: go install fyne.io/tools/cmd/fyne@v1.6.1
 
       - name: Update version.txt from release tag
         run: echo "${{ github.event.release.tag_name }}" > version.txt
+        
       - name: Import Apple Certificate
         run: |
           echo "${{ secrets.MACOS_CERTIFICATE }}" | base64 --decode > certificate.p12
@@ -237,22 +241,28 @@ jobs:
           security import certificate.p12 -k build.keychain -P "${{ secrets.MACOS_CERTIFICATE_PASSWORD }}" -T /usr/bin/codesign
           security set-key-partition-list -S apple-tool:,apple: -s -k "${{ runner.temp }}" build.keychain
           rm certificate.p12
+          
       - name: Set up notarytool credentials
         run: |
           xcrun notarytool store-credentials "AC_PASSWORD" --apple-id "${{ secrets.APPLE_ID }}" --password "${{ secrets.APPLE_ID_PASSWORD }}" --team-id "${{ secrets.APPLE_TEAM_ID }}"
+          
       - name: Build and Sign macOS App
         env:
           SIGNING_IDENTITY: "Developer ID Application: Karl Kwong (T96W95GY4U)"
         run: make build-darwin-arm64
+        
       - name: Notarize macOS App
         run: make notarize-mac-arm64
+        
       - name: Define Release Asset Names
         id: assets
         run: |
           VERSION=$(cat version.txt)
           echo "DMG_NAME=Spice-${VERSION}-arm64.dmg" >> $GITHUB_OUTPUT
+          
       - name: Create Checksum for DMG
         run: shasum -a 256 "dist/${{ steps.assets.outputs.DMG_NAME }}" > "dist/${{ steps.assets.outputs.DMG_NAME }}.sha256"
+        
       - name: Upload macOS Release Assets
         uses: softprops/action-gh-release@v2
         with:
