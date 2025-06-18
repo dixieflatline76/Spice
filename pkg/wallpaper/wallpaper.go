@@ -93,12 +93,12 @@ type wallpaperPlugin struct {
 // getWallpaperPlugin returns the wallpaper plugin instance.
 func getWallpaperPlugin() *wallpaperPlugin {
 	wpOnce.Do(func() {
-		// Initialize the wallpaper service for Windows
+		// Initialize the wallpaper service for right OS
 		currentOS := getOS()
 
 		// Initialize the wallpaper service
 		wpInstance = &wallpaperPlugin{
-			os: currentOS, // Initialize with Windows OS
+			os: currentOS, // Initialize with right OS
 			imgProcessor: &smartImageProcessor{
 				os:              currentOS,
 				aspectThreshold: 0.9,

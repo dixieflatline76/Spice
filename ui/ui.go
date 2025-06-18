@@ -35,6 +35,18 @@ type SpiceApp struct {
 	splash    fyne.Window   // Splash window for initial setup
 	notifiers []ui.Notifier // List of notifiers to activate
 	plugins   []ui.Plugin   // List of plugins to activate
+	os        OS            // Operating system interface
+}
+
+// OS interface defines methods for transforming the application state
+// to foreground or background. This is useful for managing the application
+// behavior on different operating systems, such as macOS where background apps
+// do not show a Dock icon.
+type OS interface {
+	// TransformToForeground changes the application to be a regular app with a Dock icon.
+	TransformToForeground()
+	// TransformToBackground changes the application to be a background-only app.
+	TransformToBackground()
 }
 
 var (
@@ -83,6 +95,9 @@ func GetApplication() ui.App {
 func getInstance() *SpiceApp {
 	// Create a new instance of the application if it doesn't exist
 	saOnce.Do(func() {
+		// Initialize the wallpaper service for right OS
+		currentOS := getOS()
+
 		a := app.NewWithID(config.AppName)
 		if _, ok := a.(desktop.App); ok {
 
@@ -94,6 +109,7 @@ func getInstance() *SpiceApp {
 					a.SendNotification(fyne.NewNotification(title, message))
 				}},
 				plugins: []ui.Plugin{},
+				os:      currentOS,
 			}
 			saInstance.verifyEULA()
 		} else {
@@ -135,13 +151,26 @@ func (sa *SpiceApp) CreateTrayMenu() {
 	}, "tray.png"))
 	sa.trayMenu.Items = append(sa.trayMenu.Items, fyne.NewMenuItemSeparator())
 	sa.trayMenu.Items = append(sa.trayMenu.Items, sa.CreateMenuItem("Quit", func() {
-		// Stop the service before quitting the application
+		sa.os.TransformToForeground()     // Ensure the app is in the foreground before quitting
+		time.Sleep(50 * time.Millisecond) // Small delay to ensure the OS processes the state change
+		sa.deactivateAllPlugins()         // Deactivate all plugins before quitting
+		time.Sleep(2 * time.Second)       // Small delay to ensure plugins are deactivate
+		log.Println("Quitting Spice application")
 		sa.Quit()
 	}, "quit.png"))
 
 	sa.SetIcon(trayIcon)
 	desk.SetSystemTrayMenu(sa.trayMenu)
 	desk.SetSystemTrayIcon(trayIcon)
+}
+
+// DeactivateAllPlugins deactivates all plugins in the application
+func (sa *SpiceApp) deactivateAllPlugins() {
+	// Deactivate all plugins
+	for _, plugin := range sa.plugins {
+		plugin.Deactivate()
+		log.Printf("Deactivated plugin: %s", plugin.Name())
+	}
 }
 
 // CreateMenuItem creates a menu item with the given label, action, and icon
@@ -265,8 +294,9 @@ func (sa *SpiceApp) CreateSplashScreen(seconds int) {
 	fyne.Do(
 		func() {
 			time.Sleep(time.Duration(seconds) * time.Second)
-			sa.splash.Hide() // Close the splash window
-	})
+			sa.splash.Hide()              // Close the splash window
+			sa.os.TransformToBackground() // Transform the app to background state
+		})
 }
 
 // CreatePreferencesWindow creates and displays a new window for the application's preferences.
@@ -275,9 +305,11 @@ func (sa *SpiceApp) CreateSplashScreen(seconds int) {
 // The close button closes the preferences window when clicked.
 func (sa *SpiceApp) CreatePreferencesWindow() {
 	// Create a new window for the preferences
+	sa.os.TransformToForeground()
 	prefsWindow := sa.NewWindow(fmt.Sprintf("%s Preferences", config.AppName))
 	prefsWindow.Resize(fyne.NewSize(800, 1000)) // TODO: make this size a ratio of the screen size
 	prefsWindow.CenterOnScreen()
+	prefsWindow.SetOnClosed(sa.os.TransformToBackground)
 	sm := NewSettingsManager(prefsWindow)
 
 	prefsContainers := []fyne.CanvasObject{}
@@ -316,7 +348,9 @@ func (sa *SpiceApp) displayEULAAcceptance() {
 	}
 
 	// Create a new window for the EULA
+	sa.os.TransformToForeground() // Ensure the app is in the foreground before showing the EULA
 	eulaWindow := sa.NewWindow("Spice EULA")
+	eulaWindow.SetOnClosed(sa.os.TransformToBackground) // Set the close action to transform to background
 	eulaWindow.Resize(fyne.NewSize(800, 600))
 	eulaWindow.CenterOnScreen()
 	eulaWindow.SetCloseIntercept(func() {
