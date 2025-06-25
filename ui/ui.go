@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -383,6 +385,7 @@ func (sa *SpiceApp) Start() {
 
 	// Create the tray menu
 	saInstance.CreateTrayMenu()
+	go sa.StartPeriodicUpdateCheck()
 
 	// Activate all plugins
 	go func() {
@@ -395,4 +398,92 @@ func (sa *SpiceApp) Start() {
 
 	// Run the Fyne application
 	sa.Run()
+}
+
+// StartPeriodicUpdateCheck starts a goroutine to check for updates on startup and then periodically.
+func (sa *SpiceApp) StartPeriodicUpdateCheck() {
+	log.Print("Starting periodic application update checker...")
+
+	performCheck := func() {
+		log.Print("Checking for application updates...")
+		updateInfo, err := util.CheckForUpdates()
+		if err != nil {
+			log.Printf("Update check failed: %v", err)
+			return
+		}
+		sa.updateTrayMenu(updateInfo)
+	}
+
+	time.Sleep(1 * time.Minute)
+	performCheck()
+
+	ticker := time.NewTicker(24 * time.Hour)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		performCheck()
+	}
+}
+
+// updateTrayMenu adds or removes the "Update Available" menu item based on check results.
+func (sa *SpiceApp) updateTrayMenu(info *util.CheckForUpdatesResult) {
+	// First, create a new slice of items that excludes any previous update item.
+	newItems := make([]*fyne.MenuItem, 0)
+	for _, item := range sa.trayMenu.Items {
+		if !strings.HasPrefix(item.Label, updateMenuItemPrefix) {
+			newItems = append(newItems, item)
+		}
+	}
+	sa.trayMenu.Items = newItems
+
+	// If no update is available, we're done.
+	if !info.UpdateAvailable {
+		sa.trayMenu.Refresh()
+		return
+	}
+
+	// If an update IS available, create the new menu item.
+	releaseURL, err := url.Parse(info.ReleaseURL)
+	if err != nil {
+		log.Printf("Could not parse release URL for update menu item: %v", err)
+		return
+	}
+	log.Printf("New version available: %s", info.LatestVersion)
+	
+	updateItem := sa.CreateMenuItem(
+		fmt.Sprintf("%s%s", updateMenuItemPrefix, info.LatestVersion),
+		func() { sa.OpenURL(releaseURL) },
+		"download.png",
+	)
+
+	// Find the insertion index (just before the separator above "About Spice").
+	insertIndex := -1
+	for i, item := range sa.trayMenu.Items {
+		if item.Label == "About Spice" {
+			if i > 0 && sa.trayMenu.Items[i-1].IsSeparator {
+				insertIndex = i - 1
+			} else {
+				insertIndex = i
+			}
+			break
+		}
+	}
+
+	// Insert the new item at the correct position.
+	if insertIndex != -1 {
+		sa.trayMenu.Items = append(sa.trayMenu.Items[:insertIndex], append([]*fyne.MenuItem{updateItem}, sa.trayMenu.Items[insertIndex:]...)...)
+	} else {
+		// Fallback: add before the Quit button's separator if "About" isn't found.
+		for i, item := range sa.trayMenu.Items {
+			if item.Label == "Quit" {
+				insertIndex = i - 1
+				break
+			}
+		}
+		if insertIndex != -1 {
+			sa.trayMenu.Items = append(sa.trayMenu.Items[:insertIndex], append([]*fyne.MenuItem{updateItem}, sa.trayMenu.Items[insertIndex:]...)...)
+		}
+	}
+
+	sa.trayMenu.Refresh()
 }

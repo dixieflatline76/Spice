@@ -8,11 +8,10 @@ import (
 	"os"
 	"time"
 
-	"github.com/dixieflatline76/Spice/util/log"
-
 	"fyne.io/fyne/v2"
 	"github.com/dixieflatline76/Spice/asset"
 	"github.com/dixieflatline76/Spice/config"
+	"github.com/dixieflatline76/Spice/util/log"
 )
 
 var assetMgr = asset.NewManager()
@@ -27,11 +26,10 @@ type EULAAcceptance struct {
 	Hash                string    `json:"hash"`
 }
 
-// generateEULAHash generates a hash of the EULA text, machine ID, date, and version
+// generateEULAHash generates a hash of the EULA text, machine ID, and version.
 func generateEULAHash(eulaText, version string) string {
 	machineID := getMachineID()
-	dateStr := time.Now().Format("2006-01-02")
-	data := fmt.Sprintf("%s%s%s%s", eulaText, machineID, dateStr, version)
+	data := fmt.Sprintf("%s%s%s", eulaText, machineID, version)
 	hash := sha256.Sum256([]byte(data))
 	return hex.EncodeToString(hash[:])
 }

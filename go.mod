@@ -8,6 +8,7 @@ require (
 	al.essio.dev/pkg/shellescape v1.6.0 // indirect
 	github.com/danieljoos/wincred v1.2.2 // indirect
 	github.com/fyne-io/oksvg v0.1.0 // indirect
+	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/hack-pad/go-indexeddb v0.3.2 // indirect
 	github.com/hack-pad/safejs v0.1.1 // indirect
 	github.com/kr/text v0.2.0 // indirect
@@ -47,7 +48,9 @@ require (
 )
 
 require (
+	github.com/google/go-github/v63 v63.0.0
 	github.com/zalando/go-keyring v0.2.6
 	golang.org/x/image v0.28.0
+	golang.org/x/mod v0.25.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
