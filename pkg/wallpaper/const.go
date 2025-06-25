@@ -172,3 +172,32 @@ func GetCacheSizes() []fmt.Stringer {
 	}
 	return stringers
 }
+
+// NetworkTimeouts defines the standard durations for various network operations.
+const (
+	// HTTPClientRequestTimeout is the total time limit for a single HTTP request,
+	// including connection, redirects, and reading the response body.
+	HTTPClientRequestTimeout = 60 * time.Second
+
+	// HTTPClientDialerTimeout is the timeout for establishing a TCP connection.
+	// This is the most critical timeout for handling network issues after sleep.
+	HTTPClientDialerTimeout = 15 * time.Second
+
+	// HTTPClientTLSHandshakeTimeout is the time limit for the TLS handshake for HTTPS.
+	HTTPClientTLSHandshakeTimeout = 10 * time.Second
+
+	// HTTPClientResponseHeaderTimeout is the time limit for receiving response headers
+	// from the server after the request has been successfully sent.
+	HTTPClientResponseHeaderTimeout = 15 * time.Second
+
+	// HTTPClientKeepAlive is the duration for TCP keep-alive probes. This helps
+	// maintain long-lived connections efficiently.
+	HTTPClientKeepAlive = 30 * time.Second
+
+	// NetworkConnectivityCheckTimeout is a short timeout used specifically for
+	// the initial, lightweight network availability check.
+	NetworkConnectivityCheckTimeout = 4 * time.Second
+
+	// URLValidationTimeout is used when checking if a user-provided URL is valid.
+	URLValidationTimeout = 15 * time.Second
+)
