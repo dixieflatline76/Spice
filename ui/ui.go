@@ -485,5 +485,8 @@ func (sa *SpiceApp) updateTrayMenu(info *util.CheckForUpdatesResult) {
 		}
 	}
 
+	// Notify user of new version available
+	sa.NotifyUser("Spice: Update Available", fmt.Sprintf("Click the tray icon to download version %s.", info.LatestVersion))
+
 	sa.trayMenu.Refresh()
 }
