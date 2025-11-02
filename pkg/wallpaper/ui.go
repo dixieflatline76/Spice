@@ -3,8 +3,6 @@ package wallpaper
 import (
 	"fmt"
 	"net/url"
-	"strconv"
-	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -38,6 +36,7 @@ func (wp *wallpaperPlugin) CreateTrayMenuItems() []*fyne.MenuItem {
 // createSettingEntry creates a widget for a setting entry
 func (wp *wallpaperPlugin) createImgQueryList(sm setting.SettingsManager) *widget.List {
 
+	pendingState := make(map[string]bool) // holds pending active state changes
 	var queryList *widget.List
 	queryList = widget.NewList(
 		func() int {
@@ -51,39 +50,55 @@ func (wp *wallpaperPlugin) createImgQueryList(sm setting.SettingsManager) *widge
 			return container.NewHBox(urlLink, layout.NewSpacer(), activeCheck, deleteButton)
 		},
 		func(i int, o fyne.CanvasObject) {
+			if i >= len(wp.cfg.ImageQueries) {
+				return // Safety check
+			}
+			// Capture the query object itself, NOT the index 'i'.
+			query := wp.cfg.ImageQueries[i]
+			queryKey := query.ID // Use stable ID for refresh key
 
-			queryKey := fmt.Sprintf("img_query_%d", i)
 			c := o.(*fyne.Container)
 
 			urlLink := c.Objects[0].(*widget.Hyperlink)
-			urlLink.SetText(wp.cfg.ImageQueries[i].Description)
+			urlLink.SetText(query.Description)
 
-			siteURL := wp.GetWallhavenURL(wp.cfg.ImageQueries[i].URL)
+			siteURL := wp.GetWallhavenURL(query.URL)
 			if siteURL != nil {
 				urlLink.SetURL(siteURL)
 			} else {
 				// this should never happen
 				// TODO refactor later
-				urlLink.SetURLFromString(wp.cfg.ImageQueries[i].URL)
+				urlLink.SetURLFromString(query.URL)
 			}
 
 			activeCheck := c.Objects[2].(*widget.Check)
 			deleteButton := c.Objects[3].(*widget.Button)
 
-			initialActive := wp.cfg.ImageQueries[i].Active
-			activeCheck.SetChecked(initialActive)
+			initialActive := query.Active
+			activeCheck.OnChanged = nil
+
+			if val, ok := pendingState[queryKey]; ok {
+				activeCheck.SetChecked(val)
+			} else {
+				activeCheck.SetChecked(initialActive)
+			}
+
 			activeCheck.OnChanged = func(b bool) {
-				if b != initialActive { // only add callback if the value has changed
+				if b != initialActive {
+					pendingState[queryKey] = b // Store the pending change
 					sm.SetSettingChangedCallback(queryKey, func() {
 						if b {
-							wp.cfg.EnableImageQuery(i)
+							wp.cfg.EnableImageQuery(query.ID)
 						} else {
-							wp.cfg.DisableImageQuery(i)
+							wp.cfg.DisableImageQuery(query.ID)
 						}
-						initialActive = b // update initial value
+						initialActive = b // Update the closure's captured variable
+						delete(pendingState, queryKey) // Clean up the pending state on apply
 					})
 					sm.SetRefreshFlag(queryKey)
 				} else {
+					// User toggled back to the original state, so no change is pending
+					delete(pendingState, queryKey)
 					sm.RemoveSettingChangedCallback(queryKey)
 					sm.UnsetRefreshFlag(queryKey)
 				}
@@ -91,13 +106,15 @@ func (wp *wallpaperPlugin) createImgQueryList(sm setting.SettingsManager) *widge
 			}
 
 			deleteButton.OnTapped = func() {
-				d := dialog.NewConfirm("Please Confirm", fmt.Sprintf("Are you sure you want to delete %s?", wp.cfg.ImageQueries[i].Description), func(b bool) {
+				d := dialog.NewConfirm("Please Confirm", fmt.Sprintf("Are you sure you want to delete %s?", query.Description), func(b bool) {
 					if b {
-						if wp.cfg.ImageQueries[i].Active {
+						if query.Active {
 							sm.SetRefreshFlag(queryKey)
 							sm.GetCheckAndEnableApplyFunc()()
 						}
-						wp.cfg.RemoveImageQuery(i)
+						// Clear any pending state for a deleted item
+						delete(pendingState, queryKey)
+						wp.cfg.RemoveImageQuery(query.ID)
 						queryList.Refresh()
 					}
 
@@ -114,12 +131,8 @@ func (wp *wallpaperPlugin) createImageQueryPanel(sm setting.SettingsManager) *fy
 
 	imgQueryList := wp.createImgQueryList(sm)
 	var addButton *widget.Button
-	var queryKey string
 
 	addButton = widget.NewButton("Add wallhaven URL", func() {
-
-		addID := time.Now()
-		queryKey = strconv.FormatInt(addID.UnixNano(), 10)
 
 		urlEntry := widget.NewEntry()
 		urlEntry.SetPlaceHolder("Cut and paste a wallhaven search or collection URL from your browser to here")
@@ -138,35 +151,48 @@ func (wp *wallpaperPlugin) createImageQueryPanel(sm setting.SettingsManager) *fy
 			urlStrErr := urlEntry.Validate()
 			descStrErr := descEntry.Validate()
 
-			if urlStrErr == nil && descStrErr == nil {
-				formStatus.SetText("Everything looks good")
-				formStatus.Importance = widget.SuccessImportance
-				formStatus.Refresh()
-				return true
-			}
-
-			if who == urlEntry {
-				if urlStrErr != nil {
+			if urlStrErr != nil {
+				if who == urlEntry {
 					formStatus.SetText(urlStrErr.Error())
 					formStatus.Importance = widget.DangerImportance
-				} else {
-					formStatus.SetText("URL OK")
-					formStatus.Importance = widget.SuccessImportance
 				}
+				formStatus.Refresh()
+				return false // URL syntax is wrong
 			}
 
-			if who == descEntry {
-				if descStrErr != nil {
+			if descStrErr != nil {
+				if who == descEntry {
 					formStatus.SetText(descStrErr.Error())
 					formStatus.Importance = widget.DangerImportance
-				} else {
-					formStatus.SetText("Description OK")
-					formStatus.Importance = widget.SuccessImportance
 				}
+				formStatus.Refresh()
+				return false // Description is wrong
 			}
 
+			apiURL, _, err := CovertWebToAPIURL(urlEntry.Text)
+			if err != nil {
+				if who == urlEntry {
+					formStatus.SetText(fmt.Sprintf("URL conversion error: %v", err))
+					formStatus.Importance = widget.DangerImportance
+				}
+				formStatus.Refresh()
+				return false // URL is not convertible
+			}
+
+			queryID := GenerateQueryID(apiURL) // Using our new exported function
+			if wp.cfg.IsDuplicateID(queryID) {
+				if who == urlEntry || (who == descEntry && urlEntry.Text != "") {
+					formStatus.SetText("Duplicate query: this URL already exists")
+					formStatus.Importance = widget.DangerImportance
+				}
+				formStatus.Refresh()
+				return false // It's a duplicate!
+			}
+
+			formStatus.SetText("Everything looks good")
+			formStatus.Importance = widget.SuccessImportance
 			formStatus.Refresh()
-			return false
+			return true
 		}
 
 		urlEntry.Validator = validation.NewRegexp(WallhavenURLRegexp, "Invalid wallhaven image query URL pattern")
@@ -177,7 +203,7 @@ func (wp *wallpaperPlugin) createImageQueryPanel(sm setting.SettingsManager) *fy
 				return func(s string) {
 					if len(s) > maxLen {
 						entry.SetText(s[:maxLen]) // Truncate to max length
-						return                    // Very important! Stop further processing
+						return                    // Stop further processing
 					}
 
 					if formValidator(entry) {
@@ -214,7 +240,7 @@ func (wp *wallpaperPlugin) createImageQueryPanel(sm setting.SettingsManager) *fy
 				return
 			}
 
-			err = wp.CheckWallhavenURL(apiURL, queryType) // Check if the API URL is valid
+			err = wp.CheckWallhavenURL(apiURL, queryType)
 			if err != nil {
 				formStatus.SetText(err.Error())
 				formStatus.Importance = widget.DangerImportance
@@ -222,16 +248,21 @@ func (wp *wallpaperPlugin) createImageQueryPanel(sm setting.SettingsManager) *fy
 				return
 			}
 
-			wp.cfg.AddImageQuery(descEntry.Text, apiURL, activeBool.Checked)
+			// We already checked for duplicates, but we check err just in case.
+			newID, err := wp.cfg.AddImageQuery(descEntry.Text, apiURL, activeBool.Checked)
+			if err != nil {
+				formStatus.SetText(err.Error())
+				formStatus.Importance = widget.DangerImportance
+				formStatus.Refresh()
+				return // Don't close the dialog
+			}
 
 			addButton.Enable()
 			imgQueryList.Refresh()
 
 			if activeBool.Checked {
-				sm.SetRefreshFlag(queryKey)
+				sm.SetRefreshFlag(newID)
 				sm.GetCheckAndEnableApplyFunc()()
-			} else {
-				sm.UnsetRefreshFlag(queryKey)
 			}
 			d.Hide()
 			addButton.Enable()

@@ -2,6 +2,7 @@ package wallpaper
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/user"
@@ -33,6 +34,7 @@ type Config struct { //nolint:golint"
 
 // ImageQuery struct to hold the URL of an image and whether it is active
 type ImageQuery struct {
+	ID          string `json:"id"`
 	Description string `json:"desc"`
 	URL         string `json:"url"`
 	Active      bool   `json:"active"`
@@ -86,29 +88,77 @@ func (c *Config) loadFromPrefs() error {
 	}
 	cfgText := c.StringWithFallback(wallhavenConfigPrefKey, defaultCfg)
 
-	err = json.Unmarshal([]byte(cfgText), c)
-	if err != nil {
+	if err := json.Unmarshal([]byte(cfgText), c); err != nil {
 		return err
+	}
+
+	// Data migration: Iterate and backfill missing IDs
+	queriesChanged := false
+	for i, q := range c.ImageQueries {
+		if q.ID == "" {
+			log.Printf("Migrating query (missing ID): %s", q.Description)
+			c.ImageQueries[i].ID = GenerateQueryID(q.URL)
+			queriesChanged = true
+		}
+	}
+
+	if queriesChanged {
+		// Re-save the config with the new IDs immediately
+		c.save()
 	}
 
 	return nil
 }
 
-// AddImageQuery adds a new image query to the end of the list
-func (c *Config) AddImageQuery(desc, url string, active bool) {
+// AddImageQuery adds a new image query to the list and returns its new ID.
+func (c *Config) AddImageQuery(desc, url string, active bool) (string, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	newItem := ImageQuery{desc, url, active}
+
+	newID := GenerateQueryID(url)
+	// Check for duplicates
+	for _, q := range c.ImageQueries {
+		if q.ID == newID {
+			return "", errors.New("duplicate query: this URL already exists")
+		}
+	}
+
+	newItem := ImageQuery{newID, desc, url, active}
 	c.ImageQueries = append([]ImageQuery{newItem}, c.ImageQueries...)
 	c.save()
+	return newID, nil
 }
 
-// RemoveImageQuery removes the image query with the specified description
-func (c *Config) RemoveImageQuery(index int) error {
+// IsDuplicateID checks if a query ID already exists in the config.
+func (c *Config) IsDuplicateID(id string) bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	for _, q := range c.ImageQueries {
+		if q.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
+// findQueryIndex is a helper to find a query by its stable ID
+func (c *Config) findQueryIndex(id string) (int, error) {
+	for i, q := range c.ImageQueries {
+		if q.ID == id {
+			return i, nil
+		}
+	}
+	return -1, fmt.Errorf("query with ID %s not found", id)
+}
+
+// RemoveImageQuery removes the image query with the specified ID
+func (c *Config) RemoveImageQuery(id string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if index < 0 || index >= len(c.ImageQueries) {
-		return fmt.Errorf("invalid query index: %d", index)
+
+	index, err := c.findQueryIndex(id)
+	if err != nil {
+		return err
 	}
 
 	c.ImageQueries = append(c.ImageQueries[:index], c.ImageQueries[index+1:]...)
@@ -116,12 +166,14 @@ func (c *Config) RemoveImageQuery(index int) error {
 	return nil
 }
 
-// EnableImageQuery enables the image query with the specified description
-func (c *Config) EnableImageQuery(index int) error {
+// EnableImageQuery enables the image query with the specified ID
+func (c *Config) EnableImageQuery(id string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if index < 0 || index >= len(c.ImageQueries) {
-		return fmt.Errorf("invalid query index: %d", index)
+
+	index, err := c.findQueryIndex(id)
+	if err != nil {
+		return err
 	}
 
 	c.ImageQueries[index].Active = true
@@ -129,12 +181,14 @@ func (c *Config) EnableImageQuery(index int) error {
 	return nil
 }
 
-// DisableImageQuery disables the image query with the specified description
-func (c *Config) DisableImageQuery(index int) error {
+// DisableImageQuery disables the image query with the specified ID
+func (c *Config) DisableImageQuery(id string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if index < 0 || index >= len(c.ImageQueries) {
-		return fmt.Errorf("invalid query index: %d", index)
+
+	index, err := c.findQueryIndex(id)
+	if err != nil {
+		return err
 	}
 
 	c.ImageQueries[index].Active = false
