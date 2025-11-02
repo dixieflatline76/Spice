@@ -227,7 +227,7 @@ jobs:
 
       - name: Install Fyne CLI
         # Pinned to your exact local version
-        run: go install fyne.io/tools/cmd/fyne@v1.6.1
+        run: go install fyne.io/tools/cmd/fyne@v1.6.2
 
       - name: Update version.txt from release tag
         run: echo "${{ github.event.release.tag_name }}" > version.txt
