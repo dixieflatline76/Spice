@@ -2,7 +2,9 @@ package wallpaper
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
+	"hash/fnv"
 	"net/http"
 	"net/url"
 	"path/filepath"
@@ -124,4 +126,11 @@ func CovertWebToAPIURL(webURL string) (finalAPIURL string, queryType URLType, er
 	// Return the cleaned URL, the detected type, and nil error if successful so far
 	log.Printf("Transformed URL to: %s (Type: %s)", finalAPIURL, queryType)
 	return
+}
+
+// GenerateQueryID creates a stable hash ID from a URL string.
+func GenerateQueryID(url string) string {
+	h := fnv.New64a()
+	h.Write([]byte(url))
+	return hex.EncodeToString(h.Sum(nil))
 }
