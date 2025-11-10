@@ -92,7 +92,6 @@ func (wp *wallpaperPlugin) createImgQueryList(sm setting.SettingsManager) *widge
 						} else {
 							wp.cfg.DisableImageQuery(query.ID)
 						}
-						initialActive = b // Update the closure's captured variable
 						delete(pendingState, queryKey) // Clean up the pending state on apply
 					})
 					sm.SetRefreshFlag(queryKey)
@@ -130,6 +129,8 @@ func (wp *wallpaperPlugin) createImgQueryList(sm setting.SettingsManager) *widge
 func (wp *wallpaperPlugin) createImageQueryPanel(sm setting.SettingsManager) *fyne.Container {
 
 	imgQueryList := wp.createImgQueryList(sm)
+	sm.RegisterRefreshFunc(imgQueryList.Refresh)
+
 	var addButton *widget.Button
 
 	addButton = widget.NewButton("Add wallhaven URL", func() {
@@ -357,16 +358,21 @@ func (wp *wallpaperPlugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Co
 	}
 	sm.CreateBoolSetting(&chgImgOnStartConfig, header) // Use the SettingsManager
 
-	// Nightly Refresh
+// Nightly Refresh
 	var nightlyRefreshConfig setting.BoolConfig
 	nightlyRefreshConfig = setting.BoolConfig{
 		Name:         "nightlyRefresh",
 		InitialValue: wp.cfg.GetNightlyRefresh(),
 		Label:        sm.CreateSettingTitleLabel("Refresh wallpapers nightly:"),
-		HelpContent:  sm.CreateSettingDescriptionLabel("Useful when using image queries with random elements. Requires application restart to take effect."),
+		HelpContent:  sm.CreateSettingDescriptionLabel("Useful when using image queries with random elements. Toggling this will start or stop the nightly refresh process."),
 		ApplyFunc: func(b bool) {
-			wp.cfg.SetNightlyRefresh(b)           // Persists the setting in wp.cfg and updates the UI
-			nightlyRefreshConfig.InitialValue = b // Update the initial value to reflect the new state of nightly refresh
+			wp.cfg.SetNightlyRefresh(b) // Persists the setting
+			nightlyRefreshConfig.InitialValue = b
+			if b {
+				wp.StartNightlyRefresh()
+			} else {
+				wp.StopNightlyRefresh()
+			}
 		},
 		NeedsRefresh: false,
 	}

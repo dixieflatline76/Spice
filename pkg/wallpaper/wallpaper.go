@@ -907,3 +907,29 @@ func (wp *wallpaperPlugin) CheckWallhavenURL(queryURL string, queryType URLType)
 func (wp *wallpaperPlugin) GetWallhavenURL(apiURL string) *url.URL {
 	return wp.getWallhavenURL(apiURL)
 }
+
+// StopNightlyRefresh signals the nightly refresh goroutine to stop.
+func (wp *wallpaperPlugin) StopNightlyRefresh() {
+	wp.downloadMutex.Lock()
+	defer wp.downloadMutex.Unlock()
+
+	if wp.stopNightlyRefresh != nil {
+		close(wp.stopNightlyRefresh) // Signal the goroutine to stop
+		wp.stopNightlyRefresh = nil   // Set to nil so we don't close it twice
+		log.Print("Nightly refresh stop signal sent and channel cleared.")
+	}
+}
+
+// StartNightlyRefresh starts the goroutine for nightly wallpaper refresh.
+func (wp *wallpaperPlugin) StartNightlyRefresh() {
+	// Stop any existing goroutine before starting a new one.
+	wp.StopNightlyRefresh()
+
+	wp.downloadMutex.Lock()
+	defer wp.downloadMutex.Unlock()
+
+	// Create a new stop channel and start the goroutine
+	wp.stopNightlyRefresh = make(chan struct{})
+	log.Print("Created new nightly refresh stop channel.")
+	go wp.startNightlyRefresher()
+}
