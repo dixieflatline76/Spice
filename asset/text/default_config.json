@@ -1,4 +1,9 @@
 {
+  "version": "1.0.0",
+  "pause_duration": 30,
+  "smart_crop_enabled": false,
+  "smart_crop_threshold": 0.1,
+  "face_boost_enabled": false,
   "query_urls": [
     {
       "desc": "Toplist last 3 months General",
@@ -11,6 +16,5 @@
       "active": false
     }
   ],
-  "avoid_set": {
-  }
+  "avoid_set": {}
 }

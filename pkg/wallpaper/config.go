@@ -25,11 +25,12 @@ import (
 // Config struct to hold all configuration data
 type Config struct { //nolint:golint"
 	fyne.Preferences
-	ImageQueries []ImageQuery    `json:"query_urls"` // List of image queries
-	assetMgr     *asset.Manager  // Asset manager
-	AvoidSet     map[string]bool `json:"avoid_set"` // Set of image URLs to avoid
-	userid       string
-	mu           sync.RWMutex // Mutex for thread-safe access
+	ImageQueries     []ImageQuery    `json:"query_urls"` // List of image queries
+	FaceBoostEnabled bool            `json:"face_boost_enabled"`
+	assetMgr         *asset.Manager  // Asset manager
+	AvoidSet         map[string]bool `json:"avoid_set"` // Set of image URLs to avoid
+	userid           string
+	mu               sync.RWMutex // Mutex for thread-safe access
 }
 
 // ImageQuery struct to hold the URL of an image and whether it is active
@@ -321,6 +322,26 @@ func (c *Config) GetNightlyRefresh() bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.BoolWithFallback(NightlyRefreshPrefKey, true) // Return the change image on start preference with a fallback value of true if not set
+}
+
+// SetFaceBoostEnabled sets the face boost preference.
+func (c *Config) SetFaceBoostEnabled(enable bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.FaceBoostEnabled = enable
+	c.SetBool(FaceBoostPrefKey, enable)
+}
+
+// GetFaceBoostEnabled returns the face boost preference.
+func (c *Config) GetFaceBoostEnabled() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.BoolWithFallback(FaceBoostPrefKey, false)
+}
+
+// GetAssetManager returns the asset manager
+func (c *Config) GetAssetManager() *asset.Manager {
+	return c.assetMgr
 }
 
 // Save saves the current configuration to the user's config file

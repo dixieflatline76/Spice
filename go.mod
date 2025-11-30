@@ -1,6 +1,6 @@
 module github.com/dixieflatline76/Spice
 
-go 1.23.3
+go 1.24.0
 
 require fyne.io/fyne/v2 v2.6.3
 
@@ -43,14 +43,15 @@ require (
 	golang.org/x/net v0.41.0 // indirect
 	golang.org/x/oauth2 v0.30.0
 	golang.org/x/sys v0.33.0
-	golang.org/x/text v0.26.0 // indirect
+	golang.org/x/text v0.31.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
 require (
+	github.com/esimov/pigo v1.4.6
 	github.com/google/go-github/v63 v63.0.0
 	github.com/zalando/go-keyring v0.2.6
-	golang.org/x/image v0.28.0
-	golang.org/x/mod v0.25.0
+	golang.org/x/image v0.33.0
+	golang.org/x/mod v0.29.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )

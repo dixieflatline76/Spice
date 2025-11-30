@@ -76,7 +76,7 @@ type SettingsManager interface {
 	SettingsHelper
 
 	CreateSelectSetting(cfg *SelectConfig, header *fyne.Container)                                 // Create a select setting widget.
-	CreateBoolSetting(cfg *BoolConfig, header *fyne.Container)                                     // Create a boolean setting widget.
+	CreateBoolSetting(cfg *BoolConfig, header *fyne.Container) *widget.Check                       // Create a boolean setting widget.
 	CreateTextEntrySetting(cfg *TextEntrySettingConfig, header *fyne.Container)                    // Create a text entry setting widget.
 	CreateButtonWithConfirmationSetting(cfg *ButtonWithConfirmationConfig, header *fyne.Container) // Create a button setting with confirmation dialog widget.
 

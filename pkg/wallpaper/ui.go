@@ -295,86 +295,142 @@ func (wp *wallpaperPlugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Co
 	header.Add(sm.CreateSectionTitleLabel("Wallpaper Preferences"))
 
 	// Change Frequency
-	var frequencyConfig setting.SelectConfig
-	frequencyConfig = setting.SelectConfig{
+	frequencyConfig := setting.SelectConfig{
 		Name:         "changeFrequency",
 		Options:      setting.StringOptions(GetFrequencies()),
 		InitialValue: int(wp.cfg.GetWallpaperChangeFrequency()),
 		Label:        sm.CreateSettingTitleLabel("Wallpaper Change Frequency:"),
 		HelpContent:  sm.CreateSettingDescriptionLabel("Set how often the wallpaper changes. Set to never to disable wallpaper changes."),
-		ApplyFunc: func(val interface{}) {
-			selectedFrequency := Frequency(val.(int))
-			wp.cfg.SetWallpaperChangeFrequency(selectedFrequency) // Persists new frequency in configuration
-			wp.ChangeWallpaperFrequency(selectedFrequency)        // Activate the new frequency in wallpaper plugin
-			frequencyConfig.InitialValue = int(selectedFrequency) // Update initial value for frequency
-		},
+	}
+	frequencyConfig.ApplyFunc = func(val interface{}) {
+		selectedFrequency := Frequency(val.(int))
+		wp.cfg.SetWallpaperChangeFrequency(selectedFrequency) // Persists new frequency in configuration
+		wp.ChangeWallpaperFrequency(selectedFrequency)        // Activate the new frequency in wallpaper plugin
+		frequencyConfig.InitialValue = int(selectedFrequency) // Update initial value for frequency
 	}
 	sm.CreateSelectSetting(&frequencyConfig, header)
 
 	// Cache Size
-	var cacheSizeConfig setting.SelectConfig
-	cacheSizeConfig = setting.SelectConfig{
+	cacheSizeConfig := setting.SelectConfig{
 		Name:         "cacheSize",
 		Options:      setting.StringOptions(GetCacheSizes()), // Correctly calling GetCacheSizes
 		InitialValue: int(wp.cfg.GetCacheSize()),
 		Label:        sm.CreateSettingTitleLabel("Cache Size:"),
 		HelpContent:  sm.CreateSettingDescriptionLabel("Set how many images to cache for faster startup and less network usage. Set to none to disable caching."),
-		ApplyFunc: func(val interface{}) {
-			selectedCacheSize := CacheSize(val.(int))
-			wp.cfg.SetCacheSize(selectedCacheSize)                // Persists new cache size in configuration
-			cacheSizeConfig.InitialValue = int(selectedCacheSize) // Update initial value for cache size
-		},
+	}
+	cacheSizeConfig.ApplyFunc = func(val interface{}) {
+		selectedCacheSize := CacheSize(val.(int))
+		wp.cfg.SetCacheSize(selectedCacheSize)                // Persists new cache size in configuration
+		cacheSizeConfig.InitialValue = int(selectedCacheSize) // Update initial value for cache size
 	}
 	sm.CreateSelectSetting(&cacheSizeConfig, header)
 
 	// Smart Fit
-	var smartFitConfig setting.BoolConfig
-	smartFitConfig = setting.BoolConfig{
+	smartFitConfig := setting.BoolConfig{
 		Name:         "smartFit",
 		InitialValue: wp.cfg.GetSmartFit(),
 		Label:        sm.CreateSettingTitleLabel("Scale Wallpaper to Fit Screen:"),
 		HelpContent:  sm.CreateSettingDescriptionLabel("Smart Fit analizes wallpapers to find best way to scale and crop them to fit your screen."),
-		ApplyFunc: func(b bool) {
-			wp.cfg.SetSmartFit(b)           // Persists the setting in wp.cfg and updates the UI
-			wp.SetSmartFit(b)               // Activates smart fit in the wallpaper engine
-			smartFitConfig.InitialValue = b // Update the initial value to reflect the new state of smart fit
-		},
 		NeedsRefresh: true,
+	}
+	smartFitConfig.ApplyFunc = func(b bool) {
+		wp.cfg.SetSmartFit(b)           // Persists the setting in wp.cfg and updates the UI
+		wp.SetSmartFit(b)               // Activates smart fit in the wallpaper engine
+		smartFitConfig.InitialValue = b // Update the initial value to reflect the new state of smart fit
 	}
 	sm.CreateBoolSetting(&smartFitConfig, header) // Use the SettingsManager
 
+	// Face Boost
+	faceBoostConfig := setting.BoolConfig{
+		Name:         "faceBoost",
+		InitialValue: wp.cfg.GetFaceBoostEnabled(),
+		Label:        sm.CreateSettingTitleLabel("Enable Face Boost:"),
+		HelpContent:  sm.CreateSettingDescriptionLabel("Boosts faces to keep them in frame. May produce odd crops for... 'artistic' photos."),
+		ApplyFunc:    func(b bool) { wp.cfg.SetFaceBoostEnabled(b) },
+		NeedsRefresh: true,
+	}
+
+	// Link Face Boost to Smart Fit
+	faceBoostCheck := sm.CreateBoolSetting(&faceBoostConfig, header)
+	if !wp.cfg.GetSmartFit() {
+		faceBoostCheck.Disable()
+	}
+
+	smartFitConfig.OnChanged = func(b bool) {
+		// Update Face Boost state
+		if b {
+			faceBoostCheck.Enable()
+		} else {
+			faceBoostCheck.SetChecked(false)
+			faceBoostCheck.Disable()
+		}
+	}
+
+	// Link Face Boost to Smart Fit
+	if !wp.cfg.GetSmartFit() {
+		// If Smart Fit is off, Face Boost should be disabled in UI (handled by SettingsManager if supported, or we hack it)
+		// Since SettingsManager doesn't seem to support dynamic enabling/disabling easily via config,
+		// we might need to rely on the ApplyFunc of SmartFit to update the UI state if possible.
+		// However, looking at SettingsManager, it creates widgets. We can't easily access the widget instance here.
+		// But the user prompt showed a direct widget manipulation approach in `ui/settings_manager.go`.
+		// Wait, the user prompt said: "Open your settings UI file: ui/settings_manager.go. Find the buildGeneralSettings function."
+		// But I found that `pkg/wallpaper/ui.go` is where the wallpaper prefs are built using `sm.CreateBoolSetting`.
+		// The user's instructions might have been based on an older version or a different understanding of the codebase.
+		// Since I am using `SettingsManager` which abstracts widget creation, I can't easily do the "link child to parent" logic
+		// exactly as requested without modifying `SettingsManager` or bypassing it.
+		//
+		// The user's example code:
+		// faceBoostCheck := widget.NewCheck(...)
+		// if !s.Config.SmartCropEnabled { faceBoostCheck.Disable() }
+		// smartCropCheck.OnChanged = func(on bool) { ... if on { faceBoostCheck.Enable() } ... }
+		//
+		// My `SettingsManager` in `ui/settings_manager.go` creates the widgets inside `CreateBoolSetting`.
+		// It doesn't return the widget.
+		//
+		// I have two options:
+		// 1. Modify `SettingsManager` to return the created widget.
+		// 2. Implement this specific setting manually using Fyne widgets here, bypassing `SettingsManager` helper for this one.
+		//
+		// Option 2 seems safer and closer to the user's intent of "custom logic".
+		// But `SettingsManager` expects to manage everything.
+		//
+		// Let's look at `ui/settings_manager.go` again. `CreateBoolSetting` takes `header *fyne.Container` and adds the widget to it.
+		// It doesn't return the widget.
+		//
+		// I will modify `ui/settings_manager.go` to return the widget from `CreateBoolSetting`.
+		// This is a small change that enables the required logic.
+	}
+
 	// Change Wallpaper on Start
-	var chgImgOnStartConfig setting.BoolConfig
-	chgImgOnStartConfig = setting.BoolConfig{
+	chgImgOnStartConfig := setting.BoolConfig{
 		Name:         "chgImgOnStart",
 		InitialValue: wp.cfg.GetChgImgOnStart(),
 		Label:        sm.CreateSettingTitleLabel("Change wallpaper on start:"),
 		HelpContent:  sm.CreateSettingDescriptionLabel("Disable if you prefer the wallpaper to change only based on its timer or a manual refresh."),
-		ApplyFunc: func(b bool) {
-			wp.cfg.SetChgImgOnStart(b)           // Persists the setting in wp.cfg and updates the UI
-			chgImgOnStartConfig.InitialValue = b // Update the initial value to reflect the new state of change wallpaper on start
-		},
 		NeedsRefresh: false,
+	}
+	chgImgOnStartConfig.ApplyFunc = func(b bool) {
+		wp.cfg.SetChgImgOnStart(b)           // Persists the setting in wp.cfg and updates the UI
+		chgImgOnStartConfig.InitialValue = b // Update the initial value to reflect the new state of change wallpaper on start
 	}
 	sm.CreateBoolSetting(&chgImgOnStartConfig, header) // Use the SettingsManager
 
-// Nightly Refresh
-	var nightlyRefreshConfig setting.BoolConfig
-	nightlyRefreshConfig = setting.BoolConfig{
+	// Nightly Refresh
+	nightlyRefreshConfig := setting.BoolConfig{
 		Name:         "nightlyRefresh",
 		InitialValue: wp.cfg.GetNightlyRefresh(),
 		Label:        sm.CreateSettingTitleLabel("Refresh wallpapers nightly:"),
 		HelpContent:  sm.CreateSettingDescriptionLabel("Useful when using image queries with random elements. Toggling this will start or stop the nightly refresh process."),
-		ApplyFunc: func(b bool) {
-			wp.cfg.SetNightlyRefresh(b) // Persists the setting
-			nightlyRefreshConfig.InitialValue = b
-			if b {
-				wp.StartNightlyRefresh()
-			} else {
-				wp.StopNightlyRefresh()
-			}
-		},
 		NeedsRefresh: false,
+	}
+	nightlyRefreshConfig.ApplyFunc = func(b bool) {
+		wp.cfg.SetNightlyRefresh(b) // Persists the setting
+		nightlyRefreshConfig.InitialValue = b
+		if b {
+			wp.StartNightlyRefresh()
+		} else {
+			wp.StopNightlyRefresh()
+		}
 	}
 	sm.CreateBoolSetting(&nightlyRefreshConfig, header) // Use the SettingsManager
 
@@ -395,21 +451,20 @@ func (wp *wallpaperPlugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Co
 
 	// Wallhaven API Key
 	whURL, _ := url.Parse("https://wallhaven.cc/settings/account")
-	var wallhavenAPIKeyConfig setting.TextEntrySettingConfig
-	wallhavenAPIKeyConfig = setting.TextEntrySettingConfig{
-		Name:         "wallhavenAPIKey",
-		InitialValue: wp.cfg.GetWallhavenAPIKey(),
-		PlaceHolder:  "Enter your wallhaven.cc API Key",
-		Label:        sm.CreateSettingTitleLabel("wallhaven API Key:"),
-		HelpContent:  widget.NewHyperlink("Restricted content requires an API key. Get one here.", whURL),
-		Validator:    validation.NewRegexp(WallhavenAPIKeyRegexp, "32 alphanumeric characters required"),
-		ApplyFunc: func(s string) {
-			wp.cfg.SetWallhavenAPIKey(s)           // Update the wallpaper configuration with the new API key
-			wallhavenAPIKeyConfig.InitialValue = s // Update the initial value of the text entry setting with the new API key
-		},
+	wallhavenAPIKeyConfig := setting.TextEntrySettingConfig{
+		Name:              "wallhavenAPIKey",
+		InitialValue:      wp.cfg.GetWallhavenAPIKey(),
+		PlaceHolder:       "Enter your wallhaven.cc API Key",
+		Label:             sm.CreateSettingTitleLabel("wallhaven API Key:"),
+		HelpContent:       widget.NewHyperlink("Restricted content requires an API key. Get one here.", whURL),
+		Validator:         validation.NewRegexp(WallhavenAPIKeyRegexp, "32 alphanumeric characters required"),
 		NeedsRefresh:      true,
 		DisplayStatus:     true,
 		PostValidateCheck: CheckWallhavenAPIKey,
+	}
+	wallhavenAPIKeyConfig.ApplyFunc = func(s string) {
+		wp.cfg.SetWallhavenAPIKey(s)           // Update the wallpaper configuration with the new API key
+		wallhavenAPIKeyConfig.InitialValue = s // Update the initial value of the text entry setting with the new API key
 	}
 	sm.CreateTextEntrySetting(&wallhavenAPIKeyConfig, header) // Use the SettingsManager
 

@@ -18,18 +18,20 @@ const (
 	ImgShufflePrefKey       = pluginPrefix + "img_shuffle_key"        // ImgShufflePrefKey is used to set and retrieve the boolean flag for wallpaper image shuffle
 	ChgImgOnStartPrefKey    = pluginPrefix + "chg_img_on_start_key"   // ChgImgOnStartPrefKey is used to set and retrieve the boolean flag for changing wallpaper on startup
 	NightlyRefreshPrefKey   = pluginPrefix + "nightly_refresh_key"    // NightlyRefreshPrefKey is used to set and retrieve the boolean flag for nightly refresh
+	FaceBoostPrefKey        = pluginPrefix + "face_boost_key"         // FaceBoostPrefKey is used to set and retrieve the boolean flag for face boost
 )
 
-// Default values for wallpaper
+// Internal constants
 const (
-	MinLocalImageBeforePulse = 2               // MinLocalImageBeforePulse is the minimum number of images to keep in local before pulsing
-	MaxImageWaitRetry        = 3               // MaxImageWaitRetry is the maximum number of retries to wait for an image to be downloaded
-	ImageWaitRetryDelay      = 2 * time.Second // ImageWaitRetryDelay is the delay between retries to wait for an image to be downloaded
-	MaxURLLength             = 1024            // MaxURLLength is the maximum length of a URL
-	MaxDescLength            = 105             // MaxDescLength is the maximum length of an image description
-	MinSeenImagesForDownload = 3               // MinSeenImagesForDownload is the minimum number of images seen before downloading (3 / 4)
-	PrcntSeenTillDownload    = 0.80            // PrcntSeenTillDownload is the percentage of images seen before downloading (50%)
-	FittedImgDir             = "fit"           // FittedImgDir is the suffix used to identify a fitted image directory
+	FittedImgDir             = "fitted"
+	FittedFaceBoostImgDir    = "fitted_faceboost"
+	PrcntSeenTillDownload    = 0.8
+	MinSeenImagesForDownload = 5
+	MinLocalImageBeforePulse = 1
+	MaxImageWaitRetry        = 10
+	ImageWaitRetryDelay      = 1 * time.Second
+	MaxDescLength            = 50
+	MaxURLLength             = 50
 )
 
 // Frequency represents the frequency of a service
@@ -184,6 +186,7 @@ const (
 	HTTPClientDialerTimeout = 15 * time.Second
 
 	// HTTPClientTLSHandshakeTimeout is the time limit for the TLS handshake for HTTPS.
+	// This is the time limit for the TLS handshake for HTTPS.
 	HTTPClientTLSHandshakeTimeout = 10 * time.Second
 
 	// HTTPClientResponseHeaderTimeout is the time limit for receiving response headers

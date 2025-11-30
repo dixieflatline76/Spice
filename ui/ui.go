@@ -449,7 +449,7 @@ func (sa *SpiceApp) updateTrayMenu(info *util.CheckForUpdatesResult) {
 		return
 	}
 	log.Printf("New version available: %s", info.LatestVersion)
-	
+
 	updateItem := sa.CreateMenuItem(
 		fmt.Sprintf("%s%s", updateMenuItemPrefix, info.LatestVersion),
 		func() { sa.OpenURL(releaseURL) },
