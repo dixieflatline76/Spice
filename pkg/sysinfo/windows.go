@@ -15,7 +15,9 @@ var (
 )
 
 const (
+	// SMCXScreen is the index for the screen width system metric.
 	SMCXScreen = 0
+	// SMCYScreen is the index for the screen height system metric.
 	SMCYScreen = 1
 )
 
