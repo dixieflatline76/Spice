@@ -160,7 +160,7 @@ func (wp *wallpaperPlugin) Init(manager ui.PluginManager) {
 
 // Name returns the name of the plugin.
 func (wp *wallpaperPlugin) Name() string {
-	return pluginName
+	return "Wallpaper"
 }
 
 // stopAllWorkers stops all workers and cancels any ongoing downloads. It blocks until all workers have stopped.

@@ -287,13 +287,10 @@ func (wp *wallpaperPlugin) createImageQueryPanel(sm setting.SettingsManager) *fy
 	return qpContainer
 }
 
-// CreateWallpaperPreferences creates a preferences widget for wallpaper settings
+// CreatePrefsPanel creates a preferences widget for wallpaper settings
 func (wp *wallpaperPlugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
-	header := container.NewVBox()
-	footer := container.NewVBox()
-	prefsPanel := container.NewBorder(header, footer, nil, nil)
-
-	header.Add(sm.CreateSectionTitleLabel("Wallpaper Preferences"))
+	// --- General Settings Container ---
+	generalContainer := container.NewVBox()
 
 	// Change Frequency
 	frequencyConfig := setting.SelectConfig{
@@ -309,7 +306,7 @@ func (wp *wallpaperPlugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Co
 		wp.ChangeWallpaperFrequency(selectedFrequency)        // Activate the new frequency in wallpaper plugin
 		frequencyConfig.InitialValue = int(selectedFrequency) // Update initial value for frequency
 	}
-	sm.CreateSelectSetting(&frequencyConfig, header)
+	sm.CreateSelectSetting(&frequencyConfig, generalContainer)
 
 	// Cache Size
 	cacheSizeConfig := setting.SelectConfig{
@@ -324,7 +321,7 @@ func (wp *wallpaperPlugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Co
 		wp.cfg.SetCacheSize(selectedCacheSize)                // Persists new cache size in configuration
 		cacheSizeConfig.InitialValue = int(selectedCacheSize) // Update initial value for cache size
 	}
-	sm.CreateSelectSetting(&cacheSizeConfig, header)
+	sm.CreateSelectSetting(&cacheSizeConfig, generalContainer)
 
 	// Smart Fit
 	smartFitConfig := setting.BoolConfig{
@@ -339,7 +336,7 @@ func (wp *wallpaperPlugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Co
 		wp.SetSmartFit(b)               // Activates smart fit in the wallpaper engine
 		smartFitConfig.InitialValue = b // Update the initial value to reflect the new state of smart fit
 	}
-	sm.CreateBoolSetting(&smartFitConfig, header) // Use the SettingsManager
+	sm.CreateBoolSetting(&smartFitConfig, generalContainer) // Use the SettingsManager
 
 	// Face Crop and Face Boost configs (pre-declared for mutual access)
 	var faceCropConfig setting.BoolConfig
@@ -380,8 +377,8 @@ func (wp *wallpaperPlugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Co
 	}
 
 	// Create checkboxes
-	faceCropCheck := sm.CreateBoolSetting(&faceCropConfig, header)
-	faceBoostCheck := sm.CreateBoolSetting(&faceBoostConfig, header)
+	faceCropCheck := sm.CreateBoolSetting(&faceCropConfig, generalContainer)
+	faceBoostCheck := sm.CreateBoolSetting(&faceBoostConfig, generalContainer)
 
 	// Mutual exclusion logic
 	// We need to hook into the OnChanged of the widgets to update the UI state of the other checkbox.
@@ -443,7 +440,7 @@ func (wp *wallpaperPlugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Co
 		wp.cfg.SetChgImgOnStart(b)           // Persists the setting in wp.cfg and updates the UI
 		chgImgOnStartConfig.InitialValue = b // Update the initial value to reflect the new state of change wallpaper on start
 	}
-	sm.CreateBoolSetting(&chgImgOnStartConfig, header) // Use the SettingsManager
+	sm.CreateBoolSetting(&chgImgOnStartConfig, generalContainer) // Use the SettingsManager
 
 	// Nightly Refresh
 	nightlyRefreshConfig := setting.BoolConfig{
@@ -462,7 +459,7 @@ func (wp *wallpaperPlugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Co
 			wp.StopNightlyRefresh()
 		}
 	}
-	sm.CreateBoolSetting(&nightlyRefreshConfig, header) // Use the SettingsManager
+	sm.CreateBoolSetting(&nightlyRefreshConfig, generalContainer) // Use the SettingsManager
 
 	// Reset Blocked Images
 	resetButtonConfig := setting.ButtonWithConfirmationConfig{
@@ -473,11 +470,10 @@ func (wp *wallpaperPlugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Co
 		ConfirmMessage: "This cannot be undone. Are you sure?",
 		OnPressed:      wp.cfg.ResetAvoidSet,
 	}
-	sm.CreateButtonWithConfirmationSetting(&resetButtonConfig, header) // Use the SettingsManager
+	sm.CreateButtonWithConfirmationSetting(&resetButtonConfig, generalContainer) // Use the SettingsManager
 
-	// wallhaven service section
-	header.Add(widget.NewSeparator())
-	header.Add(sm.CreateSectionTitleLabel("wallhaven.cc Image Service Preferences"))
+	// --- Wallhaven Settings Container ---
+	whHeader := container.NewVBox()
 
 	// Wallhaven API Key
 	whURL, _ := url.Parse("https://wallhaven.cc/settings/account")
@@ -496,15 +492,128 @@ func (wp *wallpaperPlugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Co
 		wp.cfg.SetWallhavenAPIKey(s)           // Update the wallpaper configuration with the new API key
 		wallhavenAPIKeyConfig.InitialValue = s // Update the initial value of the text entry setting with the new API key
 	}
-	sm.CreateTextEntrySetting(&wallhavenAPIKeyConfig, header) // Use the SettingsManager
+	sm.CreateTextEntrySetting(&wallhavenAPIKeyConfig, whHeader) // Use the SettingsManager
 
 	qp := wp.createImageQueryPanel(sm) // Create image query panel
-	prefsPanel.Add(qp)                 // Add image query panel to preferences panel
+	// qp is a Border layout. We want whHeader at the top.
+	// We can wrap qp in another Border layout with whHeader at the top.
+	wallhavenContainer := container.NewBorder(whHeader, nil, nil, nil, qp)
 
-	footer.Add(widget.NewSeparator())
-	sm.RegisterRefreshFunc(func() {
-		wp.RefreshImagesAndPulse()
+	// --- Accordion ---
+	// Wrap generalContainer in VScroll because it might be tall
+	generalScroll := container.NewVScroll(generalContainer)
+
+	// --- Smart Accordion Logic ---
+	// We build a custom accordion to support the "auto-expand next" behavior requested by the user.
+
+	// Accordion Items
+	items := []struct {
+		Title   string
+		Content fyne.CanvasObject
+		Open    bool
+	}{
+		{"General Settings", generalScroll, true},
+		{"Image Sources (Wallhaven)", wallhavenContainer, false},
+	}
+
+	// Container to hold the accordion
+	accordionContainer := container.NewStack() // Use Stack layout to hold the Border layout
+
+	// Function to refresh the accordion UI
+	var refreshAccordion func()
+
+	refreshAccordion = func() {
+		topHeaders := container.NewVBox()
+		bottomHeaders := container.NewVBox()
+		var centerContent fyne.CanvasObject
+
+		foundOpen := false
+
+		for i := range items {
+			index := i // Capture loop variable
+			item := &items[index]
+
+			// Header Button
+			var icon fyne.Resource
+			var err error
+			if item.Open {
+				icon, err = wp.manager.GetAssetManager().GetIcon("down.png")
+			} else {
+				icon, err = wp.manager.GetAssetManager().GetIcon("right.png")
+			}
+
+			// If we don't have icons, we can use text arrows
+			titleText := item.Title
+			if err != nil {
+				if item.Open {
+					titleText = "▼ " + titleText
+				} else {
+					titleText = "▶ " + titleText
+				}
+			}
+
+			headerBtn := widget.NewButton(titleText, func() {
+				if item.Open {
+					// If closing, open the next one (wrapping around)
+					item.Open = false
+					nextIndex := (index + 1) % len(items)
+					items[nextIndex].Open = true
+				} else {
+					// If opening, close all others (Single Expansion)
+					for j := range items {
+						items[j].Open = (j == index)
+					}
+				}
+				refreshAccordion()
+			})
+			if err == nil {
+				headerBtn.Icon = icon
+			}
+			headerBtn.Alignment = widget.ButtonAlignLeading
+			headerBtn.Importance = widget.LowImportance // Flat look
+
+			if item.Open {
+				topHeaders.Add(headerBtn)
+				centerContent = item.Content
+				foundOpen = true
+			} else {
+				if foundOpen {
+					bottomHeaders.Add(headerBtn)
+				} else {
+					topHeaders.Add(headerBtn)
+				}
+			}
+		}
+
+		// Create the border layout
+		// Top: topHeaders
+		// Bottom: bottomHeaders
+		// Center: centerContent
+		borderLayout := container.NewBorder(topHeaders, bottomHeaders, nil, nil, centerContent)
+
+		accordionContainer.Objects = []fyne.CanvasObject{borderLayout}
+		accordionContainer.Refresh()
+	}
+
+	// Initial Render
+	refreshAccordion()
+
+	// Add "Manage Image Sources" button to General Settings
+	// Now we can access the 'items' and 'refreshAccordion'
+	manageSourcesBtn := widget.NewButton("Manage Image Sources", func() {
+		// Open the second item (Image Sources)
+		for j := range items {
+			items[j].Open = (j == 1)
+		}
+		refreshAccordion()
 	})
+	// Add a separator and the button to the end of the general container
+	generalContainer.Add(widget.NewSeparator())
+	generalContainer.Add(manageSourcesBtn)
 
-	return prefsPanel
+	// Wrap accordion in a container to return.
+	// Since accordion items expand, we just return the accordion.
+	// However, CreatePrefsPanel returns *fyne.Container. widget.Accordion is a Widget.
+	// We need to wrap it.
+	return container.NewStack(accordionContainer)
 }

@@ -4,6 +4,7 @@ import (
 	"net/url"
 
 	"fyne.io/fyne/v2"
+	"github.com/dixieflatline76/Spice/asset"
 )
 
 // PluginManager is the interface that must be implemented by all UI plugin managers.
@@ -16,6 +17,7 @@ type PluginManager interface {
 	CreateToggleMenuItem(string, func(bool), string, bool) *fyne.MenuItem // Creates a toggle menu item.
 	OpenURL(*url.URL) error                                               // Opens a URL.
 	GetPreferences() fyne.Preferences                                     // Returns the preferences.
+	GetAssetManager() *asset.Manager                                      // Returns the asset manager.
 }
 
 // App is the interface that must be implemented by all applications.
