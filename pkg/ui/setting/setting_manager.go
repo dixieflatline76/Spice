@@ -9,9 +9,9 @@ import (
 
 // SettingsHelper is the interface that must be implemented by all settings helpers.
 type SettingsHelper interface {
-	CreateSectionTitleLabel(desc string) *widget.Label       // Creates a section title label.
-	CreateSettingTitleLabel(desc string) *widget.Label       // Creates a setting title label.
-	CreateSettingDescriptionLabel(desc string) *widget.Label // Creates a setting description label.
+	CreateSectionTitleLabel(desc string) *widget.Label           // Creates a section title label.
+	CreateSettingTitleLabel(desc string) *widget.Label           // Creates a setting title label.
+	CreateSettingDescriptionLabel(desc string) fyne.CanvasObject // Creates a setting description label.
 }
 
 // SelectConfig holds the configuration for a generic select widget.

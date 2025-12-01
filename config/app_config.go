@@ -24,3 +24,29 @@ func (c *AppConfig) GetAppNotificationsEnabled() bool {
 func (c *AppConfig) SetAppNotificationsEnabled(enabled bool) {
 	c.prefs.SetBool(AppNotificationsEnabledKey, enabled)
 }
+
+// AppUpdateCheckEnabledKey is the key for the app update check enabled preference
+const AppUpdateCheckEnabledKey = "app_update_check_enabled"
+
+// GetUpdateCheckEnabled returns whether the application should check for updates
+func (c *AppConfig) GetUpdateCheckEnabled() bool {
+	return c.prefs.BoolWithFallback(AppUpdateCheckEnabledKey, true)
+}
+
+// SetUpdateCheckEnabled sets whether the application should check for updates
+func (c *AppConfig) SetUpdateCheckEnabled(enabled bool) {
+	c.prefs.SetBool(AppUpdateCheckEnabledKey, enabled)
+}
+
+// AppThemeKey is the key for the app theme preference
+const AppThemeKey = "app_theme"
+
+// GetTheme returns the current application theme
+func (c *AppConfig) GetTheme() string {
+	return c.prefs.StringWithFallback(AppThemeKey, "System")
+}
+
+// SetTheme sets the application theme
+func (c *AppConfig) SetTheme(theme string) {
+	c.prefs.SetString(AppThemeKey, theme)
+}

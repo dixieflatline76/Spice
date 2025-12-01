@@ -13,6 +13,7 @@ import (
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/basicfont"
@@ -122,6 +123,18 @@ func getInstance() *SpiceApp {
 				os:      currentOS,
 			}
 			saInstance.appConfig = config.NewAppConfig(saInstance.Preferences())
+
+			// Apply saved theme
+			currentTheme := saInstance.appConfig.GetTheme()
+			switch currentTheme {
+			case "Dark":
+				saInstance.Settings().SetTheme(&forcedVariantTheme{Theme: theme.DefaultTheme(), variant: theme.VariantDark})
+			case "Light":
+				saInstance.Settings().SetTheme(&forcedVariantTheme{Theme: theme.DefaultTheme(), variant: theme.VariantLight})
+			default:
+				saInstance.Settings().SetTheme(theme.DefaultTheme())
+			}
+
 			saInstance.verifyEULA()
 		} else {
 			utilLog.Fatal("Spice not supported on this platform")
@@ -361,6 +374,59 @@ func (sa *SpiceApp) CreatePreferencesWindow() {
 	}
 	sm.CreateBoolSetting(&notificationsConfig, generalContainer)
 
+	// Enable New Version Check
+	var updateCheckConfig setting.BoolConfig
+	updateCheckConfig = setting.BoolConfig{
+		Name:         "enableUpdateCheck",
+		InitialValue: sa.appConfig.GetUpdateCheckEnabled(),
+		Label:        sm.CreateSettingTitleLabel("Enable New Version Check:"),
+		HelpContent:  sm.CreateSettingDescriptionLabel("Automatically check for new versions of Spice on startup."),
+		ApplyFunc: func(b bool) {
+			sa.appConfig.SetUpdateCheckEnabled(b)
+			updateCheckConfig.InitialValue = b
+		},
+	}
+	sm.CreateBoolSetting(&updateCheckConfig, generalContainer)
+
+	// Theme Selection
+	themeOptions := []string{"System", "Dark", "Light"}
+	currentTheme := sa.appConfig.GetTheme()
+	initialThemeIndex := 0
+	for i, t := range themeOptions {
+		if t == currentTheme {
+			initialThemeIndex = i
+			break
+		}
+	}
+
+	themeConfig := setting.SelectConfig{
+		Name:         "theme",
+		Options:      setting.StringOptions(util.StringsToStringers(themeOptions)),
+		InitialValue: initialThemeIndex,
+		Label:        sm.CreateSettingTitleLabel("Theme:"),
+		HelpContent:  sm.CreateSettingDescriptionLabel("Select the application theme."),
+	}
+	themeConfig.ApplyFunc = func(val interface{}) {
+		selectedIndex := val.(int)
+		if selectedIndex < 0 || selectedIndex >= len(themeOptions) {
+			return // Safety check
+		}
+		selectedTheme := themeOptions[selectedIndex]
+		sa.appConfig.SetTheme(selectedTheme)
+		themeConfig.InitialValue = selectedIndex
+
+		// Apply Theme
+		switch selectedTheme {
+		case "Dark":
+			sa.Settings().SetTheme(&forcedVariantTheme{Theme: theme.DefaultTheme(), variant: theme.VariantDark})
+		case "Light":
+			sa.Settings().SetTheme(&forcedVariantTheme{Theme: theme.DefaultTheme(), variant: theme.VariantLight})
+		default:
+			sa.Settings().SetTheme(theme.DefaultTheme())
+		}
+	}
+	sm.CreateSelectSetting(&themeConfig, generalContainer)
+
 	generalTabItem := container.NewTabItem("App", container.NewVScroll(generalContainer))
 
 	// --- Plugin Tabs ---
@@ -391,6 +457,16 @@ func (sa *SpiceApp) CreatePreferencesWindow() {
 
 	prefsWindow.SetContent(prefsWindowLayout)
 	prefsWindow.Show()
+}
+
+// forcedVariantTheme is a theme that forces a specific variant (Dark or Light)
+type forcedVariantTheme struct {
+	fyne.Theme
+	variant fyne.ThemeVariant
+}
+
+func (t *forcedVariantTheme) Color(name fyne.ThemeColorName, _ fyne.ThemeVariant) color.Color {
+	return t.Theme.Color(name, t.variant)
 }
 
 // verifyEULA checks if the End User License Agreement has been accepted. If not, it will show the EULA and prompt the user to accept it.
@@ -469,6 +545,10 @@ func (sa *SpiceApp) StartPeriodicUpdateCheck() {
 	utilLog.Print("Starting periodic application update checker...")
 
 	performCheck := func() {
+		if !sa.appConfig.GetUpdateCheckEnabled() {
+			utilLog.Print("Update check disabled by user.")
+			return
+		}
 		utilLog.Print("Checking for application updates...")
 		updateInfo, err := util.CheckForUpdates()
 		if err != nil {

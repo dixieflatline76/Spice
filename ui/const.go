@@ -10,7 +10,7 @@ const aboutSplashTime = 3 // seconds
 const updateMenuItemPrefix = "Update to "
 
 // PreferencesWindowHeightRatio is the ratio of the screen height to use for the preferences window
-const PreferencesWindowHeightRatio = 0.9
+const PreferencesWindowHeightRatio = 0.8
 
 // PreferencesWindowWidthRatio is the ratio of the window height to use for the window width
 const PreferencesWindowWidthRatio = 3.0 / 4.0

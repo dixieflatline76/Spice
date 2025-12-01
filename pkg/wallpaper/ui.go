@@ -9,6 +9,7 @@ import (
 	"fyne.io/fyne/v2/data/validation"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/dixieflatline76/Spice/pkg/ui/setting"
 	utilLog "github.com/dixieflatline76/Spice/util/log"
@@ -376,9 +377,15 @@ func (wp *wallpaperPlugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Co
 		NeedsRefresh: true,
 	}
 
-	// Create checkboxes
-	faceCropCheck := sm.CreateBoolSetting(&faceCropConfig, generalContainer)
-	faceBoostCheck := sm.CreateBoolSetting(&faceBoostConfig, generalContainer)
+	// Create checkboxes in a sub-container for indentation
+	subSettingsContainer := container.NewVBox()
+	faceCropCheck := sm.CreateBoolSetting(&faceCropConfig, subSettingsContainer)
+	faceBoostCheck := sm.CreateBoolSetting(&faceBoostConfig, subSettingsContainer)
+
+	// Add indentation
+	indentation := widget.NewLabel("      ") // Simple spacer
+	indentedWrapper := container.NewBorder(nil, nil, indentation, nil, subSettingsContainer)
+	generalContainer.Add(indentedWrapper)
 
 	// Mutual exclusion logic
 	// We need to hook into the OnChanged of the widgets to update the UI state of the other checkbox.
@@ -535,22 +542,15 @@ func (wp *wallpaperPlugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Co
 
 			// Header Button
 			var icon fyne.Resource
-			var err error
 			if item.Open {
-				icon, err = wp.manager.GetAssetManager().GetIcon("down.png")
+				icon = theme.MoveDownIcon()
 			} else {
-				icon, err = wp.manager.GetAssetManager().GetIcon("right.png")
+				icon = theme.NavigateNextIcon()
 			}
 
 			// If we don't have icons, we can use text arrows
 			titleText := item.Title
-			if err != nil {
-				if item.Open {
-					titleText = "▼ " + titleText
-				} else {
-					titleText = "▶ " + titleText
-				}
-			}
+			// No error check needed for theme icons
 
 			headerBtn := widget.NewButton(titleText, func() {
 				if item.Open {
@@ -566,9 +566,7 @@ func (wp *wallpaperPlugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Co
 				}
 				refreshAccordion()
 			})
-			if err == nil {
-				headerBtn.Icon = icon
-			}
+			headerBtn.Icon = icon
 			headerBtn.Alignment = widget.ButtonAlignLeading
 			headerBtn.Importance = widget.LowImportance // Flat look
 
