@@ -13,7 +13,6 @@ import (
 var (
 	user32               = syscall.NewLazyDLL("user32.dll")
 	systemParametersInfo = user32.NewProc("SystemParametersInfoW")
-	getSystemMetrics     = user32.NewProc("GetSystemMetrics")
 )
 
 func init() {
@@ -31,8 +30,6 @@ const (
 	SPIFUpdateIniFile    = 0x01
 	SPIFSendChange       = 0x02
 	SPIFSendWinIniChange = 0x02
-	SMCXScreen           = 0
-	SMCYScreen           = 1
 )
 
 // setWallpaper sets the wallpaper to the given image file path.

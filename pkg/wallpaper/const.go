@@ -19,12 +19,14 @@ const (
 	ChgImgOnStartPrefKey    = pluginPrefix + "chg_img_on_start_key"   // ChgImgOnStartPrefKey is used to set and retrieve the boolean flag for changing wallpaper on startup
 	NightlyRefreshPrefKey   = pluginPrefix + "nightly_refresh_key"    // NightlyRefreshPrefKey is used to set and retrieve the boolean flag for nightly refresh
 	FaceBoostPrefKey        = pluginPrefix + "face_boost_key"         // FaceBoostPrefKey is used to set and retrieve the boolean flag for face boost
+	FaceCropPrefKey         = pluginPrefix + "face_crop_key"          // FaceCropPrefKey is used to set and retrieve the boolean flag for face crop
 )
 
 // Internal constants
 const (
 	FittedImgDir             = "fitted"
 	FittedFaceBoostImgDir    = "fitted_faceboost"
+	FittedFaceCropImgDir     = "fitted_facecrop"
 	PrcntSeenTillDownload    = 0.8
 	MinSeenImagesForDownload = 5
 	MinLocalImageBeforePulse = 1

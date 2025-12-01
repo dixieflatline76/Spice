@@ -25,12 +25,11 @@ import (
 // Config struct to hold all configuration data
 type Config struct { //nolint:golint"
 	fyne.Preferences
-	ImageQueries     []ImageQuery    `json:"query_urls"` // List of image queries
-	FaceBoostEnabled bool            `json:"face_boost_enabled"`
-	assetMgr         *asset.Manager  // Asset manager
-	AvoidSet         map[string]bool `json:"avoid_set"` // Set of image URLs to avoid
-	userid           string
-	mu               sync.RWMutex // Mutex for thread-safe access
+	ImageQueries []ImageQuery    `json:"query_urls"` // List of image queries
+	assetMgr     *asset.Manager  // Asset manager
+	AvoidSet     map[string]bool `json:"avoid_set"` // Set of image URLs to avoid
+	userid       string
+	mu           sync.RWMutex // Mutex for thread-safe access
 }
 
 // ImageQuery struct to hold the URL of an image and whether it is active
@@ -97,14 +96,22 @@ func (c *Config) loadFromPrefs() error {
 	queriesChanged := false
 	for i, q := range c.ImageQueries {
 		if q.ID == "" {
-			log.Printf("Migrating query (missing ID): %s", q.Description)
 			c.ImageQueries[i].ID = GenerateQueryID(q.URL)
 			queriesChanged = true
 		}
 	}
 
+	// Sanitize Face Boost/Crop settings (Mutual Exclusivity)
+	// We check the Fyne preferences directly to avoid recursive locking (deadlock)
+	faceCrop := c.BoolWithFallback(FaceCropPrefKey, false)
+	faceBoost := c.BoolWithFallback(FaceBoostPrefKey, false)
+
+	if faceCrop && faceBoost {
+		c.SetBool(FaceBoostPrefKey, false)
+	}
+
 	if queriesChanged {
-		// Re-save the config with the new IDs immediately
+		// Re-save the config with the new IDs/Settings immediately
 		c.save()
 	}
 
@@ -328,7 +335,6 @@ func (c *Config) GetNightlyRefresh() bool {
 func (c *Config) SetFaceBoostEnabled(enable bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.FaceBoostEnabled = enable
 	c.SetBool(FaceBoostPrefKey, enable)
 }
 
@@ -337,6 +343,20 @@ func (c *Config) GetFaceBoostEnabled() bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.BoolWithFallback(FaceBoostPrefKey, false)
+}
+
+// SetFaceCropEnabled sets the face crop preference.
+func (c *Config) SetFaceCropEnabled(enable bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.SetBool(FaceCropPrefKey, enable)
+}
+
+// GetFaceCropEnabled returns the face crop preference.
+func (c *Config) GetFaceCropEnabled() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.BoolWithFallback(FaceCropPrefKey, false)
 }
 
 // GetAssetManager returns the asset manager

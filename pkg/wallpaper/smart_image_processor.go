@@ -5,6 +5,8 @@ import (
 	"context"
 	"fmt"
 	"image"
+	"image/color"
+	"image/draw"
 	"image/jpeg"
 	"image/png"
 	"math"
@@ -141,32 +143,55 @@ func (c *smartImageProcessor) cropImage(ctx context.Context, img image.Image) (i
 
 	r := &resizer{resampler: c.resampler} // Create resizer here
 
-	// Check for face boost first
+	// Variable to hold the image used for analysis (potentially boosted)
+	var imgForAnalysis image.Image
 
-	if c.config.GetFaceBoostEnabled() && c.pigo != nil {
+	// Check for face crop/boost
+	if (c.config.GetFaceCropEnabled() || c.config.GetFaceBoostEnabled()) && c.pigo != nil {
 		faceBox, err := c.findBestFace(img)
 		if err == nil {
-			// Face found, crop around it
-			log.Debugf("Face Boost: Face found at %v. Cropping...", faceBox)
-			cropRect := c.cropAroundFace(img.Bounds(), faceBox, systemWidth, systemHeight)
-			log.Debugf("Face Boost: Cropping to %v (Size: %dx%d)", cropRect, cropRect.Dx(), cropRect.Dy())
+			// Priority 1: Face Crop (Hard Crop)
+			if c.config.GetFaceCropEnabled() {
+				log.Debugf("Face Crop: Face found at %v. Cropping...", faceBox)
+				cropRect := c.cropAroundFace(img.Bounds(), faceBox, systemWidth, systemHeight)
+				log.Debugf("Face Crop: Cropping to %v (Size: %dx%d)", cropRect, cropRect.Dx(), cropRect.Dy())
 
-			// Crop and resize
-			type SubImager interface {
-				SubImage(r image.Rectangle) image.Image
-			}
-			img = img.(SubImager).SubImage(cropRect)
+				// Crop and resize
+				type SubImager interface {
+					SubImage(r image.Rectangle) image.Image
+				}
+				img = img.(SubImager).SubImage(cropRect)
 
-			resizedImg := r.resizeWithContext(ctx, img, uint(systemWidth), uint(systemHeight))
-			if resizedImg == nil {
-				return nil, ctx.Err()
+				resizedImg := r.resizeWithContext(ctx, img, uint(systemWidth), uint(systemHeight))
+				if resizedImg == nil {
+					return nil, ctx.Err()
+				}
+				return resizedImg, nil
 			}
-			return resizedImg, nil
+
+			// Priority 2: Face Boost (Hinting)
+			if c.config.GetFaceBoostEnabled() {
+				log.Debugf("Face Boost: Face found at %v. Applying boost hint...", faceBox)
+
+				// Create a copy of the image for analysis
+				bounds := img.Bounds()
+				analysisImg := image.NewRGBA(bounds)
+
+				// Draw original image onto the analysis image
+				draw.Draw(analysisImg, bounds, img, bounds.Min, draw.Src)
+
+				// Draw white box over face to boost contrast/edges in that area
+				white := color.RGBA{255, 255, 255, 255}
+				draw.Draw(analysisImg, faceBox, &image.Uniform{white}, image.Point{}, draw.Src)
+
+				// Use this boosted image for analysis
+				imgForAnalysis = analysisImg
+			}
 		} else {
-			log.Debugf("Face Boost: No face found (%v). Falling back to smartcrop.", err)
+			log.Debugf("Face Logic: No face found (%v). Falling back to smartcrop.", err)
 		}
-	} else if c.config.GetFaceBoostEnabled() && c.pigo == nil {
-		log.Debugf("Face Boost: Enabled but pigo model not loaded.")
+	} else if (c.config.GetFaceCropEnabled() || c.config.GetFaceBoostEnabled()) && c.pigo == nil {
+		log.Debugf("Face Logic: Enabled but pigo model not loaded.")
 	}
 
 	// Fallback to smartcrop
@@ -180,7 +205,12 @@ func (c *smartImageProcessor) cropImage(ctx context.Context, img image.Image) (i
 	resultChan := make(chan cropResult)
 
 	go func() {
-		topCrop, err := analyzer.FindBestCrop(img, systemWidth, systemHeight)
+		// Use imgForAnalysis if set, otherwise original img
+		targetImg := img
+		if imgForAnalysis != nil {
+			targetImg = imgForAnalysis
+		}
+		topCrop, err := analyzer.FindBestCrop(targetImg, systemWidth, systemHeight)
 		resultChan <- cropResult{crop: topCrop, err: err}
 	}()
 

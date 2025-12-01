@@ -145,7 +145,6 @@ func (sm *SettingsManager) CreateBoolSetting(cfg *setting.BoolConfig, header *fy
 			cfg.OnChanged(b)
 		}
 		sm.GetCheckAndEnableApplyFunc()()
-		sm.GetCheckAndEnableApplyFunc()()
 	}
 	return check
 }

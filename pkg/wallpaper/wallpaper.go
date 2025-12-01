@@ -506,6 +506,9 @@ func (wp *wallpaperPlugin) downloadImage(ctx context.Context, isi ImgSrvcImage) 
 // getDownloadedDir returns the downloaded images directory.
 func (wp *wallpaperPlugin) getDownloadedDir() string {
 	if wp.fitImageFlag.Value() {
+		if wp.cfg.GetFaceCropEnabled() {
+			return filepath.Join(wp.downloadedDir, FittedFaceCropImgDir)
+		}
 		if wp.cfg.GetFaceBoostEnabled() {
 			return filepath.Join(wp.downloadedDir, FittedFaceBoostImgDir)
 		}
@@ -587,6 +590,7 @@ func (wp *wallpaperPlugin) cleanupImageCache() error {
 		wp.downloadedDir,
 		filepath.Join(wp.downloadedDir, FittedImgDir),
 		filepath.Join(wp.downloadedDir, FittedFaceBoostImgDir),
+		filepath.Join(wp.downloadedDir, FittedFaceCropImgDir),
 	}
 	for _, dir := range dirs {
 		entries, err := os.ReadDir(dir)
@@ -629,6 +633,7 @@ func (wp *wallpaperPlugin) setupImageDirs() {
 	wp.downloadedDir = filepath.Join(config.GetWorkingDir(), strings.ToLower(pluginName)+"_downloads")
 	fittedDir := filepath.Join(wp.downloadedDir, FittedImgDir)
 	fittedFaceBoostDir := filepath.Join(wp.downloadedDir, FittedFaceBoostImgDir)
+	fittedFaceCropDir := filepath.Join(wp.downloadedDir, FittedFaceCropImgDir)
 
 	err := os.MkdirAll(wp.downloadedDir, 0755)
 	if err != nil {
@@ -641,6 +646,10 @@ func (wp *wallpaperPlugin) setupImageDirs() {
 	err = os.MkdirAll(fittedFaceBoostDir, 0755)
 	if err != nil {
 		log.Fatalf("error creating fitted face boost images directory: %v", err)
+	}
+	err = os.MkdirAll(fittedFaceCropDir, 0755)
+	if err != nil {
+		log.Fatalf("error creating fitted face crop images directory: %v", err)
 	}
 }
 

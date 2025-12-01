@@ -11,6 +11,7 @@ import (
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
 	"github.com/dixieflatline76/Spice/pkg/ui/setting"
+	utilLog "github.com/dixieflatline76/Spice/util/log"
 )
 
 // CreateTrayMenuItems creates the menu items for the tray menu
@@ -340,65 +341,94 @@ func (wp *wallpaperPlugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Co
 	}
 	sm.CreateBoolSetting(&smartFitConfig, header) // Use the SettingsManager
 
-	// Face Boost
-	faceBoostConfig := setting.BoolConfig{
-		Name:         "faceBoost",
-		InitialValue: wp.cfg.GetFaceBoostEnabled(),
-		Label:        sm.CreateSettingTitleLabel("Enable Face Boost:"),
-		HelpContent:  sm.CreateSettingDescriptionLabel("Boosts faces to keep them in frame. May produce odd crops for... 'artistic' photos."),
-		ApplyFunc:    func(b bool) { wp.cfg.SetFaceBoostEnabled(b) },
+	// Face Crop and Face Boost configs (pre-declared for mutual access)
+	var faceCropConfig setting.BoolConfig
+	var faceBoostConfig setting.BoolConfig
+
+	// Face Crop (formerly Face Boost)
+	faceCropConfig = setting.BoolConfig{
+		Name:         "faceCrop",
+		InitialValue: wp.cfg.GetFaceCropEnabled(),
+		Label:        sm.CreateSettingTitleLabel("Enable Face Crop:"),
+		HelpContent:  sm.CreateSettingDescriptionLabel("Aggressively crops the image to center on the largest face found. Good for portraits."),
+		ApplyFunc: func(b bool) {
+			wp.cfg.SetFaceCropEnabled(b)
+			if b {
+				wp.cfg.SetFaceBoostEnabled(false)
+				faceBoostConfig.InitialValue = false // Sync the other setting's initial value
+			}
+			faceCropConfig.InitialValue = b
+		},
 		NeedsRefresh: true,
 	}
 
-	// Link Face Boost to Smart Fit
+	// Face Boost (new hinting mode)
+	faceBoostConfig = setting.BoolConfig{
+		Name:         "faceBoost",
+		InitialValue: wp.cfg.GetFaceBoostEnabled(),
+		Label:        sm.CreateSettingTitleLabel("Enable Face Boost:"),
+		HelpContent:  sm.CreateSettingDescriptionLabel("Uses face detection to hint the smart cropper. Keeps faces in frame but balances with other image details."),
+		ApplyFunc: func(b bool) {
+			wp.cfg.SetFaceBoostEnabled(b)
+			if b {
+				wp.cfg.SetFaceCropEnabled(false)
+				faceCropConfig.InitialValue = false // Sync the other setting's initial value
+			}
+			faceBoostConfig.InitialValue = b
+		},
+		NeedsRefresh: true,
+	}
+
+	// Create checkboxes
+	faceCropCheck := sm.CreateBoolSetting(&faceCropConfig, header)
 	faceBoostCheck := sm.CreateBoolSetting(&faceBoostConfig, header)
+
+	// Mutual exclusion logic
+	// We need to hook into the OnChanged of the widgets to update the UI state of the other checkbox.
+	// CreateBoolSetting returns *widget.Check, so we can access it directly.
+
+	// Store original handlers to chain them
+	originalFaceCropHandler := faceCropCheck.OnChanged
+	originalFaceBoostHandler := faceBoostCheck.OnChanged
+
+	faceCropCheck.OnChanged = func(b bool) {
+		utilLog.Debugf("UI: Face Crop Toggled: %v", b)
+		if b {
+			utilLog.Debugf("UI: Unchecking Face Boost")
+			faceBoostCheck.SetChecked(false) // Uncheck Boost if Crop is checked
+		}
+		if originalFaceCropHandler != nil {
+			originalFaceCropHandler(b)
+		}
+	}
+
+	faceBoostCheck.OnChanged = func(b bool) {
+		utilLog.Debugf("UI: Face Boost Toggled: %v", b)
+		if b {
+			utilLog.Debugf("UI: Unchecking Face Crop")
+			faceCropCheck.SetChecked(false) // Uncheck Crop if Boost is checked
+		}
+		if originalFaceBoostHandler != nil {
+			originalFaceBoostHandler(b)
+		}
+	}
+
+	// Link both to Smart Fit
 	if !wp.cfg.GetSmartFit() {
+		faceCropCheck.Disable()
 		faceBoostCheck.Disable()
 	}
 
 	smartFitConfig.OnChanged = func(b bool) {
-		// Update Face Boost state
 		if b {
+			faceCropCheck.Enable()
 			faceBoostCheck.Enable()
 		} else {
+			faceCropCheck.SetChecked(false)
+			faceCropCheck.Disable()
 			faceBoostCheck.SetChecked(false)
 			faceBoostCheck.Disable()
 		}
-	}
-
-	// Link Face Boost to Smart Fit
-	if !wp.cfg.GetSmartFit() {
-		// If Smart Fit is off, Face Boost should be disabled in UI (handled by SettingsManager if supported, or we hack it)
-		// Since SettingsManager doesn't seem to support dynamic enabling/disabling easily via config,
-		// we might need to rely on the ApplyFunc of SmartFit to update the UI state if possible.
-		// However, looking at SettingsManager, it creates widgets. We can't easily access the widget instance here.
-		// But the user prompt showed a direct widget manipulation approach in `ui/settings_manager.go`.
-		// Wait, the user prompt said: "Open your settings UI file: ui/settings_manager.go. Find the buildGeneralSettings function."
-		// But I found that `pkg/wallpaper/ui.go` is where the wallpaper prefs are built using `sm.CreateBoolSetting`.
-		// The user's instructions might have been based on an older version or a different understanding of the codebase.
-		// Since I am using `SettingsManager` which abstracts widget creation, I can't easily do the "link child to parent" logic
-		// exactly as requested without modifying `SettingsManager` or bypassing it.
-		//
-		// The user's example code:
-		// faceBoostCheck := widget.NewCheck(...)
-		// if !s.Config.SmartCropEnabled { faceBoostCheck.Disable() }
-		// smartCropCheck.OnChanged = func(on bool) { ... if on { faceBoostCheck.Enable() } ... }
-		//
-		// My `SettingsManager` in `ui/settings_manager.go` creates the widgets inside `CreateBoolSetting`.
-		// It doesn't return the widget.
-		//
-		// I have two options:
-		// 1. Modify `SettingsManager` to return the created widget.
-		// 2. Implement this specific setting manually using Fyne widgets here, bypassing `SettingsManager` helper for this one.
-		//
-		// Option 2 seems safer and closer to the user's intent of "custom logic".
-		// But `SettingsManager` expects to manage everything.
-		//
-		// Let's look at `ui/settings_manager.go` again. `CreateBoolSetting` takes `header *fyne.Container` and adds the widget to it.
-		// It doesn't return the widget.
-		//
-		// I will modify `ui/settings_manager.go` to return the widget from `CreateBoolSetting`.
-		// This is a small change that enables the required logic.
 	}
 
 	// Change Wallpaper on Start
