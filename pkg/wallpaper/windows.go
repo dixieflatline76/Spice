@@ -7,7 +7,7 @@ import (
 	"syscall"
 	"unsafe"
 
-	"golang.org/x/sys/windows"
+	"github.com/dixieflatline76/Spice/pkg/sysinfo"
 )
 
 var (
@@ -58,20 +58,7 @@ func (w *windowsOS) setWallpaper(imagePath string) error {
 
 // getDesktopDimension returns the desktop dimension (width and height) in pixels.
 func (w *windowsOS) getDesktopDimension() (int, int, error) {
-
-	var width, height uintptr
-	var err error
-
-	width, _, err = getSystemMetrics.Call(uintptr(SMCXScreen))
-	if err != windows.NOERROR {
-		return 0, 0, err
-	}
-	height, _, err = getSystemMetrics.Call(uintptr(SMCYScreen))
-	if err != windows.NOERROR {
-		return 0, 0, err
-	}
-
-	return int(width), int(height), nil
+	return sysinfo.GetScreenDimensions()
 }
 
 // getOS returns a new instance of the windowsOS struct.

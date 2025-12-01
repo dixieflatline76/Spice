@@ -24,6 +24,7 @@ import (
 	"github.com/disintegration/imaging"
 	"github.com/dixieflatline76/Spice/asset"
 	"github.com/dixieflatline76/Spice/config"
+	"github.com/dixieflatline76/Spice/pkg/sysinfo"
 	"github.com/dixieflatline76/Spice/pkg/ui"
 	"github.com/dixieflatline76/Spice/util"
 	"github.com/dixieflatline76/Spice/util/log"
@@ -309,7 +310,18 @@ func (sa *SpiceApp) CreatePreferencesWindow() {
 	// Create a new window for the preferences
 	sa.os.TransformToForeground()
 	prefsWindow := sa.NewWindow(fmt.Sprintf("%s Preferences", config.AppName))
-	prefsWindow.Resize(fyne.NewSize(800, 1000)) // TODO: make this size a ratio of the screen size
+
+	// Set window size based on screen dimensions
+	_, height, err := sysinfo.GetScreenDimensions()
+	if err != nil {
+		log.Printf("Failed to get screen dimensions: %v", err)
+		prefsWindow.Resize(fyne.NewSize(800, 600)) // Fallback size
+	} else {
+		targetHeight := float32(height) * PreferencesWindowHeightRatio
+		targetWidth := targetHeight * PreferencesWindowWidthRatio
+		prefsWindow.Resize(fyne.NewSize(targetWidth, targetHeight))
+	}
+
 	prefsWindow.CenterOnScreen()
 	prefsWindow.SetOnClosed(sa.os.TransformToBackground)
 	sm := NewSettingsManager(prefsWindow)

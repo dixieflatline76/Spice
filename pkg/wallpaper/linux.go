@@ -8,8 +8,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
+
+	"github.com/dixieflatline76/Spice/pkg/sysinfo"
 )
 
 // linuxOS implements the OS interface for Linux.
@@ -49,26 +50,7 @@ func (l *linuxOS) setWallpaper(imagePath string) error {
 
 // getDesktopDimension returns the desktop dimensions on Linux.
 func (l *linuxOS) getDesktopDimension() (int, int, error) {
-	// Use `xdpyinfo` to get screen resolution
-	cmd := exec.Command("xdpyinfo", "|", "grep", "dimensions")
-	out, err := cmd.Output()
-	if err != nil {
-		return 0, 0, fmt.Errorf("failed to get screen resolution: %w", err)
-	}
-
-	// Parse the output to extract the resolution
-	parts := strings.Split(string(out), ":")
-	if len(parts) >= 2 {
-		resolution := strings.TrimSpace(parts[1])
-		dimensions := strings.Split(resolution, "x")
-		if len(dimensions) == 2 {
-			width, _ := strconv.Atoi(dimensions[0])
-			height, _ := strconv.Atoi(dimensions[1])
-			return width, height, nil
-		}
-	}
-
-	return 0, 0, fmt.Errorf("failed to parse screen resolution")
+	return sysinfo.GetScreenDimensions()
 }
 
 // setWallpaperGNOME sets the wallpaper for GNOME-based desktop environments.
