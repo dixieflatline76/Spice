@@ -19,79 +19,66 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dixieflatline76/Spice/util/log"
-
 	"github.com/disintegration/imaging"
+	"github.com/dixieflatline76/Spice/asset"
 	"github.com/dixieflatline76/Spice/config"
 	"github.com/dixieflatline76/Spice/pkg/ui"
-	app "github.com/dixieflatline76/Spice/ui"
 	"github.com/dixieflatline76/Spice/util"
+	"github.com/dixieflatline76/Spice/util/log"
+	pigo "github.com/esimov/pigo/core"
 )
+
+// OS interface defines the operating system specific operations.
+type OS interface {
+	getDesktopDimension() (int, int, error)
+	setWallpaper(path string) error
+}
+
+// ImageProcessor interface defines the image processing operations.
+type ImageProcessor interface {
+	DecodeImage(ctx context.Context, imgBytes []byte, contentType string) (image.Image, string, error)
+	EncodeImage(ctx context.Context, img image.Image, contentType string) ([]byte, error)
+	FitImage(ctx context.Context, img image.Image) (image.Image, error)
+}
+
+// wallpaperPlugin is the main struct for the wallpaper downloader plugin.
+type wallpaperPlugin struct {
+	os                   OS
+	imgProcessor         ImageProcessor
+	cfg                  *Config
+	httpClient           *http.Client
+	manager              ui.PluginManager
+	downloadMutex        sync.Mutex
+	currentDownloadPage  *util.SafeCounter
+	downloadedDir        string
+	localImgRecs         []ImgSrvcImage
+	interrupt            *util.SafeFlag
+	currentImage         ImgSrvcImage
+	localImgIndex        util.SafeCounter
+	randomizedIndexes    []int
+	randomizedIndexesPos int
+	seenImages           map[string]bool
+	prevLocalImgs        []int
+	imgPulseOp           func()
+	fitImageFlag         *util.SafeFlag
+	shuffleImageFlag     *util.SafeFlag
+	stopNightlyRefresh   chan struct{}
+	ticker               *time.Ticker
+	cancel               context.CancelFunc
+	downloadWaitGroup    *sync.WaitGroup
+}
+
+type fileInfo struct {
+	path    string
+	modTime time.Time
+}
 
 var (
 	wpInstance *wallpaperPlugin
 	wpOnce     sync.Once
 )
 
-// LoadPlugin creates a new instance of the wallpaper plugin and registers it with the plugin manager.
-func LoadPlugin() {
-	wp := getWallpaperPlugin() // Get the wallpaper plugin instance
-	app.GetPluginManager().Register(wp)
-}
-
-// OS is an interface for abstracting OS-specific operations.
-type OS interface {
-	setWallpaper(imagePath string) error    // Set the desktop wallpaper.
-	getDesktopDimension() (int, int, error) // Get the desktop dimensions.
-}
-
-// ImageProcessor interface now includes context in all methods.
-type ImageProcessor interface {
-	FitImage(ctx context.Context, img image.Image) (image.Image, error)
-	DecodeImage(ctx context.Context, imgBytes []byte, contentType string) (image.Image, string, error)
-	EncodeImage(ctx context.Context, img image.Image, contentType string) ([]byte, error)
-}
-
-// fileInfo struct to store file path and modification time.
-type fileInfo struct {
-	path    string
-	modTime time.Time
-}
-
-// wallpaperPlugin manages wallpaper rotation.
-type wallpaperPlugin struct {
-	os           OS
-	imgProcessor ImageProcessor
-	cfg          *Config
-	ticker       *time.Ticker
-	httpClient   *http.Client
-
-	// Download related fields
-	downloadMutex       sync.Mutex         // Protects currentPage, downloading, and download operations
-	currentDownloadPage *util.SafeCounter  // Current page of images
-	downloadedDir       string             // Directory where downloaded images are stored
-	localImgRecs        []ImgSrvcImage     // Keep track of downloaded images to quickly access info like image web path
-	interrupt           *util.SafeFlag     // Whether to interrupt the image download
-	cancel              context.CancelFunc // Cancel function for the context
-	downloadWaitGroup   *sync.WaitGroup    // Wait group for image download workers
-	stopNightlyRefresh  chan struct{}      // Channel to signal nightly refresh goroutine to stop
-
-	// Display related fields
-	currentImage         ImgSrvcImage     // Current image being displayed
-	localImgIndex        util.SafeCounter // Index of the current image in the download history
-	randomizedIndexes    []int            // Keep track of randomized indexes for image selection
-	randomizedIndexesPos int              // Position in the randomizedIndexes slice for image selection
-	seenImages           map[string]bool  // Keep track of images that have been seen to trigger download of next page
-	prevLocalImgs        []int            // Keep track of every image set to support the previous wallpaper action
-	imgPulseOp           func()           // Function to call to pulse the image
-	fitImageFlag         *util.SafeFlag   // Whether to fit the image to the desktop resolution
-	shuffleImageFlag     *util.SafeFlag   // Whether to shuffle the images
-
-	// Plugin related fields
-	manager ui.PluginManager // Plugin manager
-}
-
-// getWallpaperPlugin returns the wallpaper plugin instance.
+// getWallpaperPlugin returns the singleton instance of the wallpaper plugin.
 func getWallpaperPlugin() *wallpaperPlugin {
 	wpOnce.Do(func() {
 		// Initialize the wallpaper service for right OS
@@ -109,13 +96,31 @@ func getWallpaperPlugin() *wallpaperPlugin {
 			},
 		}
 
+		// Initialize pigo
+		var pigoInstance *pigo.Pigo
+		am := asset.NewManager()
+		modelData, err := am.GetModel("facefinder")
+		if err != nil {
+			log.Printf("Warning: Failed to load face detection model: %v. Face Boost will be disabled.", err)
+		} else {
+			p := pigo.NewPigo()
+			pigoInstance, err = p.Unpack(modelData)
+			if err != nil {
+				log.Printf("Warning: Failed to unpack face detection model: %v. Face Boost will be disabled.", err)
+				pigoInstance = nil
+			}
+		}
+
 		// Initialize the wallpaper service
 		wpInstance = &wallpaperPlugin{
 			os: currentOS, // Initialize with right OS
 			imgProcessor: &smartImageProcessor{
 				os:              currentOS,
 				aspectThreshold: 0.9,
-				resampler:       imaging.Lanczos}, // Initialize with smartCropper with a lenient threshold
+				resampler:       imaging.Lanczos,
+				pigo:            pigoInstance,
+				config:          nil, // Will be set in Init
+			},
 			cfg:        nil,
 			httpClient: robustClient,
 
@@ -130,27 +135,32 @@ func getWallpaperPlugin() *wallpaperPlugin {
 			randomizedIndexesPos: 0,
 			seenImages:           make(map[string]bool),
 			prevLocalImgs:        []int{},
-			imgPulseOp:           wpInstance.SetNextWallpaper,
+			imgPulseOp:           nil,
 			fitImageFlag:         util.NewSafeBoolWithValue(false),
 			shuffleImageFlag:     util.NewSafeBoolWithValue(false),
 			stopNightlyRefresh:   make(chan struct{}), // Initialize the channel for nightly refresh
 		}
+		wpInstance.imgPulseOp = wpInstance.setNextWallpaper
 	})
 	return wpInstance
 }
 
-// InitPlugin initializes the wallpaper plugin.
+// Init initializes the wallpaper plugin with the given PluginManager.
 func (wp *wallpaperPlugin) Init(manager ui.PluginManager) {
 	wp.manager = manager
 	wp.cfg = GetConfig(manager.GetPreferences())
-	if wp.cfg == nil {
-		log.Fatal("Failed to initialize wallpaper configuration.")
+
+	// Inject config into smartImageProcessor
+	if sip, ok := wp.imgProcessor.(*smartImageProcessor); ok {
+		sip.config = wp.cfg
 	}
+
+	log.Debugf("Wallpaper Plugin Initialized. Config: FaceBoostEnabled=%v, SmartFit=%v", wp.cfg.GetFaceBoostEnabled(), wp.cfg.GetSmartFit())
 }
 
 // Name returns the name of the plugin.
 func (wp *wallpaperPlugin) Name() string {
-	return pluginName
+	return "Wallpaper"
 }
 
 // stopAllWorkers stops all workers and cancels any ongoing downloads. It blocks until all workers have stopped.
@@ -422,6 +432,7 @@ func (wp *wallpaperPlugin) downloadImage(ctx context.Context, isi ImgSrvcImage) 
 
 	imagePath := filepath.Join(wp.getDownloadedDir(), extractFilenameFromURL(isi.Path))
 	if _, err := os.Stat(imagePath); !os.IsNotExist(err) {
+		log.Debugf("Image %s already exists at %s. Skipping download/processing.", isi.ID, imagePath)
 		wp.downloadMutex.Lock()
 		wp.localImgRecs = append(wp.localImgRecs, isi)
 		wp.downloadMutex.Unlock()
@@ -452,6 +463,7 @@ func (wp *wallpaperPlugin) downloadImage(ctx context.Context, isi ImgSrvcImage) 
 	}
 
 	if wp.fitImageFlag.Value() {
+		log.Debugf("SmartFit enabled. Processing image %s...", isi.ID)
 		img, _, err := wp.imgProcessor.DecodeImage(ctx, imgBytes, isi.FileType)
 		if err != nil {
 			log.Printf("failed to decode image %s: %v", isi.ID, err)
@@ -470,6 +482,8 @@ func (wp *wallpaperPlugin) downloadImage(ctx context.Context, isi ImgSrvcImage) 
 			return
 		}
 		imgBytes = processedImgBytes
+	} else {
+		log.Debugf("SmartFit disabled. Skipping processing for image %s.", isi.ID)
 	}
 
 	outFile, err := os.Create(imagePath)
@@ -492,6 +506,12 @@ func (wp *wallpaperPlugin) downloadImage(ctx context.Context, isi ImgSrvcImage) 
 // getDownloadedDir returns the downloaded images directory.
 func (wp *wallpaperPlugin) getDownloadedDir() string {
 	if wp.fitImageFlag.Value() {
+		if wp.cfg.GetFaceCropEnabled() {
+			return filepath.Join(wp.downloadedDir, FittedFaceCropImgDir)
+		}
+		if wp.cfg.GetFaceBoostEnabled() {
+			return filepath.Join(wp.downloadedDir, FittedFaceBoostImgDir)
+		}
 		return filepath.Join(wp.downloadedDir, FittedImgDir)
 	}
 	return wp.downloadedDir
@@ -566,9 +586,19 @@ func (wp *wallpaperPlugin) DeleteCurrentImage() {
 // cleanupImageCache clears the downloaded images directory.
 func (wp *wallpaperPlugin) cleanupImageCache() error {
 	var files []fileInfo
-	for _, dir := range []string{wp.downloadedDir, filepath.Join(wp.downloadedDir, FittedImgDir)} {
+	dirs := []string{
+		wp.downloadedDir,
+		filepath.Join(wp.downloadedDir, FittedImgDir),
+		filepath.Join(wp.downloadedDir, FittedFaceBoostImgDir),
+		filepath.Join(wp.downloadedDir, FittedFaceCropImgDir),
+	}
+	for _, dir := range dirs {
 		entries, err := os.ReadDir(dir)
 		if err != nil {
+			// If the directory doesn't exist, just skip it
+			if os.IsNotExist(err) {
+				continue
+			}
 			return fmt.Errorf("error reading directory %s: %w", dir, err)
 		}
 		for _, entry := range entries {
@@ -602,13 +632,24 @@ func (wp *wallpaperPlugin) cleanupImageCache() error {
 func (wp *wallpaperPlugin) setupImageDirs() {
 	wp.downloadedDir = filepath.Join(config.GetWorkingDir(), strings.ToLower(pluginName)+"_downloads")
 	fittedDir := filepath.Join(wp.downloadedDir, FittedImgDir)
+	fittedFaceBoostDir := filepath.Join(wp.downloadedDir, FittedFaceBoostImgDir)
+	fittedFaceCropDir := filepath.Join(wp.downloadedDir, FittedFaceCropImgDir)
+
 	err := os.MkdirAll(wp.downloadedDir, 0755)
 	if err != nil {
 		log.Fatalf("error creating downloaded images directory: %v", err)
 	}
 	err = os.MkdirAll(fittedDir, 0755)
 	if err != nil {
-		log.Fatalf("error creating downloaded images directory: %v", err)
+		log.Fatalf("error creating fitted images directory: %v", err)
+	}
+	err = os.MkdirAll(fittedFaceBoostDir, 0755)
+	if err != nil {
+		log.Fatalf("error creating fitted face boost images directory: %v", err)
+	}
+	err = os.MkdirAll(fittedFaceCropDir, 0755)
+	if err != nil {
+		log.Fatalf("error creating fitted face crop images directory: %v", err)
 	}
 }
 
@@ -906,4 +947,35 @@ func (wp *wallpaperPlugin) CheckWallhavenURL(queryURL string, queryType URLType)
 // GetWallhavenURL returns the Wallhaven URL for the given API URL.
 func (wp *wallpaperPlugin) GetWallhavenURL(apiURL string) *url.URL {
 	return wp.getWallhavenURL(apiURL)
+}
+
+// StopNightlyRefresh signals the nightly refresh goroutine to stop.
+func (wp *wallpaperPlugin) StopNightlyRefresh() {
+	wp.downloadMutex.Lock()
+	defer wp.downloadMutex.Unlock()
+
+	if wp.stopNightlyRefresh != nil {
+		close(wp.stopNightlyRefresh) // Signal the goroutine to stop
+		wp.stopNightlyRefresh = nil  // Set to nil so we don't close it twice
+		log.Print("Nightly refresh stop signal sent and channel cleared.")
+	}
+}
+
+// StartNightlyRefresh starts the goroutine for nightly wallpaper refresh.
+func (wp *wallpaperPlugin) StartNightlyRefresh() {
+	// Stop any existing goroutine before starting a new one.
+	wp.StopNightlyRefresh()
+
+	wp.downloadMutex.Lock()
+	defer wp.downloadMutex.Unlock()
+
+	// Create a new stop channel and start the goroutine
+	wp.stopNightlyRefresh = make(chan struct{})
+	log.Print("Created new nightly refresh stop channel.")
+	go wp.startNightlyRefresher()
+}
+
+// LoadPlugin loads the wallpaper plugin.
+func LoadPlugin(pm ui.PluginManager) {
+	pm.Register(getWallpaperPlugin())
 }

@@ -45,6 +45,13 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Commit the version change before tagging
+	err = commitVersionFile("version.txt", newVersion.String())
+	if err != nil {
+		fmt.Println("Error committing version file:", err)
+		os.Exit(1)
+	}
+
 	err = createGitTag(newVersion.String())
 	if err != nil {
 		fmt.Println("Error creating Git tag:", err)
@@ -129,5 +136,20 @@ func createGitTag(versionString string) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
+	return cmd.Run()
+}
+
+// commitVersionFile commits the version file to git.
+func commitVersionFile(filename, version string) error {
+	cmd := exec.Command("git", "add", filename)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("git add failed: %w", err)
+	}
+
+	cmd = exec.Command("git", "commit", "-m", fmt.Sprintf("Bump version to %s", version))
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 	return cmd.Run()
 }

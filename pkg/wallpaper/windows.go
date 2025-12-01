@@ -7,13 +7,12 @@ import (
 	"syscall"
 	"unsafe"
 
-	"golang.org/x/sys/windows"
+	"github.com/dixieflatline76/Spice/pkg/sysinfo"
 )
 
 var (
 	user32               = syscall.NewLazyDLL("user32.dll")
 	systemParametersInfo = user32.NewProc("SystemParametersInfoW")
-	getSystemMetrics     = user32.NewProc("GetSystemMetrics")
 )
 
 func init() {
@@ -31,8 +30,6 @@ const (
 	SPIFUpdateIniFile    = 0x01
 	SPIFSendChange       = 0x02
 	SPIFSendWinIniChange = 0x02
-	SMCXScreen           = 0
-	SMCYScreen           = 1
 )
 
 // setWallpaper sets the wallpaper to the given image file path.
@@ -58,20 +55,7 @@ func (w *windowsOS) setWallpaper(imagePath string) error {
 
 // getDesktopDimension returns the desktop dimension (width and height) in pixels.
 func (w *windowsOS) getDesktopDimension() (int, int, error) {
-
-	var width, height uintptr
-	var err error
-
-	width, _, err = getSystemMetrics.Call(uintptr(SMCXScreen))
-	if err != windows.NOERROR {
-		return 0, 0, err
-	}
-	height, _, err = getSystemMetrics.Call(uintptr(SMCYScreen))
-	if err != windows.NOERROR {
-		return 0, 0, err
-	}
-
-	return int(width), int(height), nil
+	return sysinfo.GetScreenDimensions()
 }
 
 // getOS returns a new instance of the windowsOS struct.

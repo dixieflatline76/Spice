@@ -9,8 +9,10 @@ import (
 	"fyne.io/fyne/v2/data/validation"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/dixieflatline76/Spice/pkg/ui/setting"
+	utilLog "github.com/dixieflatline76/Spice/util/log"
 )
 
 // CreateTrayMenuItems creates the menu items for the tray menu
@@ -92,7 +94,6 @@ func (wp *wallpaperPlugin) createImgQueryList(sm setting.SettingsManager) *widge
 						} else {
 							wp.cfg.DisableImageQuery(query.ID)
 						}
-						initialActive = b // Update the closure's captured variable
 						delete(pendingState, queryKey) // Clean up the pending state on apply
 					})
 					sm.SetRefreshFlag(queryKey)
@@ -130,6 +131,8 @@ func (wp *wallpaperPlugin) createImgQueryList(sm setting.SettingsManager) *widge
 func (wp *wallpaperPlugin) createImageQueryPanel(sm setting.SettingsManager) *fyne.Container {
 
 	imgQueryList := wp.createImgQueryList(sm)
+	sm.RegisterRefreshFunc(imgQueryList.Refresh)
+
 	var addButton *widget.Button
 
 	addButton = widget.NewButton("Add wallhaven URL", func() {
@@ -285,92 +288,185 @@ func (wp *wallpaperPlugin) createImageQueryPanel(sm setting.SettingsManager) *fy
 	return qpContainer
 }
 
-// CreateWallpaperPreferences creates a preferences widget for wallpaper settings
+// CreatePrefsPanel creates a preferences widget for wallpaper settings
 func (wp *wallpaperPlugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
-	header := container.NewVBox()
-	footer := container.NewVBox()
-	prefsPanel := container.NewBorder(header, footer, nil, nil)
-
-	header.Add(sm.CreateSectionTitleLabel("Wallpaper Preferences"))
+	// --- General Settings Container ---
+	generalContainer := container.NewVBox()
 
 	// Change Frequency
-	var frequencyConfig setting.SelectConfig
-	frequencyConfig = setting.SelectConfig{
+	frequencyConfig := setting.SelectConfig{
 		Name:         "changeFrequency",
 		Options:      setting.StringOptions(GetFrequencies()),
 		InitialValue: int(wp.cfg.GetWallpaperChangeFrequency()),
 		Label:        sm.CreateSettingTitleLabel("Wallpaper Change Frequency:"),
 		HelpContent:  sm.CreateSettingDescriptionLabel("Set how often the wallpaper changes. Set to never to disable wallpaper changes."),
-		ApplyFunc: func(val interface{}) {
-			selectedFrequency := Frequency(val.(int))
-			wp.cfg.SetWallpaperChangeFrequency(selectedFrequency) // Persists new frequency in configuration
-			wp.ChangeWallpaperFrequency(selectedFrequency)        // Activate the new frequency in wallpaper plugin
-			frequencyConfig.InitialValue = int(selectedFrequency) // Update initial value for frequency
-		},
 	}
-	sm.CreateSelectSetting(&frequencyConfig, header)
+	frequencyConfig.ApplyFunc = func(val interface{}) {
+		selectedFrequency := Frequency(val.(int))
+		wp.cfg.SetWallpaperChangeFrequency(selectedFrequency) // Persists new frequency in configuration
+		wp.ChangeWallpaperFrequency(selectedFrequency)        // Activate the new frequency in wallpaper plugin
+		frequencyConfig.InitialValue = int(selectedFrequency) // Update initial value for frequency
+	}
+	sm.CreateSelectSetting(&frequencyConfig, generalContainer)
 
 	// Cache Size
-	var cacheSizeConfig setting.SelectConfig
-	cacheSizeConfig = setting.SelectConfig{
+	cacheSizeConfig := setting.SelectConfig{
 		Name:         "cacheSize",
 		Options:      setting.StringOptions(GetCacheSizes()), // Correctly calling GetCacheSizes
 		InitialValue: int(wp.cfg.GetCacheSize()),
 		Label:        sm.CreateSettingTitleLabel("Cache Size:"),
 		HelpContent:  sm.CreateSettingDescriptionLabel("Set how many images to cache for faster startup and less network usage. Set to none to disable caching."),
-		ApplyFunc: func(val interface{}) {
-			selectedCacheSize := CacheSize(val.(int))
-			wp.cfg.SetCacheSize(selectedCacheSize)                // Persists new cache size in configuration
-			cacheSizeConfig.InitialValue = int(selectedCacheSize) // Update initial value for cache size
-		},
 	}
-	sm.CreateSelectSetting(&cacheSizeConfig, header)
+	cacheSizeConfig.ApplyFunc = func(val interface{}) {
+		selectedCacheSize := CacheSize(val.(int))
+		wp.cfg.SetCacheSize(selectedCacheSize)                // Persists new cache size in configuration
+		cacheSizeConfig.InitialValue = int(selectedCacheSize) // Update initial value for cache size
+	}
+	sm.CreateSelectSetting(&cacheSizeConfig, generalContainer)
 
 	// Smart Fit
-	var smartFitConfig setting.BoolConfig
-	smartFitConfig = setting.BoolConfig{
+	smartFitConfig := setting.BoolConfig{
 		Name:         "smartFit",
 		InitialValue: wp.cfg.GetSmartFit(),
 		Label:        sm.CreateSettingTitleLabel("Scale Wallpaper to Fit Screen:"),
 		HelpContent:  sm.CreateSettingDescriptionLabel("Smart Fit analizes wallpapers to find best way to scale and crop them to fit your screen."),
+		NeedsRefresh: true,
+	}
+	smartFitConfig.ApplyFunc = func(b bool) {
+		wp.cfg.SetSmartFit(b)           // Persists the setting in wp.cfg and updates the UI
+		wp.SetSmartFit(b)               // Activates smart fit in the wallpaper engine
+		smartFitConfig.InitialValue = b // Update the initial value to reflect the new state of smart fit
+	}
+	sm.CreateBoolSetting(&smartFitConfig, generalContainer) // Use the SettingsManager
+
+	// Face Crop and Face Boost configs (pre-declared for mutual access)
+	var faceCropConfig setting.BoolConfig
+	var faceBoostConfig setting.BoolConfig
+
+	// Face Crop (formerly Face Boost)
+	faceCropConfig = setting.BoolConfig{
+		Name:         "faceCrop",
+		InitialValue: wp.cfg.GetFaceCropEnabled(),
+		Label:        sm.CreateSettingTitleLabel("Enable Face Crop:"),
+		HelpContent:  sm.CreateSettingDescriptionLabel("Aggressively crops the image to center on the largest face found. Good for portraits."),
 		ApplyFunc: func(b bool) {
-			wp.cfg.SetSmartFit(b)           // Persists the setting in wp.cfg and updates the UI
-			wp.SetSmartFit(b)               // Activates smart fit in the wallpaper engine
-			smartFitConfig.InitialValue = b // Update the initial value to reflect the new state of smart fit
+			wp.cfg.SetFaceCropEnabled(b)
+			if b {
+				wp.cfg.SetFaceBoostEnabled(false)
+				faceBoostConfig.InitialValue = false // Sync the other setting's initial value
+			}
+			faceCropConfig.InitialValue = b
 		},
 		NeedsRefresh: true,
 	}
-	sm.CreateBoolSetting(&smartFitConfig, header) // Use the SettingsManager
+
+	// Face Boost (new hinting mode)
+	faceBoostConfig = setting.BoolConfig{
+		Name:         "faceBoost",
+		InitialValue: wp.cfg.GetFaceBoostEnabled(),
+		Label:        sm.CreateSettingTitleLabel("Enable Face Boost:"),
+		HelpContent:  sm.CreateSettingDescriptionLabel("Uses face detection to hint the smart cropper. Keeps faces in frame but balances with other image details."),
+		ApplyFunc: func(b bool) {
+			wp.cfg.SetFaceBoostEnabled(b)
+			if b {
+				wp.cfg.SetFaceCropEnabled(false)
+				faceCropConfig.InitialValue = false // Sync the other setting's initial value
+			}
+			faceBoostConfig.InitialValue = b
+		},
+		NeedsRefresh: true,
+	}
+
+	// Create checkboxes in a sub-container for indentation
+	subSettingsContainer := container.NewVBox()
+	faceCropCheck := sm.CreateBoolSetting(&faceCropConfig, subSettingsContainer)
+	faceBoostCheck := sm.CreateBoolSetting(&faceBoostConfig, subSettingsContainer)
+
+	// Add indentation
+	indentation := widget.NewLabel("      ") // Simple spacer
+	indentedWrapper := container.NewBorder(nil, nil, indentation, nil, subSettingsContainer)
+	generalContainer.Add(indentedWrapper)
+
+	// Mutual exclusion logic
+	// We need to hook into the OnChanged of the widgets to update the UI state of the other checkbox.
+	// CreateBoolSetting returns *widget.Check, so we can access it directly.
+
+	// Store original handlers to chain them
+	originalFaceCropHandler := faceCropCheck.OnChanged
+	originalFaceBoostHandler := faceBoostCheck.OnChanged
+
+	faceCropCheck.OnChanged = func(b bool) {
+		utilLog.Debugf("UI: Face Crop Toggled: %v", b)
+		if b {
+			utilLog.Debugf("UI: Unchecking Face Boost")
+			faceBoostCheck.SetChecked(false) // Uncheck Boost if Crop is checked
+		}
+		if originalFaceCropHandler != nil {
+			originalFaceCropHandler(b)
+		}
+	}
+
+	faceBoostCheck.OnChanged = func(b bool) {
+		utilLog.Debugf("UI: Face Boost Toggled: %v", b)
+		if b {
+			utilLog.Debugf("UI: Unchecking Face Crop")
+			faceCropCheck.SetChecked(false) // Uncheck Crop if Boost is checked
+		}
+		if originalFaceBoostHandler != nil {
+			originalFaceBoostHandler(b)
+		}
+	}
+
+	// Link both to Smart Fit
+	if !wp.cfg.GetSmartFit() {
+		faceCropCheck.Disable()
+		faceBoostCheck.Disable()
+	}
+
+	smartFitConfig.OnChanged = func(b bool) {
+		if b {
+			faceCropCheck.Enable()
+			faceBoostCheck.Enable()
+		} else {
+			faceCropCheck.SetChecked(false)
+			faceCropCheck.Disable()
+			faceBoostCheck.SetChecked(false)
+			faceBoostCheck.Disable()
+		}
+	}
 
 	// Change Wallpaper on Start
-	var chgImgOnStartConfig setting.BoolConfig
-	chgImgOnStartConfig = setting.BoolConfig{
+	chgImgOnStartConfig := setting.BoolConfig{
 		Name:         "chgImgOnStart",
 		InitialValue: wp.cfg.GetChgImgOnStart(),
 		Label:        sm.CreateSettingTitleLabel("Change wallpaper on start:"),
 		HelpContent:  sm.CreateSettingDescriptionLabel("Disable if you prefer the wallpaper to change only based on its timer or a manual refresh."),
-		ApplyFunc: func(b bool) {
-			wp.cfg.SetChgImgOnStart(b)           // Persists the setting in wp.cfg and updates the UI
-			chgImgOnStartConfig.InitialValue = b // Update the initial value to reflect the new state of change wallpaper on start
-		},
 		NeedsRefresh: false,
 	}
-	sm.CreateBoolSetting(&chgImgOnStartConfig, header) // Use the SettingsManager
+	chgImgOnStartConfig.ApplyFunc = func(b bool) {
+		wp.cfg.SetChgImgOnStart(b)           // Persists the setting in wp.cfg and updates the UI
+		chgImgOnStartConfig.InitialValue = b // Update the initial value to reflect the new state of change wallpaper on start
+	}
+	sm.CreateBoolSetting(&chgImgOnStartConfig, generalContainer) // Use the SettingsManager
 
 	// Nightly Refresh
-	var nightlyRefreshConfig setting.BoolConfig
-	nightlyRefreshConfig = setting.BoolConfig{
+	nightlyRefreshConfig := setting.BoolConfig{
 		Name:         "nightlyRefresh",
 		InitialValue: wp.cfg.GetNightlyRefresh(),
 		Label:        sm.CreateSettingTitleLabel("Refresh wallpapers nightly:"),
-		HelpContent:  sm.CreateSettingDescriptionLabel("Useful when using image queries with random elements. Requires application restart to take effect."),
-		ApplyFunc: func(b bool) {
-			wp.cfg.SetNightlyRefresh(b)           // Persists the setting in wp.cfg and updates the UI
-			nightlyRefreshConfig.InitialValue = b // Update the initial value to reflect the new state of nightly refresh
-		},
+		HelpContent:  sm.CreateSettingDescriptionLabel("Useful when using image queries with random elements. Toggling this will start or stop the nightly refresh process."),
 		NeedsRefresh: false,
 	}
-	sm.CreateBoolSetting(&nightlyRefreshConfig, header) // Use the SettingsManager
+	nightlyRefreshConfig.ApplyFunc = func(b bool) {
+		wp.cfg.SetNightlyRefresh(b) // Persists the setting
+		nightlyRefreshConfig.InitialValue = b
+		if b {
+			wp.StartNightlyRefresh()
+		} else {
+			wp.StopNightlyRefresh()
+		}
+	}
+	sm.CreateBoolSetting(&nightlyRefreshConfig, generalContainer) // Use the SettingsManager
 
 	// Reset Blocked Images
 	resetButtonConfig := setting.ButtonWithConfirmationConfig{
@@ -381,39 +477,141 @@ func (wp *wallpaperPlugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Co
 		ConfirmMessage: "This cannot be undone. Are you sure?",
 		OnPressed:      wp.cfg.ResetAvoidSet,
 	}
-	sm.CreateButtonWithConfirmationSetting(&resetButtonConfig, header) // Use the SettingsManager
+	sm.CreateButtonWithConfirmationSetting(&resetButtonConfig, generalContainer) // Use the SettingsManager
 
-	// wallhaven service section
-	header.Add(widget.NewSeparator())
-	header.Add(sm.CreateSectionTitleLabel("wallhaven.cc Image Service Preferences"))
+	// --- Wallhaven Settings Container ---
+	whHeader := container.NewVBox()
 
 	// Wallhaven API Key
 	whURL, _ := url.Parse("https://wallhaven.cc/settings/account")
-	var wallhavenAPIKeyConfig setting.TextEntrySettingConfig
-	wallhavenAPIKeyConfig = setting.TextEntrySettingConfig{
-		Name:         "wallhavenAPIKey",
-		InitialValue: wp.cfg.GetWallhavenAPIKey(),
-		PlaceHolder:  "Enter your wallhaven.cc API Key",
-		Label:        sm.CreateSettingTitleLabel("wallhaven API Key:"),
-		HelpContent:  widget.NewHyperlink("Restricted content requires an API key. Get one here.", whURL),
-		Validator:    validation.NewRegexp(WallhavenAPIKeyRegexp, "32 alphanumeric characters required"),
-		ApplyFunc: func(s string) {
-			wp.cfg.SetWallhavenAPIKey(s)           // Update the wallpaper configuration with the new API key
-			wallhavenAPIKeyConfig.InitialValue = s // Update the initial value of the text entry setting with the new API key
-		},
+	wallhavenAPIKeyConfig := setting.TextEntrySettingConfig{
+		Name:              "wallhavenAPIKey",
+		InitialValue:      wp.cfg.GetWallhavenAPIKey(),
+		PlaceHolder:       "Enter your wallhaven.cc API Key",
+		Label:             sm.CreateSettingTitleLabel("wallhaven API Key:"),
+		HelpContent:       widget.NewHyperlink("Restricted content requires an API key. Get one here.", whURL),
+		Validator:         validation.NewRegexp(WallhavenAPIKeyRegexp, "32 alphanumeric characters required"),
 		NeedsRefresh:      true,
 		DisplayStatus:     true,
 		PostValidateCheck: CheckWallhavenAPIKey,
 	}
-	sm.CreateTextEntrySetting(&wallhavenAPIKeyConfig, header) // Use the SettingsManager
+	wallhavenAPIKeyConfig.ApplyFunc = func(s string) {
+		wp.cfg.SetWallhavenAPIKey(s)           // Update the wallpaper configuration with the new API key
+		wallhavenAPIKeyConfig.InitialValue = s // Update the initial value of the text entry setting with the new API key
+	}
+	sm.CreateTextEntrySetting(&wallhavenAPIKeyConfig, whHeader) // Use the SettingsManager
 
 	qp := wp.createImageQueryPanel(sm) // Create image query panel
-	prefsPanel.Add(qp)                 // Add image query panel to preferences panel
+	// qp is a Border layout. We want whHeader at the top.
+	// We can wrap qp in another Border layout with whHeader at the top.
+	wallhavenContainer := container.NewBorder(whHeader, nil, nil, nil, qp)
 
-	footer.Add(widget.NewSeparator())
-	sm.RegisterRefreshFunc(func() {
-		wp.RefreshImagesAndPulse()
+	// --- Accordion ---
+	// Wrap generalContainer in VScroll because it might be tall
+	generalScroll := container.NewVScroll(generalContainer)
+
+	// --- Smart Accordion Logic ---
+	// We build a custom accordion to support the "auto-expand next" behavior requested by the user.
+
+	// Accordion Items
+	items := []struct {
+		Title   string
+		Content fyne.CanvasObject
+		Open    bool
+	}{
+		{"General Settings", generalScroll, true},
+		{"Image Sources (Wallhaven)", wallhavenContainer, false},
+	}
+
+	// Container to hold the accordion
+	accordionContainer := container.NewStack() // Use Stack layout to hold the Border layout
+
+	// Function to refresh the accordion UI
+	var refreshAccordion func()
+
+	refreshAccordion = func() {
+		topHeaders := container.NewVBox()
+		bottomHeaders := container.NewVBox()
+		var centerContent fyne.CanvasObject
+
+		foundOpen := false
+
+		for i := range items {
+			index := i // Capture loop variable
+			item := &items[index]
+
+			// Header Button
+			var icon fyne.Resource
+			if item.Open {
+				icon = theme.MoveDownIcon()
+			} else {
+				icon = theme.NavigateNextIcon()
+			}
+
+			// If we don't have icons, we can use text arrows
+			titleText := item.Title
+			// No error check needed for theme icons
+
+			headerBtn := widget.NewButton(titleText, func() {
+				if item.Open {
+					// If closing, open the next one (wrapping around)
+					item.Open = false
+					nextIndex := (index + 1) % len(items)
+					items[nextIndex].Open = true
+				} else {
+					// If opening, close all others (Single Expansion)
+					for j := range items {
+						items[j].Open = (j == index)
+					}
+				}
+				refreshAccordion()
+			})
+			headerBtn.Icon = icon
+			headerBtn.Alignment = widget.ButtonAlignLeading
+			headerBtn.Importance = widget.LowImportance // Flat look
+
+			if item.Open {
+				topHeaders.Add(headerBtn)
+				centerContent = item.Content
+				foundOpen = true
+			} else {
+				if foundOpen {
+					bottomHeaders.Add(headerBtn)
+				} else {
+					topHeaders.Add(headerBtn)
+				}
+			}
+		}
+
+		// Create the border layout
+		// Top: topHeaders
+		// Bottom: bottomHeaders
+		// Center: centerContent
+		borderLayout := container.NewBorder(topHeaders, bottomHeaders, nil, nil, centerContent)
+
+		accordionContainer.Objects = []fyne.CanvasObject{borderLayout}
+		accordionContainer.Refresh()
+	}
+
+	// Initial Render
+	refreshAccordion()
+
+	// Add "Manage Image Sources" button to General Settings
+	// Now we can access the 'items' and 'refreshAccordion'
+	manageSourcesBtn := widget.NewButton("Manage Image Sources", func() {
+		// Open the second item (Image Sources)
+		for j := range items {
+			items[j].Open = (j == 1)
+		}
+		refreshAccordion()
 	})
+	// Add a separator and the button to the end of the general container
+	generalContainer.Add(widget.NewSeparator())
+	generalContainer.Add(manageSourcesBtn)
 
-	return prefsPanel
+	// Wrap accordion in a container to return.
+	// Since accordion items expand, we just return the accordion.
+	// However, CreatePrefsPanel returns *fyne.Container. widget.Accordion is a Widget.
+	// We need to wrap it.
+	return container.NewStack(accordionContainer)
 }

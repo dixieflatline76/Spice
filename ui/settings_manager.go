@@ -118,7 +118,7 @@ func (sm *SettingsManager) CreateSelectSetting(cfg *setting.SelectConfig, header
 }
 
 // CreateBoolSetting creates a reusable boolean check setting.
-func (sm *SettingsManager) CreateBoolSetting(cfg *setting.BoolConfig, header *fyne.Container) {
+func (sm *SettingsManager) CreateBoolSetting(cfg *setting.BoolConfig, header *fyne.Container) *widget.Check {
 	check := widget.NewCheck("", func(b bool) {}) // Use empty string, label is CanvasObject
 	check.SetChecked(cfg.InitialValue)
 
@@ -146,6 +146,7 @@ func (sm *SettingsManager) CreateBoolSetting(cfg *setting.BoolConfig, header *fy
 		}
 		sm.GetCheckAndEnableApplyFunc()()
 	}
+	return check
 }
 
 // CreateTextEntrySetting creates a reusable text entry setting.

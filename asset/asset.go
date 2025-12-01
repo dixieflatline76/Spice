@@ -11,7 +11,7 @@ import (
 	"github.com/dixieflatline76/Spice/util/log"
 )
 
-//go:embed images/* icons/* text/*
+//go:embed images/* icons/* text/* models/*
 var assets embed.FS
 
 // Manager manages the loading of UI assets.
@@ -58,4 +58,14 @@ func (am *Manager) GetText(name string) (string, error) {
 		return "", err
 	}
 	return string(textBytes), nil
+}
+
+// GetModel loads and returns embedded model asset by name.
+func (am *Manager) GetModel(name string) ([]byte, error) {
+	modelData, err := assets.ReadFile("models/" + name)
+	if err != nil {
+		log.Println("Error loading model:", err)
+		return nil, err
+	}
+	return modelData, nil
 }

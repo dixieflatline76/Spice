@@ -13,6 +13,7 @@ import (
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/basicfont"
@@ -24,9 +25,11 @@ import (
 	"github.com/disintegration/imaging"
 	"github.com/dixieflatline76/Spice/asset"
 	"github.com/dixieflatline76/Spice/config"
+	"github.com/dixieflatline76/Spice/pkg/sysinfo"
 	"github.com/dixieflatline76/Spice/pkg/ui"
+	"github.com/dixieflatline76/Spice/pkg/ui/setting"
 	"github.com/dixieflatline76/Spice/util"
-	"github.com/dixieflatline76/Spice/util/log"
+	utilLog "github.com/dixieflatline76/Spice/util/log"
 )
 
 // SpiceApp represents the application
@@ -38,6 +41,7 @@ type SpiceApp struct {
 	notifiers []ui.Notifier // List of notifiers to activate
 	plugins   []ui.Plugin   // List of plugins to activate
 	os        OS            // Operating system interface
+	appConfig *config.AppConfig
 }
 
 // OS interface defines methods for transforming the application state
@@ -83,6 +87,11 @@ func (sa *SpiceApp) GetPreferences() fyne.Preferences {
 	return sa.Preferences()
 }
 
+// GetAssetManager returns the asset manager
+func (sa *SpiceApp) GetAssetManager() *asset.Manager {
+	return sa.assetMgr
+}
+
 // RegisterNotifier registers a notifier with the application
 func (sa *SpiceApp) RegisterNotifier(notifier ui.Notifier) {
 	sa.notifiers = append(sa.notifiers, notifier)
@@ -113,9 +122,22 @@ func getInstance() *SpiceApp {
 				plugins: []ui.Plugin{},
 				os:      currentOS,
 			}
+			saInstance.appConfig = config.NewAppConfig(saInstance.Preferences())
+
+			// Apply saved theme
+			currentTheme := saInstance.appConfig.GetTheme()
+			switch currentTheme {
+			case "Dark":
+				saInstance.Settings().SetTheme(&forcedVariantTheme{Theme: theme.DefaultTheme(), variant: theme.VariantDark})
+			case "Light":
+				saInstance.Settings().SetTheme(&forcedVariantTheme{Theme: theme.DefaultTheme(), variant: theme.VariantLight})
+			default:
+				saInstance.Settings().SetTheme(theme.DefaultTheme())
+			}
+
 			saInstance.verifyEULA()
 		} else {
-			log.Fatal("Spice not supported on this platform")
+			utilLog.Fatal("Spice not supported on this platform")
 		}
 	})
 	return saInstance
@@ -123,6 +145,11 @@ func getInstance() *SpiceApp {
 
 // NotifyUser sends a notification to the user via all registered notifiers
 func (sa *SpiceApp) NotifyUser(title, message string) {
+	// Check if notifications are enabled
+	if !sa.appConfig.GetAppNotificationsEnabled() {
+		return
+	}
+
 	for _, notify := range sa.notifiers {
 		notify(title, message)
 	}
@@ -157,7 +184,7 @@ func (sa *SpiceApp) CreateTrayMenu() {
 		time.Sleep(50 * time.Millisecond) // Small delay to ensure the OS processes the state change
 		sa.deactivateAllPlugins()         // Deactivate all plugins before quitting
 		time.Sleep(2 * time.Second)       // Small delay to ensure plugins are deactivate
-		log.Println("Quitting Spice application")
+		utilLog.Println("Quitting Spice application")
 		sa.Quit()
 	}, "quit.png"))
 
@@ -171,7 +198,7 @@ func (sa *SpiceApp) deactivateAllPlugins() {
 	// Deactivate all plugins
 	for _, plugin := range sa.plugins {
 		plugin.Deactivate()
-		log.Printf("Deactivated plugin: %s", plugin.Name())
+		utilLog.Printf("Deactivated plugin: %s", plugin.Name())
 	}
 }
 
@@ -180,7 +207,7 @@ func (sa *SpiceApp) CreateMenuItem(label string, action func(), iconName string)
 	mi := fyne.NewMenuItem(label, action)
 	icon, err := sa.assetMgr.GetIcon(iconName)
 	if err != nil {
-		log.Printf("Failed to load icon: %v", err)
+		utilLog.Printf("Failed to load icon: %v", err)
 		return mi
 	}
 	mi.Icon = icon
@@ -200,7 +227,7 @@ func (sa *SpiceApp) CreateToggleMenuItem(label string, action func(bool), iconNa
 
 	icon, err := sa.assetMgr.GetIcon(iconName)
 	if err != nil {
-		log.Printf("Failed to load icon: %v", err)
+		utilLog.Printf("Failed to load icon: %v", err)
 		return mi
 	}
 
@@ -260,7 +287,7 @@ func (sa *SpiceApp) CreateSplashScreen(seconds int) {
 		// Create a splash screen with the application icon
 		drv, ok := sa.Driver().(desktop.Driver)
 		if !ok {
-			log.Println("Splash screen not supported")
+			utilLog.Println("Splash screen not supported")
 			return // Splash screen not supported
 		}
 
@@ -269,7 +296,7 @@ func (sa *SpiceApp) CreateSplashScreen(seconds int) {
 		// Load the splash image
 		splashImg, err := sa.assetMgr.GetImage("splash.png")
 		if err != nil {
-			log.Fatalf("Failed to load splash image: %v", err)
+			utilLog.Fatalf("Failed to load splash image: %v", err)
 		}
 
 		// Create a watermark image
@@ -305,28 +332,141 @@ func (sa *SpiceApp) CreateSplashScreen(seconds int) {
 // The window is titled "Preferences" and is sized to 800x600 pixels, centered on the screen.
 // It contains a main container for wallpaper plugin preferences and a close button at the bottom.
 // The close button closes the preferences window when clicked.
+// CreatePreferencesWindow creates and displays a new window for the application's preferences.
+// The window is titled "Preferences" and is sized to 800x600 pixels, centered on the screen.
+// It contains a main container for wallpaper plugin preferences and a close button at the bottom.
+// The close button closes the preferences window when clicked.
 func (sa *SpiceApp) CreatePreferencesWindow() {
 	// Create a new window for the preferences
 	sa.os.TransformToForeground()
 	prefsWindow := sa.NewWindow(fmt.Sprintf("%s Preferences", config.AppName))
-	prefsWindow.Resize(fyne.NewSize(800, 1000)) // TODO: make this size a ratio of the screen size
+
+	// Set window size based on screen dimensions
+	_, height, err := sysinfo.GetScreenDimensions()
+	if err != nil {
+		utilLog.Printf("Failed to get screen dimensions: %v", err)
+		prefsWindow.Resize(fyne.NewSize(800, 600)) // Fallback size
+	} else {
+		targetHeight := float32(height) * PreferencesWindowHeightRatio
+		targetWidth := targetHeight * PreferencesWindowWidthRatio
+		prefsWindow.Resize(fyne.NewSize(targetWidth, targetHeight))
+	}
+
 	prefsWindow.CenterOnScreen()
 	prefsWindow.SetOnClosed(sa.os.TransformToBackground)
 	sm := NewSettingsManager(prefsWindow)
 
-	prefsContainers := []fyne.CanvasObject{}
+	// --- General Tab ---
+	generalContainer := container.NewVBox()
+	generalContainer.Add(sm.CreateSectionTitleLabel("General Application Settings"))
+
+	// Enable System Notifications
+	var notificationsConfig setting.BoolConfig
+	notificationsConfig = setting.BoolConfig{
+		Name:         "enableNotifications",
+		InitialValue: sa.appConfig.GetAppNotificationsEnabled(),
+		Label:        sm.CreateSettingTitleLabel("Enable System Notifications:"),
+		HelpContent:  sm.CreateSettingDescriptionLabel("Enable or disable system notifications from Spice."),
+		ApplyFunc: func(b bool) {
+			sa.appConfig.SetAppNotificationsEnabled(b)
+			notificationsConfig.InitialValue = b
+		},
+	}
+	sm.CreateBoolSetting(&notificationsConfig, generalContainer)
+
+	// Enable New Version Check
+	var updateCheckConfig setting.BoolConfig
+	updateCheckConfig = setting.BoolConfig{
+		Name:         "enableUpdateCheck",
+		InitialValue: sa.appConfig.GetUpdateCheckEnabled(),
+		Label:        sm.CreateSettingTitleLabel("Enable New Version Check:"),
+		HelpContent:  sm.CreateSettingDescriptionLabel("Automatically check for new versions of Spice on startup."),
+		ApplyFunc: func(b bool) {
+			sa.appConfig.SetUpdateCheckEnabled(b)
+			updateCheckConfig.InitialValue = b
+		},
+	}
+	sm.CreateBoolSetting(&updateCheckConfig, generalContainer)
+
+	// Theme Selection
+	themeOptions := []string{"System", "Dark", "Light"}
+	currentTheme := sa.appConfig.GetTheme()
+	initialThemeIndex := 0
+	for i, t := range themeOptions {
+		if t == currentTheme {
+			initialThemeIndex = i
+			break
+		}
+	}
+
+	themeConfig := setting.SelectConfig{
+		Name:         "theme",
+		Options:      setting.StringOptions(util.StringsToStringers(themeOptions)),
+		InitialValue: initialThemeIndex,
+		Label:        sm.CreateSettingTitleLabel("Theme:"),
+		HelpContent:  sm.CreateSettingDescriptionLabel("Select the application theme."),
+	}
+	themeConfig.ApplyFunc = func(val interface{}) {
+		selectedIndex := val.(int)
+		if selectedIndex < 0 || selectedIndex >= len(themeOptions) {
+			return // Safety check
+		}
+		selectedTheme := themeOptions[selectedIndex]
+		sa.appConfig.SetTheme(selectedTheme)
+		themeConfig.InitialValue = selectedIndex
+
+		// Apply Theme
+		switch selectedTheme {
+		case "Dark":
+			sa.Settings().SetTheme(&forcedVariantTheme{Theme: theme.DefaultTheme(), variant: theme.VariantDark})
+		case "Light":
+			sa.Settings().SetTheme(&forcedVariantTheme{Theme: theme.DefaultTheme(), variant: theme.VariantLight})
+		default:
+			sa.Settings().SetTheme(theme.DefaultTheme())
+		}
+	}
+	sm.CreateSelectSetting(&themeConfig, generalContainer)
+
+	generalTabItem := container.NewTabItem("App", container.NewVScroll(generalContainer))
+
+	// --- Plugin Tabs ---
+	var pluginTabItems []*container.TabItem
 	for _, plugin := range sa.plugins {
-		prefsContainers = append(prefsContainers, plugin.CreatePrefsPanel(sm))
+		// Create a tab for each plugin
+		pluginContainer := plugin.CreatePrefsPanel(sm)
+		// Wrap in scroll container if needed, but plugins usually handle their own layout.
+		// For now, let's assume CreatePrefsPanel returns a container that fits or handles scrolling if needed.
+		// Actually, CreatePrefsPanel returns a *fyne.Container. Let's wrap it in a VScroll just in case,
+		// or trust the plugin. The current implementation uses Border layout, so it might not scroll well if wrapped blindly.
+		// Let's stick to using the container directly as the tab content.
+		pluginTabItems = append(pluginTabItems, container.NewTabItem(plugin.Name(), pluginContainer))
+	}
+
+	// Combine all tabs
+	tabs := container.NewAppTabs(generalTabItem)
+	for _, item := range pluginTabItems {
+		tabs.Append(item)
 	}
 
 	closeButton := widget.NewButton("Close", func() {
 		prefsWindow.Close()
 	})
 
-	prefsWindowLayout := container.NewBorder(nil, container.NewVBox(sm.GetApplySettingsButton(), container.NewHBox(layout.NewSpacer(), closeButton)), nil, nil, prefsContainers...)
+	// Layout: Tabs take up the main space, Apply/Close buttons at the bottom
+	prefsWindowLayout := container.NewBorder(nil, container.NewVBox(sm.GetApplySettingsButton(), container.NewHBox(layout.NewSpacer(), closeButton)), nil, nil, tabs)
 
 	prefsWindow.SetContent(prefsWindowLayout)
 	prefsWindow.Show()
+}
+
+// forcedVariantTheme is a theme that forces a specific variant (Dark or Light)
+type forcedVariantTheme struct {
+	fyne.Theme
+	variant fyne.ThemeVariant
+}
+
+func (t *forcedVariantTheme) Color(name fyne.ThemeColorName, _ fyne.ThemeVariant) color.Color {
+	return t.Theme.Color(name, t.variant)
 }
 
 // verifyEULA checks if the End User License Agreement has been accepted. If not, it will show the EULA and prompt the user to accept it.
@@ -346,7 +486,7 @@ func (sa *SpiceApp) verifyEULA() {
 func (sa *SpiceApp) displayEULAAcceptance() {
 	eulaText, err := sa.assetMgr.GetText("eula.txt")
 	if err != nil {
-		log.Fatalf("Error loading EULA: %v", err)
+		utilLog.Fatalf("Error loading EULA: %v", err)
 	}
 
 	// Create a new window for the EULA
@@ -392,7 +532,7 @@ func (sa *SpiceApp) Start() {
 		time.Sleep(500 * time.Millisecond) // Wait for the tray menu to be created and the ui to be ready
 		for _, plugin := range sa.plugins {
 			plugin.Activate()
-			log.Printf("Activated plugin: %s", plugin.Name())
+			utilLog.Printf("Activated plugin: %s", plugin.Name())
 		}
 	}()
 
@@ -402,13 +542,17 @@ func (sa *SpiceApp) Start() {
 
 // StartPeriodicUpdateCheck starts a goroutine to check for updates on startup and then periodically.
 func (sa *SpiceApp) StartPeriodicUpdateCheck() {
-	log.Print("Starting periodic application update checker...")
+	utilLog.Print("Starting periodic application update checker...")
 
 	performCheck := func() {
-		log.Print("Checking for application updates...")
+		if !sa.appConfig.GetUpdateCheckEnabled() {
+			utilLog.Print("Update check disabled by user.")
+			return
+		}
+		utilLog.Print("Checking for application updates...")
 		updateInfo, err := util.CheckForUpdates()
 		if err != nil {
-			log.Printf("Update check failed: %v", err)
+			utilLog.Printf("Update check failed: %v", err)
 			return
 		}
 		sa.updateTrayMenu(updateInfo)
@@ -445,11 +589,11 @@ func (sa *SpiceApp) updateTrayMenu(info *util.CheckForUpdatesResult) {
 	// If an update IS available, create the new menu item.
 	releaseURL, err := url.Parse(info.ReleaseURL)
 	if err != nil {
-		log.Printf("Could not parse release URL for update menu item: %v", err)
+		utilLog.Printf("Could not parse release URL for update menu item: %v", err)
 		return
 	}
-	log.Printf("New version available: %s", info.LatestVersion)
-	
+	utilLog.Printf("New version available: %s", info.LatestVersion)
+
 	updateItem := sa.CreateMenuItem(
 		fmt.Sprintf("%s%s", updateMenuItemPrefix, info.LatestVersion),
 		func() { sa.OpenURL(releaseURL) },

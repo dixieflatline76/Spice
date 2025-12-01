@@ -3,6 +3,7 @@
 package log
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -51,30 +52,44 @@ func init() {
 
 // Print calls the standard log.Print()
 func Print(v ...interface{}) {
-	log.Print(v...)
+	log.Output(2, fmt.Sprint(v...))
 }
 
 // Printf calls the standard log.Printf()
 func Printf(format string, v ...interface{}) {
-	log.Printf(format, v...)
+	log.Output(2, fmt.Sprintf(format, v...))
 }
 
 // Println calls the standard log.Println()
 func Println(v ...interface{}) {
-	log.Println(v...)
+	log.Output(2, fmt.Sprintln(v...))
 }
 
 // Fatal calls the standard log.Fatal()
 func Fatal(v ...interface{}) {
-	log.Fatal(v...)
+	log.Output(2, fmt.Sprint(v...))
+	os.Exit(1)
 }
 
 // Fatalf calls the standard log.Fatalf()
 func Fatalf(format string, v ...interface{}) {
-	log.Fatalf(format, v...)
+	log.Output(2, fmt.Sprintf(format, v...))
+	os.Exit(1)
 }
 
 // Fatalln calls the standard log.Fatalln()
 func Fatalln(v ...interface{}) {
-	log.Fatalln(v...)
+	log.Output(2, fmt.Sprintln(v...))
+	os.Exit(1)
+}
+
+// Debug calls the standard log.Print() with a [DEBUG] prefix
+// Debug calls the standard log.Print() with a [DEBUG] prefix
+func Debug(v ...interface{}) {
+	// No-op in release builds
+}
+
+// Debugf calls the standard log.Printf() with a [DEBUG] prefix
+func Debugf(format string, v ...interface{}) {
+	// No-op in release builds
 }
