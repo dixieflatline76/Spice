@@ -324,7 +324,8 @@ func (wp *wallpaperPlugin) isNetworkAvailable() bool {
 
 // downloadAllImages downloads images from all active URLs for the specified page.
 func (wp *wallpaperPlugin) downloadAllImages() {
-	wp.stopAllWorkers() // Stop all workers before starting new ones. Blocks until all workers are stopped.
+	wp.stopAllWorkers()     // Stop all workers before starting new ones. Blocks until all workers are stopped.
+	wp.interrupt.Set(false) // Reset interrupt flag so new downloads can proceed.
 	if wp.currentDownloadPage.Value() <= 1 {
 		wp.resetPluginState()
 	}
