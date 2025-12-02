@@ -10,6 +10,7 @@ import (
 	"image/jpeg"
 	"image/png"
 	"math"
+	"math/rand"
 
 	"github.com/disintegration/imaging"
 	"github.com/dixieflatline76/Spice/util/log"
@@ -180,9 +181,36 @@ func (c *smartImageProcessor) cropImage(ctx context.Context, img image.Image) (i
 				// Draw original image onto the analysis image
 				draw.Draw(analysisImg, bounds, img, bounds.Min, draw.Src)
 
-				// Draw white box over face to boost contrast/edges in that area
-				white := color.RGBA{255, 255, 255, 255}
-				draw.Draw(analysisImg, faceBox, &image.Uniform{white}, image.Point{}, draw.Src)
+				// Draw random noise over the face to boost edge detection energy
+				// We use "Medium" noise (3px blocks) with RGB randomization to maximize variance.
+				blockSize := 3
+				for y := faceBox.Min.Y; y < faceBox.Max.Y; y += blockSize {
+					for x := faceBox.Min.X; x < faceBox.Max.X; x += blockSize {
+						// Generate high-contrast RGB value for the whole block
+						r := uint8(0)
+						if rand.Intn(2) == 1 {
+							r = 255
+						}
+						g := uint8(0)
+						if rand.Intn(2) == 1 {
+							g = 255
+						}
+						b := uint8(0)
+						if rand.Intn(2) == 1 {
+							b = 255
+						}
+						c := color.RGBA{r, g, b, 255}
+
+						// Fill the block
+						for by := 0; by < blockSize; by++ {
+							for bx := 0; bx < blockSize; bx++ {
+								if x+bx < faceBox.Max.X && y+by < faceBox.Max.Y {
+									analysisImg.Set(x+bx, y+by, c)
+								}
+							}
+						}
+					}
+				}
 
 				// Use this boosted image for analysis
 				imgForAnalysis = analysisImg
@@ -222,11 +250,66 @@ func (c *smartImageProcessor) cropImage(ctx context.Context, img image.Image) (i
 			return nil, fmt.Errorf("finding best crop: %w", result.err)
 		}
 
+		// "Smart Pan" Logic:
+		// The user wants to avoid "zooming" (cropping to a small area).
+		// We want the MAXIMUM size crop that fits the aspect ratio, centered on the "smart" area.
+
+		// 1. Calculate the center of the smart crop
+		smartCenter := result.crop.Min.Add(result.crop.Size().Div(2))
+
+		// 2. Calculate the maximum possible crop size for the target aspect ratio
+		imgBounds := img.Bounds()
+		targetAspect := float64(systemWidth) / float64(systemHeight)
+		var cropWidth, cropHeight int
+
+		if float64(imgBounds.Dx())/float64(imgBounds.Dy()) > targetAspect {
+			// Image is wider than target: Height is the limiting factor
+			cropHeight = imgBounds.Dy()
+			cropWidth = int(float64(cropHeight) * targetAspect)
+		} else {
+			// Image is taller than target: Width is the limiting factor
+			cropWidth = imgBounds.Dx()
+			cropHeight = int(float64(cropWidth) / targetAspect)
+		}
+
+		// 3. Center this max crop on the smart center
+		minX := smartCenter.X - cropWidth/2
+		minY := smartCenter.Y - cropHeight/2
+		maxX := minX + cropWidth
+		maxY := minY + cropHeight
+
+		// 4. Adjust to stay within bounds (clamp)
+		if minX < imgBounds.Min.X {
+			diff := imgBounds.Min.X - minX
+			minX += diff
+			maxX += diff
+		}
+		if minY < imgBounds.Min.Y {
+			diff := imgBounds.Min.Y - minY
+			minY += diff
+			maxY += diff
+		}
+		if maxX > imgBounds.Max.X {
+			diff := maxX - imgBounds.Max.X
+			minX -= diff
+			maxX -= diff
+		}
+		if maxY > imgBounds.Max.Y {
+			diff := maxY - imgBounds.Max.Y
+			minY -= diff
+			maxY -= diff
+		}
+
+		finalCrop := image.Rect(minX, minY, maxX, maxY)
+		log.Debugf("Smart Pan: ImgBounds %v, TargetAspect %.2f, SmartCenter %v", imgBounds, targetAspect, smartCenter)
+		log.Debugf("Smart Pan: Calculated Max Crop %dx%d", cropWidth, cropHeight)
+		log.Debugf("Smart Pan: Final Crop %v (Size: %dx%d)", finalCrop, finalCrop.Dx(), finalCrop.Dy())
+
 		// Crop and resize the image.
 		type SubImager interface {
 			SubImage(r image.Rectangle) image.Image
 		}
-		img = img.(SubImager).SubImage(result.crop)
+		img = img.(SubImager).SubImage(finalCrop)
 
 		// Use the context-aware resize.
 		resizedImg := r.resizeWithContext(ctx, img, uint(systemWidth), uint(systemHeight))
@@ -345,8 +428,8 @@ func (c *smartImageProcessor) findBestFace(img image.Image) (image.Rectangle, er
 	}
 
 	params := pigo.CascadeParams{
-		MinSize:     20,           // Lower minimum size to catch smaller faces
-		MaxSize:     minDimension, // Allow faces up to the full image size
+		MinSize:     int(float64(minDimension) * 0.05), // Dynamic min size: 5% of smallest dimension
+		MaxSize:     minDimension,                      // Allow faces up to the full image size
 		ShiftFactor: 0.1,
 		ScaleFactor: 1.1,
 		ImageParams: pigo.ImageParams{
@@ -365,12 +448,14 @@ func (c *smartImageProcessor) findBestFace(img image.Image) (image.Rectangle, er
 	var bestDet pigo.Detection
 	found := false
 	for _, det := range dets {
-		// We're looking for the best *quality* detection.
-		// You could also use `det.Scale` to find the *largest* face.
-
-		if det.Q > bestDet.Q && det.Q > 5.0 { // 5.0 is a good minimum threshold
-			bestDet = det
-			found = true
+		// We filter by a higher quality threshold to avoid false positives (like knees, elbows, or random textures).
+		if det.Q > 20.0 {
+			// If we found a valid face, we prioritize the LARGEST one (Scale).
+			// Wallpapers usually feature the subject prominently.
+			if !found || det.Scale > bestDet.Scale {
+				bestDet = det
+				found = true
+			}
 		}
 	}
 
@@ -378,13 +463,20 @@ func (c *smartImageProcessor) findBestFace(img image.Image) (image.Rectangle, er
 		return image.Rectangle{}, fmt.Errorf("no face found")
 	}
 
+	// Expand the box by 50% to ensure we cover the whole face (forehead, chin, etc.)
+	// pigo often detects just the "core" (eyes/nose/mouth)
+	expandedScale := int(float64(bestDet.Scale) * 1.5)
+
 	// Convert pigo's detection (col, row, scale) to a standard image.Rectangle
 	faceBox := image.Rect(
-		bestDet.Col-bestDet.Scale/2,
-		bestDet.Row-bestDet.Scale/2,
-		bestDet.Col+bestDet.Scale/2,
-		bestDet.Row+bestDet.Scale/2,
+		bestDet.Col-expandedScale/2,
+		bestDet.Row-expandedScale/2,
+		bestDet.Col+expandedScale/2,
+		bestDet.Row+expandedScale/2,
 	)
+
+	// Clamp to image bounds
+	faceBox = faceBox.Intersect(img.Bounds())
 
 	return faceBox, nil
 }
