@@ -293,6 +293,9 @@ func (wp *wallpaperPlugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Co
 	// --- General Settings Container ---
 	generalContainer := container.NewVBox()
 
+	// Register the wallpaper refresh function
+	sm.RegisterRefreshFunc(wp.RefreshImagesAndPulse)
+
 	// Change Frequency
 	frequencyConfig := setting.SelectConfig{
 		Name:         "changeFrequency",
