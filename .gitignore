@@ -24,3 +24,14 @@ logs/
 # Sensitive configuration (optional - handle with care!)
 config.json 
 .DS_Store
+
+# Test output and coverage
+coverage
+coverage.out
+coverage.html
+coverage_report.txt
+util_coverage
+wallpaper_coverage
+*_coverage
+*_coverage.out
+test_output_*.txt

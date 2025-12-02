@@ -17,8 +17,11 @@ import (
 // extractFilenameFromURL extracts the filename from a URL.
 func extractFilenameFromURL(url string) string {
 	lastSlashIndex := strings.LastIndex(url, "/")
-	if lastSlashIndex == -1 || lastSlashIndex == len(url)-1 {
-		return "" // Handle cases where there's no slash or it's at the end
+	if lastSlashIndex == -1 {
+		return url
+	}
+	if lastSlashIndex == len(url)-1 {
+		return "" // Handle cases where slash is at the end
 	}
 	return url[lastSlashIndex+1:]
 }

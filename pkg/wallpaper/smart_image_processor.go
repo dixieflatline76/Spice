@@ -88,6 +88,10 @@ func (c *smartImageProcessor) EncodeImage(ctx context.Context, img image.Image, 
 
 // FitImage fits an image with context awareness.
 func (c *smartImageProcessor) FitImage(ctx context.Context, img image.Image) (image.Image, error) {
+	if !c.config.GetSmartFit() {
+		return img, nil
+	}
+
 	systemWidth, systemHeight, err := c.os.getDesktopDimension() // No context here (TEMP)
 	if err != nil {
 		return nil, fmt.Errorf("getting desktop dimensions: %w", err)
