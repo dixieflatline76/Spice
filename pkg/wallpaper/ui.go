@@ -24,6 +24,28 @@ func (wp *wallpaperPlugin) CreateTrayMenuItems() []*fyne.MenuItem {
 	items = append(items, wp.manager.CreateMenuItem("Prev Wallpaper", func() {
 		go wp.SetPreviousWallpaper()
 	}, "prev.png"))
+
+	// Pause/Resume Item (Using ToggleMenuItem to leverage built-in refresh)
+	updatePauseVisuals := func() {
+		if wp.IsPaused() {
+			wp.pauseMenuItem.Label = "Resume Wallpaper"
+			wp.pauseMenuItem.Icon, _ = wp.manager.GetAssetManager().GetIcon("play.png")
+		} else {
+			wp.pauseMenuItem.Label = "Pause Wallpaper"
+			wp.pauseMenuItem.Icon, _ = wp.manager.GetAssetManager().GetIcon("pause.png")
+		}
+	}
+
+	wp.pauseMenuItem = wp.manager.CreateToggleMenuItem("Pause Wallpaper", func(b bool) {
+		wp.TogglePause()
+		updatePauseVisuals()
+	}, "pause.png", wp.IsPaused())
+
+	// Initial visual update (to override default checkmark if needed, though CreateToggleMenuItem sets label first)
+	updatePauseVisuals()
+
+	items = append(items, wp.pauseMenuItem)
+
 	items = append(items, wp.manager.CreateToggleMenuItem("Shuffle Wallpapers", wp.SetShuffleImage, "shuffle.png", wp.cfg.GetImgShuffle()))
 	items = append(items, fyne.NewMenuItemSeparator())
 	items = append(items, wp.manager.CreateMenuItem("Image Source", func() {
@@ -32,6 +54,8 @@ func (wp *wallpaperPlugin) CreateTrayMenuItems() []*fyne.MenuItem {
 	items = append(items, wp.manager.CreateMenuItem("Delete and Block Image", func() {
 		go wp.DeleteCurrentImage()
 	}, "delete.png"))
+	items = append(items, fyne.NewMenuItemSeparator())
+
 	return items
 }
 

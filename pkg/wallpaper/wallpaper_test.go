@@ -300,3 +300,48 @@ func TestNavigation(t *testing.T) {
 	wp.SetNextWallpaper()
 	assert.Equal(t, 0, wp.localImgIndex.Value())
 }
+
+func TestTogglePause(t *testing.T) {
+	// Setup
+	ResetConfig()
+	prefs := NewMockPreferences()
+	cfg := GetConfig(prefs)
+	mockPM := new(MockPluginManager)
+
+	wp := &wallpaperPlugin{
+		cfg:     cfg,
+		manager: mockPM,
+	}
+
+	// Mock NotifyUser for frequency change
+	mockPM.On("NotifyUser", "Wallpaper Change", mock.Anything).Return()
+
+	// Initial state: Default frequency (Hourly)
+	assert.Equal(t, FrequencyHourly, wp.cfg.GetWallpaperChangeFrequency())
+	assert.False(t, wp.IsPaused())
+
+	// Toggle Pause -> Should become Never
+	wp.TogglePause()
+	assert.Equal(t, FrequencyNever, wp.cfg.GetWallpaperChangeFrequency())
+	assert.True(t, wp.IsPaused())
+	assert.Equal(t, FrequencyHourly, wp.prePauseFrequency) // Should store previous
+
+	// Toggle Resume -> Should restore Hourly
+	wp.TogglePause()
+	assert.Equal(t, FrequencyHourly, wp.cfg.GetWallpaperChangeFrequency())
+	assert.False(t, wp.IsPaused())
+
+	// Test Resume with no history (simulate fresh start paused)
+	wp.prePauseFrequency = FrequencyNever // Reset history
+	wp.cfg.SetWallpaperChangeFrequency(FrequencyNever)
+	wp.TogglePause()
+	assert.Equal(t, FrequencyHourly, wp.cfg.GetWallpaperChangeFrequency()) // Should default to Hourly
+}
+
+func TestGetInstance(t *testing.T) {
+	// Ensure singleton behavior
+	instance1 := GetInstance()
+	instance2 := GetInstance()
+	assert.NotNil(t, instance1)
+	assert.Equal(t, instance1, instance2)
+}

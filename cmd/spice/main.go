@@ -8,6 +8,7 @@ import (
 	"github.com/dixieflatline76/Spice/config"
 	"github.com/dixieflatline76/Spice/ui"
 
+	"github.com/dixieflatline76/Spice/pkg/hotkey"
 	"github.com/dixieflatline76/Spice/pkg/wallpaper"
 )
 
@@ -28,6 +29,9 @@ func main() {
 		return
 	}
 	defer releaseLock() // Make sure to release the lock when done
+
+	// Start global hotkey listeners (Register on main thread)
+	hotkey.StartListeners()
 
 	spiceApp := ui.GetApplication() // Create a new Fyne application
 	pm := ui.GetPluginManager()     // Get the plugin manager
