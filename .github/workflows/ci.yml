@@ -19,26 +19,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4 # Use latest checkout action
 
-      - name: Cache Go modules
-        uses: actions/cache@v4 # Use latest cache action
-        with:
-          path: ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
 
       - name: Set up Go
         uses: actions/setup-go@v5 # Use latest setup-go action
         with:
           go-version: 'stable' # Or pin to a specific version e.g., '1.22.x'
+          cache: true
 
-      - name: Cache Chocolatey packages
-        uses: actions/cache@v4
-        with:
-          path: C:\ProgramData\chocolatey\lib # Correct default Chocolatey lib path
-          key: ${{ runner.os }}-chocolatey-${{ hashFiles('**/tools.txt') }} # Assuming you might have a tools.txt
-          restore-keys: |
-            ${{ runner.os }}-chocolatey-
 
       - name: Install GCC (if not cached)
         run: choco install mingw -y --no-progress
@@ -48,17 +35,11 @@ jobs:
 
       # Removed redundant 'go get fyne...' step here
 
-      - name: Install linters
-        run: |
-          go install golang.org/x/lint/golint@latest
-          go install honnef.co/go/tools/cmd/staticcheck@latest
-        shell: pwsh # Explicitly use pwsh for consistency if needed
-
-      - name: Run linters
-        run: |
-          golint ./...
-          staticcheck ./...
-        shell: pwsh # Explicitly use pwsh for consistency if needed
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.64.6 # Pinned to a recent stable version
+          args: --timeout=10m ./...
 
       - name: Run tests
         run: go test ./...
@@ -71,18 +52,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Cache Go modules
-        uses: actions/cache@v4
-        with:
-          path: ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version: '1.25.3' # Or pin to a specific version e.g., '1.22.x'
+          cache: true
 
       - name: Cache Chocolatey packages
         uses: actions/cache@v4

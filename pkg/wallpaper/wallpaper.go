@@ -43,8 +43,8 @@ type ImageProcessor interface {
 	FitImage(ctx context.Context, img image.Image) (image.Image, error)
 }
 
-// WallpaperPlugin is the main struct for the wallpaper downloader plugin.
-type WallpaperPlugin struct {
+// Plugin is the main struct for the wallpaper downloader plugin.
+type Plugin struct {
 	os                   OS
 	imgProcessor         ImageProcessor
 	cfg                  *Config
@@ -79,12 +79,12 @@ type fileInfo struct {
 }
 
 var (
-	wpInstance *WallpaperPlugin
+	wpInstance *Plugin
 	wpOnce     sync.Once
 )
 
-// getWallpaperPlugin returns the singleton instance of the wallpaper plugin.
-func getWallpaperPlugin() *WallpaperPlugin {
+// getPlugin returns the singleton instance of the wallpaper plugin.
+func getPlugin() *Plugin {
 	wpOnce.Do(func() {
 		// Initialize the wallpaper service for right OS
 		currentOS := getOS()
@@ -117,7 +117,7 @@ func getWallpaperPlugin() *WallpaperPlugin {
 		}
 
 		// Initialize the wallpaper service
-		wpInstance = &WallpaperPlugin{
+		wpInstance = &Plugin{
 			os: currentOS, // Initialize with right OS
 			imgProcessor: &smartImageProcessor{
 				os:              currentOS,
@@ -151,7 +151,7 @@ func getWallpaperPlugin() *WallpaperPlugin {
 }
 
 // Init initializes the wallpaper plugin with the given PluginManager.
-func (wp *WallpaperPlugin) Init(manager ui.PluginManager) {
+func (wp *Plugin) Init(manager ui.PluginManager) {
 	wp.manager = manager
 	wp.cfg = GetConfig(manager.GetPreferences())
 
@@ -164,12 +164,12 @@ func (wp *WallpaperPlugin) Init(manager ui.PluginManager) {
 }
 
 // Name returns the name of the plugin.
-func (wp *WallpaperPlugin) Name() string {
+func (wp *Plugin) Name() string {
 	return "Wallpaper"
 }
 
 // stopAllWorkers stops all workers and cancels any ongoing downloads. It blocks until all workers have stopped.
-func (wp *WallpaperPlugin) stopAllWorkers() {
+func (wp *Plugin) stopAllWorkers() {
 
 	log.Print("Stopping all workers...")
 	wp.interrupt.Set(true)
@@ -189,7 +189,7 @@ func (wp *WallpaperPlugin) stopAllWorkers() {
 }
 
 // resetPluginState clears all state related to image downloads and resets the plugin. It also cleans up any downloaded images from the cache directory.
-func (wp *WallpaperPlugin) resetPluginState() {
+func (wp *Plugin) resetPluginState() {
 	wp.downloadMutex.Lock()
 	defer wp.downloadMutex.Unlock()
 
@@ -206,7 +206,7 @@ func (wp *WallpaperPlugin) resetPluginState() {
 }
 
 // startNightlyRefresher runs a goroutine that periodically checks if a nightly refresh is due.
-func (wp *WallpaperPlugin) startNightlyRefresher() {
+func (wp *Plugin) startNightlyRefresher() {
 	log.Print("Starting nightly refresh checker...")
 
 	ticker := time.NewTicker(5 * time.Minute)
@@ -251,7 +251,7 @@ func (wp *WallpaperPlugin) startNightlyRefresher() {
 }
 
 // checkAndRunRefresh determines if a nightly refresh should be performed based on the current day and time.
-func (wp *WallpaperPlugin) checkAndRunRefresh(now time.Time, lastRefreshDay int, isInitialCheck bool) int {
+func (wp *Plugin) checkAndRunRefresh(now time.Time, lastRefreshDay int, isInitialCheck bool) int {
 	today := now.Day()
 	shouldRun := false
 	reason := "" // For logging clarity
@@ -300,7 +300,7 @@ func (wp *WallpaperPlugin) checkAndRunRefresh(now time.Time, lastRefreshDay int,
 }
 
 // isNetworkAvailable checks if the device has a stable internet connection by attempting to connect to a public endpoint.
-func (wp *WallpaperPlugin) isNetworkAvailable() bool {
+func (wp *Plugin) isNetworkAvailable() bool {
 	checkURL := "https://connectivitycheck.gstatic.com/generate_204"
 
 	ctx, cancel := context.WithTimeout(context.Background(), NetworkConnectivityCheckTimeout)
@@ -328,7 +328,7 @@ func (wp *WallpaperPlugin) isNetworkAvailable() bool {
 }
 
 // downloadAllImages downloads images from all active URLs for the specified page.
-func (wp *WallpaperPlugin) downloadAllImages() {
+func (wp *Plugin) downloadAllImages() {
 	wp.stopAllWorkers()     // Stop all workers before starting new ones. Blocks until all workers are stopped.
 	wp.interrupt.Set(false) // Reset interrupt flag so new downloads can proceed.
 	if wp.currentDownloadPage.Value() <= 1 {
@@ -371,7 +371,7 @@ func (wp *WallpaperPlugin) downloadAllImages() {
 
 // downloadImagesForURL downloads images from the given URL for the specified page. This function purposely serialize the download process per query
 // and per page to prevent overwhelming the API server. This is a design choice as there's no need to maximize download speed.
-func (wp *WallpaperPlugin) downloadImagesForURL(ctx context.Context, query ImageQuery, page int) {
+func (wp *Plugin) downloadImagesForURL(ctx context.Context, query ImageQuery, page int) {
 	u, err := url.Parse(query.URL)
 	if err != nil {
 		log.Printf("Invalid Image URL: %v", err)
@@ -431,7 +431,7 @@ func (wp *WallpaperPlugin) downloadImagesForURL(ctx context.Context, query Image
 }
 
 // downloadImage downloads a single image, processes it if needed, and saves it to the cache.
-func (wp *WallpaperPlugin) downloadImage(ctx context.Context, isi ImgSrvcImage) {
+func (wp *Plugin) downloadImage(ctx context.Context, isi ImgSrvcImage) {
 	if wp.cfg.InAvoidSet(isi.ID) {
 		return // Skip this image
 	}
@@ -510,7 +510,7 @@ func (wp *WallpaperPlugin) downloadImage(ctx context.Context, isi ImgSrvcImage) 
 }
 
 // getDownloadedDir returns the downloaded images directory.
-func (wp *WallpaperPlugin) getDownloadedDir() string {
+func (wp *Plugin) getDownloadedDir() string {
 	if wp.fitImageFlag.Value() {
 		if wp.cfg.GetFaceCropEnabled() {
 			return filepath.Join(wp.downloadedDir, FittedFaceCropImgDir)
@@ -524,7 +524,7 @@ func (wp *WallpaperPlugin) getDownloadedDir() string {
 }
 
 // setWallpaperAt sets the wallpaper at the specified index.
-func (wp *WallpaperPlugin) setWallpaperAt(imageIndex int) {
+func (wp *Plugin) setWallpaperAt(imageIndex int) {
 	var shouldDownloadNextPage bool
 
 	wp.downloadMutex.Lock()
@@ -565,7 +565,7 @@ func (wp *WallpaperPlugin) setWallpaperAt(imageIndex int) {
 }
 
 // DeleteCurrentImage deletes the current wallpaper image from the filesystem and updates the history.
-func (wp *WallpaperPlugin) DeleteCurrentImage() {
+func (wp *Plugin) DeleteCurrentImage() {
 	if wp.localImgIndex.Value() == -1 {
 		log.Println("no current image to delete.")
 		return
@@ -592,7 +592,7 @@ func (wp *WallpaperPlugin) DeleteCurrentImage() {
 }
 
 // cleanupImageCache clears the downloaded images directory.
-func (wp *WallpaperPlugin) cleanupImageCache() error {
+func (wp *Plugin) cleanupImageCache() error {
 	var files []fileInfo
 	dirs := []string{
 		wp.downloadedDir,
@@ -637,7 +637,7 @@ func (wp *WallpaperPlugin) cleanupImageCache() error {
 }
 
 // setupImageDirs sets up the downloaded images directories.
-func (wp *WallpaperPlugin) setupImageDirs() {
+func (wp *Plugin) setupImageDirs() {
 	wp.downloadedDir = filepath.Join(config.GetWorkingDir(), strings.ToLower(pluginName)+"_downloads")
 	fittedDir := filepath.Join(wp.downloadedDir, FittedImgDir)
 	fittedFaceBoostDir := filepath.Join(wp.downloadedDir, FittedFaceBoostImgDir)
@@ -662,7 +662,7 @@ func (wp *WallpaperPlugin) setupImageDirs() {
 }
 
 // Activate starts the wallpaper rotation.
-func (wp *WallpaperPlugin) Activate() {
+func (wp *Plugin) Activate() {
 	wp.setupImageDirs()
 
 	if wp.cfg.GetNightlyRefresh() {
@@ -688,7 +688,7 @@ func (wp *WallpaperPlugin) Activate() {
 }
 
 // changeFrequency changes the wallpaper change frequency.
-func (wp *WallpaperPlugin) changeFrequency(newFrequency Frequency) {
+func (wp *Plugin) changeFrequency(newFrequency Frequency) {
 	wp.downloadMutex.Lock()
 	defer wp.downloadMutex.Unlock()
 
@@ -712,7 +712,7 @@ func (wp *WallpaperPlugin) changeFrequency(newFrequency Frequency) {
 }
 
 // Deactivate stops the wallpaper rotation, any active downloads, and cleans up.
-func (wp *WallpaperPlugin) Deactivate() {
+func (wp *Plugin) Deactivate() {
 	log.Print("Deactivating wallpaper plugin...")
 
 	wp.downloadMutex.Lock()
@@ -734,14 +734,14 @@ func (wp *WallpaperPlugin) Deactivate() {
 }
 
 // getCurrentImage returns the current image.
-func (wp *WallpaperPlugin) getCurrentImage() ImgSrvcImage {
+func (wp *Plugin) getCurrentImage() ImgSrvcImage {
 	wp.downloadMutex.Lock()
 	defer wp.downloadMutex.Unlock()
 	return wp.currentImage
 }
 
 // getWallhavenURL returns the wallhaven URL for the given API URL.
-func (wp *WallpaperPlugin) getWallhavenURL(apiURL string) *url.URL {
+func (wp *Plugin) getWallhavenURL(apiURL string) *url.URL {
 	urlStr := strings.Replace(apiURL, "https://wallhaven.cc/api/v1/search?", "https://wallhaven.cc/search?", 1)
 	url, err := url.Parse(urlStr)
 	if err != nil {
@@ -759,13 +759,13 @@ func (wp *WallpaperPlugin) getWallhavenURL(apiURL string) *url.URL {
 }
 
 // setNextWallpaper sets the next wallpaper in the list.
-func (wp *WallpaperPlugin) setNextWallpaper() {
+func (wp *Plugin) setNextWallpaper() {
 	wp.prevLocalImgs = append(wp.prevLocalImgs, wp.localImgIndex.Increment())
 	wp.setWallpaperAt(wp.localImgIndex.Value())
 }
 
 // setRandomWallpaper sets a random wallpaper from the list.
-func (wp *WallpaperPlugin) setRandomWallpaper() {
+func (wp *Plugin) setRandomWallpaper() {
 	wp.downloadMutex.Lock()
 	if len(wp.localImgRecs) == 0 {
 		log.Println("no downloaded images found.")
@@ -784,7 +784,7 @@ func (wp *WallpaperPlugin) setRandomWallpaper() {
 }
 
 // SetPreviousWallpaper sets the previous wallpaper in the list.
-func (wp *WallpaperPlugin) SetPreviousWallpaper() {
+func (wp *Plugin) SetPreviousWallpaper() {
 	wp.downloadMutex.Lock()
 	if len(wp.prevLocalImgs) <= 1 {
 		wp.downloadMutex.Unlock()
@@ -801,17 +801,17 @@ func (wp *WallpaperPlugin) SetPreviousWallpaper() {
 }
 
 // SetNextWallpaper sets the next wallpaper, will respect shuffle toggle
-func (wp *WallpaperPlugin) SetNextWallpaper() {
+func (wp *Plugin) SetNextWallpaper() {
 	wp.imgPulseOp()
 }
 
 // GetInstance returns the singleton instance of the wallpaper plugin.
-func GetInstance() *WallpaperPlugin {
-	return getWallpaperPlugin()
+func GetInstance() *Plugin {
+	return getPlugin()
 }
 
 // TogglePause toggles the wallpaper change frequency between paused (Never) and the previous frequency.
-func (wp *WallpaperPlugin) TogglePause() {
+func (wp *Plugin) TogglePause() {
 	wp.downloadMutex.Lock()
 	currentFreq := wp.cfg.GetWallpaperChangeFrequency()
 	wp.downloadMutex.Unlock()
@@ -840,7 +840,7 @@ func (wp *WallpaperPlugin) TogglePause() {
 }
 
 // TogglePauseAction triggers the UI action for pausing/resuming if available, otherwise toggles logic directly.
-func (wp *WallpaperPlugin) TogglePauseAction() {
+func (wp *Plugin) TogglePauseAction() {
 	if wp.pauseMenuItem != nil {
 		wp.pauseMenuItem.Action()
 	} else {
@@ -849,34 +849,34 @@ func (wp *WallpaperPlugin) TogglePauseAction() {
 }
 
 // SetPauseChangeCallback sets the callback function to be called when pause state changes.
-func (wp *WallpaperPlugin) SetPauseChangeCallback(callback func(bool)) {
+func (wp *Plugin) SetPauseChangeCallback(callback func(bool)) {
 	wp.downloadMutex.Lock()
 	defer wp.downloadMutex.Unlock()
 	wp.pauseChangeCallback = callback
 }
 
 // IsPaused returns true if the wallpaper change frequency is set to Never.
-func (wp *WallpaperPlugin) IsPaused() bool {
+func (wp *Plugin) IsPaused() bool {
 	return wp.cfg.GetWallpaperChangeFrequency() == FrequencyNever
 }
 
 // SetRandomWallpaper sets a random wallpaper.
-func (wp *WallpaperPlugin) SetRandomWallpaper() {
+func (wp *Plugin) SetRandomWallpaper() {
 	wp.setRandomWallpaper()
 }
 
 // GetCurrentImage returns the current wallpaper image information.
-func (wp *WallpaperPlugin) GetCurrentImage() ImgSrvcImage {
+func (wp *Plugin) GetCurrentImage() ImgSrvcImage {
 	return wp.getCurrentImage()
 }
 
 // ChangeWallpaperFrequency changes the wallpaper frequency.
-func (wp *WallpaperPlugin) ChangeWallpaperFrequency(newFrequency Frequency) {
+func (wp *Plugin) ChangeWallpaperFrequency(newFrequency Frequency) {
 	wp.changeFrequency(newFrequency)
 }
 
 // ViewCurrentImageOnWeb opens the current wallpaper image in the default web browser.
-func (wp *WallpaperPlugin) ViewCurrentImageOnWeb() {
+func (wp *Plugin) ViewCurrentImageOnWeb() {
 	if wp.getCurrentImage().ShortURL == "" {
 		wp.manager.NotifyUser("No Image Details", "Wallpaper not set during this session.")
 		return
@@ -892,7 +892,7 @@ func (wp *WallpaperPlugin) ViewCurrentImageOnWeb() {
 }
 
 // RefreshImagesAndPulse refreshes the list of images and pulses the image.
-func (wp *WallpaperPlugin) RefreshImagesAndPulse() {
+func (wp *Plugin) RefreshImagesAndPulse() {
 	go func() {
 		wp.currentDownloadPage.Set(1)
 		wp.downloadAllImages()
@@ -905,12 +905,12 @@ func (wp *WallpaperPlugin) RefreshImagesAndPulse() {
 }
 
 // SetSmartFit enables or disables smart cropping.
-func (wp *WallpaperPlugin) SetSmartFit(enabled bool) {
+func (wp *Plugin) SetSmartFit(enabled bool) {
 	wp.fitImageFlag.Set(enabled)
 }
 
 // SetShuffleImage enables or disables image shuffling.
-func (wp *WallpaperPlugin) SetShuffleImage(enabled bool) {
+func (wp *Plugin) SetShuffleImage(enabled bool) {
 	wp.shuffleImageFlag.Set(enabled)
 	wp.cfg.SetImgShuffle(enabled)
 
@@ -927,7 +927,7 @@ func (wp *WallpaperPlugin) SetShuffleImage(enabled bool) {
 }
 
 // checkWallhavenURL takes a transformed API URL and its type, performs a network check
-func (wp *WallpaperPlugin) checkWallhavenURL(apiURL string, queryType URLType) error {
+func (wp *Plugin) checkWallhavenURL(apiURL string, queryType URLType) error {
 	checkURLParsed, err := url.Parse(apiURL)
 	if err != nil {
 		return fmt.Errorf("internal error parsing API URL for check '%s': %w", apiURL, err)
@@ -1005,17 +1005,17 @@ func (wp *WallpaperPlugin) checkWallhavenURL(apiURL string, queryType URLType) e
 }
 
 // CheckWallhavenURL checks if the given URL is a valid Wallhaven URL.
-func (wp *WallpaperPlugin) CheckWallhavenURL(queryURL string, queryType URLType) error {
+func (wp *Plugin) CheckWallhavenURL(queryURL string, queryType URLType) error {
 	return wp.checkWallhavenURL(queryURL, queryType)
 }
 
 // GetWallhavenURL returns the Wallhaven URL for the given API URL.
-func (wp *WallpaperPlugin) GetWallhavenURL(apiURL string) *url.URL {
+func (wp *Plugin) GetWallhavenURL(apiURL string) *url.URL {
 	return wp.getWallhavenURL(apiURL)
 }
 
 // StopNightlyRefresh signals the nightly refresh goroutine to stop.
-func (wp *WallpaperPlugin) StopNightlyRefresh() {
+func (wp *Plugin) StopNightlyRefresh() {
 	wp.downloadMutex.Lock()
 	defer wp.downloadMutex.Unlock()
 
@@ -1027,7 +1027,7 @@ func (wp *WallpaperPlugin) StopNightlyRefresh() {
 }
 
 // StartNightlyRefresh starts the goroutine for nightly wallpaper refresh.
-func (wp *WallpaperPlugin) StartNightlyRefresh() {
+func (wp *Plugin) StartNightlyRefresh() {
 	// Stop any existing goroutine before starting a new one.
 	wp.StopNightlyRefresh()
 
@@ -1042,5 +1042,5 @@ func (wp *WallpaperPlugin) StartNightlyRefresh() {
 
 // LoadPlugin loads the wallpaper plugin.
 func LoadPlugin(pm ui.PluginManager) {
-	pm.Register(getWallpaperPlugin())
+	pm.Register(getPlugin())
 }
