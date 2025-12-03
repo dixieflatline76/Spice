@@ -16,7 +16,7 @@ import (
 )
 
 // CreateTrayMenuItems creates the menu items for the tray menu
-func (wp *wallpaperPlugin) CreateTrayMenuItems() []*fyne.MenuItem {
+func (wp *WallpaperPlugin) CreateTrayMenuItems() []*fyne.MenuItem {
 	items := []*fyne.MenuItem{}
 	items = append(items, wp.manager.CreateMenuItem("Next Wallpaper", func() {
 		go wp.SetNextWallpaper()
@@ -60,7 +60,7 @@ func (wp *wallpaperPlugin) CreateTrayMenuItems() []*fyne.MenuItem {
 }
 
 // createSettingEntry creates a widget for a setting entry
-func (wp *wallpaperPlugin) createImgQueryList(sm setting.SettingsManager) *widget.List {
+func (wp *WallpaperPlugin) createImgQueryList(sm setting.SettingsManager) *widget.List {
 
 	pendingState := make(map[string]bool) // holds pending active state changes
 	var queryList *widget.List
@@ -94,7 +94,9 @@ func (wp *wallpaperPlugin) createImgQueryList(sm setting.SettingsManager) *widge
 			} else {
 				// this should never happen
 				// TODO refactor later
-				urlLink.SetURLFromString(query.URL)
+				if err := urlLink.SetURLFromString(query.URL); err != nil {
+					utilLog.Printf("Failed to set URL from string: %v", err)
+				}
 			}
 
 			activeCheck := c.Objects[2].(*widget.Check)
@@ -114,9 +116,13 @@ func (wp *wallpaperPlugin) createImgQueryList(sm setting.SettingsManager) *widge
 					pendingState[queryKey] = b // Store the pending change
 					sm.SetSettingChangedCallback(queryKey, func() {
 						if b {
-							wp.cfg.EnableImageQuery(query.ID)
+							if err := wp.cfg.EnableImageQuery(query.ID); err != nil {
+								utilLog.Printf("Failed to enable image query: %v", err)
+							}
 						} else {
-							wp.cfg.DisableImageQuery(query.ID)
+							if err := wp.cfg.DisableImageQuery(query.ID); err != nil {
+								utilLog.Printf("Failed to disable image query: %v", err)
+							}
 						}
 						delete(pendingState, queryKey) // Clean up the pending state on apply
 					})
@@ -139,7 +145,9 @@ func (wp *wallpaperPlugin) createImgQueryList(sm setting.SettingsManager) *widge
 						}
 						// Clear any pending state for a deleted item
 						delete(pendingState, queryKey)
-						wp.cfg.RemoveImageQuery(query.ID)
+						if err := wp.cfg.RemoveImageQuery(query.ID); err != nil {
+							utilLog.Printf("Failed to remove image query: %v", err)
+						}
 						queryList.Refresh()
 					}
 
@@ -152,7 +160,7 @@ func (wp *wallpaperPlugin) createImgQueryList(sm setting.SettingsManager) *widge
 }
 
 // createImgQueryList creates a list of image queries
-func (wp *wallpaperPlugin) createImageQueryPanel(sm setting.SettingsManager) *fyne.Container {
+func (wp *WallpaperPlugin) createImageQueryPanel(sm setting.SettingsManager) *fyne.Container {
 
 	imgQueryList := wp.createImgQueryList(sm)
 	sm.RegisterRefreshFunc(imgQueryList.Refresh)
@@ -313,7 +321,7 @@ func (wp *wallpaperPlugin) createImageQueryPanel(sm setting.SettingsManager) *fy
 }
 
 // CreatePrefsPanel creates a preferences widget for wallpaper settings
-func (wp *wallpaperPlugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
+func (wp *WallpaperPlugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 	// --- General Settings Container ---
 	generalContainer := container.NewVBox()
 

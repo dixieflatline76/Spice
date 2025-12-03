@@ -23,7 +23,7 @@ import (
 // TODO: Explore tradeoffs of using a single JSON string preference vs multiple preferences
 
 // Config struct to hold all configuration data
-type Config struct { //nolint:golint"
+type Config struct {
 	fyne.Preferences
 	ImageQueries []ImageQuery    `json:"query_urls"` // List of image queries
 	assetMgr     *asset.Manager  // Asset manager
@@ -300,7 +300,10 @@ func (c *Config) GetWallhavenAPIKey() string {
 func (c *Config) SetWallhavenAPIKey(apiKey string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	keyring.Set(WallhavenAPIKeyPrefKey, c.userid, apiKey) // Save the API key to the keyring
+	err := keyring.Set(WallhavenAPIKeyPrefKey, c.userid, apiKey) // Save the API key to the keyring
+	if err != nil {
+		log.Printf("failed to save Wallhaven API key to keyring: %v", err)
+	}
 }
 
 // SetChgImgOnStart returns the change image on start preference.

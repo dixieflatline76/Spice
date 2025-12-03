@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/dixieflatline76/Spice/util/log"
 
@@ -30,11 +31,15 @@ func main() {
 	}
 	defer releaseLock() // Make sure to release the lock when done
 
-	// Start global hotkey listeners (Register on main thread)
-	hotkey.StartListeners()
-
 	spiceApp := ui.GetApplication() // Create a new Fyne application
 	pm := ui.GetPluginManager()     // Get the plugin manager
 	wallpaper.LoadPlugin(pm)        // Initialize the wallpaper plugin
-	spiceApp.Start()                // Run the application
+
+	// Start the listener in a separate goroutine
+	go func() {
+		time.Sleep(500 * time.Millisecond)
+		hotkey.StartListeners()
+	}()
+
+	spiceApp.Start() // Run the application
 }

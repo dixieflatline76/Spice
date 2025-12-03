@@ -22,5 +22,6 @@ type PluginManager interface {
 
 // App is the interface that must be implemented by all applications.
 type App interface {
-	Start() // Bam starts the Spice application.
+	Start()                    // Bam starts the Spice application.
+	Lifecycle() fyne.Lifecycle // Lifecycle returns the application lifecycle.
 }

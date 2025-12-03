@@ -70,43 +70,43 @@ func (sw *safeWriter) Write(p []byte) (int, error) {
 
 // Print calls the standard log.Print()
 func Print(v ...interface{}) {
-	log.Output(2, fmt.Sprint(v...))
+	_ = log.Output(2, fmt.Sprint(v...))
 }
 
 // Printf calls the standard log.Printf()
 func Printf(format string, v ...interface{}) {
-	log.Output(2, fmt.Sprintf(format, v...))
+	_ = log.Output(2, fmt.Sprintf(format, v...))
 }
 
 // Println calls the standard log.Println()
 func Println(v ...interface{}) {
-	log.Output(2, fmt.Sprintln(v...))
+	_ = log.Output(2, fmt.Sprintln(v...))
 }
 
 // Fatal calls the standard log.Fatal()
 func Fatal(v ...interface{}) {
-	log.Output(2, fmt.Sprint(v...))
+	_ = log.Output(2, fmt.Sprint(v...))
 	os.Exit(1)
 }
 
 // Fatalf calls the standard log.Fatalf()
 func Fatalf(format string, v ...interface{}) {
-	log.Output(2, fmt.Sprintf(format, v...))
+	_ = log.Output(2, fmt.Sprintf(format, v...))
 	os.Exit(1)
 }
 
 // Fatalln calls the standard log.Fatalln()
 func Fatalln(v ...interface{}) {
-	log.Output(2, fmt.Sprintln(v...))
+	_ = log.Output(2, fmt.Sprintln(v...))
 	os.Exit(1)
 }
 
 // Debug calls the standard log.Print() with a [DEBUG] prefix
 func Debug(v ...interface{}) {
-	log.Output(2, "[DEBUG] "+fmt.Sprint(v...))
+	_ = log.Output(2, "[DEBUG] "+fmt.Sprint(v...))
 }
 
 // Debugf calls the standard log.Printf() with a [DEBUG] prefix
 func Debugf(format string, v ...interface{}) {
-	log.Output(2, fmt.Sprintf("[DEBUG] "+format, v...))
+	_ = log.Output(2, fmt.Sprintf("[DEBUG] "+format, v...))
 }
