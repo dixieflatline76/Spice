@@ -141,7 +141,7 @@ func TestDownloadAllImages(t *testing.T) {
 		// Verify request
 		// Return mock JSON response
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{
+		_, _ = w.Write([]byte(`{
 			"data": [
 				{
 					"id": "test_img_1",
@@ -172,7 +172,7 @@ func TestDownloadAllImages(t *testing.T) {
 	mockIP := new(MockImageProcessorTyped)
 
 	// Create plugin instance manually to inject mocks
-	wp := &wallpaperPlugin{
+	wp := &WallpaperPlugin{
 		os:           mockOS,
 		imgProcessor: mockIP,
 		cfg:          cfg,
@@ -203,7 +203,7 @@ func TestDownloadAllImages(t *testing.T) {
 	// Update mock handler to serve image
 	ts.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/image1.jpg" {
-			w.Write([]byte("fake image content"))
+			_, _ = w.Write([]byte("fake image content"))
 			return
 		}
 		// Default: serve JSON
@@ -219,7 +219,7 @@ func TestDownloadAllImages(t *testing.T) {
 				}
 			]
 		}`
-		w.Write([]byte(responseJSON))
+		_, _ = w.Write([]byte(responseJSON))
 	})
 
 	// Run
@@ -254,7 +254,7 @@ func TestNavigation(t *testing.T) {
 	mockPM := new(MockPluginManager)
 	mockIP := new(MockImageProcessorTyped)
 
-	wp := &wallpaperPlugin{
+	wp := &WallpaperPlugin{
 		os:                  mockOS,
 		imgProcessor:        mockIP,
 		cfg:                 cfg,
@@ -308,7 +308,7 @@ func TestTogglePause(t *testing.T) {
 	cfg := GetConfig(prefs)
 	mockPM := new(MockPluginManager)
 
-	wp := &wallpaperPlugin{
+	wp := &WallpaperPlugin{
 		cfg:     cfg,
 		manager: mockPM,
 	}

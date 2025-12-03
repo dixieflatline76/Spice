@@ -596,7 +596,11 @@ func (sa *SpiceApp) updateTrayMenu(info *util.CheckForUpdatesResult) {
 
 	updateItem := sa.CreateMenuItem(
 		fmt.Sprintf("%s%s", updateMenuItemPrefix, info.LatestVersion),
-		func() { sa.OpenURL(releaseURL) },
+		func() {
+			if err := sa.OpenURL(releaseURL); err != nil {
+				utilLog.Printf("Failed to open release URL: %v", err)
+			}
+		},
 		"download.png",
 	)
 
