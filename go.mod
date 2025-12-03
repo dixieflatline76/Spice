@@ -52,6 +52,7 @@ require (
 	github.com/esimov/pigo v1.4.6
 	github.com/google/go-github/v63 v63.0.0
 	github.com/zalando/go-keyring v0.2.6
+	golang.design/x/hotkey v0.4.1
 	golang.org/x/image v0.33.0
 	golang.org/x/mod v0.29.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1

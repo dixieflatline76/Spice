@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"image"
 	"io"
+
 	"math"
 	"math/rand"
 	"net"
@@ -19,6 +20,7 @@ import (
 	"sync"
 	"time"
 
+	"fyne.io/fyne/v2"
 	"github.com/disintegration/imaging"
 	"github.com/dixieflatline76/Spice/asset"
 	"github.com/dixieflatline76/Spice/config"
@@ -66,6 +68,9 @@ type wallpaperPlugin struct {
 	ticker               *time.Ticker
 	cancel               context.CancelFunc
 	downloadWaitGroup    *sync.WaitGroup
+	prePauseFrequency    Frequency
+	pauseChangeCallback  func(bool)
+	pauseMenuItem        *fyne.MenuItem
 }
 
 type fileInfo struct {
@@ -577,6 +582,8 @@ func (wp *wallpaperPlugin) DeleteCurrentImage() {
 	wp.localImgIndex.Decrement()
 	wp.downloadMutex.Unlock()
 
+	wp.manager.NotifyUser("Wallpaper Blocked", "Image deleted and added to blocklist.")
+
 	wp.SetNextWallpaper()
 
 	if err := os.Remove(imagePath); err != nil {
@@ -796,6 +803,61 @@ func (wp *wallpaperPlugin) SetPreviousWallpaper() {
 // SetNextWallpaper sets the next wallpaper, will respect shuffle toggle
 func (wp *wallpaperPlugin) SetNextWallpaper() {
 	wp.imgPulseOp()
+}
+
+// GetInstance returns the singleton instance of the wallpaper plugin.
+func GetInstance() *wallpaperPlugin {
+	return getWallpaperPlugin()
+}
+
+// TogglePause toggles the wallpaper change frequency between paused (Never) and the previous frequency.
+func (wp *wallpaperPlugin) TogglePause() {
+	wp.downloadMutex.Lock()
+	currentFreq := wp.cfg.GetWallpaperChangeFrequency()
+	wp.downloadMutex.Unlock()
+
+	if currentFreq == FrequencyNever {
+		// Resume
+		if wp.prePauseFrequency != FrequencyNever {
+			wp.cfg.SetWallpaperChangeFrequency(wp.prePauseFrequency)
+			wp.ChangeWallpaperFrequency(wp.prePauseFrequency)
+		} else {
+			wp.cfg.SetWallpaperChangeFrequency(FrequencyHourly)
+			wp.ChangeWallpaperFrequency(FrequencyHourly)
+		}
+		if wp.pauseChangeCallback != nil {
+			wp.pauseChangeCallback(false)
+		}
+	} else {
+		// Pause
+		wp.prePauseFrequency = currentFreq
+		wp.cfg.SetWallpaperChangeFrequency(FrequencyNever)
+		wp.ChangeWallpaperFrequency(FrequencyNever)
+		if wp.pauseChangeCallback != nil {
+			wp.pauseChangeCallback(true)
+		}
+	}
+}
+
+// TogglePauseAction triggers the UI action for pausing/resuming if available, otherwise toggles logic directly.
+func (wp *wallpaperPlugin) TogglePauseAction() {
+	if wp.pauseMenuItem != nil {
+		wp.pauseMenuItem.Action()
+	} else {
+		wp.TogglePause()
+	}
+}
+
+// SetPauseChangeCallback sets the callback function to be called when pause state changes.
+func (wp *wallpaperPlugin) SetPauseChangeCallback(callback func(bool)) {
+	wp.downloadMutex.Lock()
+	defer wp.downloadMutex.Unlock()
+	wp.pauseChangeCallback = callback
+}
+
+// IsPaused returns true if the wallpaper change frequency is set to Never.
+func (wp *wallpaperPlugin) IsPaused() bool {
+	return wp.cfg.GetWallpaperChangeFrequency() == FrequencyNever
 }
 
 // SetRandomWallpaper sets a random wallpaper.
