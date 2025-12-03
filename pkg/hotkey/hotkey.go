@@ -13,16 +13,16 @@ import (
 func StartListeners() {
 	// Define shortcuts
 	// Ctrl + Alt + Right Arrow (Next)
-	hkNext := hotkey.New([]hotkey.Modifier{hotkey.ModCtrl, hotkey.ModAlt}, hotkey.KeyRight)
+	hkNext := hotkey.New([]hotkey.Modifier{modCtrl, modAlt}, hotkey.KeyRight)
 
 	// Ctrl + Alt + Left Arrow (Previous)
-	hkPrev := hotkey.New([]hotkey.Modifier{hotkey.ModCtrl, hotkey.ModAlt}, hotkey.KeyLeft)
+	hkPrev := hotkey.New([]hotkey.Modifier{modCtrl, modAlt}, hotkey.KeyLeft)
 
 	// Ctrl + Alt + Down Arrow (Trash/Delete)
-	hkTrash := hotkey.New([]hotkey.Modifier{hotkey.ModCtrl, hotkey.ModAlt}, hotkey.KeyDown)
+	hkTrash := hotkey.New([]hotkey.Modifier{modCtrl, modAlt}, hotkey.KeyDown)
 
 	// Ctrl + Alt + Up Arrow (Pause/Resume)
-	hkPause := hotkey.New([]hotkey.Modifier{hotkey.ModCtrl, hotkey.ModAlt}, hotkey.KeyUp)
+	hkPause := hotkey.New([]hotkey.Modifier{modCtrl, modAlt}, hotkey.KeyUp)
 
 	// Helper to register and listen
 	registerAndListen := func(hk *hotkey.Hotkey, name string, action func()) {
