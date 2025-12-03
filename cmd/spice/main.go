@@ -30,11 +30,14 @@ func main() {
 	}
 	defer releaseLock() // Make sure to release the lock when done
 
-	// Start global hotkey listeners (Register on main thread)
-	hotkey.StartListeners()
-
 	spiceApp := ui.GetApplication() // Create a new Fyne application
 	pm := ui.GetPluginManager()     // Get the plugin manager
 	wallpaper.LoadPlugin(pm)        // Initialize the wallpaper plugin
-	spiceApp.Start()                // Run the application
+
+	// Start global hotkey listeners (Register on main thread after app start)
+	spiceApp.Lifecycle().SetOnStarted(func() {
+		hotkey.StartListeners()
+	})
+
+	spiceApp.Start() // Run the application
 }
