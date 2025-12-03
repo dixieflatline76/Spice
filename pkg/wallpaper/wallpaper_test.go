@@ -172,7 +172,7 @@ func TestDownloadAllImages(t *testing.T) {
 	mockIP := new(MockImageProcessorTyped)
 
 	// Create plugin instance manually to inject mocks
-	wp := &WallpaperPlugin{
+	wp := &Plugin{
 		os:           mockOS,
 		imgProcessor: mockIP,
 		cfg:          cfg,
@@ -254,7 +254,7 @@ func TestNavigation(t *testing.T) {
 	mockPM := new(MockPluginManager)
 	mockIP := new(MockImageProcessorTyped)
 
-	wp := &WallpaperPlugin{
+	wp := &Plugin{
 		os:                  mockOS,
 		imgProcessor:        mockIP,
 		cfg:                 cfg,
@@ -308,7 +308,7 @@ func TestTogglePause(t *testing.T) {
 	cfg := GetConfig(prefs)
 	mockPM := new(MockPluginManager)
 
-	wp := &WallpaperPlugin{
+	wp := &Plugin{
 		cfg:     cfg,
 		manager: mockPM,
 	}

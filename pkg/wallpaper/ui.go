@@ -16,7 +16,7 @@ import (
 )
 
 // CreateTrayMenuItems creates the menu items for the tray menu
-func (wp *WallpaperPlugin) CreateTrayMenuItems() []*fyne.MenuItem {
+func (wp *Plugin) CreateTrayMenuItems() []*fyne.MenuItem {
 	items := []*fyne.MenuItem{}
 	items = append(items, wp.manager.CreateMenuItem("Next Wallpaper", func() {
 		go wp.SetNextWallpaper()
@@ -60,7 +60,7 @@ func (wp *WallpaperPlugin) CreateTrayMenuItems() []*fyne.MenuItem {
 }
 
 // createSettingEntry creates a widget for a setting entry
-func (wp *WallpaperPlugin) createImgQueryList(sm setting.SettingsManager) *widget.List {
+func (wp *Plugin) createImgQueryList(sm setting.SettingsManager) *widget.List {
 
 	pendingState := make(map[string]bool) // holds pending active state changes
 	var queryList *widget.List
@@ -160,7 +160,7 @@ func (wp *WallpaperPlugin) createImgQueryList(sm setting.SettingsManager) *widge
 }
 
 // createImgQueryList creates a list of image queries
-func (wp *WallpaperPlugin) createImageQueryPanel(sm setting.SettingsManager) *fyne.Container {
+func (wp *Plugin) createImageQueryPanel(sm setting.SettingsManager) *fyne.Container {
 
 	imgQueryList := wp.createImgQueryList(sm)
 	sm.RegisterRefreshFunc(imgQueryList.Refresh)
@@ -321,7 +321,7 @@ func (wp *WallpaperPlugin) createImageQueryPanel(sm setting.SettingsManager) *fy
 }
 
 // CreatePrefsPanel creates a preferences widget for wallpaper settings
-func (wp *WallpaperPlugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
+func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 	// --- General Settings Container ---
 	generalContainer := container.NewVBox()
 

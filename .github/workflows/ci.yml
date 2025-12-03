@@ -48,17 +48,9 @@ jobs:
 
       # Removed redundant 'go get fyne...' step here
 
-      - name: Install linters
-        run: |
-          go install golang.org/x/lint/golint@latest
-          go install honnef.co/go/tools/cmd/staticcheck@latest
-        shell: pwsh # Explicitly use pwsh for consistency if needed
-
-      - name: Run linters
-        run: |
-          golint ./...
-          staticcheck ./...
-        shell: pwsh # Explicitly use pwsh for consistency if needed
+      - name: Run lint
+        run: make lint
+        shell: pwsh
 
       - name: Run tests
         run: go test ./...
