@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/dixieflatline76/Spice/util/log"
 
@@ -34,10 +35,11 @@ func main() {
 	pm := ui.GetPluginManager()     // Get the plugin manager
 	wallpaper.LoadPlugin(pm)        // Initialize the wallpaper plugin
 
-	// Start global hotkey listeners (Register on main thread after app start)
-	spiceApp.Lifecycle().SetOnStarted(func() {
+	// Start the listener in a separate goroutine
+	go func() {
+		time.Sleep(500 * time.Millisecond)
 		hotkey.StartListeners()
-	})
+	}()
 
 	spiceApp.Start() // Run the application
 }
