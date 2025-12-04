@@ -54,7 +54,6 @@ func (wp *Plugin) CreateTrayMenuItems() []*fyne.MenuItem {
 	items = append(items, wp.manager.CreateMenuItem("Delete and Block Image", func() {
 		go wp.DeleteCurrentImage()
 	}, "delete.png"))
-	items = append(items, fyne.NewMenuItemSeparator())
 
 	return items
 }
