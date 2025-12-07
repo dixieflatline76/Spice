@@ -9,7 +9,7 @@
   <a href="https://github.com/dixieflatline76/Spice/releases/latest"><img src="https://img.shields.io/github/v/release/dixieflatline76/Spice?include_prereleases&color=blue" alt="Latest Release"></a>
 </p>
 
-Spice is a powerful wallpaper manager that brings a continuous stream of inspiration to your screen. It flexibly and automatically downloads high-resolution wallpapers from your favorite sources, keeping your desktop fresh, dynamic, and perfectly styled.
+Spice is a minimalist wallpaper manager that brings a continuous stream of delight to your screen while not getting in your way. It automatically downloads high-quality wallpapers from your favorite image services like Wallhaven and Unsplash, keeping your desktop fresh and fun.
 
 **Note:** Spice runs quietly in your **Windows system tray** or **macOS menu bar**, doing its magic in the background while giving you full control when you need it.
 
