@@ -25,11 +25,13 @@ import (
 // Config struct to hold all configuration data
 type Config struct {
 	fyne.Preferences
-	ImageQueries []ImageQuery    `json:"query_urls"` // List of image queries
-	assetMgr     *asset.Manager  // Asset manager
-	AvoidSet     map[string]bool `json:"avoid_set"` // Set of image URLs to avoid
-	userid       string
-	mu           sync.RWMutex // Mutex for thread-safe access
+	WallhavenAPIKey string          `json:"wallhaven_api_key"`
+	ImageQueries    []ImageQuery    `json:"query_urls"`       // List of image queries (Wallhaven)
+	UnsplashQueries []ImageQuery    `json:"unsplash_queries"` // List of Unsplash image queries
+	assetMgr        *asset.Manager  // Asset manager
+	AvoidSet        map[string]bool `json:"avoid_set"` // Set of image URLs to avoid
+	userid          string
+	mu              sync.RWMutex // Mutex for thread-safe access
 }
 
 // ImageQuery struct to hold the URL of an image and whether it is active
@@ -53,11 +55,12 @@ func GetConfig(p fyne.Preferences) *Config {
 			log.Fatalf("failed to initialize %s: %s", config.AppName, e)
 		}
 		cfgInstance = &Config{
-			Preferences:  p,
-			ImageQueries: make([]ImageQuery, 0),
-			assetMgr:     asset.NewManager(),
-			AvoidSet:     make(map[string]bool),
-			userid:       u.Uid,
+			Preferences:     p,
+			ImageQueries:    make([]ImageQuery, 0),
+			UnsplashQueries: make([]ImageQuery, 0), // Initialize UnsplashQueries
+			assetMgr:        asset.NewManager(),
+			AvoidSet:        make(map[string]bool),
+			userid:          u.Uid,
 		}
 		// Load config from file
 		if err := cfgInstance.loadFromPrefs(); err != nil {
@@ -92,11 +95,19 @@ func (c *Config) loadFromPrefs() error {
 		return err
 	}
 
-	// Data migration: Iterate and backfill missing IDs
+	// Data migration: Iterate and backfill missing IDs for Wallhaven queries
 	queriesChanged := false
 	for i, q := range c.ImageQueries {
 		if q.ID == "" {
 			c.ImageQueries[i].ID = GenerateQueryID(q.URL)
+			queriesChanged = true
+		}
+	}
+
+	// Data migration: Iterate and backfill missing IDs for Unsplash queries
+	for i, q := range c.UnsplashQueries {
+		if q.ID == "" {
+			c.UnsplashQueries[i].ID = GenerateQueryID(q.URL)
 			queriesChanged = true
 		}
 	}
@@ -124,11 +135,9 @@ func (c *Config) AddImageQuery(desc, url string, active bool) (string, error) {
 	defer c.mu.Unlock()
 
 	newID := GenerateQueryID(url)
-	// Check for duplicates
-	for _, q := range c.ImageQueries {
-		if q.ID == newID {
-			return "", errors.New("duplicate query: this URL already exists")
-		}
+	// Check for duplicates across all query types
+	if c.isDuplicateID(newID) {
+		return "", errors.New("duplicate query: this URL already exists")
 	}
 
 	newItem := ImageQuery{newID, desc, url, active}
@@ -137,11 +146,36 @@ func (c *Config) AddImageQuery(desc, url string, active bool) (string, error) {
 	return newID, nil
 }
 
-// IsDuplicateID checks if a query ID already exists in the config.
-func (c *Config) IsDuplicateID(id string) bool {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
+// AddUnsplashQuery adds a new Unsplash query to the list.
+func (c *Config) AddUnsplashQuery(description, url string, active bool) (string, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	id := GenerateQueryID(url)
+	if c.isDuplicateID(id) {
+		return "", fmt.Errorf("duplicate query: this URL already exists")
+	}
+
+	newQuery := ImageQuery{
+		ID:          id,
+		Description: description,
+		URL:         url,
+		Active:      active,
+	}
+
+	c.UnsplashQueries = append([]ImageQuery{newQuery}, c.UnsplashQueries...) // Add to the beginning
+	c.save()
+	return id, nil
+}
+
+// isDuplicateID checks if a query ID already exists in either list.
+func (c *Config) isDuplicateID(id string) bool {
 	for _, q := range c.ImageQueries {
+		if q.ID == id {
+			return true
+		}
+	}
+	for _, q := range c.UnsplashQueries {
 		if q.ID == id {
 			return true
 		}
@@ -149,9 +183,16 @@ func (c *Config) IsDuplicateID(id string) bool {
 	return false
 }
 
-// findQueryIndex is a helper to find a query by its stable ID
-func (c *Config) findQueryIndex(id string) (int, error) {
-	for i, q := range c.ImageQueries {
+// IsDuplicateID checks if a query ID already exists (exported version).
+func (c *Config) IsDuplicateID(id string) bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.isDuplicateID(id)
+}
+
+// findQueryIndex is a helper to find a query by its stable ID in a given slice
+func (c *Config) findQueryIndex(queries []ImageQuery, id string) (int, error) {
+	for i, q := range queries {
 		if q.ID == id {
 			return i, nil
 		}
@@ -164,7 +205,7 @@ func (c *Config) RemoveImageQuery(id string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	index, err := c.findQueryIndex(id)
+	index, err := c.findQueryIndex(c.ImageQueries, id)
 	if err != nil {
 		return err
 	}
@@ -174,12 +215,27 @@ func (c *Config) RemoveImageQuery(id string) error {
 	return nil
 }
 
+// RemoveUnsplashQuery removes an Unsplash query from the list.
+func (c *Config) RemoveUnsplashQuery(id string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	index, err := c.findQueryIndex(c.UnsplashQueries, id)
+	if err != nil {
+		return err
+	}
+
+	c.UnsplashQueries = append(c.UnsplashQueries[:index], c.UnsplashQueries[index+1:]...)
+	c.save()
+	return nil
+}
+
 // EnableImageQuery enables the image query with the specified ID
 func (c *Config) EnableImageQuery(id string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	index, err := c.findQueryIndex(id)
+	index, err := c.findQueryIndex(c.ImageQueries, id)
 	if err != nil {
 		return err
 	}
@@ -189,17 +245,47 @@ func (c *Config) EnableImageQuery(id string) error {
 	return nil
 }
 
+// EnableUnsplashQuery enables an Unsplash query.
+func (c *Config) EnableUnsplashQuery(id string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	index, err := c.findQueryIndex(c.UnsplashQueries, id)
+	if err != nil {
+		return err
+	}
+
+	c.UnsplashQueries[index].Active = true
+	c.save()
+	return nil
+}
+
 // DisableImageQuery disables the image query with the specified ID
 func (c *Config) DisableImageQuery(id string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	index, err := c.findQueryIndex(id)
+	index, err := c.findQueryIndex(c.ImageQueries, id)
 	if err != nil {
 		return err
 	}
 
 	c.ImageQueries[index].Active = false
+	c.save()
+	return nil
+}
+
+// DisableUnsplashQuery disables an Unsplash query.
+func (c *Config) DisableUnsplashQuery(id string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	index, err := c.findQueryIndex(c.UnsplashQueries, id)
+	if err != nil {
+		return err
+	}
+
+	c.UnsplashQueries[index].Active = false
 	c.save()
 	return nil
 }
@@ -282,6 +368,31 @@ func (c *Config) SetImgShuffle(enabled bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.SetBool(ImgShufflePrefKey, enabled)
+}
+
+// GetUnsplashToken returns the Unsplash Access Token from the keyring.
+func (c *Config) GetUnsplashToken() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	token, err := keyring.Get(UnsplashTokenPrefKey, c.userid)
+	if err != nil {
+		// Log only if it's not a "not found" error to avoid noise on first run
+		if !errors.Is(err, keyring.ErrNotFound) {
+			log.Printf("failed to retrieve Unsplash token from keyring: %v", err)
+		}
+		return ""
+	}
+	return token
+}
+
+// SetUnsplashToken sets the Unsplash Access Token in the keyring.
+func (c *Config) SetUnsplashToken(token string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	err := keyring.Set(UnsplashTokenPrefKey, c.userid, token)
+	if err != nil {
+		log.Printf("failed to save Unsplash token to keyring: %v", err)
+	}
 }
 
 // GetWallhavenAPIKey returns the Wallhaven API key from the config.

@@ -14,16 +14,33 @@ import (
 	"golang.org/x/oauth2"
 )
 
-// extractFilenameFromURL extracts the filename from a URL.
-func extractFilenameFromURL(url string) string {
-	lastSlashIndex := strings.LastIndex(url, "/")
+// extractFilenameFromURL extracts the filename from a URL, ignoring query parameters.
+func extractFilenameFromURL(rawURL string) string {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		// Fallback to simple string manipulation if parsing fails
+		return extractFilenameSimple(rawURL)
+	}
+	filename := filepath.Base(u.Path)
+	if filename == "." || filename == "/" || filename == "\\" {
+		return ""
+	}
+	return filename
+}
+
+func extractFilenameSimple(urlStr string) string {
+	// Strip query params if present
+	if idx := strings.Index(urlStr, "?"); idx != -1 {
+		urlStr = urlStr[:idx]
+	}
+	lastSlashIndex := strings.LastIndex(urlStr, "/")
 	if lastSlashIndex == -1 {
-		return url
+		return urlStr
 	}
-	if lastSlashIndex == len(url)-1 {
-		return "" // Handle cases where slash is at the end
+	if lastSlashIndex == len(urlStr)-1 {
+		return ""
 	}
-	return url[lastSlashIndex+1:]
+	return urlStr[lastSlashIndex+1:]
 }
 
 // isImageFile checks if a file has a common image extension.

@@ -550,7 +550,7 @@ func (sa *SpiceApp) StartPeriodicUpdateCheck() {
 			return
 		}
 		utilLog.Print("Checking for application updates...")
-		updateInfo, err := util.CheckForUpdates()
+		updateInfo, err := util.CheckForUpdates(nil)
 		if err != nil {
 			utilLog.Printf("Update check failed: %v", err)
 			return
@@ -571,70 +571,85 @@ func (sa *SpiceApp) StartPeriodicUpdateCheck() {
 
 // updateTrayMenu adds or removes the "Update Available" menu item based on check results.
 func (sa *SpiceApp) updateTrayMenu(info *util.CheckForUpdatesResult) {
-	// First, create a new slice of items that excludes any previous update item.
-	newItems := make([]*fyne.MenuItem, 0)
-	for _, item := range sa.trayMenu.Items {
-		if !strings.HasPrefix(item.Label, updateMenuItemPrefix) {
-			newItems = append(newItems, item)
-		}
-	}
-	sa.trayMenu.Items = newItems
-
-	// If no update is available, we're done.
-	if !info.UpdateAvailable {
-		sa.trayMenu.Refresh()
-		return
-	}
-
-	// If an update IS available, create the new menu item.
-	releaseURL, err := url.Parse(info.ReleaseURL)
-	if err != nil {
-		utilLog.Printf("Could not parse release URL for update menu item: %v", err)
-		return
-	}
-	utilLog.Printf("New version available: %s", info.LatestVersion)
-
-	updateItem := sa.CreateMenuItem(
-		fmt.Sprintf("%s%s", updateMenuItemPrefix, info.LatestVersion),
-		func() {
-			if err := sa.OpenURL(releaseURL); err != nil {
-				utilLog.Printf("Failed to open release URL: %v", err)
+	fyne.Do(func() {
+		// First, create a new slice of items that excludes any previous update item.
+		newItems := make([]*fyne.MenuItem, 0)
+		for _, item := range sa.trayMenu.Items {
+			if !strings.HasPrefix(item.Label, updateMenuItemPrefix) {
+				newItems = append(newItems, item)
 			}
-		},
-		"download.png",
-	)
-
-	// Find the insertion index (just before the separator above "About Spice").
-	insertIndex := -1
-	for i, item := range sa.trayMenu.Items {
-		if item.Label == "About Spice" {
-			if i > 0 && sa.trayMenu.Items[i-1].IsSeparator {
-				insertIndex = i - 1
-			} else {
-				insertIndex = i
-			}
-			break
 		}
-	}
+		sa.trayMenu.Items = newItems
 
-	// Insert the new item at the correct position.
-	if insertIndex != -1 {
-		sa.trayMenu.Items = append(sa.trayMenu.Items[:insertIndex], append([]*fyne.MenuItem{updateItem}, sa.trayMenu.Items[insertIndex:]...)...)
-	} else {
-		// Fallback: add before the Quit button's separator if "About" isn't found.
+		// If no update is available, we're done.
+		if !info.UpdateAvailable {
+			sa.trayMenu.Refresh()
+			return
+		}
+
+		// If an update IS available, create the new menu item.
+		releaseURL, err := url.Parse(info.ReleaseURL)
+		if err != nil {
+			utilLog.Printf("Could not parse release URL for update menu item: %v", err)
+			return
+		}
+		utilLog.Printf("New version available: %s", info.LatestVersion)
+
+		updateItem := sa.CreateMenuItem(
+			fmt.Sprintf("%s%s", updateMenuItemPrefix, info.LatestVersion),
+			func() {
+				if err := sa.OpenURL(releaseURL); err != nil {
+					utilLog.Printf("Failed to open release URL: %v", err)
+				}
+			},
+			"download.png",
+		)
+
+		// Find the insertion index (just before the separator above "About Spice").
+		insertIndex := -1
 		for i, item := range sa.trayMenu.Items {
-			if item.Label == "Quit" {
-				insertIndex = i - 1
+			if item.Label == "About Spice" {
+				if i > 0 && sa.trayMenu.Items[i-1].IsSeparator {
+					insertIndex = i - 1
+				} else {
+					insertIndex = i
+				}
 				break
 			}
 		}
+
+		// Insert the new item at the correct position.
 		if insertIndex != -1 {
 			sa.trayMenu.Items = append(sa.trayMenu.Items[:insertIndex], append([]*fyne.MenuItem{updateItem}, sa.trayMenu.Items[insertIndex:]...)...)
+		} else {
+			// Fallback: add before the Quit button's separator if "About" isn't found.
+			for i, item := range sa.trayMenu.Items {
+				if item.Label == "Quit" {
+					insertIndex = i - 1
+					break
+				}
+			}
+			if insertIndex != -1 {
+				sa.trayMenu.Items = append(sa.trayMenu.Items[:insertIndex], append([]*fyne.MenuItem{updateItem}, sa.trayMenu.Items[insertIndex:]...)...)
+			}
 		}
-	}
 
-	// Notify user of new version available
-	sa.NotifyUser("Spice: Update Available", fmt.Sprintf("Click the tray icon to download version %s.", info.LatestVersion))
+		// Notify user of new version available
+		sa.NotifyUser("Spice: Update Available", fmt.Sprintf("Click the tray icon to download version %s.", info.LatestVersion))
 
-	sa.trayMenu.Refresh()
+		sa.trayMenu.Refresh()
+	})
+}
+
+// RefreshTrayMenu refreshes the tray menu
+func (sa *SpiceApp) RefreshTrayMenu() {
+	// Use fyne.Do to ensure UI updates happen on the main thread
+	fyne.Do(func() {
+		sa.trayMenu.Refresh()
+		utilLog.Debugf("[Timing] RefreshTrayMenu: Calling SetSystemTrayMenu")
+		if desk, ok := sa.App.(desktop.App); ok {
+			desk.SetSystemTrayMenu(sa.trayMenu)
+		}
+		utilLog.Debugf("[Timing] RefreshTrayMenu: Finished SetSystemTrayMenu")
+	})
 }

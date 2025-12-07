@@ -53,9 +53,9 @@ type Plugin struct {
 	downloadMutex        sync.Mutex
 	currentDownloadPage  *util.SafeCounter
 	downloadedDir        string
-	localImgRecs         []ImgSrvcImage
+	localImgRecs         []Image
 	interrupt            *util.SafeFlag
-	currentImage         ImgSrvcImage
+	currentImage         Image
 	localImgIndex        util.SafeCounter
 	randomizedIndexes    []int
 	randomizedIndexesPos int
@@ -71,6 +71,8 @@ type Plugin struct {
 	prePauseFrequency    Frequency
 	pauseChangeCallback  func(bool)
 	pauseMenuItem        *fyne.MenuItem
+	sourceMenuItem       *fyne.MenuItem
+	providers            map[string]ImageProvider
 }
 
 type fileInfo struct {
@@ -132,7 +134,7 @@ func getPlugin() *Plugin {
 			downloadMutex:       sync.Mutex{},
 			currentDownloadPage: util.NewSafeIntWithValue(1), // Start with the first page,
 			downloadedDir:       "",
-			localImgRecs:        []ImgSrvcImage{},
+			localImgRecs:        []Image{},
 			interrupt:           util.NewSafeBoolWithValue(false),
 
 			localImgIndex:        *util.NewSafeIntWithValue(-1),
@@ -144,6 +146,7 @@ func getPlugin() *Plugin {
 			fitImageFlag:         util.NewSafeBoolWithValue(false),
 			shuffleImageFlag:     util.NewSafeBoolWithValue(false),
 			stopNightlyRefresh:   make(chan struct{}), // Initialize the channel for nightly refresh
+			providers:            make(map[string]ImageProvider),
 		}
 		wpInstance.imgPulseOp = wpInstance.setNextWallpaper
 	})
@@ -155,6 +158,14 @@ func (wp *Plugin) Init(manager ui.PluginManager) {
 	wp.manager = manager
 	wp.cfg = GetConfig(manager.GetPreferences())
 
+	// Initialize providers
+	wallhavenProvider := NewWallhavenProvider(wp.cfg, wp.httpClient)
+	unsplashProvider := NewUnsplashProvider(wp.cfg, wp.httpClient)
+
+	wp.providers = map[string]ImageProvider{
+		wallhavenProvider.Name(): wallhavenProvider,
+		unsplashProvider.Name():  unsplashProvider,
+	}
 	// Inject config into smartImageProcessor
 	if sip, ok := wp.imgProcessor.(*smartImageProcessor); ok {
 		sip.config = wp.cfg
@@ -193,11 +204,11 @@ func (wp *Plugin) resetPluginState() {
 	wp.downloadMutex.Lock()
 	defer wp.downloadMutex.Unlock()
 
-	wp.localImgRecs = []ImgSrvcImage{} // Clear the download history.
-	clear(wp.seenImages)               // Clear the seen history.
-	wp.prevLocalImgs = []int{}         // Clear the previous history.
-	wp.currentDownloadPage.Set(1)      // Reset to the first page.
-	wp.localImgIndex.Set(-1)           // Reset the current image index.
+	wp.localImgRecs = []Image{}   // Clear the download history.
+	clear(wp.seenImages)          // Clear the seen history.
+	wp.prevLocalImgs = []int{}    // Clear the previous history.
+	wp.currentDownloadPage.Set(1) // Reset to the first page.
+	wp.localImgIndex.Set(-1)      // Reset the current image index.
 
 	err := wp.cleanupImageCache()
 	if err != nil {
@@ -342,12 +353,16 @@ func (wp *Plugin) downloadAllImages() {
 	wp.downloadMutex.Lock()
 	wp.cancel = cancel
 	wp.downloadWaitGroup = wg
-	queries := wp.cfg.ImageQueries // Take a copy of the queries slice to avoid concurrent modification.
+	// Combine queries from all sources
+	queries := append([]ImageQuery{}, wp.cfg.ImageQueries...)
+	queries = append(queries, wp.cfg.UnsplashQueries...)
 	wp.downloadMutex.Unlock()
 	wp.interrupt.Set(false)
 
 	var message string
+	log.Debugf("Processing %d queries...", len(queries))
 	for _, query := range queries {
+		log.Debugf("Checking query: %s (Active: %v)", query.URL, query.Active)
 		if query.Active {
 			wg.Add(1)
 			go func(q ImageQuery) {
@@ -371,92 +386,127 @@ func (wp *Plugin) downloadAllImages() {
 
 // downloadImagesForURL downloads images from the given URL for the specified page. This function purposely serialize the download process per query
 // and per page to prevent overwhelming the API server. This is a design choice as there's no need to maximize download speed.
+// downloadImagesForURL downloads images from the given URL for the specified page.
 func (wp *Plugin) downloadImagesForURL(ctx context.Context, query ImageQuery, page int) {
-	u, err := url.Parse(query.URL)
-	if err != nil {
-		log.Printf("Invalid Image URL: %v", err)
-		return
-	}
+	// Find the provider for this URL
+	var provider ImageProvider
+	var apiURL string
+	var err error
 
-	q := u.Query()
-	q.Set("apikey", wp.cfg.GetWallhavenAPIKey()) // Add the API key
-	q.Set("page", fmt.Sprint(page))              // Add the page number
-
-	if !q.Has("resolutions") && !q.Has("atleast") {
-		if width, height, err := wp.os.getDesktopDimension(); err == nil {
-			q.Set("atleast", fmt.Sprintf("%dx%d", width, height))
-		} else {
-			log.Printf("Error getting desktop dimensions: %v", err)
+	for _, p := range wp.providers {
+		apiURL, err = p.ParseURL(query.URL)
+		if err == nil {
+			provider = p
+			log.Debugf("Found provider %s for URL %s", p.Name(), query.URL)
+			break
 		}
 	}
 
-	u.RawQuery = q.Encode()
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
-	if err != nil {
-		log.Printf("Failed to create request: %v", err)
+	if provider == nil {
+		log.Printf("No provider found for URL: %s", query.URL)
 		return
 	}
 
-	resp, err := wp.httpClient.Do(req)
+	// Apply resolution constraints if supported
+	if rap, ok := provider.(ResolutionAwareProvider); ok {
+		width, height, err := wp.os.getDesktopDimension()
+		if err == nil {
+			apiURL = rap.WithResolution(apiURL, width, height)
+			log.Debugf("Applied resolution constraints for %s: %s", provider.Name(), apiURL)
+		} else {
+			log.Printf("Failed to get desktop dimension for resolution filtering: %v", err)
+		}
+	}
+
+	images, err := provider.FetchImages(ctx, apiURL, page)
 	if err != nil {
 		if ctx.Err() != nil {
-			log.Printf("Request canceled: %v", ctx.Err()) // Log context cancellation
+			log.Printf("Request canceled: %v", ctx.Err())
 			return
 		}
-		log.Printf("Failed to fetch from image service: %v", err)
-		return
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		log.Printf("Failed to read image service response: %v", err)
+		log.Printf("Failed to fetch from %s: %v", provider.Name(), err)
 		return
 	}
 
-	var response imgSrvcResponse
-	if err = json.Unmarshal(body, &response); err != nil {
-		log.Printf("Failed to parse image service JSON: %v", err)
-		return
-	}
-
-	for _, isi := range response.Data {
+	for _, img := range images {
 		if wp.interrupt.Value() || ctx.Err() != nil {
 			log.Printf("Download of '%s' interrupted", query.Description)
 			return // Interrupt download
 		}
-		wp.downloadImage(ctx, isi)
+		wp.downloadImage(ctx, img)
 	}
 }
 
 // downloadImage downloads a single image, processes it if needed, and saves it to the cache.
-func (wp *Plugin) downloadImage(ctx context.Context, isi ImgSrvcImage) {
-	if wp.cfg.InAvoidSet(isi.ID) {
+func (wp *Plugin) downloadImage(ctx context.Context, img Image) {
+	if wp.cfg.InAvoidSet(img.ID) {
 		return // Skip this image
 	}
 
-	imagePath := filepath.Join(wp.getDownloadedDir(), extractFilenameFromURL(isi.Path))
+	// Enrich image metadata (e.g. fetch attribution for Wallhaven)
+	// We do this before checking for file existence so that even if the file exists,
+	// we have the correct metadata in memory.
+	// Note: If this becomes too slow for existing images, we could move it inside the !exists block,
+	// but then we risk having missing attribution for cached images until a restart/refetch.
+	// For now, we assume enrichment is fast or necessary.
+	// Actually, if the file exists, we might not need to enrich if we persist metadata?
+	// But we don't persist metadata to disk yet (only in memory struct).
+	// So we should enrich.
+
+	// Find the provider for this image
+	// We don't have the provider instance easily available here, it's passed to FetchImages but not downloadImage.
+	// We need to look it up or pass it.
+	// downloadImage is called from downloadAllImages which iterates over queries.
+	// But downloadAllImages calls FetchImages which returns images.
+	// The images have a Provider string field.
+	// We can look up the provider by name.
+
+	var provider ImageProvider
+	if p, ok := wp.providers[img.Provider]; ok {
+		provider = p
+	}
+
+	if provider != nil {
+		enrichedImg, err := provider.EnrichImage(ctx, img)
+		if err != nil {
+			log.Printf("Failed to enrich image %s: %v", img.ID, err)
+			// Continue with original image
+		} else {
+			img = enrichedImg
+		}
+	}
+
+	filename := extractFilenameFromURL(img.Path)
+	if filepath.Ext(filename) == "" {
+		if img.FileType == "image/jpeg" {
+			filename += ".jpg"
+		} else if img.FileType == "image/png" {
+			filename += ".png"
+		}
+	}
+	imagePath := filepath.Join(wp.getDownloadedDir(), filename)
 	if _, err := os.Stat(imagePath); !os.IsNotExist(err) {
-		log.Debugf("Image %s already exists at %s. Skipping download/processing.", isi.ID, imagePath)
+		log.Debugf("Image %s already exists at %s. Skipping download/processing.", img.ID, imagePath)
 		wp.downloadMutex.Lock()
-		wp.localImgRecs = append(wp.localImgRecs, isi)
+		// Update local path in the struct
+		img.FilePath = imagePath
+		wp.localImgRecs = append(wp.localImgRecs, img)
 		wp.downloadMutex.Unlock()
 		return // Image already exists
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, isi.Path, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, img.Path, nil)
 	if err != nil {
-		log.Printf("failed to create request for %s: %v", isi.ID, err)
+		log.Printf("failed to create request for %s: %v", img.ID, err)
 		return
 	}
 
 	resp, err := wp.httpClient.Do(req)
 	if err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-			log.Printf("request for image %s canceled: %v", isi.ID, err)
+			log.Printf("request for image %s canceled: %v", img.ID, err)
 		} else {
-			log.Printf("failed to download image %s: %v", isi.ID, err)
+			log.Printf("failed to download image %s: %v", img.ID, err)
 		}
 		return
 	}
@@ -464,32 +514,32 @@ func (wp *Plugin) downloadImage(ctx context.Context, isi ImgSrvcImage) {
 
 	imgBytes, err := io.ReadAll(io.LimitReader(resp.Body, 100*1024*1024))
 	if err != nil {
-		log.Printf("failed to read image bytes for %s: %v", isi.ID, err)
+		log.Printf("failed to read image bytes for %s: %v", img.ID, err)
 		return
 	}
 
 	if wp.fitImageFlag.Value() {
-		log.Debugf("SmartFit enabled. Processing image %s...", isi.ID)
-		img, _, err := wp.imgProcessor.DecodeImage(ctx, imgBytes, isi.FileType)
+		log.Debugf("SmartFit enabled. Processing image %s...", img.ID)
+		decodedImg, _, err := wp.imgProcessor.DecodeImage(ctx, imgBytes, img.FileType)
 		if err != nil {
-			log.Printf("failed to decode image %s: %v", isi.ID, err)
+			log.Printf("failed to decode image %s: %v", img.ID, err)
 			return
 		}
 
-		processedImg, err := wp.imgProcessor.FitImage(ctx, img)
+		processedImg, err := wp.imgProcessor.FitImage(ctx, decodedImg)
 		if err != nil {
-			log.Printf("failed to fit image %s: %v", isi.ID, err)
+			log.Printf("failed to fit image %s: %v", img.ID, err)
 			return
 		}
 
-		processedImgBytes, err := wp.imgProcessor.EncodeImage(ctx, processedImg, isi.FileType)
+		processedImgBytes, err := wp.imgProcessor.EncodeImage(ctx, processedImg, img.FileType)
 		if err != nil {
-			log.Printf("failed to encode image %s: %v", isi.ID, err)
+			log.Printf("failed to encode image %s: %v", img.ID, err)
 			return
 		}
 		imgBytes = processedImgBytes
 	} else {
-		log.Debugf("SmartFit disabled. Skipping processing for image %s.", isi.ID)
+		log.Debugf("SmartFit disabled. Skipping processing for image %s.", img.ID)
 	}
 
 	outFile, err := os.Create(imagePath)
@@ -505,7 +555,8 @@ func (wp *Plugin) downloadImage(ctx context.Context, isi ImgSrvcImage) {
 	}
 
 	wp.downloadMutex.Lock()
-	wp.localImgRecs = append(wp.localImgRecs, isi)
+	img.FilePath = imagePath
+	wp.localImgRecs = append(wp.localImgRecs, img)
 	wp.downloadMutex.Unlock()
 }
 
@@ -544,7 +595,7 @@ func (wp *Plugin) setWallpaperAt(imageIndex int) {
 
 	safeIndex := (imageIndex + len(wp.localImgRecs)) % len(wp.localImgRecs)
 	isi := wp.localImgRecs[safeIndex]
-	imagePath := filepath.Join(wp.getDownloadedDir(), extractFilenameFromURL(isi.Path))
+	imagePath := isi.FilePath
 	wp.downloadMutex.Unlock()
 
 	if shouldDownloadNextPage {
@@ -552,16 +603,37 @@ func (wp *Plugin) setWallpaperAt(imageIndex int) {
 		go wp.downloadAllImages()
 	}
 
-	if err := wp.os.setWallpaper(imagePath); err != nil {
-		log.Printf("failed to set wallpaper: %v", err)
-		return
-	}
-
+	// Update internal state and UI *before* setting the wallpaper to ensure responsiveness
+	// and avoid race conditions where the menu update happens long after the user action.
 	wp.downloadMutex.Lock()
 	wp.currentImage = isi
 	wp.localImgIndex.Set(safeIndex)
 	wp.seenImages[imagePath] = true
+
+	if wp.sourceMenuItem != nil {
+		attribution := isi.Attribution
+		if attribution == "" {
+			attribution = "Unknown"
+		}
+		if len(attribution) > 25 {
+			attribution = attribution[:22] + "..."
+		}
+		wp.sourceMenuItem.Label = fmt.Sprintf("%s: %s", isi.Provider, attribution)
+		wp.manager.RefreshTrayMenu()
+	}
 	wp.downloadMutex.Unlock()
+
+	if err := wp.os.setWallpaper(imagePath); err != nil {
+		log.Printf("failed to set wallpaper: %v", err)
+		// Note: We don't revert the UI state here because it would be jarring.
+		// The next successful wallpaper change will correct it.
+		return
+	}
+
+	// Trigger download event for Unsplash (or other providers requiring it)
+	if isi.DownloadLocation != "" {
+		go wp.triggerDownload(isi.DownloadLocation)
+	}
 }
 
 // DeleteCurrentImage deletes the current wallpaper image from the filesystem and updates the history.
@@ -571,7 +643,7 @@ func (wp *Plugin) DeleteCurrentImage() {
 		return
 	}
 
-	imagePath := filepath.Join(wp.getDownloadedDir(), extractFilenameFromURL(wp.currentImage.Path))
+	imagePath := wp.currentImage.FilePath
 
 	wp.downloadMutex.Lock()
 	currentPos := wp.localImgIndex.Value()
@@ -734,7 +806,7 @@ func (wp *Plugin) Deactivate() {
 }
 
 // getCurrentImage returns the current image.
-func (wp *Plugin) getCurrentImage() ImgSrvcImage {
+func (wp *Plugin) getCurrentImage() Image {
 	wp.downloadMutex.Lock()
 	defer wp.downloadMutex.Unlock()
 	return wp.currentImage
@@ -802,6 +874,7 @@ func (wp *Plugin) SetPreviousWallpaper() {
 
 // SetNextWallpaper sets the next wallpaper, will respect shuffle toggle
 func (wp *Plugin) SetNextWallpaper() {
+	log.Debugf("[Timing] SetNextWallpaper: User triggered action")
 	wp.imgPulseOp()
 }
 
@@ -866,7 +939,7 @@ func (wp *Plugin) SetRandomWallpaper() {
 }
 
 // GetCurrentImage returns the current wallpaper image information.
-func (wp *Plugin) GetCurrentImage() ImgSrvcImage {
+func (wp *Plugin) GetCurrentImage() Image {
 	return wp.getCurrentImage()
 }
 
@@ -875,13 +948,15 @@ func (wp *Plugin) ChangeWallpaperFrequency(newFrequency Frequency) {
 	wp.changeFrequency(newFrequency)
 }
 
-// ViewCurrentImageOnWeb opens the current wallpaper image in the default web browser.
+// ViewCurrentImageOnWeb opens the current image in the default browser.
 func (wp *Plugin) ViewCurrentImageOnWeb() {
-	if wp.getCurrentImage().ShortURL == "" {
-		wp.manager.NotifyUser("No Image Details", "Wallpaper not set during this session.")
+	wp.downloadMutex.Lock()
+	defer wp.downloadMutex.Unlock()
+	if wp.currentImage.ViewURL == "" {
+		log.Println("no current image to view.")
 		return
 	}
-	url, err := url.Parse(wp.getCurrentImage().ShortURL)
+	url, err := url.Parse(wp.currentImage.ViewURL)
 	if err != nil {
 		log.Printf("failed to parse URL: %v", err)
 		return
@@ -1043,4 +1118,34 @@ func (wp *Plugin) StartNightlyRefresh() {
 // LoadPlugin loads the wallpaper plugin.
 func LoadPlugin(pm ui.PluginManager) {
 	pm.Register(getPlugin())
+}
+
+// triggerDownload sends a request to the provider's download location endpoint to register the download.
+func (wp *Plugin) triggerDownload(url string) {
+	ctx, cancel := context.WithTimeout(context.Background(), NetworkConnectivityCheckTimeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		log.Printf("Failed to create download trigger request: %v", err)
+		return
+	}
+
+	// Unsplash requires the Client-ID to be sent with the download trigger request
+	if strings.Contains(url, "unsplash.com") {
+		req.Header.Set("Authorization", "Client-ID "+UnsplashClientID)
+	}
+
+	resp, err := wp.httpClient.Do(req)
+	if err != nil {
+		log.Printf("Failed to trigger download event: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("Download trigger returned status: %d", resp.StatusCode)
+	} else {
+		log.Debugf("Download event triggered successfully for %s", url)
+	}
 }

@@ -18,6 +18,7 @@ type PluginManager interface {
 	OpenURL(*url.URL) error                                               // Opens a URL.
 	GetPreferences() fyne.Preferences                                     // Returns the preferences.
 	GetAssetManager() *asset.Manager                                      // Returns the asset manager.
+	RefreshTrayMenu()                                                     // Refreshes the tray menu.
 }
 
 // App is the interface that must be implemented by all applications.

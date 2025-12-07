@@ -1,6 +1,8 @@
 package util
 
-import "fmt"
+import (
+	"fmt"
+)
 
 // StringerString is a string that implements fmt.Stringer
 type StringerString string
