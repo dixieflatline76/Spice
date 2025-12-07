@@ -1,22 +1,25 @@
 # --- Extract version needed for EULA hash ---
 VERSION := $(shell sh -c "cat version.txt" 2> /dev/null || cmd /c "type version.txt")
 
+# --- Build flags ---
+LDFLAGS_COMMON := -X main.version=$(VERSION) -X github.com/dixieflatline76/Spice/pkg/wallpaper.UnsplashClientID=$(UNSPLASH_CLIENT_ID) -X github.com/dixieflatline76/Spice/pkg/wallpaper.UnsplashClientSecret=$(UNSPLASH_CLIENT_SECRET)
+
 # --- Build targets ---
 build-win-amd64:
-	set GOOS=windows&& set GOARCH=amd64&& go build -tags release -o bin/Spice.exe -ldflags "-H=windowsgui -X main.version=$(VERSION)" ./cmd/spice
+	set GOOS=windows&& set GOARCH=amd64&& go build -tags release -o bin/Spice.exe -ldflags "-H=windowsgui $(LDFLAGS_COMMON)" ./cmd/spice
 
 build-win-console-amd64:
-	set GOOS=windows&& set GOARCH=amd64&& go build -tags release -o bin/Spice-console.exe -ldflags "-X main.version=$(VERSION)" ./cmd/spice
+	set GOOS=windows&& set GOARCH=amd64&& go build -tags release -o bin/Spice-console.exe -ldflags "$(LDFLAGS_COMMON)" ./cmd/spice
 
 build-win-arm64:
-	set GOOS=windows&& set GOARCH=arm64&& go build -tags release -o bin/Spice-arm64.exe -ldflags "-H=windowsgui -X main.version=$(VERSION)" ./cmd/spice
+	set GOOS=windows&& set GOARCH=arm64&& go build -tags release -o bin/Spice-arm64.exe -ldflags "-H=windowsgui $(LDFLAGS_COMMON)" ./cmd/spice
 
 build-linux-amd64:
-	GOOS=linux GOARCH=amd64 go build -tags release -o bin/Spice-amd64 -ldflags "-X main.version=$(VERSION)" ./cmd/spice
+	GOOS=linux GOARCH=amd64 go build -tags release -o bin/Spice-amd64 -ldflags "$(LDFLAGS_COMMON)" ./cmd/spice
 
 build-darwin-amd64:
 	@echo "Building Go executable for darwin/amd64..."
-	GOOS=darwin GOARCH=amd64 go build -tags release -o bin/Spice-darwin-amd64 -ldflags "-X main.version=$(VERSION)" ./cmd/spice
+	GOOS=darwin GOARCH=amd64 go build -tags release -o bin/Spice-darwin-amd64 -ldflags "$(LDFLAGS_COMMON)" ./cmd/spice
 
 	@echo "Packaging Spice.app..."
 	fyne package -os darwin --executable ./bin/Spice-darwin-amd64 -icon asset/icons/tray.png -name Spice
@@ -29,7 +32,7 @@ build-darwin-amd64:
 
 build-darwin-arm64:
 	@echo "Building Go executable for darwin/arm64..."
-	GOOS=darwin GOARCH=arm64 go build -tags release -o bin/Spice-darwin-arm64 -ldflags "-X main.version=$(VERSION)" ./cmd/spice
+	GOOS=darwin GOARCH=arm64 go build -tags release -o bin/Spice-darwin-arm64 -ldflags "$(LDFLAGS_COMMON)" ./cmd/spice
 
 	@echo "Packaging Spice.app..."
 	fyne package -os darwin --executable ./bin/Spice-darwin-arm64 -icon asset/icons/tray.png -name Spice
@@ -61,17 +64,17 @@ build-darwin-arm64:
 
 # --- Development build targets ---
 build-win-amd64-dev:
-	set GOOS=windows&& set GOARCH=amd64&& go build -o bin/Spice.exe -ldflags "-H=windowsgui -X main.version=$(VERSION)" ./cmd/spice
+	set GOOS=windows&& set GOARCH=amd64&& go build -o bin/Spice.exe -ldflags "-H=windowsgui $(LDFLAGS_COMMON)" ./cmd/spice
 
 build-win-console-amd64-dev:
-	set GOOS=windows&& set GOARCH=amd64&& go build -o bin/Spice-console.exe -ldflags "-X main.version=$(VERSION)" ./cmd/spice
+	set GOOS=windows&& set GOARCH=amd64&& go build -o bin/Spice-console.exe -ldflags "$(LDFLAGS_COMMON)" ./cmd/spice
 
 build-linux-amd64-dev:
-	GOOS=linux GOARCH=amd64 go build -o bin/Spice-amd64 -ldflags "-X main.version=$(VERSION)" ./cmd/spice
+	GOOS=linux GOARCH=amd64 go build -o bin/Spice-amd64 -ldflags "$(LDFLAGS_COMMON)" ./cmd/spice
 
 build-darwin-amd64-dev:
 	@echo "Building Go executable for darwin/amd64..."
-	GOOS=darwin GOARCH=amd64 go build -o bin/Spice-darwin-amd64 -ldflags "-X main.version=$(VERSION)" ./cmd/spice
+	GOOS=darwin GOARCH=amd64 go build -o bin/Spice-darwin-amd64 -ldflags "$(LDFLAGS_COMMON)" ./cmd/spice
 
 	@echo "Packaging Spice.app..."
 	fyne package -os darwin --executable ./bin/Spice-darwin-amd64 -icon asset/icons/tray.png -name Spice
@@ -84,7 +87,7 @@ build-darwin-amd64-dev:
 
 build-darwin-arm64-dev:
 	@echo "Building Go executable for darwin/arm64..."
-	GOOS=darwin GOARCH=arm64 go build -o bin/Spice-darwin-arm64 -ldflags "-X main.version=$(VERSION)" ./cmd/spice
+	GOOS=darwin GOARCH=arm64 go build -o bin/Spice-darwin-arm64 -ldflags "$(LDFLAGS_COMMON)" ./cmd/spice
 
 	@echo "Packaging Spice.app..."
 	fyne package -os darwin --executable ./bin/Spice-darwin-arm64 -icon asset/icons/tray.png -name Spice

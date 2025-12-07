@@ -83,6 +83,9 @@ jobs:
       - name: Build Application
         # Assuming Makefile's build-win-amd64 outputs to bin/Spice.exe
         # And Makefile doesn't need -v anymore
+        env:
+          UNSPLASH_CLIENT_ID: ${{ secrets.UNSPLASH_CLIENT_ID }}
+          UNSPLASH_CLIENT_SECRET: ${{ secrets.UNSPLASH_CLIENT_SECRET }}
         run: make build-win-amd64
 
       - name: Verify Build Output File
@@ -224,6 +227,8 @@ jobs:
       - name: Build and Sign macOS App
         env:
           SIGNING_IDENTITY: "Developer ID Application: Karl Kwong (T96W95GY4U)"
+          UNSPLASH_CLIENT_ID: ${{ secrets.UNSPLASH_CLIENT_ID }}
+          UNSPLASH_CLIENT_SECRET: ${{ secrets.UNSPLASH_CLIENT_SECRET }}
         run: make build-darwin-arm64
         
       - name: Notarize macOS App

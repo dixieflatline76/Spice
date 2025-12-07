@@ -3,6 +3,7 @@ package util
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"strings"
 
 	"github.com/dixieflatline76/Spice/config"
@@ -26,8 +27,9 @@ type CheckForUpdatesResult struct {
 
 // CheckForUpdates polls GitHub for the latest stable release.
 // It automatically uses the global config.AppVersion.
-func CheckForUpdates() (*CheckForUpdatesResult, error) {
-	client := github.NewClient(nil)
+// If httpClient is nil, a default client is used.
+func CheckForUpdates(httpClient *http.Client) (*CheckForUpdatesResult, error) {
+	client := github.NewClient(httpClient)
 
 	release, _, err := client.Repositories.GetLatestRelease(context.Background(), githubOwner, githubRepo)
 	if err != nil {

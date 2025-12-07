@@ -75,6 +75,10 @@ func (m *MockPluginManager) GetAssetManager() *asset.Manager {
 	return args.Get(0).(*asset.Manager)
 }
 
+func (m *MockPluginManager) RefreshTrayMenu() {
+	m.Called()
+}
+
 // MockImageProcessor implements ImageProcessor for testing
 type MockImageProcessor struct {
 	mock.Mock
@@ -130,53 +134,95 @@ func (m *MockImageProcessorTyped) FitImage(ctx context.Context, img image.Image)
 	return args.Get(0).(image.Image), args.Error(1)
 }
 
+// MockImageProvider implements ImageProvider for testing
+type MockImageProvider struct {
+	mock.Mock
+}
+
+func (m *MockImageProvider) Name() string {
+	args := m.Called()
+	return args.String(0)
+}
+
+func (m *MockImageProvider) ParseURL(webURL string) (string, error) {
+	args := m.Called(webURL)
+	return args.String(0), args.Error(1)
+}
+
+func (m *MockImageProvider) FetchImages(ctx context.Context, apiURL string, page int) ([]Image, error) {
+	args := m.Called(ctx, apiURL, page)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]Image), args.Error(1)
+}
+
+func (m *MockImageProvider) EnrichImage(ctx context.Context, img Image) (Image, error) {
+	args := m.Called(ctx, img)
+	if args.Get(0) == nil {
+		return Image{}, args.Error(1)
+	}
+	return args.Get(0).(Image), args.Error(1)
+}
+
 func TestDownloadAllImages(t *testing.T) {
 	// Setup
 	ResetConfig()
 	prefs := NewMockPreferences()
 	cfg := GetConfig(prefs)
 
-	// Mock Server
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Verify request
-		// Return mock JSON response
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{
-			"data": [
-				{
-					"id": "test_img_1",
-					"path": "http://example.com/image1.jpg",
-					"thumbs": {"large": "http://example.com/thumb1.jpg"},
-					"short_url": "http://whvn.cc/test_img_1"
-				}
-			]
-		}`))
-	}))
-	defer ts.Close()
+	// Mock Provider
+	mockProvider := new(MockImageProvider)
+	mockProvider.On("Name").Return("MockProvider")
+	mockProvider.On("ParseURL", "http://mock.url").Return("http://api.mock.url", nil)
 
-	// Add a query pointing to mock server
-	// We need to override the URL in the query to point to ts.URL
-	// But the query URL is usually "https://wallhaven.cc/..."
-	// The code parses the URL.
-	// We can add a query with ts.URL.
-
-	// But `downloadImagesForURL` parses the query URL.
-	// If we provide `ts.URL`, it will use it.
+	// Mock FetchImages to return one image
+	mockProvider.On("FetchImages", mock.Anything, "http://api.mock.url", 1).Return([]Image{
+		{
+			ID:          "test_img_1",
+			Path:        "http://example.com/image1.jpg", // We will mock this download
+			ViewURL:     "http://whvn.cc/test_img_1",
+			Attribution: "tester",
+			Provider:    "MockProvider",
+			FileType:    "image/jpeg",
+		},
+	}, nil)
 
 	cfg.ImageQueries = []ImageQuery{}
-	_, err := cfg.AddImageQuery("Test Query", ts.URL, true)
+	_, err := cfg.AddImageQuery("Test Query", "http://mock.url", true)
 	assert.NoError(t, err)
 
 	mockOS := new(MockOS)
 	mockPM := new(MockPluginManager)
 	mockIP := new(MockImageProcessorTyped)
 
+	// Mock HTTP Client to intercept image download
+	// The provider returns "http://example.com/image1.jpg" as Path.
+	// We need to intercept this.
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/image1.jpg" {
+			_, _ = w.Write([]byte("fake image content"))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer ts.Close()
+
+	// Update the mock provider to return the ts URL for the image path
+	mockProvider.ExpectedCalls = nil // Setup mock provider
+	mockProvider.On("Name").Return("MockProvider")
+	mockProvider.On("ParseURL", mock.Anything).Return("http://mock.url", nil)
+	img := Image{ID: "test_img_1", Path: ts.URL + "/image1.jpg", Provider: "MockProvider"}
+	mockProvider.On("FetchImages", mock.Anything, "http://mock.url", 1).Return([]Image{img}, nil)
+	// Expect EnrichImage call
+	mockProvider.On("EnrichImage", mock.Anything, mock.Anything).Return(img, nil)
+
 	// Create plugin instance manually to inject mocks
 	wp := &Plugin{
 		os:           mockOS,
 		imgProcessor: mockIP,
 		cfg:          cfg,
-		httpClient:   ts.Client(), // Use client that trusts the server (though httptest server is http usually)
+		httpClient:   ts.Client(),
 		manager:      mockPM,
 		// Initialize other fields
 		downloadedDir:       t.TempDir(),
@@ -185,63 +231,105 @@ func TestDownloadAllImages(t *testing.T) {
 		fitImageFlag:        util.NewSafeBool(),
 		shuffleImageFlag:    util.NewSafeBool(),
 		seenImages:          make(map[string]bool),
+		providers:           make(map[string]ImageProvider),
+		localImgRecs:        []Image{},
 	}
+	wp.providers["MockProvider"] = mockProvider
 
 	// Expectations
 	mockPM.On("NotifyUser", mock.Anything, mock.Anything).Return()
 	mockOS.On("getDesktopDimension").Return(1920, 1080, nil)
-
-	// We need to handle the image download itself.
-	// The response contains "path": "http://example.com/image1.jpg".
-	// The code will try to download this URL.
-	// "example.com" will fail or hit real network.
-	// We should make the image path point to our mock server too.
-	// But `downloadImagesForURL` parses the JSON response.
-	// We can control the JSON response.
-	// So we set "path": ts.URL + "/image1.jpg".
-
-	// Update mock handler to serve image
-	ts.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/image1.jpg" {
-			_, _ = w.Write([]byte("fake image content"))
-			return
-		}
-		// Default: serve JSON
-		w.Header().Set("Content-Type", "application/json")
-		// Use ts.URL in the response
-		responseJSON := `{
-			"data": [
-				{
-					"id": "test_img_1",
-					"path": "` + ts.URL + `/image1.jpg",
-					"thumbs": {"large": "http://example.com/thumb1.jpg"},
-					"short_url": "http://whvn.cc/test_img_1"
-				}
-			]
-		}`
-		_, _ = w.Write([]byte(responseJSON))
-	})
 
 	// Run
 	wp.downloadAllImages()
 
 	// Verify
 	mockPM.AssertCalled(t, "NotifyUser", "Downloading: ", "[Test Query]\n")
-	// Verify file exists
-	// Filename is extracted from URL. "image1.jpg".
-	// Path: wp.downloadedDir/image1.jpg
-	// Wait, `extractFilenameFromURL` logic.
-	// URL: ts.URL + "/image1.jpg".
-	// It should extract "image1.jpg".
 
-	// Check if file exists
-	// We need to know the path.
-	// But `downloadAllImages` runs goroutines.
-	// It waits for them.
-
-	// We can check `wp.localImgRecs`.
+	// Check if file exists in localImgRecs
 	assert.Equal(t, 1, len(wp.localImgRecs))
 	assert.Equal(t, "test_img_1", wp.localImgRecs[0].ID)
+}
+
+func TestDownloadAllImages_EnrichmentFailure(t *testing.T) {
+	// Setup
+	ResetConfig()
+	prefs := NewMockPreferences()
+	cfg := GetConfig(prefs)
+
+	// Mock Provider
+	mockProvider := new(MockImageProvider)
+	mockProvider.On("Name").Return("MockProvider")
+	mockProvider.On("ParseURL", "http://mock.url").Return("http://api.mock.url", nil)
+
+	// Mock FetchImages to return one image
+	img := Image{
+		ID:          "test_img_fail",
+		Path:        "http://example.com/image_fail.jpg",
+		Provider:    "MockProvider",
+		Attribution: "Original",
+	}
+	mockProvider.On("FetchImages", mock.Anything, "http://api.mock.url", 1).Return([]Image{img}, nil)
+
+	// Expect EnrichImage call to FAIL
+	mockProvider.On("EnrichImage", mock.Anything, mock.Anything).Return(Image{}, assert.AnError)
+
+	cfg.ImageQueries = []ImageQuery{}
+	_, err := cfg.AddImageQuery("Test Query", "http://mock.url", true)
+	assert.NoError(t, err)
+
+	mockOS := new(MockOS)
+	mockPM := new(MockPluginManager)
+	mockIP := new(MockImageProcessorTyped)
+
+	// Mock HTTP Client
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/image_fail.jpg" {
+			_, _ = w.Write([]byte("fake image content"))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer ts.Close()
+
+	// Update image path to use mock server
+	img.Path = ts.URL + "/image_fail.jpg"
+	// Re-setup FetchImages with correct path
+	mockProvider.ExpectedCalls = nil
+	mockProvider.On("Name").Return("MockProvider")
+	mockProvider.On("ParseURL", mock.Anything).Return("http://api.mock.url", nil)
+	mockProvider.On("FetchImages", mock.Anything, "http://api.mock.url", 1).Return([]Image{img}, nil)
+	mockProvider.On("EnrichImage", mock.Anything, mock.Anything).Return(Image{}, assert.AnError)
+
+	wp := &Plugin{
+		os:                  mockOS,
+		imgProcessor:        mockIP,
+		cfg:                 cfg,
+		httpClient:          ts.Client(),
+		manager:             mockPM,
+		downloadedDir:       t.TempDir(),
+		interrupt:           util.NewSafeBool(),
+		currentDownloadPage: util.NewSafeIntWithValue(1),
+		fitImageFlag:        util.NewSafeBool(),
+		shuffleImageFlag:    util.NewSafeBool(),
+		seenImages:          make(map[string]bool),
+		providers:           make(map[string]ImageProvider),
+		localImgRecs:        []Image{},
+	}
+	wp.providers["MockProvider"] = mockProvider
+
+	mockPM.On("NotifyUser", mock.Anything, mock.Anything).Return()
+	mockOS.On("getDesktopDimension").Return(1920, 1080, nil)
+
+	// Run
+	wp.downloadAllImages()
+
+	// Verify
+	// Should still have downloaded the image
+	assert.Equal(t, 1, len(wp.localImgRecs))
+	assert.Equal(t, "test_img_fail", wp.localImgRecs[0].ID)
+	// Attribution should remain original
+	assert.Equal(t, "Original", wp.localImgRecs[0].Attribution)
 }
 
 func TestNavigation(t *testing.T) {
@@ -269,9 +357,9 @@ func TestNavigation(t *testing.T) {
 	}
 
 	// Setup initial state with some images
-	img1 := ImgSrvcImage{ID: "img1", Path: "http://example.com/img1.jpg"}
-	img2 := ImgSrvcImage{ID: "img2", Path: "http://example.com/img2.jpg"}
-	wp.localImgRecs = []ImgSrvcImage{img1, img2}
+	img1 := Image{ID: "img1", Path: "http://example.com/img1.jpg", FilePath: "path/to/img1.jpg", Attribution: "user1"}
+	img2 := Image{ID: "img2", Path: "http://example.com/img2.jpg", FilePath: "path/to/img2.jpg", Attribution: "user2"}
+	wp.localImgRecs = []Image{img1, img2}
 
 	// Mock OS setWallpaper
 	mockOS.On("setWallpaper", mock.Anything).Return(nil)
