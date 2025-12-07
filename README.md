@@ -1,5 +1,5 @@
 <!-- markdownlint-disable MD033 MD041 -->
-<p align="center"><img src="images/readme-banner.png" height="250" alt="Spice logo" /></p>
+<p align="center"><img src="images/readme-banner.png" height="400" alt="Spice logo" /></p>
 
 <h1 align="center">Spice - Spice Up Your Desktop 🌶️</h1>
 
