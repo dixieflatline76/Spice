@@ -220,7 +220,7 @@ func TestConfig(t *testing.T) {
 
 	t.Run("ImageQueries", func(t *testing.T) {
 		// Clear default queries loaded from asset
-		cfg.ImageQueries = []ImageQuery{}
+		cfg.Queries = []ImageQuery{}
 
 		id, err := cfg.AddImageQuery("Test Query", "https://example.com", true)
 		assert.NoError(t, err)
@@ -228,13 +228,17 @@ func TestConfig(t *testing.T) {
 
 		assert.True(t, cfg.IsDuplicateID(id))
 
+		// Verify it was added to the unified list with correct provider
+		assert.Equal(t, 1, len(cfg.Queries))
+		assert.Equal(t, "Wallhaven", cfg.Queries[0].Provider)
+
 		err = cfg.DisableImageQuery(id)
 		assert.NoError(t, err)
-		// Verify it's disabled? We need to inspect cfg.ImageQueries
-		assert.False(t, cfg.ImageQueries[0].Active)
+		// Verify it's disabled
+		assert.False(t, cfg.Queries[0].Active)
 
 		err = cfg.RemoveImageQuery(id)
 		assert.NoError(t, err)
-		assert.Empty(t, cfg.ImageQueries)
+		assert.Empty(t, cfg.Queries)
 	})
 }

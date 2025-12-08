@@ -20,7 +20,36 @@ const (
 	NightlyRefreshPrefKey   = pluginPrefix + "nightly_refresh_key"    // NightlyRefreshPrefKey is used to set and retrieve the boolean flag for nightly refresh
 	FaceBoostPrefKey        = pluginPrefix + "face_boost_key"         // FaceBoostPrefKey is used to set and retrieve the boolean flag for face boost
 	FaceCropPrefKey         = pluginPrefix + "face_crop_key"          // FaceCropPrefKey is used to set and retrieve the boolean flag for face crop
+
+	// Provider keys (Shared)
+	UnsplashTokenPrefKey   = "unsplash_access_token"
+	WallhavenAPIKeyPrefKey = "wallhaven_api_key"
+	wallhavenConfigPrefKey = "wallhaven_image_queries"
+	PexelsAPIKeyPrefKey    = "pexels_api_key"
 )
+
+// URLType indicates the type of image source (Search or Collection).
+type URLType int
+
+const (
+	// Unknown type represents a web URL pattern not recognized nor supported by this application.
+	Unknown URLType = iota
+	// Search type represents a web search query url pattern.
+	Search
+	// Favorites type represents a web favorites url pattern.
+	Favorites
+)
+
+func (qt URLType) String() string {
+	switch qt {
+	case Search:
+		return "Search"
+	case Favorites:
+		return "Favorites"
+	default:
+		return "Unknown"
+	}
+}
 
 // Internal constants
 const (
@@ -33,7 +62,7 @@ const (
 	MaxImageWaitRetry        = 10
 	ImageWaitRetryDelay      = 1 * time.Second
 	MaxDescLength            = 50
-	MaxURLLength             = 50
+	MaxURLLength             = 255
 )
 
 // Frequency represents the frequency of a service

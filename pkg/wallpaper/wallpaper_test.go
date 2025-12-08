@@ -11,7 +11,9 @@ import (
 
 	"fyne.io/fyne/v2"
 	"github.com/dixieflatline76/Spice/asset"
+	"github.com/dixieflatline76/Spice/pkg/provider"
 	"github.com/dixieflatline76/Spice/pkg/ui"
+	"github.com/dixieflatline76/Spice/pkg/ui/setting"
 	"github.com/dixieflatline76/Spice/util"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -149,21 +151,31 @@ func (m *MockImageProvider) ParseURL(webURL string) (string, error) {
 	return args.String(0), args.Error(1)
 }
 
-func (m *MockImageProvider) FetchImages(ctx context.Context, apiURL string, page int) ([]Image, error) {
+func (m *MockImageProvider) FetchImages(ctx context.Context, apiURL string, page int) ([]provider.Image, error) {
 	args := m.Called(ctx, apiURL, page)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]Image), args.Error(1)
+	return args.Get(0).([]provider.Image), args.Error(1)
 }
 
-func (m *MockImageProvider) EnrichImage(ctx context.Context, img Image) (Image, error) {
+func (m *MockImageProvider) EnrichImage(ctx context.Context, img provider.Image) (provider.Image, error) {
 	args := m.Called(ctx, img)
 	if args.Get(0) == nil {
-		return Image{}, args.Error(1)
+		return provider.Image{}, args.Error(1)
 	}
-	return args.Get(0).(Image), args.Error(1)
+	return args.Get(0).(provider.Image), args.Error(1)
 }
+
+func (m *MockImageProvider) Title() string   { return "Mock" }
+func (m *MockImageProvider) HomeURL() string { return "https://mock.provider" }
+func (m *MockImageProvider) CreateSettingsPanel(sm setting.SettingsManager) fyne.CanvasObject {
+	return nil
+}
+func (m *MockImageProvider) CreateQueryPanel(sm setting.SettingsManager) fyne.CanvasObject {
+	return nil
+}
+func (m *MockImageProvider) GetProviderIcon() fyne.Resource { return nil }
 
 func TestDownloadAllImages(t *testing.T) {
 	// Setup
@@ -177,7 +189,7 @@ func TestDownloadAllImages(t *testing.T) {
 	mockProvider.On("ParseURL", "http://mock.url").Return("http://api.mock.url", nil)
 
 	// Mock FetchImages to return one image
-	mockProvider.On("FetchImages", mock.Anything, "http://api.mock.url", 1).Return([]Image{
+	mockProvider.On("FetchImages", mock.Anything, "http://api.mock.url", 1).Return([]provider.Image{
 		{
 			ID:          "test_img_1",
 			Path:        "http://example.com/image1.jpg", // We will mock this download
@@ -188,7 +200,7 @@ func TestDownloadAllImages(t *testing.T) {
 		},
 	}, nil)
 
-	cfg.ImageQueries = []ImageQuery{}
+	cfg.Queries = []ImageQuery{}
 	_, err := cfg.AddImageQuery("Test Query", "http://mock.url", true)
 	assert.NoError(t, err)
 
@@ -212,8 +224,8 @@ func TestDownloadAllImages(t *testing.T) {
 	mockProvider.ExpectedCalls = nil // Setup mock provider
 	mockProvider.On("Name").Return("MockProvider")
 	mockProvider.On("ParseURL", mock.Anything).Return("http://mock.url", nil)
-	img := Image{ID: "test_img_1", Path: ts.URL + "/image1.jpg", Provider: "MockProvider"}
-	mockProvider.On("FetchImages", mock.Anything, "http://mock.url", 1).Return([]Image{img}, nil)
+	img := provider.Image{ID: "test_img_1", Path: ts.URL + "/image1.jpg", Provider: "MockProvider"}
+	mockProvider.On("FetchImages", mock.Anything, "http://mock.url", 1).Return([]provider.Image{img}, nil)
 	// Expect EnrichImage call
 	mockProvider.On("EnrichImage", mock.Anything, mock.Anything).Return(img, nil)
 
@@ -231,8 +243,8 @@ func TestDownloadAllImages(t *testing.T) {
 		fitImageFlag:        util.NewSafeBool(),
 		shuffleImageFlag:    util.NewSafeBool(),
 		seenImages:          make(map[string]bool),
-		providers:           make(map[string]ImageProvider),
-		localImgRecs:        []Image{},
+		providers:           make(map[string]provider.ImageProvider),
+		localImgRecs:        []provider.Image{},
 	}
 	wp.providers["MockProvider"] = mockProvider
 
@@ -258,23 +270,38 @@ func TestDownloadAllImages_EnrichmentFailure(t *testing.T) {
 	cfg := GetConfig(prefs)
 
 	// Mock Provider
-	mockProvider := new(MockImageProvider)
-	mockProvider.On("Name").Return("MockProvider")
-	mockProvider.On("ParseURL", "http://mock.url").Return("http://api.mock.url", nil)
+	mockProvider := &MockImageProvider{}
+	mockProvider.On("Name").Return("Mock")
+	mockProvider.On("Title").Return("Mock Provider")
+	mockProvider.On("CreateSettingsPanel", mock.Anything).Return(nil)
+	mockProvider.On("CreateQueryPanel", mock.Anything).Return(nil)
+
+	// We need to register it. But providers are registered in init().
+	// We can manually add it to the map for testing if we access the plugin instance.
+	// Setup test plugin
+	wp := &Plugin{
+		providers: make(map[string]provider.ImageProvider),
+	}
+	wp.providers["Mock"] = mockProvider
+
+	// Test logic that uses providers...
+	// For now just asserting the interface compatibility
+	var _ provider.ImageProvider = mockProvider
 
 	// Mock FetchImages to return one image
-	img := Image{
+	img := provider.Image{
 		ID:          "test_img_fail",
 		Path:        "http://example.com/image_fail.jpg",
-		Provider:    "MockProvider",
+		Provider:    "Mock",
 		Attribution: "Original",
 	}
-	mockProvider.On("FetchImages", mock.Anything, "http://api.mock.url", 1).Return([]Image{img}, nil)
+	mockProvider.On("ParseURL", "http://mock.url").Return("http://api.mock.url", nil)
+	mockProvider.On("FetchImages", mock.Anything, "http://api.mock.url", 1).Return([]provider.Image{img}, nil)
 
 	// Expect EnrichImage call to FAIL
-	mockProvider.On("EnrichImage", mock.Anything, mock.Anything).Return(Image{}, assert.AnError)
+	mockProvider.On("EnrichImage", mock.Anything, mock.Anything).Return(provider.Image{}, assert.AnError)
 
-	cfg.ImageQueries = []ImageQuery{}
+	cfg.Queries = []ImageQuery{}
 	_, err := cfg.AddImageQuery("Test Query", "http://mock.url", true)
 	assert.NoError(t, err)
 
@@ -298,10 +325,10 @@ func TestDownloadAllImages_EnrichmentFailure(t *testing.T) {
 	mockProvider.ExpectedCalls = nil
 	mockProvider.On("Name").Return("MockProvider")
 	mockProvider.On("ParseURL", mock.Anything).Return("http://api.mock.url", nil)
-	mockProvider.On("FetchImages", mock.Anything, "http://api.mock.url", 1).Return([]Image{img}, nil)
-	mockProvider.On("EnrichImage", mock.Anything, mock.Anything).Return(Image{}, assert.AnError)
+	mockProvider.On("FetchImages", mock.Anything, "http://api.mock.url", 1).Return([]provider.Image{img}, nil)
+	mockProvider.On("EnrichImage", mock.Anything, mock.Anything).Return(provider.Image{}, assert.AnError)
 
-	wp := &Plugin{
+	wp = &Plugin{
 		os:                  mockOS,
 		imgProcessor:        mockIP,
 		cfg:                 cfg,
@@ -313,8 +340,8 @@ func TestDownloadAllImages_EnrichmentFailure(t *testing.T) {
 		fitImageFlag:        util.NewSafeBool(),
 		shuffleImageFlag:    util.NewSafeBool(),
 		seenImages:          make(map[string]bool),
-		providers:           make(map[string]ImageProvider),
-		localImgRecs:        []Image{},
+		providers:           make(map[string]provider.ImageProvider),
+		localImgRecs:        []provider.Image{},
 	}
 	wp.providers["MockProvider"] = mockProvider
 
@@ -357,9 +384,9 @@ func TestNavigation(t *testing.T) {
 	}
 
 	// Setup initial state with some images
-	img1 := Image{ID: "img1", Path: "http://example.com/img1.jpg", FilePath: "path/to/img1.jpg", Attribution: "user1"}
-	img2 := Image{ID: "img2", Path: "http://example.com/img2.jpg", FilePath: "path/to/img2.jpg", Attribution: "user2"}
-	wp.localImgRecs = []Image{img1, img2}
+	img1 := provider.Image{ID: "img1", Path: "http://example.com/img1.jpg", FilePath: "path/to/img1.jpg", Attribution: "user1"}
+	img2 := provider.Image{ID: "img2", Path: "http://example.com/img2.jpg", FilePath: "path/to/img2.jpg", Attribution: "user2"}
+	wp.localImgRecs = []provider.Image{img1, img2}
 
 	// Mock OS setWallpaper
 	mockOS.On("setWallpaper", mock.Anything).Return(nil)

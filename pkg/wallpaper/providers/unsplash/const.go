@@ -1,8 +1,10 @@
-package wallpaper
+package unsplash
 
 const (
 	// UnsplashTokenPrefKey is the key for storing the Unsplash access token in the keyring.
 	UnsplashTokenPrefKey = "unsplash_access_token"
+	// UnsplashDescRegexp is the regular expression used to validate an image query description
+	UnsplashDescRegexp = `^[^\x00-\x1F\x7F]{5,150}$`
 )
 
 // UnsplashClientID is the client ID for the Unsplash application.
@@ -23,4 +25,9 @@ const (
 
 	// UnsplashTokenURL is the URL to exchange the authorization code for an access token.
 	UnsplashTokenURL = "https://unsplash.com/oauth/token"
+
+	// UnsplashURLRegexp validates Unsplash URLs (search, collections).
+	// Matches: https://unsplash.com/collections/..., https://unsplash.com/s/photos/...
+	// Explicitly does NOT match https://unsplash.com/photos/... (single photos)
+	UnsplashURLRegexp = `^https:\/\/(?:www\.)?unsplash\.com\/(?:collections\/|s\/photos\/).*$`
 )

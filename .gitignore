@@ -36,3 +36,5 @@ wallpaper_coverage
 *_coverage.out
 test_output_*.txt
 c
+cover
+c.out
