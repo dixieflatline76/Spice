@@ -1,4 +1,4 @@
-package wallpaper
+package unsplash
 
 import (
 	"context"
@@ -10,17 +10,18 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/dixieflatline76/Spice/pkg/wallpaper"
 	"github.com/dixieflatline76/Spice/util/log"
 )
 
 // UnsplashAuthenticator handles the OAuth flow for Unsplash.
 type UnsplashAuthenticator struct {
-	cfg        *Config
+	cfg        *wallpaper.Config
 	httpClient *http.Client
 }
 
 // NewUnsplashAuthenticator creates a new UnsplashAuthenticator.
-func NewUnsplashAuthenticator(cfg *Config, client *http.Client) *UnsplashAuthenticator {
+func NewUnsplashAuthenticator(cfg *wallpaper.Config, client *http.Client) *UnsplashAuthenticator {
 	return &UnsplashAuthenticator{
 		cfg:        cfg,
 		httpClient: client,

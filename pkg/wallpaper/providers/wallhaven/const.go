@@ -1,4 +1,4 @@
-package wallpaper
+package wallhaven
 
 import "regexp"
 
@@ -7,9 +7,9 @@ const serviceName = "wallhaven"
 
 // Preference keys for wwallhaven.cc image service
 const (
-	servicePrefix          = serviceName + "_"               // servicePrefix is the prefix used for all wallhaven image service preference keys
-	wallhavenConfigPrefKey = servicePrefix + "image_queries" // wallhavenConfigPrefKey is the string key use for saving and retrieving wallhaven image queries to fyne preferences
-	WallhavenAPIKeyPrefKey = servicePrefix + "api_key"       // WallhavenAPIKeyPrefKey is used to set and retrieve the string wallhaven api key
+	servicePrefix = serviceName + "_" // servicePrefix is the prefix used for all wallhaven image service preference keys
+
+	WallhavenAPIKeyPrefKey = servicePrefix + "api_key" // WallhavenAPIKeyPrefKey is used to set and retrieve the string wallhaven api key
 )
 
 // Default values for wallhaven.cc image service

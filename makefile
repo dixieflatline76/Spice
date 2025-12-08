@@ -143,11 +143,18 @@ darwin-arm64-dev: update-patch-deps lint test build-darwin-arm64-dev
 # --- Clean target (cross-platform) ---
 clean:
 ifeq ($(OS),Windows_NT)
-	del /s /q bin\*
+	if exist bin rmdir /s /q bin
+	if exist coverage.out del coverage.out
+	if exist coverage.html del coverage.html
+	if exist coverage_report.txt del coverage_report.txt
 else
-	$(RM) -r bin
+	$(RM) -r bin coverage.out coverage.html coverage_report.txt
 endif
 	go clean
+
+coverage-report: test-coverage
+	go tool cover -func=coverage.out
+	go tool cover -func=coverage.out > coverage_report.txt
 
 # Define the command based on OS
 # Default for Linux/macOS

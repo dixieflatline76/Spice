@@ -35,13 +35,14 @@ import (
 // SpiceApp represents the application
 type SpiceApp struct {
 	fyne.App
-	assetMgr  *asset.Manager
-	trayMenu  *fyne.Menu
-	splash    fyne.Window   // Splash window for initial setup
-	notifiers []ui.Notifier // List of notifiers to activate
-	plugins   []ui.Plugin   // List of plugins to activate
-	os        OS            // Operating system interface
-	appConfig *config.AppConfig
+	assetMgr    *asset.Manager
+	trayMenu    *fyne.Menu
+	splash      fyne.Window   // Splash window for initial setup
+	notifiers   []ui.Notifier // List of notifiers to activate
+	plugins     []ui.Plugin   // List of plugins to activate
+	os          OS            // Operating system interface
+	appConfig   *config.AppConfig
+	prefsWindow fyne.Window // Singleton preferences window
 }
 
 // OS interface defines methods for transforming the application state
@@ -337,9 +338,18 @@ func (sa *SpiceApp) CreateSplashScreen(seconds int) {
 // It contains a main container for wallpaper plugin preferences and a close button at the bottom.
 // The close button closes the preferences window when clicked.
 func (sa *SpiceApp) CreatePreferencesWindow() {
-	// Create a new window for the preferences
 	sa.os.TransformToForeground()
+
+	// If window already exists, focus it and return
+	if sa.prefsWindow != nil {
+		sa.prefsWindow.Show()
+		sa.prefsWindow.RequestFocus()
+		return
+	}
+
+	// Create a new window for the preferences
 	prefsWindow := sa.NewWindow(fmt.Sprintf("%s Preferences", config.AppName))
+	sa.prefsWindow = prefsWindow // Store reference
 
 	// Set window size based on screen dimensions
 	_, height, err := sysinfo.GetScreenDimensions()
@@ -353,7 +363,10 @@ func (sa *SpiceApp) CreatePreferencesWindow() {
 	}
 
 	prefsWindow.CenterOnScreen()
-	prefsWindow.SetOnClosed(sa.os.TransformToBackground)
+	prefsWindow.SetOnClosed(func() {
+		sa.os.TransformToBackground()
+		sa.prefsWindow = nil // Clear reference on close
+	})
 	sm := NewSettingsManager(prefsWindow)
 
 	// --- General Tab ---
