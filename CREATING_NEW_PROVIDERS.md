@@ -1,151 +1,142 @@
 # How to Create a New Image Provider
 
-This guide outlines the steps to add a new image source (Provider) to Spice. It incorporates best practices, UI consistency patterns, and resolution handling logic based on the internal architecture.
+A deep-dive technical guide for implementing new image sources in Spice (v1.1.0+).
 
-## 1. Preparation
+## 1. Provider Architecture
 
-Create a new file `pkg/wallpaper/const_<provider>.go` for your constants.
+Spice uses a **Registry Pattern** to decouple providers. Providers are standalone packages in `pkg/wallpaper/providers/<name>`.
 
-- **Base URL**: The API endpoint.
-- **Regex**: For validating/parsing URLs.
+### Directory Structure
 
-```go
-package wallpaper
-
-const (
-    MyProviderBaseURL = "https://api.myprovider.com/v1"
-    MyProviderDomainRegexp = `^https?://(www\.)?myprovider\.com/.*$`
-)
+```
+pkg/wallpaper/providers/bing/
+├── bing.go         # Implementation & Registration
+├── const.go        # Constants (API URL, Regex)
+└── bing_test.go    # Unit Tests
 ```
 
-## 2. Implement the Interface
+## 2. Interface Contract (`pkg/provider.ImageProvider`)
 
-Create `pkg/wallpaper/<provider>.go` and implement the `ImageProvider` interface.
+You must implement the following 6 methods.
 
-```go
-type ImageProvider interface {
-    Name() string       // Internal ID (e.g., "Wikimedia")
-    Title() string      // UI Display Name (e.g., "Wikimedia Commons") - Short & Clean!
-    ParseURL(webURL string) (string, error)
-    FetchImages(ctx context.Context, apiURL string, page int) ([]Image, error)
-    EnrichImage(ctx context.Context, img Image) (Image, error)
-    
-    // UI Methods
-    GetProviderIcon() fyne.Resource // Tray/Menu Icon (64x64)
-    CreateSettingsPanel(sm setting.SettingsManager) fyne.CanvasObject
-    CreateQueryPanel(sm setting.SettingsManager) fyne.CanvasObject
-}
-```
+### 2.1 Core Logic
 
-### 2.1 Optional: Custom Headers
+* **`Name() string`**:
+  * **Purpose**: Internal ID used for config keys and logging.
+  * **Format**: PascalCase, unique (e.g., "Bing").
 
-If your provider requires specific headers (e.g., a custom `User-Agent`), implement the `HeaderProvider` interface:
+* **`Title() string`**:
+  * **Purpose**: User-facing display name.
+  * **Format**: Short, Title Case (e.g., "Bing Daily").
 
-```go
-func (p *MyProvider) GetDownloadHeaders() map[string]string {
-    return map[string]string{
-        "User-Agent": "Spice-App/1.0",
-    }
-}
-```
+* **`ParseURL(webURL string) (string, error)`**:
+  * **Input**: A URL copied from the browser (e.g., `bing.com/images/search?q=foo`).
+  * **Output**: A clean API-ready string (e.g., `search:foo`) or the input if it's already compliant.
+  * **Validation**: Use your `const.go` regex here to reject invalid domains.
 
-### 2.2 Optional: Resolution Awareness
+* **`FetchImages(ctx context.Context, apiURL string, page int) ([]Image, error)`**:
+  * **Context**: Must respect `ctx.Done()` for cancellation.
+  * **Pagination**: `page` is 1-indexed. If the API uses offsets, calculate `offset = (page-1) * limit`.
+  * **Returns**: A slice of `provider.Image`.
+  * **Critical**: Map the API response fields to `Image` struct fields (`Path`, `ID`, `Attribution`, `ViewURL`).
 
-To support "Smart Fit" filtering (injecting desktop resolution into queries), implement `ResolutionAwareProvider`:
+* **`EnrichImage(ctx, img) (Image, error)`**:
+  * **Purpose**: Called *after* download if metadata is missing.
+  * **Usage**: Some search APIs don't return high-res URLs or file types. Use this to perform a secondary fetch (e.g., HEAD request or scraping) to fill in `FileType`, `Path`, etc.
+  * **Safe Default**: If your API provides everything in `FetchImages`, just return `img, nil`.
 
-```go
-func (p *MyProvider) WithResolution(apiURL string, width, height int) string {
-    // Modify apiURL to include width/height params
-    return apiURL + fmt.Sprintf("&min_width=%d", width)
-}
-```
+### 2.2 UI Integration
 
-## 3. Configuration Integration
+* **`GetProviderIcon() fyne.Resource`**:
+  * **Purpose**: 64x64px icon for Tray Menu and Settings Headers.
+  * **Implementation**: Use `fyne.NewStaticResource("Name", []byte{...})`. Embed the PNG bytes in code or use `//go:embed`.
 
-*Note: This step currently requires modifying the central `Config` struct (see `pkg/wallpaper/config.go`).*
+## 3. Configuration & Settings Logic
 
-1. Add a **Getter** (`GetMyProviderQueries`).
-2. Add an **Adder** (`AddMyProviderQuery`).
+Do **NOT** modify the global `Config` struct. Use `fyne.Preferences`.
 
-## 4. UI Implementation (Critical Patterns)
+### 3.1 Settings Panel (`CreateSettingsPanel`)
 
-The settings UI determines how users interact with your provider. Follow these patterns strictly to ensure the "Apply Changes" button works correctly.
+Constructs the "General" tab for your provider (e.g., API Keys).
+**Input**: `sm setting.SettingsManager`.
+**returns**: `fyne.CanvasObject` (usually a `container.NewVBox`).
 
-### 4.1 The "Apply" Button Logic
+**Widget Types**:
 
-Do **NOT** commit changes immediately when a user checks a box. Instead, queue the change and notify the `SettingsManager`.
+* **`CreateTextEntrySetting`**: For strings (API Keys).
+  * **Validator**: Use `fyne.StringValidator` (e.g., `validator.NewRegexp(...)`).
+  * **PostValidateCheck**: Optional function `func(s string) error` for logic validation (e.g., "Key must start with 'Bearer '").
+* **`CreateBoolSetting`**: For toggles.
+* **`CreateSelectSetting`**: For dropdowns.
+* **`CreateButtonWithConfirmationSetting`**: For dangerous actions (Reset, Clear Cache).
 
-**Correct Pattern for List Items:**
+### 3.2 Query Panel (`CreateQueryPanel`)
 
-```go
-pendingState := make(map[string]bool) // Track pending toggles
+Constructs the image source list.
+**Pattern**:
 
-// In your list item constructor:
-check := widget.NewCheck("Active", nil)
-check.OnChanged = func(b bool) {
-    if b != initialActive {
-        pendingState[queryID] = b
-        
-        // 1. Register a callback to execution when "Apply" is clicked
-        sm.SetSettingChangedCallback(queryID, func() {
-            if b {
-                 p.cfg.EnableImageQuery(queryID)
-            } else {
-                 p.cfg.DisableImageQuery(queryID)
-            }
-            delete(pendingState, queryID)
-        })
-        
-        // 2. set the refresh flag to enable the button
-        sm.SetRefreshFlag(queryID)
-    } else {
-        // Reverted to original state
-        sm.RemoveSettingChangedCallback(queryID)
-        sm.UnsetRefreshFlag(queryID)
-    }
-    
-    // 3. Trigger button state update
+1. Iterate through `p.cfg.Preferences.QueryList("queries")`? **NO**.
+2. Use `p.cfg.Queries` (the unified list). Filter by `q.Provider == p.Name()`.
+3. Render a list of queries with "Active" toggles.
+
+## 4. The "Apply" Lifecycle (Critical)
+
+Spice uses a deferred-save model. Changes are staged until "Apply" is clicked.
+**You must implement this wiring:**
+
+1. **Change Detected**: Inside `OnChanged`:
+
+    ```go
+    sm.SetRefreshFlag("setting.id") // Enables "Apply" button
+    ```
+
+2. **Queue Action**:
+
+    ```go
+    sm.SetSettingChangedCallback("setting.id", func() {
+        // Logic to run ONLY when Apply is clicked
+        prefs.SetString("key", newValue)
+    })
+    ```
+
+3. **Revert**: If user cancels/reverts:
+
+    ```go
+    sm.UnsetRefreshFlag("setting.id")
+    sm.RemoveSettingChangedCallback("setting.id")
+    ```
+
+4. **UI Update**: Trigger visual update:
+
+    ```go
     sm.GetCheckAndEnableApplyFunc()()
-}
-```
+    ```
 
-## 5. Registration
+## 5. Registration (The Hook)
 
-In your `pkg/wallpaper/<provider>.go` file, add an `init()` function to auto-register your provider. **If you miss this, your provider will not show up.**
+In `myprovider.go`, add:
 
 ```go
 func init() {
-    RegisterProvider("MyProvider", func(cfg *Config, client *http.Client) ImageProvider {
-        return NewMyProvider(cfg, client)
+    // Key "Bing" must match Name() return value
+    provider.RegisterProvider("Bing", func(cfg *wallpaper.Config, client *http.Client) provider.ImageProvider {
+        return NewBingProvider(cfg, client)
     })
 }
 ```
 
-## 6. Testing & Linting
+In `cmd/spice/main.go`:
 
-We run strict linters (`golangci-lint`). Avoid these common errors:
+```go
+import _ "github.com/dixieflatline76/Spice/pkg/wallpaper/providers/bing"
+```
 
-- **Unchecked Errors**: Always check errors from config methods.
+## 6. Testing
 
-    ```go
-    // Bad
-    p.cfg.EnableImageQuery(id)
-    // Good
-    if err := p.cfg.EnableImageQuery(id); err != nil { log.Error(err) }
-    ```
+* **Unit**: Test `ParseURL` with table-driven tests.
+* **Integration**: Mock the `http.Client` or usage `httptest.Server` to test `FetchImages` without real network calls.
+* **UI**: UI testing is optional but recommended if complex.
 
-- **Unused Assignments**: Don't assign to `err` if you don't check it.
+## Reference
 
-- **Deprecated Random**: Use `rand.New(rand.NewSource(...))` instead of `rand.Seed`.
-
-## Checklist
-
-- [ ] Constants defined?
-- [ ] Interface implemented?
-- [ ] `Title()` returns a short, clean name?
-- [ ] `HeaderProvider` implemented (if needed)?
-- [ ] `ResolutionAwareProvider` implemented (if possible)?
-- [ ] UI uses `pendingState` and `SetSettingChangedCallback`?
-- [ ] Input validation loop included in UI?
-- [ ] `init()` registration added?
-- [ ] Unit tests passing?
+See `pkg/wallpaper/providers/pexels/pexels.go` for the reference implementation of all these patterns.

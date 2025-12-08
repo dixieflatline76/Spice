@@ -23,7 +23,9 @@ Spice is a minimalist wallpaper manager that brings a continuous stream of delig
 
 * **� Wallhaven Integration:** Our original and primary source! Access the vast library of **Wallhaven.cc** with full support for API keys, NSFW filters, and your private collections (Favorites).
 
-* **📸 Native Unsplash Integration:** Now with **Unsplash** support! Securely log in via OAuth to access millions of professional, high-quality photos.
+* **📸 Native Unsplash & Pexels Integration:** Securely log in to **Unsplash** or browse **Pexels** to access millions of professional, high-quality photos.
+
+* **🏛️ Wikimedia Commons:** Access the wealth of human history and nature with support for **Featured Pictures** and Category composition on Wikimedia Commons.
 
 * **📏 Smart Fit with Face Detection:** Never worry about bad crops again. **Smart Fit** intelligently pans images to fit your screen aspect ratio. Plus, our advanced **Face Crop** and **Face Boost** technology ensures people are perfectly framed—no more chopped-off heads!
 
@@ -39,18 +41,22 @@ Spice is a minimalist wallpaper manager that brings a continuous stream of delig
 
 * **⛔ Blocklist:** Don't like a wallpaper? Trash it with a hotkey or click, and Spice will block it forever.
 
+## Developers
+
+Want to add your own wallpaper source? Check out our [**Provider Creation Guide**](CREATING_NEW_PROVIDERS.md) to learn how to implement the `ImageProvider` interface in minutes.
+
 ## 📦 Installation
 
 Head to the [**Releases Page**](https://github.com/dixieflatline76/Spice/releases/latest) to download the installer for your OS.
 
 ### For Windows
 
-1. Download `Spice-Setup-1.0.0-amd64.exe`.
+1. Download `Spice-Setup-x.y.z-amd64.exe`.
 2. Double-click to install.
 
 ### For macOS (Apple Silicon)
 
-1. Download `Spice-v1.0.0-arm64.dmg`.
+1. Download `Spice-vx.y.z-arm64.dmg`.
 2. Open the `.dmg` and drag **Spice** into your **Applications** folder.
 
 ## 🚀 Usage
