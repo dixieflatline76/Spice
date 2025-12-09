@@ -10,6 +10,8 @@ import (
 	"net/url"
 	"strings"
 
+	_ "embed"
+
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/data/validation"
@@ -21,6 +23,9 @@ import (
 	"github.com/dixieflatline76/Spice/pkg/wallpaper"
 	"github.com/dixieflatline76/Spice/util/log"
 )
+
+//go:embed wallhaven.png
+var iconData []byte
 
 // WallhavenProvider implements ImageProvider for Wallhaven.
 type WallhavenProvider struct {
@@ -506,7 +511,7 @@ func (p *WallhavenProvider) createImgQueryList(sm setting.SettingsManager) *widg
 
 // GetProviderIcon returns the provider's icon for the tray menu.
 func (p *WallhavenProvider) GetProviderIcon() fyne.Resource {
-	return nil // Use default for now
+	return fyne.NewStaticResource("Wallhaven", iconData)
 }
 
 func (p *WallhavenProvider) getWebURL(apiURL string) *url.URL {
