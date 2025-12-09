@@ -253,7 +253,7 @@ func TestDownloadAllImages(t *testing.T) {
 	mockOS.On("getDesktopDimension").Return(1920, 1080, nil)
 
 	// Run
-	wp.downloadAllImages()
+	wp.downloadAllImages(nil)
 
 	// Verify
 	mockPM.AssertCalled(t, "NotifyUser", "Downloading: ", "[Test Query]\n")
@@ -349,7 +349,7 @@ func TestDownloadAllImages_EnrichmentFailure(t *testing.T) {
 	mockOS.On("getDesktopDimension").Return(1920, 1080, nil)
 
 	// Run
-	wp.downloadAllImages()
+	wp.downloadAllImages(nil)
 
 	// Verify
 	// Should still have downloaded the image
@@ -381,6 +381,29 @@ func TestNavigation(t *testing.T) {
 		shuffleImageFlag:    util.NewSafeBool(),
 		seenImages:          make(map[string]bool),
 		localImgIndex:       *util.NewSafeIntWithValue(-1),
+		actionChan:          make(chan func(), 10),
+	}
+
+	// Helper to execute queued actions synchronously for testing
+	processActions := func() {
+		close(wp.actionChan)
+		for action := range wp.actionChan {
+			action()
+		}
+		// Re-open for next steps? No, simpler to just loop with select or buffer check.
+		// Better: process one item.
+	}
+	_ = processActions // Keep compiler happy if unused temporarily
+
+	processQueue := func() {
+		for {
+			select {
+			case action := <-wp.actionChan:
+				action()
+			default:
+				return
+			}
+		}
 	}
 
 	// Setup initial state with some images
@@ -400,6 +423,7 @@ func TestNavigation(t *testing.T) {
 
 	// Initial state: index -1. Next should be 0.
 	wp.SetNextWallpaper()
+	processQueue()
 	assert.Equal(t, 0, wp.localImgIndex.Value())
 	assert.Equal(t, "img1", wp.currentImage.ID)
 	mockOS.AssertCalled(t, "setWallpaper", mock.MatchedBy(func(path string) bool {
@@ -408,11 +432,13 @@ func TestNavigation(t *testing.T) {
 
 	// Next should be 1
 	wp.SetNextWallpaper()
+	processQueue()
 	assert.Equal(t, 1, wp.localImgIndex.Value())
 	assert.Equal(t, "img2", wp.currentImage.ID)
 
 	// Next should wrap to 0
 	wp.SetNextWallpaper()
+	processQueue()
 	assert.Equal(t, 0, wp.localImgIndex.Value())
 }
 

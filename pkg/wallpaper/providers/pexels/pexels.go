@@ -3,6 +3,7 @@ package pexels
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -310,128 +311,37 @@ func (p *PexelsProvider) CreateQueryPanel(sm setting.SettingsManager) fyne.Canva
 	imgQueryList := p.createImgQueryList(sm)
 	sm.RegisterRefreshFunc(imgQueryList.Refresh)
 
-	var addButton *widget.Button
+	// Create "Add" Button using standardized helper
+	addButton := wallpaper.CreateAddQueryButton(
+		"Add Pexels Search",
+		sm,
+		wallpaper.AddQueryConfig{
+			Title:           "New Pexels Query",
+			URLPlaceholder:  "Pexels Search URL (e.g. https://www.pexels.com/search/nature/)",
+			URLValidator:    PexelsURLRegexp,
+			URLErrorMsg:     "Invalid Pexels URL (search or collection)",
+			DescPlaceholder: "Add a description",
+			DescValidator:   PexelsDescRegexp,
+			DescErrorMsg:    fmt.Sprintf("Description must be between 5 and %d alpha numeric characters long", wallpaper.MaxDescLength),
+			ValidateFunc: func(url, desc string) error {
+				// Validate string using Pexels specific logic
+				// Pexels regex validation happens via InputValidator, so we just check duplicates here
 
-	addButton = widget.NewButton("Add Pexels Query", func() {
-
-		urlEntry := widget.NewEntry()
-		urlEntry.SetPlaceHolder("Enter keyword (e.g., 'Nature') or Pexels URL")
-
-		descEntry := widget.NewEntry()
-		descEntry.SetPlaceHolder("Add a description")
-
-		formStatus := widget.NewLabel("")
-		activeBool := widget.NewCheck("Active", nil)
-
-		cancelButton := widget.NewButton("Cancel", nil)
-		saveButton := widget.NewButton("Save", nil)
-		saveButton.Disable()
-
-		formValidator := func(who *widget.Entry) bool {
-			// Basic validation
-			if urlEntry.Text == "" {
-				return false
-			}
-			if descEntry.Text == "" {
-				return false
-			}
-
-			// Check for duplicates
-			queryID := wallpaper.GenerateQueryID(urlEntry.Text)
-			if p.cfg.IsDuplicateID(queryID) {
-				if who == urlEntry || (who == descEntry && urlEntry.Text != "") {
-					formStatus.SetText("Duplicate query: this URL already exists")
-					formStatus.Importance = widget.DangerImportance
+				// Check for duplicates
+				queryID := wallpaper.GenerateQueryID(url)
+				if p.cfg.IsDuplicateID(queryID) {
+					return errors.New("duplicate query: this URL already exists")
 				}
-				formStatus.Refresh()
-				return false
-			}
-
-			formStatus.SetText("Everything looks good")
-			formStatus.Importance = widget.SuccessImportance
-			formStatus.Refresh()
-			return true
-		}
-
-		// PexelsURLRegexp checks for search/collection URL pattern.
-		// If user enters a keyword, regex might fail?
-		// Original code: `urlEntry.Validator = validation.NewRegexp(PexelsURLRegexp, "Invalid Pexels URL (search or collection)")`
-		// Wait, did original code support keywords directly?
-		// In `createPexelsQueryPanel` (ui.go), the placeholder said "Enter keyword ... or Pexels URL".
-		// But validator uses regex that enforces `https://www.pexels.com`.
-		// If I enter "Nature", it fails regex.
-		// `AddPexelsQuery` logic inside Config might handle automatic conversion?
-		// `cfg.AddPexelsQuery(desc, url, active)` calls `ParseURL` etc?
-		// Actually `AddPexelsQuery` just stores it.
-		// If regex is strict, keyword entry might be broken or I misunderstood.
-		// Let's stick to what was in `ui.go`. `PexelsURLRegexp` was used.
-		urlEntry.Validator = validation.NewRegexp(PexelsURLRegexp, "Invalid Pexels URL (search or collection)")
-		// Use generic regexp for Pexels search URL validation if simpler, or just allow free text?
-		// But here we use free text for search? Pexels API uses search terms mostly.
-		// Wait, Pexels also has collections?
-		// Just using generic validation + length checkers.
-
-		descEntry.Validator = validation.NewRegexp(PexelsDescRegexp, fmt.Sprintf("Description must be between 5 and %d alpha numeric characters long", wallpaper.MaxDescLength))
-
-		newEntryLengthChecker := func(entry *widget.Entry, maxLen int) func(string) {
-			return func(s string) {
-				if len(s) > maxLen {
-					entry.SetText(s[:maxLen]) // Truncate to max length
-					return                    // Stop further processing
-				}
-
-				if formValidator(entry) {
-					saveButton.Enable()
-				} else {
-					saveButton.Disable()
-				}
-			}
-		}
-
-		urlEntry.OnChanged = newEntryLengthChecker(urlEntry, wallpaper.MaxURLLength)
-		descEntry.OnChanged = newEntryLengthChecker(descEntry, wallpaper.MaxDescLength)
-
-		c := container.NewVBox()
-		c.Add(sm.CreateSettingTitleLabel("Pexels Search:"))
-		c.Add(urlEntry)
-		c.Add(sm.CreateSettingTitleLabel("Description:"))
-		c.Add(descEntry)
-		c.Add(formStatus)
-		c.Add(activeBool)
-		c.Add(widget.NewSeparator())
-		c.Add(container.NewHBox(cancelButton, layout.NewSpacer(), saveButton))
-
-		d := dialog.NewCustomWithoutButtons("New Pexels Query", c, sm.GetSettingsWindow())
-		d.Resize(fyne.NewSize(800, 200))
-
-		saveButton.OnTapped = func() {
-			newID, err := p.cfg.AddPexelsQuery(descEntry.Text, urlEntry.Text, activeBool.Checked)
-			if err != nil {
-				formStatus.SetText(err.Error())
-				formStatus.Importance = widget.DangerImportance
-				formStatus.Refresh()
-				return
-			}
-
-			addButton.Enable()
+				return nil
+			},
+			AddHandler: func(desc, url string, active bool) (string, error) {
+				return p.cfg.AddPexelsQuery(desc, url, active)
+			},
+		},
+		func() {
 			imgQueryList.Refresh()
-
-			if activeBool.Checked {
-				sm.SetRefreshFlag(newID)
-				sm.GetCheckAndEnableApplyFunc()()
-			}
-			d.Hide()
-			addButton.Enable()
-		}
-
-		cancelButton.OnTapped = func() {
-			d.Hide()
-			addButton.Enable()
-		}
-
-		d.Show()
-		addButton.Disable()
-	})
+		},
+	)
 
 	header := container.NewVBox()
 	header.Add(sm.CreateSettingTitleLabel("Pexels Queries"))

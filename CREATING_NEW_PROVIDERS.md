@@ -8,7 +8,7 @@ Spice uses a **Registry Pattern** to decouple providers. Providers are standalon
 
 ### Directory Structure
 
-```
+```text
 pkg/wallpaper/providers/bing/
 ├── bing.go         # Implementation & Registration
 ├── const.go        # Constants (API URL, Regex)
@@ -78,6 +78,33 @@ Constructs the image source list.
 1. Iterate through `p.cfg.Preferences.QueryList("queries")`? **NO**.
 2. Use `p.cfg.Queries` (the unified list). Filter by `q.Provider == p.Name()`.
 3. Render a list of queries with "Active" toggles.
+4. **Use Standardized Add Button**: Use `wallpaper.CreateAddQueryButton` (in `pkg/wallpaper/ui_add_query.go`) to create the "Add" button. This helper handles validation, modal creation, and the critical "Apply" button wiring for you.
+
+   ```go
+   addBtn := wallpaper.CreateAddQueryButton(
+       "Add MyProvider Query",
+       sm,
+       wallpaper.AddQueryConfig{
+           Title:           "New Query",
+           URLPlaceholder:  "Search term or URL",
+           DescPlaceholder: "Description",
+           ValidateFunc: func(url, desc string) error {
+               if len(url) == 0 {
+                   return errors.New("URL cannot be empty")
+               }
+               // Add provider-specific validation here (e.g., regex check)
+               return nil
+           },
+           AddHandler: func(desc, url string, active bool) (string, error) {
+               return p.cfg.AddMyProviderQuery(desc, url, active)
+           },
+       },
+       func() {
+           queryList.Refresh()
+           sm.SetRefreshFlag("queries")
+       },
+   )
+   ```
 
 ## 4. The "Apply" Lifecycle (Critical)
 
@@ -139,4 +166,4 @@ import _ "github.com/dixieflatline76/Spice/pkg/wallpaper/providers/bing"
 
 ## Reference
 
-See `pkg/wallpaper/providers/pexels/pexels.go` for the reference implementation of all these patterns.
+See `pkg/wallpaper/providers/wikimedia/wikimedia.go` or `pkg/wallpaper/providers/pexels/pexels.go` for the reference implementation of all these patterns.

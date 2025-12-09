@@ -3,6 +3,7 @@ package wallhaven
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -57,6 +58,7 @@ func (p *WallhavenProvider) HomeURL() string {
 
 // ParseURL converts a web URL to an API URL.
 func (p *WallhavenProvider) ParseURL(webURL string) (string, error) {
+	log.Debugf("Wallhaven Parsing URL: %s", webURL)
 	trimmedURL := strings.TrimSpace(webURL)
 	var baseURL string
 
@@ -108,6 +110,7 @@ func (p *WallhavenProvider) ParseURL(webURL string) (string, error) {
 	if paramsChanged {
 		parsedURL.RawQuery = q.Encode()
 	}
+	log.Debugf("Wallhaven Parsed URL: %s", parsedURL.String())
 	return parsedURL.String(), nil
 }
 
@@ -181,6 +184,8 @@ func (p *WallhavenProvider) FetchImages(ctx context.Context, apiURL string, page
 	if err = json.Unmarshal(body, &response); err != nil {
 		return nil, fmt.Errorf("failed to parse JSON: %w", err)
 	}
+
+	log.Debugf("Wallhaven API returned %d images", len(response.Data))
 
 	var images []provider.Image
 	for _, item := range response.Data {
@@ -353,150 +358,45 @@ func (p *WallhavenProvider) CreateQueryPanel(sm setting.SettingsManager) fyne.Ca
 	imgQueryList := p.createImgQueryList(sm)
 	sm.RegisterRefreshFunc(imgQueryList.Refresh)
 
-	var addButton *widget.Button
-
-	addButton = widget.NewButton("Add wallhaven URL", func() {
-
-		urlEntry := widget.NewEntry()
-		urlEntry.SetPlaceHolder("Cut and paste a wallhaven search or collection URL from your browser to here")
-
-		descEntry := widget.NewEntry()
-		descEntry.SetPlaceHolder("Add a description for these images")
-
-		formStatus := widget.NewLabel("")
-		activeBool := widget.NewCheck("Active", nil)
-
-		cancelButton := widget.NewButton("Cancel", nil)
-		saveButton := widget.NewButton("Save", nil)
-		saveButton.Disable() // Save button is only enabled when the URL is valid and min desc has been added
-
-		formValidator := func(who *widget.Entry) bool {
-			urlStrErr := urlEntry.Validate()
-			descStrErr := descEntry.Validate()
-
-			if urlStrErr != nil {
-				if who == urlEntry {
-					formStatus.SetText(urlStrErr.Error())
-					formStatus.Importance = widget.DangerImportance
+	// Create "Add" Button using standardized helper
+	addButton := wallpaper.CreateAddQueryButton(
+		"Add Wallhaven URL",
+		sm,
+		wallpaper.AddQueryConfig{
+			Title:           "New Image Query",
+			URLPlaceholder:  "Paste your Wallhaven Search or Collection (Favorites) URL",
+			URLValidator:    WallhavenURLRegexp,
+			URLErrorMsg:     "Invalid wallhaven image query URL pattern",
+			DescPlaceholder: "Add a description",
+			DescValidator:   WallhavenDescRegexp,
+			DescErrorMsg:    fmt.Sprintf("Description must be between 5 and %d alpha numeric characters long", wallpaper.MaxDescLength),
+			ValidateFunc: func(url, desc string) error {
+				// Wallhaven specific logic: we need to convert the Web URL to API URL
+				apiURL, _, err := CovertWebToAPIURL(url)
+				if err != nil {
+					return fmt.Errorf("URL conversion error: %v", err)
 				}
-				formStatus.Refresh()
-				return false // URL syntax is wrong
-			}
 
-			if descStrErr != nil {
-				if who == descEntry {
-					formStatus.SetText(descStrErr.Error())
-					formStatus.Importance = widget.DangerImportance
+				// Check for duplicates
+				queryID := wallpaper.GenerateQueryID(apiURL)
+				if p.cfg.IsDuplicateID(queryID) {
+					return errors.New("Duplicate query: this URL already exists")
 				}
-				formStatus.Refresh()
-				return false // Description is wrong
-			}
-
-			apiURL, _, err := CovertWebToAPIURL(urlEntry.Text)
-			if err != nil {
-				if who == urlEntry {
-					formStatus.SetText(fmt.Sprintf("URL conversion error: %v", err))
-					formStatus.Importance = widget.DangerImportance
-				}
-				formStatus.Refresh()
-				return false // URL is not convertible
-			}
-
-			queryID := wallpaper.GenerateQueryID(apiURL)
-			if p.cfg.IsDuplicateID(queryID) {
-				if who == urlEntry || (who == descEntry && urlEntry.Text != "") {
-					formStatus.SetText("Duplicate query: this URL already exists")
-					formStatus.Importance = widget.DangerImportance
-				}
-				formStatus.Refresh()
-				return false // It's a duplicate!
-			}
-
-			formStatus.SetText("Everything looks good")
-			formStatus.Importance = widget.SuccessImportance
-			formStatus.Refresh()
-			return true
-		}
-
-		urlEntry.Validator = validation.NewRegexp(WallhavenURLRegexp, "Invalid wallhaven image query URL pattern")
-		descEntry.Validator = validation.NewRegexp(WallhavenDescRegexp, fmt.Sprintf("Description must be between 5 and %d alpha numeric characters long", wallpaper.MaxDescLength))
-
-		newEntryLengthChecker := func(entry *widget.Entry, maxLen int) func(string) {
-			{
-				return func(s string) {
-					if len(s) > maxLen {
-						entry.SetText(s[:maxLen]) // Truncate to max length
-						return                    // Stop further processing
-					}
-
-					if formValidator(entry) {
-						saveButton.Enable()
-					} else {
-						saveButton.Disable()
-					}
-				}
-			}
-		}
-		urlEntry.OnChanged = newEntryLengthChecker(urlEntry, wallpaper.MaxURLLength)
-		descEntry.OnChanged = newEntryLengthChecker(descEntry, wallpaper.MaxDescLength)
-
-		c := container.NewVBox()
-		c.Add(sm.CreateSettingTitleLabel("wallhaven Search or Collection (Favorites) URL:"))
-		c.Add(urlEntry)
-		c.Add(sm.CreateSettingTitleLabel("Description:"))
-		c.Add(descEntry)
-		c.Add(formStatus)
-		c.Add(activeBool)
-		c.Add(widget.NewSeparator())
-		c.Add(container.NewHBox(cancelButton, layout.NewSpacer(), saveButton))
-
-		d := dialog.NewCustomWithoutButtons("New Image Query", c, sm.GetSettingsWindow())
-		d.Resize(fyne.NewSize(800, 200))
-
-		saveButton.OnTapped = func() {
-
-			apiURL, _, err := CovertWebToAPIURL(urlEntry.Text)
-			if err != nil {
-				formStatus.SetText(err.Error())
-				formStatus.Importance = widget.DangerImportance
-				formStatus.Refresh()
-				return
-			}
-
-			// We skip CheckWallhavenURL for now as it requires OS context.
-			// We can reimplement a simpler check here if needed later.
-
-			// We already checked for duplicates, but we check err just in case.
-			newID, err := p.cfg.AddImageQuery(descEntry.Text, apiURL, activeBool.Checked)
-			if err != nil {
-				formStatus.SetText(err.Error())
-				formStatus.Importance = widget.DangerImportance
-				formStatus.Refresh()
-				return // Don't close the dialog
-			}
-
-			addButton.Enable()
+				return nil
+			},
+			AddHandler: func(desc, url string, active bool) (string, error) {
+				// Convert to API URL again (safe as validation passed)
+				apiURL, _, _ := CovertWebToAPIURL(url)
+				return p.cfg.AddImageQuery(desc, apiURL, active)
+			},
+		},
+		func() {
 			imgQueryList.Refresh()
-
-			if activeBool.Checked {
-				sm.SetRefreshFlag(newID)
-				sm.GetCheckAndEnableApplyFunc()()
-			}
-			d.Hide()
-			addButton.Enable()
-		}
-
-		cancelButton.OnTapped = func() {
-			d.Hide()
-			addButton.Enable()
-		}
-
-		d.Show()
-		addButton.Disable()
-	})
+		},
+	)
 
 	header := container.NewVBox()
-	header.Add(sm.CreateSettingTitleLabel("wallhaven Queries and Collections (Favorites)"))
+	header.Add(sm.CreateSettingTitleLabel("Wallhaven Queries and Collections (Favorites)"))
 	header.Add(sm.CreateSettingDescriptionLabel("Manage your wallhaven.cc image queries and collections here. Paste your image search or collection URL and Spice will take care of the rest."))
 	header.Add(addButton)
 	qpContainer := container.NewBorder(header, nil, nil, nil, imgQueryList)
