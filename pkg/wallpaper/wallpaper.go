@@ -322,7 +322,6 @@ func (wp *Plugin) setWallpaperAt(imageIndex int) {
 		// Note: We don't revert the UI state here because it would be jarring.
 		// The next successful wallpaper change will correct it.
 		return
-		return
 	}
 	// log.Debugf("[Timing] setWallpaperAt: OS SetWallpaper took %v", time.Since(tOSStart))
 
