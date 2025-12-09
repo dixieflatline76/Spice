@@ -144,17 +144,26 @@ darwin-arm64-dev: update-patch-deps lint test build-darwin-arm64-dev
 clean:
 ifeq ($(OS),Windows_NT)
 	if exist bin rmdir /s /q bin
-	if exist coverage.out del coverage.out
-	if exist coverage.html del coverage.html
-	if exist coverage_report.txt del coverage_report.txt
+	if exist coverage* del /q coverage*
+	if exist *.out del /q *.out
+	if exist *.html del /q *.html
 else
-	$(RM) -r bin coverage.out coverage.html coverage_report.txt
+	$(RM) -r bin coverage* *.out *.html
 endif
 	go clean
 
-coverage-report: test-coverage
-	go tool cover -func=coverage.out
-	go tool cover -func=coverage.out > coverage_report.txt
+# Combined coverage target
+coverage:
+	go test -v -coverprofile=coverage.out ./...
+	go tool cover -html=coverage.out -o coverage.html
+	go tool cover -func=coverage.out > coverage.txt
+	@echo "Coverage report generated: coverage.html & coverage.txt"
+	@echo "Summary:"
+	@go tool cover -func=coverage.out
+
+# Legacy aliases
+test-coverage: coverage
+coverage-report: coverage
 
 # Define the command based on OS
 # Default for Linux/macOS
@@ -194,4 +203,4 @@ notarize-mac-arm64:
 	@echo "Stapling notarization ticket to DMG..."
 	xcrun stapler staple "dist/Spice-$(VERSION)-arm64.dmg"
 
-.PHONY: build-win-amd64 build-win-console-amd64 build-win-arm64 build-linux-amd64 build-darwin-amd64 build-darwin-arm64 build-win-amd64-dev build-win-console-amd64-dev build-linux-amd64-dev lint test update-patch-deps update-minor-deps list-updates win-amd64 win-amd64-dev linux-amd64 linux-amd64-dev darwin-amd64 darwin-amd64-dev darwin-arm64 darwin-arm64-dev clean build-version-bump bump-patch bump-minor bump-major notarize-mac-arm64
+.PHONY: build-win-amd64 build-win-console-amd64 build-win-arm64 build-linux-amd64 build-darwin-amd64 build-darwin-arm64 build-win-amd64-dev build-win-console-amd64-dev build-linux-amd64-dev lint test update-patch-deps update-minor-deps list-updates win-amd64 win-amd64-dev linux-amd64 linux-amd64-dev darwin-amd64 darwin-amd64-dev darwin-arm64 darwin-arm64-dev clean build-version-bump bump-patch bump-minor bump-major notarize-mac-arm64 coverage

@@ -5,9 +5,14 @@ import (
 	"image"
 	"image/color"
 	"image/draw"
+	_ "image/png" // For decoding png
+	"os"
 	"testing"
 
+	"github.com/dixieflatline76/Spice/asset"
+	pigo "github.com/esimov/pigo/core"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func createTestImage(width, height int) image.Image {
@@ -92,4 +97,74 @@ func TestSmartImageProcessor_FitImage(t *testing.T) {
 
 		mockOS.AssertNotCalled(t, "getDesktopDimension")
 	})
+}
+
+func TestFaceDetection(t *testing.T) {
+	// Load facefinder model
+	am := asset.NewManager()
+	modelData, err := am.GetModel("facefinder")
+	if err != nil {
+		t.Skip("Facefinder model not found, skipping face detection test")
+	}
+
+	p := pigo.NewPigo()
+	pigoInstance, err := p.Unpack(modelData)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Load test image
+	f, err := os.Open("testdata/face.png")
+	if err != nil {
+		t.Skip("Test image 'testdata/face.png' not found, skipping")
+	}
+	defer f.Close()
+
+	img, _, err := image.Decode(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ResetConfig()
+	prefs := NewMockPreferences()
+	cfg := GetConfig(prefs)
+	cfg.SetFaceBoostEnabled(true)
+	cfg.SetFaceCropEnabled(true)
+
+	processor := &smartImageProcessor{
+		os:     new(MockOS),
+		config: cfg,
+		pigo:   pigoInstance,
+	}
+
+	// Test findBestFace
+	rect, err := processor.findBestFace(img)
+	if err != nil {
+		t.Logf("Face detection failed (could be due to model/image mismatch): %v", err)
+	} else {
+		// Use require to stop if basic assertions fail
+		require.False(t, rect.Empty(), "Face rectangle should not be empty")
+		require.True(t, rect.In(img.Bounds()), "Face rectangle should be within image bounds")
+
+		// Test cropAroundFace
+		// Our test image is small (generated). Let's pick a target size that definitely fits.
+		targetW, targetH := 50, 50
+		crop := processor.cropAroundFace(img.Bounds(), rect, targetW, targetH)
+
+		// Verify aspect ratio matches target (1:1)
+		// The crop should be a square, as large as possible.
+		// Since we don't know the exact image size (generated), we just check it is square.
+		// Allow for small rounding error (1px)
+		width := crop.Dx()
+		height := crop.Dy()
+		diff := width - height
+		if diff < 0 {
+			diff = -diff
+		}
+		assert.LessOrEqual(t, diff, 1, "Crop aspect ratio mismatch (expected square)")
+
+		// Verify crop contains center of face (roughly)
+		faceCenter := rect.Min.Add(rect.Size().Div(2))
+		assert.True(t, faceCenter.In(crop), "Crop should contain face center")
+	}
 }

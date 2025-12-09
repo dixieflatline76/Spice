@@ -3,6 +3,7 @@ package unsplash
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -13,7 +14,6 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/data/validation"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
@@ -371,122 +371,39 @@ func (p *UnsplashProvider) CreateQueryPanel(sm setting.SettingsManager) fyne.Can
 	imgQueryList := p.createImgQueryList(sm)
 	sm.RegisterRefreshFunc(imgQueryList.Refresh)
 
-	var addButton *widget.Button
-
-	addButton = widget.NewButton("Add Unsplash URL", func() {
-
-		urlEntry := widget.NewEntry()
-		urlEntry.SetPlaceHolder("Paste an Unsplash search or collection URL")
-
-		descEntry := widget.NewEntry()
-		descEntry.SetPlaceHolder("Add a description")
-
-		formStatus := widget.NewLabel("")
-		activeBool := widget.NewCheck("Active", nil)
-
-		cancelButton := widget.NewButton("Cancel", nil)
-		saveButton := widget.NewButton("Save", nil)
-		saveButton.Disable()
-
-		formValidator := func(who *widget.Entry) bool {
-			// Basic validation
-			if urlEntry.Text == "" {
-				return false
-			}
-			if descEntry.Text == "" {
-				return false
-			}
-
-			// Validate URL format using UnsplashProvider logic
-			_, err := p.ParseURL(urlEntry.Text)
-			if err != nil {
-				if who == urlEntry {
-					formStatus.SetText(fmt.Sprintf("Invalid Unsplash URL: %v", err))
-					formStatus.Importance = widget.DangerImportance
-				}
-				formStatus.Refresh()
-				return false
-			}
-
-			// Check for duplicates
-			queryID := wallpaper.GenerateQueryID(urlEntry.Text)
-			if p.cfg.IsDuplicateID(queryID) {
-				if who == urlEntry || (who == descEntry && urlEntry.Text != "") {
-					formStatus.SetText("Duplicate query: this URL already exists")
-					formStatus.Importance = widget.DangerImportance
-				}
-				formStatus.Refresh()
-				return false
-			}
-
-			formStatus.SetText("Everything looks good")
-			formStatus.Importance = widget.SuccessImportance
-			formStatus.Refresh()
-			return true
-		}
-
-		urlEntry.Validator = validation.NewRegexp(UnsplashURLRegexp, "Invalid Unsplash URL (search/collection/photo)")
-		descEntry.Validator = validation.NewRegexp(UnsplashDescRegexp, fmt.Sprintf("Description must be between 5 and %d alpha numeric characters long", wallpaper.MaxDescLength))
-
-		newEntryLengthChecker := func(entry *widget.Entry, maxLen int) func(string) {
-			return func(s string) {
-				if len(s) > maxLen {
-					entry.SetText(s[:maxLen]) // Truncate to max length
-					return                    // Stop further processing
+	// Create "Add" Button using standardized helper
+	addButton := wallpaper.CreateAddQueryButton(
+		"Add Unsplash URL",
+		sm,
+		wallpaper.AddQueryConfig{
+			Title:           "New Unsplash Query",
+			URLPlaceholder:  "Paste an Unsplash search or collection URL",
+			URLValidator:    UnsplashURLRegexp,
+			URLErrorMsg:     "Invalid Unsplash URL (search/collection/photo)",
+			DescPlaceholder: "Add a description",
+			DescValidator:   UnsplashDescRegexp,
+			DescErrorMsg:    fmt.Sprintf("Description must be between 5 and %d alpha numeric characters long", wallpaper.MaxDescLength),
+			ValidateFunc: func(url, desc string) error {
+				// Validate string using Unsplash specific logic
+				if _, err := p.ParseURL(url); err != nil {
+					return fmt.Errorf("Invalid Unsplash URL: %v", err)
 				}
 
-				if formValidator(entry) {
-					saveButton.Enable()
-				} else {
-					saveButton.Disable()
+				// Check for duplicates
+				queryID := wallpaper.GenerateQueryID(url)
+				if p.cfg.IsDuplicateID(queryID) {
+					return errors.New("Duplicate query: this URL already exists")
 				}
-			}
-		}
-
-		urlEntry.OnChanged = newEntryLengthChecker(urlEntry, wallpaper.MaxURLLength)
-		descEntry.OnChanged = newEntryLengthChecker(descEntry, wallpaper.MaxDescLength)
-
-		c := container.NewVBox()
-		c.Add(sm.CreateSettingTitleLabel("Unsplash Search or Collection URL:"))
-		c.Add(urlEntry)
-		c.Add(sm.CreateSettingTitleLabel("Description:"))
-		c.Add(descEntry)
-		c.Add(formStatus)
-		c.Add(activeBool)
-		c.Add(widget.NewSeparator())
-		c.Add(container.NewHBox(cancelButton, layout.NewSpacer(), saveButton))
-
-		d := dialog.NewCustomWithoutButtons("New Unsplash Query", c, sm.GetSettingsWindow())
-		d.Resize(fyne.NewSize(800, 200))
-
-		saveButton.OnTapped = func() {
-			newID, err := p.cfg.AddUnsplashQuery(descEntry.Text, urlEntry.Text, activeBool.Checked)
-			if err != nil {
-				formStatus.SetText(err.Error())
-				formStatus.Importance = widget.DangerImportance
-				formStatus.Refresh()
-				return
-			}
-
-			addButton.Enable()
+				return nil
+			},
+			AddHandler: func(desc, url string, active bool) (string, error) {
+				return p.cfg.AddUnsplashQuery(desc, url, active)
+			},
+		},
+		func() {
 			imgQueryList.Refresh()
-
-			if activeBool.Checked {
-				sm.SetRefreshFlag(newID)
-				sm.GetCheckAndEnableApplyFunc()()
-			}
-			d.Hide()
-			addButton.Enable()
-		}
-
-		cancelButton.OnTapped = func() {
-			d.Hide()
-			addButton.Enable()
-		}
-
-		d.Show()
-		addButton.Disable()
-	})
+		},
+	)
 
 	header := container.NewVBox()
 	header.Add(sm.CreateSettingTitleLabel("Unsplash Queries"))

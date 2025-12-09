@@ -15,7 +15,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
-	"fyne.io/fyne/v2/theme"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/dixieflatline76/Spice/pkg/provider"
@@ -296,6 +296,45 @@ func (p *WikimediaProvider) CreateSettingsPanel(sm setting.SettingsManager) fyne
 }
 
 func (p *WikimediaProvider) CreateQueryPanel(sm setting.SettingsManager) fyne.CanvasObject {
+	imgQueryList := p.createImgQueryList(sm)
+	sm.RegisterRefreshFunc(imgQueryList.Refresh)
+
+	// Create "Add" Button using standardized helper
+	addBtn := wallpaper.CreateAddQueryButton(
+		"Add Wikimedia Query",
+		sm,
+		wallpaper.AddQueryConfig{
+			Title:           "New Wikimedia Query",
+			URLPlaceholder:  "Category:Space OR Search Term",
+			DescPlaceholder: "Description (e.g. Space)",
+			ValidateFunc: func(url, desc string) error {
+				// We expect Wikimedia to validate the input string using ParseURL logic
+				// Note: ParseURL in wikimedia provider currently handles both category and search types
+				_, err := p.ParseURL(url)
+				return err
+			},
+			AddHandler: func(desc, url string, active bool) (string, error) {
+				return p.cfg.AddWikimediaQuery(desc, url, active)
+			},
+		},
+		func() {
+			imgQueryList.Refresh()
+			sm.SetRefreshFlag("queries")
+		},
+	)
+
+	// Layout: Add Button at top (header), List below
+	// We create a custom header container to hold the button
+	header := container.NewVBox(
+		sm.CreateSettingTitleLabel("Wikimedia Queries"),
+		widget.NewLabel("Manage your Wikimedia Commons image queries."),
+		addBtn,
+	)
+
+	return container.NewBorder(header, nil, nil, nil, imgQueryList)
+}
+
+func (p *WikimediaProvider) createImgQueryList(sm setting.SettingsManager) *widget.List {
 	pendingState := make(map[string]bool)
 	var queryList *widget.List
 
@@ -304,12 +343,12 @@ func (p *WikimediaProvider) CreateQueryPanel(sm setting.SettingsManager) fyne.Ca
 			return len(p.cfg.GetWikimediaQueries())
 		},
 		func() fyne.CanvasObject {
-			return container.NewHBox(
-				widget.NewCheck("Active", func(b bool) {}),
-				widget.NewLabel("Template Description"),
-				widget.NewLabel("Template URL"),
-				widget.NewButtonWithIcon("", theme.DeleteIcon(), func() {}),
-			)
+			urlLink := widget.NewHyperlink("Placeholder", nil)
+			queryLabel := widget.NewLabel("Query")
+			activeCheck := widget.NewCheck("Active", nil)
+			deleteButton := widget.NewButton("Delete", nil)
+			// Match Unsplash: Link -> Label -> Spacer -> Check -> Delete
+			return container.NewHBox(urlLink, queryLabel, layout.NewSpacer(), activeCheck, deleteButton)
 		},
 		func(id widget.ListItemID, obj fyne.CanvasObject) {
 			queries := p.cfg.GetWikimediaQueries()
@@ -319,22 +358,54 @@ func (p *WikimediaProvider) CreateQueryPanel(sm setting.SettingsManager) fyne.Ca
 			q := queries[id]
 			queryKey := q.ID
 
-			hbox := obj.(*fyne.Container)
-			check := hbox.Objects[0].(*widget.Check)
-			descLabel := hbox.Objects[1].(*widget.Label)
-			urlLabel := hbox.Objects[2].(*widget.Label)
-			deleteBtn := hbox.Objects[3].(*widget.Button)
+			c := obj.(*fyne.Container)
+			urlLink := c.Objects[0].(*widget.Hyperlink)
+			queryLabel := c.Objects[1].(*widget.Label)
+			activeCheck := c.Objects[3].(*widget.Check)
+			deleteButton := c.Objects[4].(*widget.Button)
 
-			initialActive := q.Active
-			check.OnChanged = nil // Detach to avoid triggering during setup
+			urlLink.SetText(q.Description)
+			queryLabel.SetText(q.URL) // Show the raw query term (e.g. "category:Space")
 
-			if val, ok := pendingState[queryKey]; ok {
-				check.SetChecked(val)
-			} else {
-				check.SetChecked(initialActive)
+			// Construct a valid URL for the hyperlink if possible
+			// The Query URL might be "Category:Foo" or "search:Bar" or a full URL if user entered one?
+			// ParseURL normalizes to "category:..." or "search:...".
+			// We try to make it clickable if it looks like a URL, or construct one.
+			// Wikimedia URLs: https://commons.wikimedia.org/wiki/Category:Nature
+			displayURL := q.URL
+			lowerURL := strings.ToLower(q.URL)
+
+			if strings.HasPrefix(lowerURL, "category:") {
+				// We must escape the category name to handle spaces (e.g. "Deep Space" -> "Deep%20Space")
+				// url.Parse will fail on spaces.
+				// Note: We strip from original q.URL to preserve casing of the category name if needed?
+				// Actually wikimedia categories are case sensitive for the first char usually capitalized, but spaces need encoding.
+				// We need to strip the prefix length carefully.
+				catName := q.URL[9:] // "category:" is 9 chars. Assuming normalized length from lowerURL check matches?
+				// BE CAREFUL: If prefix was "Category:", length is same.
+
+				displayURL = "https://commons.wikimedia.org/wiki/Category:" + url.PathEscape(catName)
+			} else if strings.HasPrefix(lowerURL, "search:") {
+				displayURL = "https://commons.wikimedia.org/w/index.php?search=" + url.QueryEscape(q.URL[7:])
 			}
 
-			check.OnChanged = func(b bool) {
+			if u, err := url.Parse(displayURL); err == nil && u.Scheme != "" {
+				urlLink.SetURL(u)
+			} else {
+				// Fallback if parsing fails or no scheme
+				_ = urlLink.SetURLFromString(displayURL)
+			}
+
+			initialActive := q.Active
+			activeCheck.OnChanged = nil // Detach to avoid triggering during setup
+
+			if val, ok := pendingState[queryKey]; ok {
+				activeCheck.SetChecked(val)
+			} else {
+				activeCheck.SetChecked(initialActive)
+			}
+
+			activeCheck.OnChanged = func(b bool) {
 				// Fetch latest status to ensure we compare against current config, not stale UI state
 				currentQ, found := p.cfg.GetQuery(queryKey)
 				currentActive := initialActive
@@ -365,16 +436,12 @@ func (p *WikimediaProvider) CreateQueryPanel(sm setting.SettingsManager) fyne.Ca
 				sm.GetCheckAndEnableApplyFunc()()
 			}
 
-			descLabel.SetText(q.Description)
-			urlLabel.SetText(q.URL)
-
-			deleteBtn.OnTapped = func() {
+			deleteButton.OnTapped = func() {
 				dialog.NewConfirm("Delete Query", "Are you sure you want to delete this query?", func(b bool) {
 					if b {
 						if q.Active {
 							sm.SetRefreshFlag(queryKey)
-							// Trigger apply check if needed, though delete is usually immediate in this app's pattern
-							// checking wallhaven logic: it just deletes immediately.
+							sm.GetCheckAndEnableApplyFunc()()
 						}
 						delete(pendingState, queryKey)
 						if err := p.cfg.RemoveImageQuery(q.ID); err != nil {
@@ -387,49 +454,7 @@ func (p *WikimediaProvider) CreateQueryPanel(sm setting.SettingsManager) fyne.Ca
 			}
 		},
 	)
-
-	// Create "Add" Box
-	descEntry := widget.NewEntry()
-	descEntry.PlaceHolder = "Description (e.g. Space)"
-	urlEntry := widget.NewEntry()
-	urlEntry.PlaceHolder = "Category:Space OR Search Term"
-
-	addBtn := widget.NewButtonWithIcon("Add", theme.ContentAddIcon(), func() {
-		if descEntry.Text == "" || urlEntry.Text == "" {
-			dialog.ShowError(errors.New("description and value are required"), sm.GetSettingsWindow())
-			return
-		}
-
-		val := urlEntry.Text
-		// Allow "Category: " with space
-		// Pre-validation logic?
-		// If it looks like a URL, validation happens in ParseURL during download?
-		// We should probably validate input format here slightly?
-		// Re-use ParseURL logic?
-
-		_, err := p.ParseURL(val)
-		if err != nil {
-			dialog.ShowError(fmt.Errorf("invalid input: %v", err), sm.GetSettingsWindow())
-			return
-		}
-
-		// If valid, add it
-		// Note check for duplicates is inside Config
-		_, err = p.cfg.AddWikimediaQuery(descEntry.Text, val, true)
-		if err != nil {
-			dialog.ShowError(err, sm.GetSettingsWindow())
-			return
-		}
-
-		descEntry.SetText("")
-		urlEntry.SetText("")
-		queryList.Refresh()
-		sm.SetRefreshFlag("queries")
-	})
-
-	addBox := container.NewBorder(nil, nil, nil, addBtn, container.NewGridWithColumns(2, descEntry, urlEntry))
-
-	return container.NewBorder(nil, addBox, nil, nil, queryList)
+	return queryList
 }
 
 func init() {

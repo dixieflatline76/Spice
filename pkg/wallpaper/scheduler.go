@@ -94,7 +94,7 @@ func (wp *Plugin) checkAndRunRefresh(now time.Time, lastRefreshDay int, isInitia
 
 		log.Print("Running nightly refresh action...") // Clarify log message
 		wp.currentDownloadPage.Set(1)
-		wp.downloadAllImages() // This calls stopAllWorkers internally
+		wp.downloadAllImages(nil) // This calls stopAllWorkers internally
 
 		log.Print("Nightly refresh action finished.")
 		return updatedLastRefreshDay // Return the new day

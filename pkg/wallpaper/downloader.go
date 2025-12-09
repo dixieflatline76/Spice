@@ -15,7 +15,9 @@ import (
 )
 
 // downloadAllImages downloads images from all active URLs for the specified page.
-func (wp *Plugin) downloadAllImages() {
+// If doneChan is provided, it performs the download asynchronously and closes the channel when finished.
+// Otherwise, it blocks until completion.
+func (wp *Plugin) downloadAllImages(doneChan chan struct{}) {
 	wp.stopAllWorkers()     // Stop all workers before starting new ones. Blocks until all workers are stopped.
 	wp.interrupt.Set(false) // Reset interrupt flag so new downloads can proceed.
 	if wp.currentDownloadPage.Value() <= 1 {
@@ -23,19 +25,26 @@ func (wp *Plugin) downloadAllImages() {
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), HTTPClientRequestTimeout)
-	defer cancel()
+	// Do not defer cancel() here, as it will cancel the context immediately for async calls.
+	// We must ensure cancel() is called when operations complete.
 
 	wg := &sync.WaitGroup{}
 	wp.downloadMutex.Lock()
 	wp.cancel = cancel
 	wp.downloadWaitGroup = wg
-
-	// Combine queries from all sources using Thread-Safe Getters (Fixes Race Condition)
-	// Combine queries from all sources using Thread-Safe Getters (Fixes Race Condition)
+	// Ensure isDownloading is set, in case we were called directly.
+	wp.isDownloading = true
 	queries := wp.cfg.GetQueries()
 
 	wp.downloadMutex.Unlock()
 	wp.interrupt.Set(false)
+
+	// Ensure isDownloading is cleared when we return
+	defer func() {
+		wp.downloadMutex.Lock()
+		wp.isDownloading = false
+		wp.downloadMutex.Unlock()
+	}()
 
 	var message string
 	log.Debugf("Processing %d queries...", len(queries))
@@ -53,7 +62,24 @@ func (wp *Plugin) downloadAllImages() {
 	}
 	wp.manager.NotifyUser("Downloading: ", message)
 
+	// If async mode is requested
+	if doneChan != nil {
+		go func() {
+			defer cancel() // Ensure context is cancelled when done
+			wg.Wait()
+			close(doneChan)
+			log.Print("All downloads for this batch have completed (Async).")
+
+			wp.downloadMutex.Lock()
+			wp.cancel = nil
+			wp.downloadWaitGroup = nil
+			wp.downloadMutex.Unlock()
+		}()
+		return
+	}
+
 	wg.Wait() // Wait for all goroutines to finish
+	cancel()  // Ensure context is cancelled when done (Sync)
 	log.Print("All downloads for this batch have completed.")
 
 	wp.downloadMutex.Lock()
@@ -66,6 +92,7 @@ func (wp *Plugin) downloadAllImages() {
 // and per page to prevent overwhelming the API server. This is a design choice as there's no need to maximize download speed.
 // downloadImagesForURL downloads images from the given URL for the specified page.
 func (wp *Plugin) downloadImagesForURL(ctx context.Context, query ImageQuery, page int) {
+	log.Debugf("Starting download for query: '%s' (Page: %d)", query.Description, page)
 	// Find the provider for this URL
 	var downloadProvider provider.ImageProvider
 	var apiURL string
@@ -105,6 +132,7 @@ func (wp *Plugin) downloadImagesForURL(ctx context.Context, query ImageQuery, pa
 		log.Printf("Failed to fetch from %s: %v", downloadProvider.Name(), err)
 		return
 	}
+	log.Debugf("Fetched %d images from %s for query '%s'", len(images), downloadProvider.Name(), query.Description)
 
 	for _, img := range images {
 		if wp.interrupt.Value() || ctx.Err() != nil {

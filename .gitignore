@@ -26,15 +26,13 @@ config.json
 .DS_Store
 
 # Test output and coverage
-coverage
-coverage.out
-coverage.html
-coverage_report.txt
-util_coverage
-wallpaper_coverage
-*_coverage
-*_coverage.out
+# Test output and coverage
+coverage*
+*.out
+*.html
+*.test
 test_output_*.txt
-c
+*_coverage
 cover
-c.out
+current_coverage_report.txt
+
