@@ -34,6 +34,9 @@ type Config struct {
 	AvoidSet        map[string]bool `json:"avoid_set"` // Set of image URLs to avoid
 	userid          string
 	mu              sync.RWMutex // Mutex for thread-safe access
+	// Advanced
+	LogLevel                string `json:"logLevel"`
+	MaxConcurrentProcessors int    `json:"maxConcurrentProcessors"`
 }
 
 // ImageQuery struct to hold the URL of an image and whether it is active
