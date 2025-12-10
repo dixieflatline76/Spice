@@ -156,8 +156,8 @@ endif
 coverage:
 	go test -v -coverprofile=coverage.out ./...
 	go tool cover -html=coverage.out -o coverage.html
-	go tool cover -func=coverage.out > docs/coverage_report.md
-	@echo "Coverage report generated: coverage.html & docs/coverage_report.md"
+	go tool cover -func=coverage.out > coverage.txt
+	@echo "Coverage report generated: coverage.html & coverage.txt"
 	@echo "Summary:"
 	@go tool cover -func=coverage.out
 

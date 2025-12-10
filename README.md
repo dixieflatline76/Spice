@@ -43,9 +43,7 @@ Spice is a minimalist wallpaper manager that brings a continuous stream of delig
 
 ## Developers
 
-* **Architecture:** Curious how Spice works under the hood? Read our [**Architecture Documentation**](docs/architecture.md) for a deep dive into our Single-Writer concurrency model.
-* **New Providers:** Want to add your own wallpaper source? Check out our [**Provider Creation Guide**](docs/creating_new_providers.md) to learn how to implement the `ImageProvider` interface in minutes.
-* **New Plugins:** Want to extend Spice with completely new features? Read our [**Plugin Development Guide**](docs/creating_new_plugins.md).
+Want to add your own wallpaper source? Check out our [**Provider Creation Guide**](CREATING_NEW_PROVIDERS.md) to learn how to implement the `ImageProvider` interface in minutes.
 
 ## 📦 Installation
 

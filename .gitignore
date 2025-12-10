@@ -28,7 +28,6 @@ config.json
 # Test output and coverage
 # Test output and coverage
 coverage*
-!docs/coverage_report.md
 *.out
 *.html
 *.test
