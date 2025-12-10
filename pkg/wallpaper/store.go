@@ -9,8 +9,10 @@ import (
 // ImageStore is a thread-safe storage for wallpaper images.
 // It manages the list of available images, seen history, and avoids blocklisted images.
 type ImageStore struct {
-	mu       sync.RWMutex
-	images   []provider.Image
+	mu     sync.RWMutex
+	images []provider.Image
+	// idSet tracks image IDs for O(1) existence checks
+	idSet    map[string]bool
 	seen     map[string]bool
 	avoidSet map[string]bool
 }
@@ -19,6 +21,7 @@ type ImageStore struct {
 func NewImageStore() *ImageStore {
 	return &ImageStore{
 		images:   make([]provider.Image, 0),
+		idSet:    make(map[string]bool),
 		seen:     make(map[string]bool),
 		avoidSet: make(map[string]bool),
 	}
@@ -36,14 +39,13 @@ func (s *ImageStore) Add(img provider.Image) bool {
 		return false
 	}
 
-	// Check if already exists
-	for _, existing := range s.images {
-		if existing.ID == img.ID {
-			return false
-		}
+	// Check if already exists using O(1) map
+	if s.idSet[img.ID] {
+		return false
 	}
 
 	s.images = append(s.images, img)
+	s.idSet[img.ID] = true
 	return true
 }
 
@@ -81,11 +83,16 @@ func (s *ImageStore) Remove(id string) (provider.Image, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	if !s.idSet[id] {
+		return provider.Image{}, false
+	}
+
 	for i, img := range s.images {
 		if img.ID == id {
 			// Found
 			s.avoidSet[id] = true
 			delete(s.seen, img.FilePath)
+			delete(s.idSet, id)
 
 			// Remove from slice
 			s.images = append(s.images[:i], s.images[i+1:]...)
@@ -107,6 +114,7 @@ func (s *ImageStore) Clear() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.images = []provider.Image{}
+	s.idSet = make(map[string]bool)
 	s.seen = make(map[string]bool)
 	s.avoidSet = make(map[string]bool)
 }

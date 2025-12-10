@@ -477,11 +477,17 @@ func (wp *Plugin) applyWallpaper(img provider.Image) {
 
 	threshold := int(math.Round(PrcntSeenTillDownload * float64(totalCount)))
 	if seenCount > MinSeenImagesForDownload && seenCount >= threshold {
+		wp.downloadMutex.Lock()
 		if !wp.isDownloading {
+			wp.isDownloading = true
+			wp.downloadMutex.Unlock()
+
 			log.Printf("Seen %d/%d images. Fetching next page...", seenCount, totalCount)
 			wp.currentDownloadPage.Increment()
 			// Trigged async download
 			go wp.downloadAllImages(nil)
+		} else {
+			wp.downloadMutex.Unlock()
 		}
 	}
 }
