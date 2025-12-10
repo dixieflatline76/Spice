@@ -8,7 +8,6 @@ import (
 	"net/url"
 	"strings"
 	"testing"
-	"time"
 
 	"fyne.io/fyne/v2"
 	"github.com/dixieflatline76/Spice/asset"
@@ -243,12 +242,10 @@ func TestDownloadAllImages(t *testing.T) {
 		currentDownloadPage: util.NewSafeIntWithValue(1),
 		fitImageFlag:        util.NewSafeBool(),
 		shuffleImageFlag:    util.NewSafeBool(),
+		seenImages:          make(map[string]bool),
 		providers:           make(map[string]provider.ImageProvider),
-		store:               NewImageStore(),
+		localImgRecs:        []provider.Image{},
 	}
-	wp.pipeline = NewPipeline(wp.cfg, wp.store, wp.ProcessImageJob)
-	wp.pipeline.Start(1)
-	defer wp.pipeline.Stop()
 	wp.providers["MockProvider"] = mockProvider
 
 	// Expectations
@@ -261,14 +258,9 @@ func TestDownloadAllImages(t *testing.T) {
 	// Verify
 	mockPM.AssertCalled(t, "NotifyUser", "Downloading: ", "[Test Query]\n")
 
-	// Check if file exists in store (wait for pipeline)
-	assert.Eventually(t, func() bool {
-		return wp.store.Count() == 1
-	}, 2*time.Second, 100*time.Millisecond)
-
-	imgStored, ok := wp.store.Get(0)
-	assert.True(t, ok)
-	assert.Equal(t, "test_img_1", imgStored.ID)
+	// Check if file exists in localImgRecs
+	assert.Equal(t, 1, len(wp.localImgRecs))
+	assert.Equal(t, "test_img_1", wp.localImgRecs[0].ID)
 }
 
 func TestDownloadAllImages_EnrichmentFailure(t *testing.T) {
@@ -347,13 +339,10 @@ func TestDownloadAllImages_EnrichmentFailure(t *testing.T) {
 		currentDownloadPage: util.NewSafeIntWithValue(1),
 		fitImageFlag:        util.NewSafeBool(),
 		shuffleImageFlag:    util.NewSafeBool(),
+		seenImages:          make(map[string]bool),
 		providers:           make(map[string]provider.ImageProvider),
-		store:               NewImageStore(),
-		runOnUI:             func(f func()) { f() }, // Run synchronously in tests
+		localImgRecs:        []provider.Image{},
 	}
-	wp.pipeline = NewPipeline(wp.cfg, wp.store, wp.ProcessImageJob)
-	wp.pipeline.Start(1)
-	defer wp.pipeline.Stop()
 	wp.providers["MockProvider"] = mockProvider
 
 	mockPM.On("NotifyUser", mock.Anything, mock.Anything).Return()
@@ -364,15 +353,10 @@ func TestDownloadAllImages_EnrichmentFailure(t *testing.T) {
 
 	// Verify
 	// Should still have downloaded the image
-	assert.Eventually(t, func() bool {
-		return wp.store.Count() == 1
-	}, 2*time.Second, 100*time.Millisecond)
-
-	imgStored, ok := wp.store.Get(0)
-	assert.True(t, ok)
-	assert.Equal(t, "test_img_fail", imgStored.ID)
+	assert.Equal(t, 1, len(wp.localImgRecs))
+	assert.Equal(t, "test_img_fail", wp.localImgRecs[0].ID)
 	// Attribution should remain original
-	assert.Equal(t, "Original", imgStored.Attribution)
+	assert.Equal(t, "Original", wp.localImgRecs[0].Attribution)
 }
 
 func TestNavigation(t *testing.T) {
@@ -395,10 +379,9 @@ func TestNavigation(t *testing.T) {
 		currentDownloadPage: util.NewSafeIntWithValue(1),
 		fitImageFlag:        util.NewSafeBool(),
 		shuffleImageFlag:    util.NewSafeBool(),
-		store:               NewImageStore(),
+		seenImages:          make(map[string]bool),
+		localImgIndex:       *util.NewSafeIntWithValue(-1),
 		actionChan:          make(chan func(), 10),
-		runOnUI:             func(f func()) { f() }, // Run synchronously in tests
-		currentIndex:        -1,
 	}
 
 	// Helper to execute queued actions synchronously for testing
@@ -426,28 +409,13 @@ func TestNavigation(t *testing.T) {
 	// Setup initial state with some images
 	img1 := provider.Image{ID: "img1", Path: "http://example.com/img1.jpg", FilePath: "path/to/img1.jpg", Attribution: "user1"}
 	img2 := provider.Image{ID: "img2", Path: "http://example.com/img2.jpg", FilePath: "path/to/img2.jpg", Attribution: "user2"}
-
-	wp.store.Add(img1)
-	wp.store.Add(img2)
-	// We need to re-build random indices if we bypassed regular flow?
-	// Store handles it?
-	// Store.Add appends.
+	wp.localImgRecs = []provider.Image{img1, img2}
 
 	// Mock OS setWallpaper
 	mockOS.On("setWallpaper", mock.Anything).Return(nil)
 
 	// Expect NotifyUser when setting shuffle
 	mockPM.On("NotifyUser", "Wallpaper Shuffling", "Disabled").Return()
-	mockPM.On("RefreshTrayMenu").Return()
-
-	// Mock GetAssetManager for fallback icon
-	mockAM := asset.NewManager() // Assuming we can create one or we should use a MockAssetManager too.
-	// But asset.Manager is struct, not interface. So we can just return a real one (dummy).
-	mockPM.On("GetAssetManager").Return(mockAM)
-
-	// Init dummy menu items to trigger UI updates path but safely
-	wp.providerMenuItem = &fyne.MenuItem{}
-	wp.artistMenuItem = &fyne.MenuItem{}
 
 	// Test SetNextWallpaper (Shuffle disabled)
 	wp.SetShuffleImage(false)
@@ -456,9 +424,7 @@ func TestNavigation(t *testing.T) {
 	// Initial state: index -1. Next should be 0.
 	wp.SetNextWallpaper()
 	processQueue()
-	// Validation of exact index is tricky if we don't expose it.
-	// Check current image ID.
-	// Store defaults to -1 index. First Next() -> 0.
+	assert.Equal(t, 0, wp.localImgIndex.Value())
 	assert.Equal(t, "img1", wp.currentImage.ID)
 	mockOS.AssertCalled(t, "setWallpaper", mock.MatchedBy(func(path string) bool {
 		return strings.HasSuffix(path, "img1.jpg")
@@ -467,12 +433,13 @@ func TestNavigation(t *testing.T) {
 	// Next should be 1
 	wp.SetNextWallpaper()
 	processQueue()
+	assert.Equal(t, 1, wp.localImgIndex.Value())
 	assert.Equal(t, "img2", wp.currentImage.ID)
 
 	// Next should wrap to 0
 	wp.SetNextWallpaper()
 	processQueue()
-	assert.Equal(t, "img1", wp.currentImage.ID)
+	assert.Equal(t, 0, wp.localImgIndex.Value())
 }
 
 func TestTogglePause(t *testing.T) {
