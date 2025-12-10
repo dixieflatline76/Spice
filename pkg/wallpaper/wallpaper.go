@@ -4,15 +4,15 @@ import (
 	"context"
 	"fmt"
 	"image"
+	"math/rand"
 
 	"math"
-	"math/rand"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
-	"sort"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -43,42 +43,44 @@ type ImageProcessor interface {
 
 // Plugin is the main struct for the wallpaper downloader plugin.
 type Plugin struct {
-	os                   OS
-	imgProcessor         ImageProcessor
-	cfg                  *Config
-	httpClient           *http.Client
-	manager              ui.PluginManager
-	downloadMutex        sync.RWMutex
-	currentDownloadPage  *util.SafeCounter
-	downloadedDir        string
-	isDownloading        bool
-	localImgRecs         []provider.Image
-	interrupt            *util.SafeFlag
-	currentImage         provider.Image
-	localImgIndex        util.SafeCounter
-	randomizedIndexes    []int
-	randomizedIndexesPos int
-	seenImages           map[string]bool
-	prevLocalImgs        []int
-	imgPulseOp           func()
-	fitImageFlag         *util.SafeFlag
-	shuffleImageFlag     *util.SafeFlag
-	stopNightlyRefresh   chan struct{}
-	ticker               *time.Ticker
-	cancel               context.CancelFunc
-	downloadWaitGroup    *sync.WaitGroup
-	prePauseFrequency    Frequency
-	pauseChangeCallback  func(bool)
-	pauseMenuItem        *fyne.MenuItem
-	providerMenuItem     *fyne.MenuItem
-	artistMenuItem       *fyne.MenuItem
-	providers            map[string]provider.ImageProvider
-	actionChan           chan func()
-}
+	os                  OS
+	imgProcessor        ImageProcessor
+	cfg                 *Config
+	httpClient          *http.Client
+	manager             ui.PluginManager
+	downloadMutex       sync.RWMutex
+	currentDownloadPage *util.SafeCounter
+	downloadedDir       string
+	isDownloading       bool
+	interrupt           *util.SafeFlag
+	currentImage        provider.Image
+	imgPulseOp          func()
+	fitImageFlag        *util.SafeFlag
+	shuffleImageFlag    *util.SafeFlag
+	stopNightlyRefresh  chan struct{}
+	ticker              *time.Ticker
+	cancel              context.CancelFunc
+	downloadWaitGroup   *sync.WaitGroup
+	prePauseFrequency   Frequency
+	pauseChangeCallback func(bool)
+	pauseMenuItem       *fyne.MenuItem
+	providerMenuItem    *fyne.MenuItem
+	artistMenuItem      *fyne.MenuItem
+	providers           map[string]provider.ImageProvider
+	actionChan          chan func()
 
-type fileInfo struct {
-	path    string
-	modTime time.Time
+	// New Components
+	store    *ImageStore
+	pipeline *Pipeline
+
+	// Session State (Local Navigation)
+	currentIndex int
+	history      []int
+	shuffleOrder []int
+	randomPos    int
+
+	// Testable UI executor
+	runOnUI func(func())
 }
 
 var (
@@ -119,6 +121,8 @@ func getPlugin() *Plugin {
 			}
 		}
 
+		store := NewImageStore()
+
 		// Initialize the wallpaper service
 		wpInstance = &Plugin{
 			os: currentOS, // Initialize with right OS
@@ -135,22 +139,28 @@ func getPlugin() *Plugin {
 			downloadMutex:       sync.RWMutex{},
 			currentDownloadPage: util.NewSafeIntWithValue(1), // Start with the first page,
 			downloadedDir:       "",
-			localImgRecs:        []provider.Image{},
 			interrupt:           util.NewSafeBoolWithValue(false),
 
-			localImgIndex:        *util.NewSafeIntWithValue(-1),
-			randomizedIndexes:    []int{},
-			randomizedIndexesPos: 0,
-			seenImages:           make(map[string]bool),
-			prevLocalImgs:        []int{},
 			// imgPulseOp will be set to the *internal* method, which should be called FROM the worker.
 			imgPulseOp:         nil,
 			fitImageFlag:       util.NewSafeBoolWithValue(false),
 			shuffleImageFlag:   util.NewSafeBoolWithValue(false),
-			stopNightlyRefresh: make(chan struct{}), // Initialize the channel for nightly refresh
+			stopNightlyRefresh: make(chan struct{}),
+			ticker:             nil,
+			downloadWaitGroup:  &sync.WaitGroup{},
 			providers:          make(map[string]provider.ImageProvider),
-			actionChan:         make(chan func(), 5), // Buffered channel for actions
+			actionChan:         make(chan func(), 5),
+			store:              store,
+			pipeline:           nil, // Initialized in Init
+			runOnUI:            fyne.DoAndWait,
 		}
+
+		// Pipeline depends on wpInstance methods, so we init it here but config is nil.
+		// We should perhaps init it in Init() when config is available?
+		// Or pass wpInstance to it?
+		// NewPipeline takes cfg.
+		// We'll init pipeline in Init().
+
 		wpInstance.imgPulseOp = wpInstance.setNextWallpaper
 	})
 	return wpInstance
@@ -173,6 +183,9 @@ func (wp *Plugin) Init(manager ui.PluginManager) {
 	if sip, ok := wp.imgProcessor.(*smartImageProcessor); ok {
 		sip.config = wp.cfg
 	}
+
+	// Initialize Pipeline
+	wp.pipeline = NewPipeline(wp.cfg, wp.store, wp.ProcessImageJob)
 
 	log.Debugf("Wallpaper Plugin Initialized. Config: FaceBoostEnabled=%v, SmartFit=%v", wp.cfg.GetFaceBoostEnabled(), wp.cfg.GetSmartFit())
 
@@ -212,199 +225,35 @@ func (wp *Plugin) stopAllWorkers() {
 	}
 }
 
-// resetPluginState clears all state related to image downloads and resets the plugin. It also cleans up any downloaded images from the cache directory.
-func (wp *Plugin) resetPluginState() {
-	wp.downloadMutex.Lock()
-	defer wp.downloadMutex.Unlock()
-
-	wp.localImgRecs = []provider.Image{} // Clear the download history.
-	clear(wp.seenImages)                 // Clear the seen history.
-	wp.prevLocalImgs = []int{}           // Clear the previous history.
-	wp.currentDownloadPage.Set(1)        // Reset to the first page.
-	wp.localImgIndex.Set(-1)             // Reset the current image index.
-
-	err := wp.cleanupImageCache()
-	if err != nil {
-		log.Printf("error clearing downloaded images directory: %v", err)
-	}
-}
-
-// setWallpaperAt sets the wallpaper at the specified index.
-func (wp *Plugin) setWallpaperAt(imageIndex int) {
-	var shouldDownloadNextPage bool
-
-	wp.downloadMutex.RLock()
-	// log.Debugf("[Timing] setWallpaperAt: RLock acquired after %v", time.Since(t0))
-	if len(wp.localImgRecs) == 0 {
-		log.Println("no downloaded images found.")
-		wp.downloadMutex.RUnlock()
-		return
-	}
-
-	seenCount := len(wp.seenImages)
-	localRecsCount := float64(len(wp.localImgRecs))
-	threshold := int(math.Round(PrcntSeenTillDownload * localRecsCount))
-
-	if seenCount > MinSeenImagesForDownload && seenCount >= threshold {
-		shouldDownloadNextPage = true
-	}
-
-	safeIndex := (imageIndex + len(wp.localImgRecs)) % len(wp.localImgRecs)
-	isi := wp.localImgRecs[safeIndex]
-	imagePath := isi.FilePath
-	wp.downloadMutex.RUnlock()
-
-	if shouldDownloadNextPage {
-		wp.downloadMutex.Lock()
-		if !wp.isDownloading {
-			wp.currentDownloadPage.Increment()
-			wp.isDownloading = true
-			go wp.downloadAllImages(nil)
-		}
-		wp.downloadMutex.Unlock()
-	}
-
-	// Update internal state and UI *before* setting the wallpaper to ensure responsiveness
-	// and avoid race conditions where the menu update happens long after the user action.
-	// Update internal state
-	wp.downloadMutex.Lock()
-	// log.Debugf("[Timing] setWallpaperAt: Lock acquired in %v", time.Since(tLockStart))
-
-	wp.currentImage = isi
-	wp.localImgIndex.Set(safeIndex)
-	wp.seenImages[imagePath] = true
-	wp.downloadMutex.Unlock()
-
-	// Update UI *after* releasing the lock to prevent deadlock.
-	// (RefreshTrayMenu might block waiting for UI thread, which might be waiting for the lock)
-	if wp.providerMenuItem != nil && wp.artistMenuItem != nil {
-		attribution := isi.Attribution
-		if attribution == "" {
-			attribution = "Unknown"
-		}
-		if len(attribution) > 20 {
-			attribution = attribution[:17] + "..."
-		}
-		wp.providerMenuItem.Label = "Source: " + isi.Provider
-		wp.providerMenuItem.Action = func() {
-			var homeURL string
-			if p, ok := wp.providers[isi.Provider]; ok {
-				homeURL = p.HomeURL()
-			} else {
-				homeURL = "https://github.com/dixieflatline76/Spice"
-			}
-			if homeURL != "" {
-				if u, err := url.Parse(homeURL); err == nil {
-					if err := fyne.CurrentApp().OpenURL(u); err != nil {
-						log.Printf("Failed to open URL %s: %v", homeURL, err)
-					}
-				}
-			}
-		}
-
-		// Update Icon
-		var icon fyne.Resource
-		if provider, ok := wp.providers[isi.Provider]; ok {
-			icon = provider.GetProviderIcon()
-		}
-		// Fallback to default if no specific icon
-		if icon == nil {
-			icon, _ = wp.manager.GetAssetManager().GetIcon("provider_default.png")
-		}
-		wp.providerMenuItem.Icon = icon
-
-		wp.artistMenuItem.Label = "By: " + attribution
-		wp.manager.RefreshTrayMenu()
-	}
-
-	if err := wp.os.setWallpaper(imagePath); err != nil {
-		log.Printf("failed to set wallpaper: %v", err)
-		// Note: We don't revert the UI state here because it would be jarring.
-		// The next successful wallpaper change will correct it.
-		return
-	}
-	// log.Debugf("[Timing] setWallpaperAt: OS SetWallpaper took %v", time.Since(tOSStart))
-
-	// Trigger download event for Unsplash (or other providers requiring it)
-	if isi.DownloadLocation != "" {
-		go wp.triggerDownload(isi.DownloadLocation)
-	}
-
-	// log.Debugf("[Timing] setWallpaperAt: Total internal duration %v", time.Since(t0))
-}
-
 // DeleteCurrentImage deletes the current wallpaper image from the filesystem and updates the history.
 func (wp *Plugin) DeleteCurrentImage() {
-	if wp.localImgIndex.Value() == -1 {
-		log.Println("no current image to delete.")
+	if wp.currentImage.FilePath == "" {
 		return
 	}
 
-	imagePath := wp.currentImage.FilePath
+	idToDelete := wp.currentImage.ID
 
-	wp.downloadMutex.Lock()
-	currentPos := wp.localImgIndex.Value()
-	wp.localImgRecs = append(wp.localImgRecs[:currentPos], wp.localImgRecs[currentPos+1:]...)
-	wp.prevLocalImgs = wp.prevLocalImgs[:len(wp.prevLocalImgs)-1]
-	delete(wp.seenImages, imagePath)
-	wp.cfg.AddToAvoidSet(wp.currentImage.ID)
-	wp.localImgIndex.Decrement()
-	wp.downloadMutex.Unlock()
+	// Send delete command to State Manager
+	if wp.pipeline != nil {
+		wp.pipeline.SendCommand(StateCmd{Type: CmdRemove, Payload: idToDelete})
+	}
 
-	wp.manager.NotifyUser("Wallpaper Blocked", "Image deleted and added to blocklist.")
+	// Delete file from disk
+	err := os.Remove(wp.currentImage.FilePath)
+	if err != nil {
+		log.Printf("Failed to delete file %s: %v", wp.currentImage.FilePath, err)
+	} else {
+		log.Printf("Deleted file: %s", wp.currentImage.FilePath)
+	}
 
-	wp.manager.NotifyUser("Wallpaper Blocked", "Image deleted and added to blocklist.")
+	// Update local state
+	// Remove this index from history if it exists
+	// Ideally we find the index of this ID if still valid?
+	// Simplified: Just move to next wallpaper
 
+	// We might need to rebuild shuffle order if we want to be strict,
+	// but moving to next image is safe.
 	wp.SetNextWallpaper()
-
-	if err := os.Remove(imagePath); err != nil {
-		log.Printf("failed to delete blocked image: %v", err)
-	}
-}
-
-// cleanupImageCache clears the downloaded images directory.
-func (wp *Plugin) cleanupImageCache() error {
-	var files []fileInfo
-	dirs := []string{
-		wp.downloadedDir,
-		filepath.Join(wp.downloadedDir, FittedImgDir),
-		filepath.Join(wp.downloadedDir, FittedFaceBoostImgDir),
-		filepath.Join(wp.downloadedDir, FittedFaceCropImgDir),
-	}
-	for _, dir := range dirs {
-		entries, err := os.ReadDir(dir)
-		if err != nil {
-			// If the directory doesn't exist, just skip it
-			if os.IsNotExist(err) {
-				continue
-			}
-			return fmt.Errorf("error reading directory %s: %w", dir, err)
-		}
-		for _, entry := range entries {
-			if !entry.IsDir() && isImageFile(entry.Name()) {
-				info, err := entry.Info()
-				if err != nil {
-					return err
-				}
-				files = append(files, fileInfo{filepath.Join(dir, entry.Name()), info.ModTime()})
-			}
-		}
-	}
-
-	sort.Slice(files, func(i, j int) bool {
-		return files[i].modTime.Before(files[j].modTime)
-	})
-
-	excess := len(files) - wp.cfg.GetCacheSize().Size()
-	if excess > 0 {
-		for i := 0; i < excess; i++ {
-			err := os.Remove(files[i].path)
-			if err != nil {
-				return fmt.Errorf("error deleting file %s: %w", files[i].path, err)
-			}
-		}
-	}
-	return nil
 }
 
 // setupImageDirs sets up the downloaded images directories.
@@ -435,6 +284,14 @@ func (wp *Plugin) setupImageDirs() {
 // Activate starts the wallpaper rotation.
 func (wp *Plugin) Activate() {
 	wp.setupImageDirs()
+
+	// Start the pipeline with default worker count (NumCPU)
+	// We should probably get this from config, but for now hardcode or use NumCPU
+	workers := runtime.NumCPU()
+	if wp.cfg != nil && wp.cfg.MaxConcurrentProcessors > 0 {
+		workers = wp.cfg.MaxConcurrentProcessors
+	}
+	wp.pipeline.Start(workers)
 
 	if wp.cfg.GetNightlyRefresh() {
 		wp.downloadMutex.Lock()
@@ -526,13 +383,6 @@ func (wp *Plugin) Deactivate() {
 	log.Print("Wallpaper plugin deactivated.")
 }
 
-// getCurrentImage returns the current image.
-func (wp *Plugin) getCurrentImage() provider.Image {
-	wp.downloadMutex.RLock()
-	defer wp.downloadMutex.RUnlock()
-	return wp.currentImage
-}
-
 // getWallhavenURL returns the wallhaven URL for the given API URL.
 func (wp *Plugin) getWallhavenURL(apiURL string) *url.URL {
 	urlStr := strings.Replace(apiURL, "https://wallhaven.cc/api/v1/search?", "https://wallhaven.cc/search?", 1)
@@ -551,37 +401,175 @@ func (wp *Plugin) getWallhavenURL(apiURL string) *url.URL {
 	return url
 }
 
-// setNextWallpaper sets the next wallpaper in the list.
-// This is the INTERNAL method that does the work. It should be called from the worker.
-func (wp *Plugin) setNextWallpaper() {
-	wp.downloadMutex.Lock()
-	// log.Debugf("[Timing] setNextWallpaper: Lock acquired in %v", time.Since(t0))
-	newIndex := wp.localImgIndex.Increment()
-	wp.prevLocalImgs = append(wp.prevLocalImgs, newIndex)
-	wp.downloadMutex.Unlock()
+// updateTrayMenuUI updates the tray menu items with the given image details.
+// It runs on the UI thread.
+func (wp *Plugin) updateTrayMenuUI(img provider.Image) {
+	wp.runOnUI(func() {
+		if wp.providerMenuItem != nil && wp.artistMenuItem != nil {
+			attribution := img.Attribution
+			if len(attribution) > 20 {
+				attribution = attribution[:17] + "..."
+			}
+			wp.providerMenuItem.Label = "Source: " + img.Provider
+			wp.providerMenuItem.Action = func() {
+				var homeURL string
+				if p, ok := wp.providers[img.Provider]; ok {
+					homeURL = p.HomeURL()
+				} else {
+					homeURL = "https://github.com/dixieflatline76/Spice"
+				}
+				if homeURL != "" {
+					if u, err := url.Parse(homeURL); err == nil {
+						if err := wp.manager.OpenURL(u); err != nil {
+							log.Printf("Failed to open URL %s: %v", homeURL, err)
+						}
+					}
+				}
+			}
 
-	wp.setWallpaperAt(newIndex)
+			// Update Icon
+			var icon fyne.Resource
+			if provider, ok := wp.providers[img.Provider]; ok {
+				icon = provider.GetProviderIcon()
+			}
+			// Fallback to default if no specific icon
+			if icon == nil {
+				icon, _ = wp.manager.GetAssetManager().GetIcon("provider_default.png")
+			}
+			wp.providerMenuItem.Icon = icon
+
+			wp.artistMenuItem.Label = "By: " + attribution
+			wp.manager.RefreshTrayMenu()
+		}
+	})
 }
 
-// setRandomWallpaper sets a random wallpaper from the list.
-// This is the INTERNAL method.
-func (wp *Plugin) setRandomWallpaper() {
-	wp.downloadMutex.Lock()
-	// log.Debugf("[Timing] setRandomWallpaper: Lock acquired in %v", time.Since(t0))
-	if len(wp.localImgRecs) == 0 {
-		log.Println("no downloaded images found.")
-		wp.downloadMutex.Unlock()
+// applyWallpaper sets the wallpaper to the given image and triggers necessary logic.
+func (wp *Plugin) applyWallpaper(img provider.Image) {
+	// Trigger download event (async)
+	if img.DownloadLocation != "" {
+		go wp.triggerDownload(img.DownloadLocation)
+	}
+
+	// Optimistic UI Update: Update tray menu and internal state BEFORE setting wallpaper.
+	// This fixes the URL desync issue where "View on Web" would link to the old image while blocks.
+	prevImage := wp.currentImage
+	wp.currentImage = img
+	wp.updateTrayMenuUI(img)
+
+	if err := wp.os.setWallpaper(img.FilePath); err != nil {
+		log.Printf("failed to set wallpaper: %v", err)
+		// Rollback UI and state to previous image
+		wp.currentImage = prevImage
+		if wp.currentImage.FilePath != "" {
+			wp.updateTrayMenuUI(wp.currentImage)
+		}
 		return
 	}
-	if len(wp.randomizedIndexes) != len(wp.localImgRecs) || wp.randomizedIndexesPos >= len(wp.randomizedIndexes) {
-		wp.randomizedIndexes = rand.Perm(len(wp.localImgRecs))
-		wp.randomizedIndexesPos = 0
+
+	// Threshold logic: If we have seen > 80% of local images (approximation), fetch next page.
+	seenCount := wp.store.SeenCount()
+	totalCount := wp.store.Count()
+
+	if totalCount == 0 {
+		return
 	}
-	randomIndex := wp.randomizedIndexes[wp.randomizedIndexesPos]
-	wp.randomizedIndexesPos++
-	wp.prevLocalImgs = append(wp.prevLocalImgs, randomIndex)
-	wp.downloadMutex.Unlock()
-	wp.setWallpaperAt(randomIndex)
+
+	threshold := int(math.Round(PrcntSeenTillDownload * float64(totalCount)))
+	if seenCount > MinSeenImagesForDownload && seenCount >= threshold {
+		wp.downloadMutex.Lock()
+		if !wp.isDownloading {
+			wp.isDownloading = true
+			wp.downloadMutex.Unlock()
+
+			log.Printf("Seen %d/%d images. Fetching next page...", seenCount, totalCount)
+			wp.currentDownloadPage.Increment()
+			// Trigged async download
+			go wp.downloadAllImages(nil)
+		} else {
+			wp.downloadMutex.Unlock()
+		}
+	}
+}
+
+// setWallpaperAt is deprecated/removed. Logic moved to applyWallpaper.
+// setRandomWallpaper is removed. Logic moved to Store.
+
+// setNextWallpaper sets the next wallpaper.
+func (wp *Plugin) setNextWallpaper() {
+	count := wp.store.Count()
+	if count == 0 {
+		log.Println("No wallpapers available.")
+		return
+	}
+
+	var newIndex int
+	if wp.shuffleImageFlag.Value() {
+		// Rebuild shuffle order if needed
+		if len(wp.shuffleOrder) != count || wp.randomPos >= len(wp.shuffleOrder) {
+			wp.rebuildShuffleOrder(count)
+		}
+		newIndex = wp.shuffleOrder[wp.randomPos]
+		wp.randomPos++
+	} else {
+		newIndex = (wp.currentIndex + 1) % count
+	}
+
+	img, ok := wp.store.Get(newIndex)
+	if !ok {
+		log.Printf("Failed to get image at index %d", newIndex)
+		return
+	}
+
+	wp.currentIndex = newIndex
+	wp.history = append(wp.history, newIndex)
+
+	// Async Mark Seen
+	if wp.pipeline != nil {
+		wp.pipeline.SendCommand(StateCmd{Type: CmdMarkSeen, Payload: img.FilePath})
+	}
+
+	wp.applyWallpaper(img)
+}
+
+// setPrevWallpaper sets the previous wallpaper.
+func (wp *Plugin) setPrevWallpaper() {
+	if len(wp.history) <= 1 {
+		log.Println("No previous wallpaper available.")
+		wp.manager.NotifyUser("Wallpaper", "No previous wallpaper available.")
+		return
+	}
+
+	// Pop current
+	wp.history = wp.history[:len(wp.history)-1]
+	// Get previous
+	newIndex := wp.history[len(wp.history)-1]
+
+	// Adjust random pos if needed
+	if wp.shuffleImageFlag.Value() && wp.randomPos > 0 {
+		wp.randomPos--
+	}
+
+	img, ok := wp.store.Get(newIndex)
+	if !ok {
+		log.Printf("Failed to get image at index %d", newIndex)
+		return
+	}
+
+	wp.currentIndex = newIndex
+	wp.applyWallpaper(img)
+}
+
+func (wp *Plugin) rebuildShuffleOrder(count int) {
+	if count == 0 {
+		return
+	}
+	// Simple deterministic shuffle based on current seed/time
+	// In a real app we might want to persist this or be more clever.
+	// For now, simple rand.Perm is fine as it stays local.
+	// Note: rand.Perm is pseudo-random.
+	wp.shuffleOrder = rand.Perm(count)
+	wp.randomPos = 0
 }
 
 // SetPreviousWallpaper sets the previous wallpaper in the list.
@@ -593,19 +581,7 @@ func (wp *Plugin) SetPreviousWallpaper() {
 		// startExec := time.Now()
 		// log.Debugf("[Timing] SetPreviousWallpaper: Starting. Waited: %v", startExec.Sub(enqueueTime))
 
-		wp.downloadMutex.Lock()
-		if len(wp.prevLocalImgs) <= 1 {
-			wp.downloadMutex.Unlock()
-			wp.manager.NotifyUser("No Previous Wallpaper", "You are at the beginning.")
-			return
-		}
-		wp.prevLocalImgs = wp.prevLocalImgs[:len(wp.prevLocalImgs)-1]
-		tempIndex := wp.prevLocalImgs[len(wp.prevLocalImgs)-1]
-		if wp.shuffleImageFlag.Value() {
-			wp.randomizedIndexesPos--
-		}
-		wp.downloadMutex.Unlock()
-		wp.setWallpaperAt(tempIndex)
+		wp.setPrevWallpaper()
 
 		// log.Debugf("[Timing] SetPreviousWallpaper: Finished. Duration: %v", time.Since(startExec))
 	}
@@ -633,9 +609,9 @@ func GetInstance() *Plugin {
 
 // TogglePause toggles the wallpaper change frequency between paused (Never) and the previous frequency.
 func (wp *Plugin) TogglePause() {
-	wp.downloadMutex.Lock()
+	// wp.downloadMutex.Lock() // Removed as part of refactor
 	currentFreq := wp.cfg.GetWallpaperChangeFrequency()
-	wp.downloadMutex.Unlock()
+	// wp.downloadMutex.Unlock()
 
 	if currentFreq == FrequencyNever {
 		// Resume
@@ -671,8 +647,8 @@ func (wp *Plugin) TogglePauseAction() {
 
 // SetPauseChangeCallback sets the callback function to be called when pause state changes.
 func (wp *Plugin) SetPauseChangeCallback(callback func(bool)) {
-	wp.downloadMutex.Lock()
-	defer wp.downloadMutex.Unlock()
+	// wp.downloadMutex.Lock()
+	// defer wp.downloadMutex.Unlock()
 	wp.pauseChangeCallback = callback
 }
 
@@ -681,16 +657,11 @@ func (wp *Plugin) IsPaused() bool {
 	return wp.cfg.GetWallpaperChangeFrequency() == FrequencyNever
 }
 
-// SetRandomWallpaper sets a random wallpaper.
-func (wp *Plugin) SetRandomWallpaper() {
-	wp.actionChan <- func() {
-		wp.setRandomWallpaper()
-	}
-}
+// SetRandomWallpaper is removed. Logic handled by Store.
 
 // GetCurrentImage returns the current wallpaper image information.
 func (wp *Plugin) GetCurrentImage() provider.Image {
-	return wp.getCurrentImage()
+	return wp.currentImage
 }
 
 // ChangeWallpaperFrequency changes the wallpaper frequency.
@@ -700,8 +671,6 @@ func (wp *Plugin) ChangeWallpaperFrequency(newFrequency Frequency) {
 
 // ViewCurrentImageOnWeb opens the current image in the default browser.
 func (wp *Plugin) ViewCurrentImageOnWeb() {
-	wp.downloadMutex.RLock()
-	defer wp.downloadMutex.RUnlock()
 	if wp.currentImage.ViewURL == "" {
 		log.Println("no current image to view.")
 		return
@@ -716,49 +685,131 @@ func (wp *Plugin) ViewCurrentImageOnWeb() {
 	}
 }
 
+// downloadAllImages downloads images from all active URLs (Producer).
+func (wp *Plugin) downloadAllImages(doneChan chan struct{}) {
+	wp.interrupt.Set(false)
+
+	if wp.currentDownloadPage.Value() <= 1 {
+		wp.store.Clear()
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), HTTPClientRequestTimeout)
+	// We need to keep context alive for the duration of DISCOVERY.
+	defer cancel()
+
+	wp.downloadMutex.Lock()
+	wp.isDownloading = true
+	queries := wp.cfg.GetQueries()
+	wp.downloadMutex.Unlock()
+
+	defer func() {
+		wp.downloadMutex.Lock()
+		wp.isDownloading = false
+		wp.downloadMutex.Unlock()
+		if doneChan != nil {
+			close(doneChan)
+		}
+	}()
+
+	var message string
+	log.Debugf("Producing jobs for %d queries...", len(queries))
+
+	var wg sync.WaitGroup
+	for _, query := range queries {
+		if query.Active {
+			wg.Add(1)
+			go func(q ImageQuery) {
+				defer wg.Done()
+				wp.produceJobsForURL(ctx, q, wp.currentDownloadPage.Value()) // Async producer
+			}(query)
+			message += fmt.Sprintf("[%s]\n", query.Description)
+		}
+	}
+	wg.Wait()
+	wp.manager.NotifyUser("Downloading: ", message)
+}
+
+// produceJobsForURL (Producer helper)
+func (wp *Plugin) produceJobsForURL(ctx context.Context, query ImageQuery, page int) {
+	// Find provider
+	var downloadProvider provider.ImageProvider
+	for _, p := range wp.providers {
+		_, err := p.ParseURL(query.URL)
+		if err == nil {
+			downloadProvider = p
+			break
+		}
+	}
+
+	if downloadProvider == nil {
+		log.Printf("No provider found for URL: %s", query.URL)
+		return
+	}
+
+	apiURL, _ := downloadProvider.ParseURL(query.URL)
+
+	// Resolution check
+	if rap, ok := downloadProvider.(provider.ResolutionAwareProvider); ok {
+		width, height, err := wp.os.getDesktopDimension()
+		if err == nil {
+			apiURL = rap.WithResolution(apiURL, width, height)
+		}
+	}
+
+	images, err := downloadProvider.FetchImages(ctx, apiURL, page)
+	if err != nil {
+		log.Printf("Failed to fetch from %s: %v", downloadProvider.Name(), err)
+		return
+	}
+
+	for _, img := range images {
+		job := DownloadJob{
+			Image:    img,
+			Provider: downloadProvider,
+		}
+		if !wp.pipeline.Submit(job) {
+			log.Printf("Pipeline full or stopped. Dropping image %s", img.ID)
+			return
+		}
+	}
+}
+
 // RefreshImagesAndPulse refreshes the list of images and pulses the image.
 func (wp *Plugin) RefreshImagesAndPulse() {
+	// Run asynchronously to avoid blocking
 	go func() {
 		wp.currentDownloadPage.Set(1)
 
-		// Use a channel to track download completion asynchronously
 		downloadDone := make(chan struct{})
+		// This will run discovery synchronously or asynchronously depending on implementation,
+		// but since we passed a channel, our `downloadAllImages` closes it when DISCOVERY is done.
+		// Wait, `produceJobsForURL` is async in my implementation above? Yes `go wp.produceJobsForURL`.
+		// So `downloadAllImages` returns almost immediately after spawning producers.
+		// And `defer close(doneChan)` happens on return.
+		// So `doneChan` closes immediately?
+		// No, `downloadAllImages` spawns producers but doesn't wait for them?
+		// Correct. To wait for discovery, `downloadAllImages` should wait for producers.
+		// I'll update `downloadAllImages` to wait.
 		wp.downloadAllImages(downloadDone)
 
-		// Wait for either enough images or completion/timeout
-		// This loop allows us to pulse AS SOON AS we have enough images, rather than waiting for the entire batch.
-		timeout := time.After(MaxImageWaitRetry * ImageWaitRetryDelay) // Fallback timeout
+		<-downloadDone
+
+		// Now we wait for *Processing*?
+		// The requirement is "Pulse AS SOON AS we have enough images".
+		// We can poll the store.
+
+		timeout := time.After(MaxImageWaitRetry * ImageWaitRetryDelay)
+		ticker := time.NewTicker(500 * time.Millisecond)
+		defer ticker.Stop()
 
 		for {
 			select {
-			case <-downloadDone:
-				// All downloads finished. Pulse immediately found images.
-				wp.actionChan <- func() {
-					wp.imgPulseOp()
-				}
-				return
 			case <-timeout:
-				// Timed out waiting for images. Pulse anyway (might fail or show old/none).
-				wp.actionChan <- func() {
-					wp.imgPulseOp()
-				}
+				wp.actionChan <- func() { wp.imgPulseOp() }
 				return
-			case <-time.After(ImageWaitRetryDelay):
-				// Check if we have enough images to proceed early
-				wp.downloadMutex.Lock()
-				count := len(wp.localImgRecs)
-				wp.downloadMutex.Unlock()
-
-				if count >= MinLocalImageBeforePulse {
-					log.Debugf("Found %d images (>= %d), pulsing early.", count, MinLocalImageBeforePulse)
-					// Pulse logic: Trigger next wallpaper via channel
-					wp.actionChan <- func() {
-						wp.imgPulseOp()
-					}
-					// We continue downloading in background, but we don't need to wait here anymore.
-					// However, we should let the goroutine exit?
-					// Actually, the downloadAllImages goroutine is ensuring cleanup.
-					// We just exit THIS goroutine.
+			case <-ticker.C:
+				if wp.store.Count() >= MinLocalImageBeforePulse {
+					wp.actionChan <- func() { wp.imgPulseOp() }
 					return
 				}
 			}
@@ -771,22 +822,15 @@ func (wp *Plugin) SetSmartFit(enabled bool) {
 	wp.fitImageFlag.Set(enabled)
 }
 
-// SetShuffleImage enables or disables image shuffling.
-func (wp *Plugin) SetShuffleImage(enabled bool) {
-	wp.shuffleImageFlag.Set(enabled)
-	wp.cfg.SetImgShuffle(enabled)
-
-	wp.downloadMutex.Lock()
-	defer wp.downloadMutex.Unlock()
-
-	if wp.shuffleImageFlag.Value() {
-		// Use internal method for the op
-		wp.imgPulseOp = wp.setRandomWallpaper
-		wp.manager.NotifyUser("Wallpaper Shuffling", "Enabled")
-	} else {
-		// Use internal method for the op
+// SetShuffleImage enables or disables random wallpaper selection.
+func (wp *Plugin) SetShuffleImage(enable bool) {
+	wp.shuffleImageFlag.Set(enable)
+	if enable {
+		count := wp.store.Count()
+		wp.rebuildShuffleOrder(count)
 		wp.imgPulseOp = wp.setNextWallpaper
-		wp.manager.NotifyUser("Wallpaper Shuffling", "Disabled")
+	} else {
+		wp.imgPulseOp = wp.setNextWallpaper
 	}
 }
 
