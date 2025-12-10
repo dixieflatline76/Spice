@@ -27,6 +27,17 @@ func main() {
 
 	bumpType := os.Args[1]
 
+	// Safety Check: Ensure we are on 'main'
+	currentBranch, err := getCurrentBranch()
+	if err != nil {
+		fmt.Println("Error determining current branch:", err)
+		os.Exit(1)
+	}
+	if currentBranch != "main" {
+		fmt.Printf("Error: Release bumps must be performed on 'main'. Current branch: '%s'\n", currentBranch)
+		os.Exit(1)
+	}
+
 	version, err := readVersionFromFile("version.txt")
 	if err != nil {
 		fmt.Println("Error reading version from file:", err)
@@ -148,8 +159,16 @@ func commitVersionFile(filename, version string) error {
 		return fmt.Errorf("git add failed: %w", err)
 	}
 
-	cmd = exec.Command("git", "commit", "-m", fmt.Sprintf("Bump version to %s", version))
-	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
+}
+
+// getCurrentBranch returns the name of the current git branch.
+func getCurrentBranch() (string, error) {
+	cmd := exec.Command("git", "branch", "--show-current")
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("git branch failed: %w", err)
+	}
+	return strings.TrimSpace(string(output)), nil
 }
