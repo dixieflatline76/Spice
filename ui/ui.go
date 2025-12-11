@@ -206,6 +206,9 @@ func (sa *SpiceApp) deactivateAllPlugins() {
 // CreateMenuItem creates a menu item with the given label, action, and icon
 func (sa *SpiceApp) CreateMenuItem(label string, action func(), iconName string) *fyne.MenuItem {
 	mi := fyne.NewMenuItem(label, action)
+	if iconName == "" {
+		return mi
+	}
 	icon, err := sa.assetMgr.GetIcon(iconName)
 	if err != nil {
 		utilLog.Printf("Failed to load icon: %v", err)
@@ -226,13 +229,14 @@ func (sa *SpiceApp) CreateToggleMenuItem(label string, action func(bool), iconNa
 		mi.Label = label
 	}
 
-	icon, err := sa.assetMgr.GetIcon(iconName)
-	if err != nil {
-		utilLog.Printf("Failed to load icon: %v", err)
-		return mi
+	if iconName != "" {
+		icon, err := sa.assetMgr.GetIcon(iconName)
+		if err != nil {
+			utilLog.Printf("Failed to load icon: %v", err)
+			return mi
+		}
+		mi.Icon = icon
 	}
-
-	mi.Icon = icon
 	mi.Checked = checked
 	mi.Action = func() {
 		newChecked := !mi.Checked

@@ -3,6 +3,7 @@ package asset
 import (
 	"bytes"
 	"embed"
+	"fmt"
 	"image"
 	_ "image/png" // Register PNG decoder
 
@@ -41,6 +42,10 @@ func (am *Manager) GetImage(name string) (image.Image, error) {
 
 // GetIcon loads and returns embedded icon asset by name.
 func (am *Manager) GetIcon(name string) (fyne.Resource, error) {
+	if name == "" {
+		return nil, fmt.Errorf("icon name is empty")
+	}
+
 	iconData, err := assets.ReadFile("icons/" + name)
 	if err != nil {
 		log.Println("Error loading icon:", err)
