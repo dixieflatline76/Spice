@@ -159,6 +159,9 @@ func commitVersionFile(filename, version string) error {
 		return fmt.Errorf("git add failed: %w", err)
 	}
 
+	commitMsg := fmt.Sprintf("Bump version to %s", version)
+	cmd = exec.Command("git", "commit", "-m", commitMsg)
+	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
 }
