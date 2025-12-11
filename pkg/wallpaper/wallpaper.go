@@ -233,6 +233,9 @@ func (wp *Plugin) DeleteCurrentImage() {
 
 	idToDelete := wp.currentImage.ID
 
+	// Persist to AvoidSet (Config)
+	wp.cfg.AddToAvoidSet(idToDelete)
+
 	// Send delete command to State Manager
 	if wp.pipeline != nil {
 		wp.pipeline.SendCommand(StateCmd{Type: CmdRemove, Payload: idToDelete})
