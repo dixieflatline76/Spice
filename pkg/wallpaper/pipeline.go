@@ -3,6 +3,7 @@ package wallpaper
 import (
 	"context"
 	"runtime"
+	"strings"
 	"sync"
 
 	"github.com/dixieflatline76/Spice/pkg/provider"
@@ -127,7 +128,13 @@ func (p *Pipeline) stateManagerLoop() {
 				return
 			}
 			if res.Error != nil {
-				log.Printf("Pipeline Error: %v", res.Error)
+				if strings.Contains(res.Error.Error(), "avoid set") {
+					log.Debugf("Pipeline: %v", res.Error)
+				} else if strings.Contains(res.Error.Error(), "smart fit") {
+					log.Debugf("Pipeline: %v", res.Error)
+				} else {
+					log.Printf("Pipeline Error: %v", res.Error)
+				}
 				continue
 			}
 			if added := p.store.Add(res.Image); added {

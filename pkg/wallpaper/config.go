@@ -32,6 +32,7 @@ type Config struct {
 	PexelsQueries   []ImageQuery    `json:"pexels_queries"`   // Legacy: List of Pexels image queries
 	assetMgr        *asset.Manager  // Asset manager
 	AvoidSet        map[string]bool `json:"avoid_set"` // Set of image URLs to avoid
+	avoidMap        sync.Map        // Thread-safe map for InAvoidSet checks
 	userid          string
 	mu              sync.RWMutex // Mutex for thread-safe access
 	// Advanced
@@ -101,6 +102,13 @@ func (c *Config) loadFromPrefs() error {
 
 	if err := json.Unmarshal([]byte(cfgText), c); err != nil {
 		return err
+	}
+
+	// Populate sync.Map from loaded AvoidSet
+	if c.AvoidSet != nil {
+		for k, v := range c.AvoidSet {
+			c.avoidMap.Store(k, v)
+		}
 	}
 
 	// Data migration: Iterate and backfill missing IDs for Wallhaven queries
@@ -390,25 +398,26 @@ func (c *Config) DisablePexelsQuery(id string) error {
 
 // InAvoidSet checks if the given ID is in the avoid set
 func (c *Config) InAvoidSet(id string) bool {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	_, found := c.AvoidSet[id]
+	_, found := c.avoidMap.Load(id)
 	return found
 }
 
 // AddToAvoidSet adds the given ID to the avoid set
 func (c *Config) AddToAvoidSet(id string) {
+	c.avoidMap.Store(id, true)
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.AvoidSet[id] = true
 	c.save()
 }
 
 // ResetAvoidSet clears the avoid set
 func (c *Config) ResetAvoidSet() {
+	c.avoidMap.Range(func(key, value interface{}) bool {
+		c.avoidMap.Delete(key)
+		return true
+	})
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.AvoidSet = make(map[string]bool)
 	c.save()
 }
 
@@ -603,6 +612,14 @@ func (c *Config) GetAssetManager() *asset.Manager {
 // Save saves the current configuration to the user's config file
 func (c *Config) save() {
 	// Don't lock the mutex here because we're already holding it in all calling functions
+
+	// Sync avoidMap to AvoidSet for JSON marshaling
+	c.AvoidSet = make(map[string]bool)
+	c.avoidMap.Range(func(key, value interface{}) bool {
+		c.AvoidSet[key.(string)] = true
+		return true
+	})
+
 	data, err := json.MarshalIndent(c, "", "  ") // Use indentation for readability
 	if err != nil {
 		log.Fatalf("Error encoding config data: %v", err)
