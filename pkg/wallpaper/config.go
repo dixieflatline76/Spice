@@ -25,14 +25,15 @@ import (
 // Config struct to hold all configuration data
 type Config struct {
 	fyne.Preferences
-	WallhavenAPIKey string          `json:"wallhaven_api_key"`
-	Queries         []ImageQuery    `json:"queries"`          // Unified list of image queries
-	ImageQueries    []ImageQuery    `json:"query_urls"`       // Legacy: List of image queries (Wallhaven)
-	UnsplashQueries []ImageQuery    `json:"unsplash_queries"` // Legacy: List of Unsplash image queries
-	PexelsQueries   []ImageQuery    `json:"pexels_queries"`   // Legacy: List of Pexels image queries
-	assetMgr        *asset.Manager  // Asset manager
-	AvoidSet        map[string]bool `json:"avoid_set"` // Set of image URLs to avoid
-	avoidMap        sync.Map        // Thread-safe map for InAvoidSet checks
+	WallhavenAPIKey string            `json:"wallhaven_api_key"`
+	Queries         []ImageQuery      `json:"queries"`          // Unified list of image queries
+	ImageQueries    []ImageQuery      `json:"query_urls"`       // Legacy: List of image queries (Wallhaven)
+	UnsplashQueries []ImageQuery      `json:"unsplash_queries"` // Legacy: List of Unsplash image queries
+	PexelsQueries   []ImageQuery      `json:"pexels_queries"`   // Legacy: List of Pexels image queries
+	assetMgr        *asset.Manager    // Asset manager
+	AvoidSet        map[string]bool   `json:"avoid_set"` // Set of image URLs to avoid
+	avoidMap        sync.Map          // Thread-safe map for InAvoidSet checks
+	MetadataCache   map[string]string `json:"metadata_cache"` // Cache for image metadata (ID -> Attribution)
 	userid          string
 	mu              sync.RWMutex // Mutex for thread-safe access
 	// Advanced
@@ -69,6 +70,7 @@ func GetConfig(p fyne.Preferences) *Config {
 			PexelsQueries:   make([]ImageQuery, 0), // Initialize PexelsQueries
 			assetMgr:        asset.NewManager(),
 			AvoidSet:        make(map[string]bool),
+			MetadataCache:   make(map[string]string),
 			userid:          u.Uid,
 		}
 		// Load config from file
@@ -418,6 +420,28 @@ func (c *Config) ResetAvoidSet() {
 	})
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.save()
+}
+
+// GetMetadata returns the metadata (attribution) for the given ID.
+func (c *Config) GetMetadata(id string) (string, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.MetadataCache == nil {
+		return "", false
+	}
+	val, ok := c.MetadataCache[id]
+	return val, ok
+}
+
+// SetMetadata sets the metadata (attribution) for the given ID and saves the config.
+func (c *Config) SetMetadata(id, attribution string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.MetadataCache == nil {
+		c.MetadataCache = make(map[string]string)
+	}
+	c.MetadataCache[id] = attribution
 	c.save()
 }
 

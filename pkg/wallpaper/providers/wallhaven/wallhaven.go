@@ -214,6 +214,13 @@ func (p *WallhavenProvider) EnrichImage(ctx context.Context, img provider.Image)
 		return img, nil // Already has attribution
 	}
 
+	// 1. Check Persistence Cache (Robustness for Wake/Offline)
+	if cachedAttr, ok := p.cfg.GetMetadata(img.ID); ok && cachedAttr != "" {
+		log.Debugf("Wallhaven: Found cache hit for %s attribution: %s", img.ID, cachedAttr)
+		img.Attribution = cachedAttr
+		return img, nil
+	}
+
 	// Wallhaven ID is usually the last part of the path or available in the struct
 	// We use the ID from the image struct
 	apiURL := fmt.Sprintf("https://wallhaven.cc/api/v1/w/%s", img.ID)
@@ -259,6 +266,8 @@ func (p *WallhavenProvider) EnrichImage(ctx context.Context, img provider.Image)
 	if response.Data.Uploader.Username != "" {
 		img.Attribution = response.Data.Uploader.Username
 		log.Debugf("Enriched Wallhaven image %s with uploader: %s", img.ID, img.Attribution)
+		// 2. Save to Persistence Cache
+		p.cfg.SetMetadata(img.ID, img.Attribution)
 	}
 
 	return img, nil
