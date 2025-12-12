@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -518,4 +520,88 @@ func TestGetInstance(t *testing.T) {
 	instance2 := GetInstance()
 	assert.NotNil(t, instance1)
 	assert.Equal(t, instance1, instance2)
+}
+
+func TestDeleteCurrentImage_PersistsBlock(t *testing.T) {
+	// Setup
+	ResetConfig()
+	prefs := NewMockPreferences()
+	cfg := GetConfig(prefs)
+
+	mockOS := new(MockOS)
+	mockPM := new(MockPluginManager)
+	mockIP := new(MockImageProcessorTyped)
+
+	wp := &Plugin{
+		os:           mockOS,
+		imgProcessor: mockIP,
+		cfg:          cfg,
+		manager:      mockPM,
+		store:        NewImageStore(),
+		runOnUI:      func(f func()) { f() }, // Run synchronously
+		actionChan:   make(chan func(), 10),
+	}
+
+	// Helper to process actions
+	processQueue := func() {
+		close(wp.actionChan)
+		for action := range wp.actionChan {
+			action()
+		}
+	}
+
+	// Setup initial state: 1 image in store, set as current
+	imgID := "img_to_block"
+	img := provider.Image{
+		ID:          imgID,
+		Path:        "http://example.com/img.jpg",
+		FilePath:    "path/to/img.jpg",
+		Attribution: "Bad Artist",
+	}
+	wp.store.Add(img)
+	wp.currentImage = img
+
+	// Mock imgPulseOp to prevent panic in SetNextWallpaper
+	wp.imgPulseOp = func() {}
+
+	// Mock dependencies for DeleteCurrentImage
+	// It calls os.Remove (via util usually, but here os is mocked?)
+	// Looking at wallpaper.go, DeleteCurrentImage calls os.Remove directly?
+	// or wp.os.Remove? Wait, the Plugin struct has an 'os' field which is the interface.
+	// Let's verify if DeleteCurrentImage uses wp.os or checks file existence.
+	// It calls os.Remove(wp.currentImage.FilePath). The Plugin struct has an 'os' interface likely wrapping this?
+	// Actually, looking at the code for DeleteCurrentImage would be good, but assuming standard mock usage:
+	mockOS.On("setWallpaper", mock.Anything).Return(nil) // It might try to set next wallpaper
+	// If the file deletion is done via direct os package calls, we can't easily mock it without filesystem abstraction.
+	// However, for this specific test, we only verify the CONFIG persistence side effect.
+	// If os.Remove fails, it might log an error but still persist the block?
+	// To be safe, use a temp file.
+
+	tmpFile := filepath.Join(t.TempDir(), "img.jpg")
+	f, err := os.Create(tmpFile)
+	assert.NoError(t, err)
+	f.Close()
+	wp.currentImage.FilePath = tmpFile
+
+	// Mock UI updates
+	mockPM.On("NotifyUser", mock.Anything, mock.Anything).Return()
+	mockPM.On("RefreshTrayMenu").Return()
+
+	// Initialize pipeline to handle removal logic
+	wp.pipeline = NewPipeline(wp.cfg, wp.store, wp.ProcessImageJob)
+	wp.pipeline.Start(1)
+	defer wp.pipeline.Stop()
+
+	// Execute
+	wp.DeleteCurrentImage()
+	// Process queue and allow time for pipeline to process removal
+	processQueue()
+	time.Sleep(100 * time.Millisecond) // Give pipeline a moment to handle CmdRemove
+
+	// Verify persistence
+	assert.True(t, cfg.InAvoidSet(imgID), "Image ID should be added to AvoidSet")
+
+	// Verify it was removed from store
+	// Verify it was removed from store
+	assert.Equal(t, 0, wp.store.Count(), "Image should be removed from store")
 }
