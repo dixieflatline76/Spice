@@ -68,6 +68,7 @@ graph TD
 
     subgraph Pipeline_Context ["Pipeline Context"]
         Workers[["Worker Pool<br/>(Download/Crop)"]]:::pipe
+        LazyWorker(("Persistent Worker<br/>(Enrichment)")):::pipe
         Manager(("State Manager<br/>Loop")):::pipe
     end
 
@@ -95,6 +96,9 @@ A thread-safe, stateless container.
 
 - **Role**: The "Database" of the application.
 - **Locking**: Uses `sync.RWMutex`.
+  - **Reads (Next Button)**: Uses `RLock()` (Non-blocking).
+  - **Writes (Download/MarkSeen)**: Uses `Lock()` (Exclusive).
+  - **Persistence**: Debounced (2s) and uses `RLock()` to save to disk without blocking readers.
 - **Constraints**: Contains no iteration logic (no `currentIndex`).
 
 ### 4.2 Pipeline State Manager (`pkg/wallpaper/pipeline.go`)
@@ -116,6 +120,16 @@ The "Controller".
   - **Navigation**: Calculates next index locally, reads from store.
   - **Optimistic Updates**: Updates Tray Menu *before* calling blocking OS wallpaper functions.
   - **Rollback**: If OS call fails, reverts UI to previous state.
+
+### 4.4 Lazy Enrichment Worker (`startEnrichmentWorker`)
+
+A persistent, single-goroutine worker that "pivots" to the user's current location.
+
+- **Role**: Fetches metadata (Enrichment) for upcoming images.
+- **Behavior**:
+  - Listens on `enrichmentSignal` (buffered channel).
+  - When user navigates, instantly aborts current look-ahead and jumps to new index.
+  - Ensures metadata is ready *just in time*, reducing API waste.
 
 ## 3.4 Interaction Flows
 
