@@ -202,6 +202,8 @@ func (p *WallhavenProvider) FetchImages(ctx context.Context, apiURL string, page
 			Attribution: item.Uploader.Username,
 			Provider:    p.Name(),
 			FileType:    item.FileType,
+			Width:       item.DimensionX,
+			Height:      item.DimensionY,
 		})
 	}
 
@@ -276,13 +278,15 @@ type imgSrvcResponse struct {
 
 // ImgSrvcImage represents an image from the image service.
 type ImgSrvcImage struct {
-	Path     string   `json:"path"`
-	ID       string   `json:"id"`
-	ShortURL string   `json:"short_url"`
-	FileType string   `json:"file_type"`
-	Ratio    string   `json:"ratio"`
-	Thumbs   Thumbs   `json:"thumbs"`
-	Uploader Uploader `json:"uploader"`
+	Path       string   `json:"path"`
+	ID         string   `json:"id"`
+	ShortURL   string   `json:"short_url"`
+	FileType   string   `json:"file_type"`
+	Ratio      string   `json:"ratio"`
+	DimensionX int      `json:"dimension_x"`
+	DimensionY int      `json:"dimension_y"`
+	Thumbs     Thumbs   `json:"thumbs"`
+	Uploader   Uploader `json:"uploader"`
 }
 
 // Uploader represents the user who uploaded the image.

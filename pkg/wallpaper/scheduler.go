@@ -92,6 +92,20 @@ func (wp *Plugin) checkAndRunRefresh(now time.Time, lastRefreshDay int, isInitia
 
 		updatedLastRefreshDay := today
 
+		// Maintenance: Grooming & Cleanup
+		log.Print("Nightly Maintenance: Starting cache grooming...")
+		targetFlags := map[string]bool{
+			"SmartFit": wp.cfg.GetSmartFit(),
+			"FaceCrop": wp.cfg.GetFaceCropEnabled(),
+		}
+		// Sync Store (Groom old images)
+		wp.store.Sync(int(wp.cfg.GetCacheSize().Size()), targetFlags, wp.cfg.GetActiveQueryIDs())
+
+		// Cleanup Orphans (Delete unknown files)
+		// We get known IDs from store (thread-safe)
+		wp.fm.CleanupOrphans(wp.store.GetKnownIDs())
+		log.Print("Nightly Maintenance: Finished.")
+
 		log.Print("Running nightly refresh action...") // Clarify log message
 		wp.currentDownloadPage.Set(1)
 		wp.downloadAllImages(nil) // This calls stopAllWorkers internally

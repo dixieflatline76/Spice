@@ -39,6 +39,7 @@ type ImageProcessor interface {
 	DecodeImage(ctx context.Context, imgBytes []byte, contentType string) (image.Image, string, error)
 	EncodeImage(ctx context.Context, img image.Image, contentType string) ([]byte, error)
 	FitImage(ctx context.Context, img image.Image) (image.Image, error)
+	CheckCompatibility(width, height int) error
 }
 
 // Plugin is the main struct for the wallpaper downloader plugin.
@@ -71,13 +72,17 @@ type Plugin struct {
 
 	// New Components
 	store    *ImageStore
+	fm       *FileManager
 	pipeline *Pipeline
 
 	// Session State (Local Navigation)
-	currentIndex int
-	history      []int
-	shuffleOrder []int
-	randomPos    int
+	currentIndex           int
+	history                []int
+	shuffleOrder           []int
+	randomPos              int
+	lastTriggeredSeenCount int       // Anti-loop state
+	lastTriggerTime        time.Time // Anti-loop cooldown state
+	enrichmentSignal       chan int  // Signal for lazy enrichment worker
 
 	// Testable UI executor
 	runOnUI func(func())
@@ -152,7 +157,7 @@ func getPlugin() *Plugin {
 			actionChan:         make(chan func(), 5),
 			store:              store,
 			pipeline:           nil, // Initialized in Init
-			runOnUI:            fyne.DoAndWait,
+			runOnUI:            fyne.Do,
 		}
 
 		// Pipeline depends on wpInstance methods, so we init it here but config is nil.
@@ -171,6 +176,9 @@ func (wp *Plugin) Init(manager ui.PluginManager) {
 	wp.manager = manager
 	wp.cfg = GetConfig(manager.GetPreferences())
 
+	// Register callbacks
+	wp.cfg.SetQueryRemovedCallback(wp.onQueryRemoved)
+
 	// Initialize providers via Registry
 	wp.providers = make(map[string]provider.ImageProvider)
 	for _, factory := range GetRegisteredProviders() {
@@ -179,6 +187,14 @@ func (wp *Plugin) Init(manager ui.PluginManager) {
 		log.Debugf("Registered provider: %s", provider.Name())
 	}
 
+	// Initialize FileManager
+	downloadsPath := filepath.Join(config.GetWorkingDir(), strings.ToLower(pluginName)+"_downloads")
+	wp.fm = NewFileManager(downloadsPath)
+
+	// Configure Store with Persistence
+	cachePath := filepath.Join(downloadsPath, "image_cache_map.json")
+	wp.store.SetFileManager(wp.fm, cachePath)
+
 	// Inject config into smartImageProcessor
 	if sip, ok := wp.imgProcessor.(*smartImageProcessor); ok {
 		sip.config = wp.cfg
@@ -186,11 +202,13 @@ func (wp *Plugin) Init(manager ui.PluginManager) {
 
 	// Initialize Pipeline
 	wp.pipeline = NewPipeline(wp.cfg, wp.store, wp.ProcessImageJob)
+	wp.enrichmentSignal = make(chan int, 1) // Buffered 1 for non-blocking signal
 
 	log.Debugf("Wallpaper Plugin Initialized. Config: FaceBoostEnabled=%v, SmartFit=%v", wp.cfg.GetFaceBoostEnabled(), wp.cfg.GetSmartFit())
 
-	// Start the action worker
+	// Start the action worker and enrichment worker
 	go wp.actionWorker()
+	go wp.startEnrichmentWorker()
 }
 
 // actionWorker processes wallpaper change actions sequentially.
@@ -259,34 +277,24 @@ func (wp *Plugin) DeleteCurrentImage() {
 	wp.SetNextWallpaper()
 }
 
-// setupImageDirs sets up the downloaded images directories.
-func (wp *Plugin) setupImageDirs() {
-	wp.downloadedDir = filepath.Join(config.GetWorkingDir(), strings.ToLower(pluginName)+"_downloads")
-	fittedDir := filepath.Join(wp.downloadedDir, FittedImgDir)
-	fittedFaceBoostDir := filepath.Join(wp.downloadedDir, FittedFaceBoostImgDir)
-	fittedFaceCropDir := filepath.Join(wp.downloadedDir, FittedFaceCropImgDir)
-
-	err := os.MkdirAll(wp.downloadedDir, 0755)
-	if err != nil {
-		log.Fatalf("error creating downloaded images directory: %v", err)
-	}
-	err = os.MkdirAll(fittedDir, 0755)
-	if err != nil {
-		log.Fatalf("error creating fitted images directory: %v", err)
-	}
-	err = os.MkdirAll(fittedFaceBoostDir, 0755)
-	if err != nil {
-		log.Fatalf("error creating fitted face boost images directory: %v", err)
-	}
-	err = os.MkdirAll(fittedFaceCropDir, 0755)
-	if err != nil {
-		log.Fatalf("error creating fitted face crop images directory: %v", err)
-	}
-}
-
 // Activate starts the wallpaper rotation.
 func (wp *Plugin) Activate() {
-	wp.setupImageDirs()
+	if err := wp.fm.EnsureDirs(); err != nil {
+		log.Fatalf("Error ensuring directories: %v", err)
+	}
+
+	// Load Cache Logic
+	if err := wp.store.LoadCache(); err != nil {
+		log.Printf("Failed to load cache: %v", err)
+	}
+
+	// Sync Store (Self-Healing)
+	// Build target flags
+	targetFlags := map[string]bool{
+		"SmartFit": wp.cfg.GetSmartFit(),
+		"FaceCrop": wp.cfg.GetFaceCropEnabled(),
+	}
+	wp.store.Sync(int(wp.cfg.GetCacheSize().Size()), targetFlags, wp.cfg.GetActiveQueryIDs())
 
 	// Start the pipeline with default worker count (NumCPU)
 	// We should probably get this from config, but for now hardcode or use NumCPU
@@ -442,6 +450,9 @@ func (wp *Plugin) updateTrayMenuUI(img provider.Image) {
 			wp.providerMenuItem.Icon = icon
 
 			wp.artistMenuItem.Label = "By: " + attribution
+			if attribution == "" {
+				wp.artistMenuItem.Label = "By: Unknown"
+			}
 			wp.manager.RefreshTrayMenu()
 		}
 	})
@@ -460,6 +471,17 @@ func (wp *Plugin) applyWallpaper(img provider.Image) {
 	wp.currentImage = img
 	wp.updateTrayMenuUI(img)
 
+	// Mark as seen to update history/pagination logic (Async to avoid blocking UI)
+	go wp.store.MarkSeen(img.FilePath)
+
+	// Verify file exists before setting
+	if _, err := os.Stat(img.FilePath); os.IsNotExist(err) {
+		log.Printf("Error: Wallpaper file missing: %s", img.FilePath)
+		// Don't rollback immediately, just abort. User might have deleted it manually.
+		return
+	}
+
+	log.Debugf("Setting wallpaper to: %s", img.FilePath)
 	if err := wp.os.setWallpaper(img.FilePath); err != nil {
 		log.Printf("failed to set wallpaper: %v", err)
 		// Rollback UI and state to previous image
@@ -469,23 +491,67 @@ func (wp *Plugin) applyWallpaper(img provider.Image) {
 		}
 		return
 	}
+	log.Debugf("Wallpaper set successfully.")
 
 	// Threshold logic: If we have seen > 80% of local images (approximation), fetch next page.
 	seenCount := wp.store.SeenCount()
 	totalCount := wp.store.Count()
 
 	if totalCount == 0 {
+		log.Printf("[DEBUG-DUMP] Total count is 0, skipping pagination check.")
 		return
 	}
 
 	threshold := int(math.Round(PrcntSeenTillDownload * float64(totalCount)))
-	if seenCount > MinSeenImagesForDownload && seenCount >= threshold {
+
+	log.Printf("[DEBUG-DUMP] Pagination Check: Seen=%d, Total=%d, MinSeen=%d, Threshold=%d. (Need: Seen > MinSeen && Seen >= Threshold)",
+		seenCount, totalCount, MinSeenImagesForDownload, threshold)
+
+	// Pagination Logic:
+	// User Request: "retrieve the next page once the user has seen 70% of the page's images"
+	// We use totalCount as proxy for "page's images" (or total loaded).
+	// Current logic uses PrcntSeenTillDownload (likely 0.7 or 0.8).
+	shouldFetch := false
+
+	if totalCount > 0 {
+		// If we have enough images to care about percentage:
+		if seenCount >= threshold {
+			shouldFetch = true
+		}
+
+		// Safety: If totalCount is very small (e.g. < MinSeenImagesForDownload), calculation might be weird.
+		// But 70% of 4 is 3. So if seen 3/4, we fetch. This seems correct.
+		// The old MinSeen check was blocking this.
+	}
+
+	if shouldFetch {
+		// Anti-Loop Check: ensure we are making progress
+		// If we've already triggered a download at this Seen count (or higher), don't trigger again
+		// until we see NEW images or enough time has passed (to retry after stalled/filtered page).
+		if seenCount <= wp.lastTriggeredSeenCount {
+			// Cooldown Override: If it's been > 15 seconds since last trigger, allow retry.
+			// This handles cases where a page yielded 0 images (due to filtering/429) and we got stuck.
+			// 15 seconds prevents machine-gunning but allows "Next" button spam to eventually work.
+			if time.Since(wp.lastTriggerTime) > 15*time.Second {
+				log.Printf("[DEBUG] Pagination: Loop prevention cooldown expired (%v). Retrying download despite stalled count.", time.Since(wp.lastTriggerTime))
+				shouldFetch = true
+			} else {
+				log.Printf("[DEBUG] Pagination: Loop prevented. Seen=%d, LastTrigger=%d. Waiting for new views (Cooldown: %v remaining).",
+					seenCount, wp.lastTriggeredSeenCount, (15*time.Second - time.Since(wp.lastTriggerTime)).Round(time.Second))
+				shouldFetch = false
+			}
+		}
+	}
+
+	if shouldFetch {
 		wp.downloadMutex.Lock()
 		if !wp.isDownloading {
 			wp.isDownloading = true
+			wp.lastTriggeredSeenCount = seenCount
+			wp.lastTriggerTime = time.Now()
 			wp.downloadMutex.Unlock()
 
-			log.Printf("Seen %d/%d images. Fetching next page...", seenCount, totalCount)
+			log.Printf("Seen %d/%d images (Trigger: %v). Fetching next page...", seenCount, totalCount, shouldFetch)
 			wp.currentDownloadPage.Increment()
 			// Trigged async download
 			go wp.downloadAllImages(nil)
@@ -498,11 +564,14 @@ func (wp *Plugin) applyWallpaper(img provider.Image) {
 // setWallpaperAt is deprecated/removed. Logic moved to applyWallpaper.
 // setRandomWallpaper is removed. Logic moved to Store.
 
-// setNextWallpaper sets the next wallpaper.
 func (wp *Plugin) setNextWallpaper() {
+	// DEBUG: Dump state to find logic disconnect
+	wp.store.DumpState()
+
 	count := wp.store.Count()
 	if count == 0 {
-		log.Println("No wallpapers available.")
+		log.Println("No wallpapers available. Triggering refresh...")
+		go wp.RefreshImagesAndPulse()
 		return
 	}
 
@@ -510,12 +579,15 @@ func (wp *Plugin) setNextWallpaper() {
 	if wp.shuffleImageFlag.Value() {
 		// Rebuild shuffle order if needed
 		if len(wp.shuffleOrder) != count || wp.randomPos >= len(wp.shuffleOrder) {
+			log.Printf("[DEBUG-DUMP] Rebuilding Shuffle Order. Count: %d, RandomPos: %d", count, wp.randomPos)
 			wp.rebuildShuffleOrder(count)
 		}
 		newIndex = wp.shuffleOrder[wp.randomPos]
+		log.Printf("[DEBUG-DUMP] Shuffle Selection: Index %d from Order[%d] (Order: %v)", newIndex, wp.randomPos, wp.shuffleOrder)
 		wp.randomPos++
 	} else {
 		newIndex = (wp.currentIndex + 1) % count
+		log.Printf("[DEBUG-DUMP] Sequential Selection: Index %d (Current: %d, Count: %d)", newIndex, wp.currentIndex, count)
 	}
 
 	img, ok := wp.store.Get(newIndex)
@@ -526,11 +598,6 @@ func (wp *Plugin) setNextWallpaper() {
 
 	wp.currentIndex = newIndex
 	wp.history = append(wp.history, newIndex)
-
-	// Async Mark Seen
-	if wp.pipeline != nil {
-		wp.pipeline.SendCommand(StateCmd{Type: CmdMarkSeen, Payload: img.FilePath})
-	}
 
 	wp.applyWallpaper(img)
 }
@@ -600,6 +667,20 @@ func (wp *Plugin) SetNextWallpaper() {
 		// log.Debugf("[Timing] SetNextWallpaper: Starting. Waited: %v", startExec.Sub(enqueueTime))
 
 		wp.imgPulseOp()
+
+		// Signal the enrichment worker to pivot to the new index
+		if wp.enrichmentSignal != nil {
+			select {
+			case wp.enrichmentSignal <- wp.currentIndex:
+			default:
+				// If channel is full (worker busy), drain and replace
+				select {
+				case <-wp.enrichmentSignal:
+				default:
+				}
+				wp.enrichmentSignal <- wp.currentIndex
+			}
+		}
 
 		// log.Debugf("[Timing] SetNextWallpaper: Finished. Duration: %v", time.Since(startExec))
 	}
@@ -730,6 +811,74 @@ func (wp *Plugin) downloadAllImages(doneChan chan struct{}) {
 	}
 	wg.Wait()
 	wp.manager.NotifyUser("Downloading: ", message)
+
+	// Cold Start Enrichment: Trigger the worker for the initial set
+	// We use non-blocking send in case worker is already busy/started
+	if wp.enrichmentSignal != nil {
+		select {
+		case wp.enrichmentSignal <- 0: // Start at index 0
+		default:
+		}
+	}
+}
+
+// startEnrichmentWorker runs a persistent loop to handle lazy enrichment.
+// It pivots immediately when a new index is signaled.
+func (wp *Plugin) startEnrichmentWorker() {
+	for newIndex := range wp.enrichmentSignal {
+		// We have a new starting point.
+		// Define window size
+		windowSize := 5
+		startIdx := newIndex
+		count := wp.store.Count()
+		if count == 0 {
+			continue
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		processed := 0
+
+		// Look ahead loop
+		for i := 1; i <= windowSize; i++ {
+			// CHECK FOR PIVOT: Before doing work, check if user moved again
+			select {
+			case latestIndex := <-wp.enrichmentSignal:
+				log.Debugf("Lazy Enrichment: Pivoting from %d to %d", startIdx, latestIndex)
+				// Updates loop variables to restart immediately
+				startIdx = latestIndex
+				i = 0 // Reset loop (will increment to 1)
+				continue
+			default:
+				// No new signal, proceed with current window
+			}
+
+			idx := (startIdx + i) % count
+			img, ok := wp.store.Get(idx)
+			if !ok || img.Attribution != "" {
+				continue
+			}
+
+			// Needs enrichment
+			p, ok := wp.providers[img.Provider]
+			if !ok {
+				continue
+			}
+
+			// Perform Enrichment
+			// log.Debugf("Lazy Enrichment: Fetching metadata for %s...", img.ID)
+			enriched, err := p.EnrichImage(ctx, img)
+			if err == nil && enriched.Attribution != "" {
+				wp.store.Update(enriched)
+				processed++
+			}
+			// Small pacing
+			time.Sleep(100 * time.Millisecond)
+		}
+		cancel()
+		if processed > 0 {
+			log.Debugf("Lazy Enrichment: Updated %d images in window %d.", processed, startIdx)
+		}
+	}
 }
 
 // produceJobsForURL (Producer helper)
@@ -766,6 +915,26 @@ func (wp *Plugin) produceJobsForURL(ctx context.Context, query ImageQuery, page 
 	}
 
 	for _, img := range images {
+		// Strict Block Check: Don't process if user blocked it.
+		if wp.cfg.InAvoidSet(img.ID) {
+			log.Debugf("Skipping blocked image %s", img.ID)
+			continue
+		}
+
+		img.SourceQueryID = query.ID // Set SourceQueryID for smart clearance
+		// Smart Producer Check:
+		// If the image is already in our store (validated by Sync), we check if it needs "claiming".
+		if existing, ok := wp.store.GetByID(img.ID); ok {
+			// If existing image has no SourceQueryID (Legacy or Lost Metadata), claim it for this query.
+			// This ensures Strict Sync can manage it later.
+			if existing.SourceQueryID == "" {
+				existing.SourceQueryID = query.ID
+				wp.store.Add(existing) // Update the store with the tagged image
+				log.Debugf("Claimed legacy/untagged image %s for query %s", img.ID, query.ID)
+			}
+			continue
+		}
+
 		job := DownloadJob{
 			Image:    img,
 			Provider: downloadProvider,
@@ -781,6 +950,14 @@ func (wp *Plugin) produceJobsForURL(ctx context.Context, query ImageQuery, page 
 func (wp *Plugin) RefreshImagesAndPulse() {
 	// Run asynchronously to avoid blocking
 	go func() {
+		// Strict Sync: Prune inactive/deleted queries before fetching new ones.
+		// This ensures that "Apply" button or Manual Refresh immediately cleans up the cache.
+		targetFlags := map[string]bool{
+			"SmartFit": wp.cfg.GetSmartFit(),
+			"FaceCrop": wp.cfg.GetFaceCropEnabled(),
+		}
+		wp.store.Sync(int(wp.cfg.GetCacheSize().Size()), targetFlags, wp.cfg.GetActiveQueryIDs())
+
 		wp.currentDownloadPage.Set(1)
 
 		downloadDone := make(chan struct{})
@@ -828,6 +1005,7 @@ func (wp *Plugin) SetSmartFit(enabled bool) {
 // SetShuffleImage enables or disables random wallpaper selection.
 func (wp *Plugin) SetShuffleImage(enable bool) {
 	wp.shuffleImageFlag.Set(enable)
+	wp.cfg.SetImgShuffle(enable) // Persist setting
 	if enable {
 		count := wp.store.Count()
 		wp.rebuildShuffleOrder(count)
@@ -922,4 +1100,22 @@ func (wp *Plugin) triggerDownload(url string) {
 	} else {
 		log.Debugf("Download event triggered successfully for %s", url)
 	}
+}
+
+// onQueryRemoved is a callback triggered when a query is removed from config.
+func (wp *Plugin) onQueryRemoved(queryID string) {
+	log.Printf("Plugin: Query %s removed. Clearing associated images from cache...", queryID)
+	wp.store.RemoveByQueryID(queryID)
+	// Refresh Tray Menu or perform other syncs if needed
+}
+
+// ClearCache clears the entire wallpaper cache (memory and disk).
+// This is the "Panic Button" functionality.
+func (wp *Plugin) ClearCache() {
+	log.Println("Plugin: Clearing entire wallpaper cache...")
+	wp.store.Wipe()
+
+	// Automatically trigger a refresh to repopulate if possible
+	log.Println("Plugin: Cache cleared. Triggering refresh to repopulate...")
+	go wp.RefreshImagesAndPulse()
 }

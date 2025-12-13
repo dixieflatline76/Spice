@@ -1,6 +1,8 @@
 package wallpaper
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"fyne.io/fyne/v2"
@@ -40,22 +42,29 @@ func TestApplyWallpaper_RollbackOnFailure(t *testing.T) {
 	wp.artistMenuItem = &fyne.MenuItem{Label: "Initial"}
 
 	// Define Images
-	img1 := provider.Image{ID: "img1", FilePath: "path/to/img1.jpg", Provider: "Prov1", Attribution: "Artist1"}
-	img2 := provider.Image{ID: "img2", FilePath: "path/to/img2.jpg", Provider: "Prov2", Attribution: "Artist2"}
+	// Define Images
+	// Use Real Temp Files for os.Stat to pass
+	tempDir := t.TempDir()
+	img1Path := filepath.Join(tempDir, "img1.jpg")
+	img2Path := filepath.Join(tempDir, "img2.jpg")
+	assert.NoError(t, os.WriteFile(img1Path, []byte("dummy"), 0644))
+	assert.NoError(t, os.WriteFile(img2Path, []byte("dummy"), 0644))
+
+	img1 := provider.Image{ID: "img1", FilePath: img1Path, Provider: "Prov1", Attribution: "Artist1"}
+	img2 := provider.Image{ID: "img2", FilePath: img2Path, Provider: "Prov2", Attribution: "Artist2"}
 
 	// Set Initial State (img1 active)
 	wp.currentImage = img1
 	wp.store.Add(img1)
 	wp.store.Add(img2)
 
-	// Mock OS setWallpaper to FAIL for img2
-	mockOS.On("setWallpaper", "path/to/img2.jpg").Return(assert.AnError)
+	mockOS.On("setWallpaper", img2Path).Return(assert.AnError)
 
 	// Action: Apply Wallpaper img2
 	wp.applyWallpaper(img2)
 
 	// Assert: OS was called
-	mockOS.AssertCalled(t, "setWallpaper", "path/to/img2.jpg")
+	mockOS.AssertCalled(t, "setWallpaper", img2Path)
 
 	// Assert: UI rolled back to img1
 	// Since runOnUI is synchronous, the final state of the menu items should match img1

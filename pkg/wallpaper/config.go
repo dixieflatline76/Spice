@@ -38,6 +38,9 @@ type Config struct {
 	// Advanced
 	LogLevel                string `json:"logLevel"`
 	MaxConcurrentProcessors int    `json:"maxConcurrentProcessors"`
+
+	// Callbacks
+	QueryRemovedCallback func(queryID string) `json:"-"`
 }
 
 // ImageQuery struct to hold the URL of an image and whether it is active
@@ -53,6 +56,51 @@ var (
 	cfgInstance *Config
 	cfgOnce     sync.Once
 )
+
+// SmartFitMode defines the behavior of the Smart Fit algorithm
+type SmartFitMode int
+
+const (
+	SmartFitOff        SmartFitMode = 0 // Disabled (Legacy: SmartFit=false)
+	SmartFitNormal     SmartFitMode = 1 // Strict Aspect Ratio (Legacy: SmartFit=true, Unlock=false)
+	SmartFitAggressive SmartFitMode = 2 // Relaxed Aspect Ratio (Legacy: SmartFit=true, Unlock=true)
+)
+
+func (m SmartFitMode) String() string {
+	switch m {
+	case SmartFitOff:
+		return "Disabled"
+	case SmartFitNormal:
+		return "Standard (Strict)"
+	case SmartFitAggressive:
+		return "Relaxed (Aggressive)"
+	default:
+		return "Unknown"
+	}
+}
+
+// GetSmartFitModes returns a list of available smart fit modes as strings
+func GetSmartFitModes() []string {
+	return []string{
+		SmartFitOff.String(),
+		SmartFitNormal.String(),
+		SmartFitAggressive.String(),
+	}
+}
+
+// ParseSmartFitMode parses a string into a SmartFitMode
+func ParseSmartFitMode(s string) SmartFitMode {
+	switch s {
+	case "Disabled":
+		return SmartFitOff
+	case "Standard (Strict)":
+		return SmartFitNormal
+	case "Relaxed (Aggressive)":
+		return SmartFitAggressive
+	default:
+		return SmartFitNormal
+	}
+}
 
 // GetConfig returns the singleton instance of Config.
 func GetConfig(p fyne.Preferences) *Config {
@@ -333,7 +381,19 @@ func (c *Config) RemoveImageQuery(id string) error {
 
 	c.Queries = append(c.Queries[:index], c.Queries[index+1:]...)
 	c.save()
+
+	// Trigger callback
+	if c.QueryRemovedCallback != nil {
+		go c.QueryRemovedCallback(id)
+	}
 	return nil
+}
+
+// SetQueryRemovedCallback sets the callback for when a query is removed.
+func (c *Config) SetQueryRemovedCallback(callback func(queryID string)) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.QueryRemovedCallback = callback
 }
 
 // RemoveUnsplashQuery removes an Unsplash query from the unified list.
@@ -394,6 +454,19 @@ func (c *Config) DisableUnsplashQuery(id string) error {
 // DisablePexelsQuery disables a Pexels query.
 func (c *Config) DisablePexelsQuery(id string) error {
 	return c.DisableImageQuery(id)
+}
+
+// GetActiveQueryIDs returns a map of all currently active query IDs.
+func (c *Config) GetActiveQueryIDs() map[string]bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	active := make(map[string]bool)
+	for _, q := range c.Queries {
+		if q.Active {
+			active[q.ID] = true
+		}
+	}
+	return active
 }
 
 // InAvoidSet checks if the given ID is in the avoid set
@@ -607,6 +680,55 @@ func (c *Config) GetFaceCropEnabled() bool {
 // GetAssetManager returns the asset manager
 func (c *Config) GetAssetManager() *asset.Manager {
 	return c.assetMgr
+}
+
+// SetUnlockAspectRatio sets the unlock aspect ratio flag.
+func (c *Config) SetUnlockAspectRatio(enabled bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.SetBool("UnlockAspectRatio", enabled)
+}
+
+// SetSmartFitMode sets the smart fit mode.
+func (c *Config) SetSmartFitMode(mode SmartFitMode) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.SetInt("SmartFitMode", int(mode))
+	// Sync legacy flags for backward compatibility if needed? No, let's just stick to the new pref.
+}
+
+// GetSmartFitMode returns the smart fit mode, migrating legacy settings if needed.
+func (c *Config) GetSmartFitMode() SmartFitMode {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	// Check if the new preference is set (check if key exists? Fyne prefs don't easily allow "exists" check without fallback)
+	// We use -1 as a sentinel for "not set"
+	val := c.IntWithFallback("SmartFitMode", -1)
+	if val != -1 {
+		return SmartFitMode(val)
+	}
+
+	// Migration Logic
+	smartFit := c.BoolWithFallback("SmartFit", true) // Default was true in code? Or false? Checked UI: InitialValue: wp.cfg.GetSmartFit(). Default in BoolWithFallback usually determines.
+	// Let's assume default "On" as per user experience.
+
+	if !smartFit {
+		return SmartFitOff
+	}
+
+	unlock := c.BoolWithFallback("UnlockAspectRatio", false)
+	if unlock {
+		return SmartFitAggressive
+	}
+	return SmartFitNormal
+}
+
+// GetUnlockAspectRatio returns the unlock aspect ratio flag.
+func (c *Config) GetUnlockAspectRatio() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.BoolWithFallback("UnlockAspectRatio", false)
 }
 
 // Save saves the current configuration to the user's config file

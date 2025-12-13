@@ -10,13 +10,17 @@ import (
 // Image represents a generic wallpaper image.
 type Image struct {
 	ID               string
-	Path             string // URL to download the image
-	ViewURL          string // URL to view the image in browser
-	FilePath         string // Local path after download (optional/computed)
-	Attribution      string // Photographer or Uploader name
-	Provider         string // Source provider name
-	FileType         string // Content type (e.g., "image/jpeg")
-	DownloadLocation string // URL to trigger download event (Unsplash requirement)
+	Path             string          // URL to download the image
+	ViewURL          string          // URL to view the image in browser
+	FilePath         string          // Local path after download (optional/computed)
+	Attribution      string          // Photographer or Uploader name
+	Provider         string          // Source provider name
+	FileType         string          // Content type (e.g., "image/jpeg")
+	DownloadLocation string          // URL to trigger download event (Unsplash requirement)
+	ProcessingFlags  map[string]bool // Flags indicating how the image was processed (e.g. "SmartFit", "FaceCrop")
+	SourceQueryID    string          // ID of the query that produced this image (for smart cache clearing)
+	Width            int             // Image Width (if available from source)
+	Height           int             // Image Height (if available from source)
 }
 
 // ImageProvider defines the interface for an image service.
