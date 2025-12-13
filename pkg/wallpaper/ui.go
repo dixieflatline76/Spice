@@ -41,6 +41,7 @@ func (wp *Plugin) CreateTrayMenuItems() []*fyne.MenuItem {
 	items = append(items, wp.pauseMenuItem)
 
 	items = append(items, wp.manager.CreateToggleMenuItem("Shuffle Wallpapers", wp.SetShuffleImage, "shuffle.png", wp.cfg.GetImgShuffle()))
+	// Relax Smart Fit removed from tray (Use Preferences)
 	items = append(items, fyne.NewMenuItemSeparator())
 	// Provider Info (Static)
 	wp.providerMenuItem = wp.manager.CreateMenuItem("Initializing...", nil, "")
@@ -97,22 +98,42 @@ func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 	}
 	sm.CreateSelectSetting(&cacheSizeConfig, generalContainer)
 
-	// Smart Fit
-	smartFitConfig := setting.BoolConfig{
-		Name:         "smartFit",
-		InitialValue: wp.cfg.GetSmartFit(),
-		Label:        sm.CreateSettingTitleLabel("Scale Wallpaper to Fit Screen:"),
-		HelpContent:  sm.CreateSettingDescriptionLabel("Smart Fit analizes wallpapers to find best way to scale and crop them to fit your screen."),
-		NeedsRefresh: true,
-	}
-	smartFitConfig.ApplyFunc = func(b bool) {
-		wp.cfg.SetSmartFit(b)           // Persists the setting in wp.cfg and updates the UI
-		wp.SetSmartFit(b)               // Activates smart fit in the wallpaper engine
-		smartFitConfig.InitialValue = b // Update the initial value to reflect the new state of smart fit
-	}
-	sm.CreateBoolSetting(&smartFitConfig, generalContainer) // Use the SettingsManager
+	// Declare check widgets early for usage in closures
+	var faceCropCheck *widget.Check
+	var faceBoostCheck *widget.Check
 
-	// Face Crop and Face Boost configs (pre-declared for mutual access)
+	// Smart Fit Mode
+	// 0: Disabled
+	// 1: Standard (Strict)
+	// 2: Relaxed (Aggressive)
+	smartFitModeConfig := setting.SelectConfig{
+		Name:         "smartFitMode",
+		Options:      GetSmartFitModes(), // Pass string slice directly
+		InitialValue: int(wp.cfg.GetSmartFitMode()),
+		Label:        sm.CreateSettingTitleLabel("Smart Fit Mode:"),
+		HelpContent:  sm.CreateSettingDescriptionLabel("Control how images are fitted to your screen:\n- Disabled: Original image.\n- Standard: Strict fit (must match aspect).\n- Relaxed: Allow high-res mismatch."),
+	}
+	smartFitModeConfig.ApplyFunc = func(val interface{}) {
+		mode := SmartFitMode(val.(int))
+		wp.cfg.SetSmartFitMode(mode)
+		smartFitModeConfig.InitialValue = int(mode)
+
+		// Link to Face Crop/Boost logic
+		if faceCropCheck != nil && faceBoostCheck != nil {
+			if mode == SmartFitOff {
+				faceCropCheck.SetChecked(false)
+				faceCropCheck.Disable()
+				faceBoostCheck.SetChecked(false)
+				faceBoostCheck.Disable()
+			} else {
+				faceCropCheck.Enable()
+				faceBoostCheck.Enable()
+			}
+		}
+	}
+	sm.CreateSelectSetting(&smartFitModeConfig, generalContainer)
+
+	// Face Crop and Face Boost configs
 	var faceCropConfig setting.BoolConfig
 	var faceBoostConfig setting.BoolConfig
 
@@ -152,8 +173,8 @@ func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 
 	// Create checkboxes in a sub-container for indentation
 	subSettingsContainer := container.NewVBox()
-	faceCropCheck := sm.CreateBoolSetting(&faceCropConfig, subSettingsContainer)
-	faceBoostCheck := sm.CreateBoolSetting(&faceBoostConfig, subSettingsContainer)
+	faceCropCheck = sm.CreateBoolSetting(&faceCropConfig, subSettingsContainer)
+	faceBoostCheck = sm.CreateBoolSetting(&faceBoostConfig, subSettingsContainer)
 
 	// Add indentation
 	indentation := widget.NewLabel("      ") // Simple spacer
@@ -190,22 +211,10 @@ func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 		}
 	}
 
-	// Link both to Smart Fit
-	if !wp.cfg.GetSmartFit() {
+	// Link both to Smart Fit Mode (Initial State)
+	if wp.cfg.GetSmartFitMode() == SmartFitOff {
 		faceCropCheck.Disable()
 		faceBoostCheck.Disable()
-	}
-
-	smartFitConfig.OnChanged = func(b bool) {
-		if b {
-			faceCropCheck.Enable()
-			faceBoostCheck.Enable()
-		} else {
-			faceCropCheck.SetChecked(false)
-			faceCropCheck.Disable()
-			faceBoostCheck.SetChecked(false)
-			faceBoostCheck.Disable()
-		}
 	}
 
 	// Change Wallpaper on Start
@@ -240,6 +249,17 @@ func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 		}
 	}
 	sm.CreateBoolSetting(&nightlyRefreshConfig, generalContainer) // Use the SettingsManager
+
+	// Clear Cache
+	clearCacheButtonConfig := setting.ButtonWithConfirmationConfig{
+		Label:          sm.CreateSettingTitleLabel("Clear Wallpaper Cache:"),
+		HelpContent:    sm.CreateSettingDescriptionLabel("Delete all downloaded wallpapers (Source and Derivatives). This is a safety feature."),
+		ButtonText:     "Clear Cache",
+		ConfirmTitle:   "Clear Cache?",
+		ConfirmMessage: "Are you sure? This will delete ALL downloaded images from disk. You will need internet to see new wallpapers.",
+		OnPressed:      wp.ClearCache,
+	}
+	sm.CreateButtonWithConfirmationSetting(&clearCacheButtonConfig, generalContainer) // Use the SettingsManager
 
 	// Reset Blocked Images
 	resetButtonConfig := setting.ButtonWithConfirmationConfig{
@@ -388,20 +408,6 @@ func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 
 	// Initial Render
 	refreshAccordion()
-
-	// Add "Manage Image Sources" button to General Settings
-	manageSourcesBtn := widget.NewButton("Manage Image Sources", func() {
-		// Open the second item (First Image Source)
-		if len(items) > 1 {
-			for j := range items {
-				items[j].Open = (j == 1)
-			}
-			refreshAccordion()
-		}
-	})
-	// Add a separator and the button to the end of the general container
-	generalContainer.Add(widget.NewSeparator())
-	generalContainer.Add(manageSourcesBtn)
 
 	// Wrap accordion in a container to return.
 	return container.NewStack(accordionContainer)

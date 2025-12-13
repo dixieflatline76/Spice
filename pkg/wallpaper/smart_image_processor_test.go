@@ -26,7 +26,7 @@ func TestSmartImageProcessor_FitImage(t *testing.T) {
 	prefs := NewMockPreferences()
 	cfg := GetConfig(prefs)
 	// Enable SmartFit
-	cfg.SetSmartFit(true)
+	cfg.SetSmartFitMode(SmartFitNormal)
 
 	t.Run("FitImage_Resize", func(t *testing.T) {
 		mockOS := new(MockOS)
@@ -79,7 +79,7 @@ func TestSmartImageProcessor_FitImage(t *testing.T) {
 	})
 
 	t.Run("FitImage_SmartFitDisabled", func(t *testing.T) {
-		cfg.SetSmartFit(false)
+		cfg.SetSmartFitMode(SmartFitOff)
 		mockOS := new(MockOS)
 		processor := &smartImageProcessor{
 			os:              mockOS,

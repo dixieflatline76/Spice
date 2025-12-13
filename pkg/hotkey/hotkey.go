@@ -44,24 +44,30 @@ func StartListeners() {
 
 	// Start listeners
 	registerAndListen(hkNext, "Next Wallpaper", func() {
-		wp := wallpaper.GetInstance()
-		if wp != nil {
-			wp.SetNextWallpaper()
-		}
+		go func() {
+			wp := wallpaper.GetInstance()
+			if wp != nil {
+				wp.SetNextWallpaper()
+			}
+		}()
 	})
 
 	registerAndListen(hkPrev, "Previous Wallpaper", func() {
-		wp := wallpaper.GetInstance()
-		if wp != nil {
-			wp.SetPreviousWallpaper()
-		}
+		go func() {
+			wp := wallpaper.GetInstance()
+			if wp != nil {
+				wp.SetPreviousWallpaper()
+			}
+		}()
 	})
 
 	registerAndListen(hkTrash, "Trash Wallpaper", func() {
-		wp := wallpaper.GetInstance()
-		if wp != nil {
-			wp.DeleteCurrentImage()
-		}
+		go func() {
+			wp := wallpaper.GetInstance()
+			if wp != nil {
+				wp.DeleteCurrentImage()
+			}
+		}()
 	})
 
 	registerAndListen(hkPause, "Pause/Resume Wallpaper", func() {

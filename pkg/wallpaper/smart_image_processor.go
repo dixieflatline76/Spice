@@ -86,9 +86,50 @@ func (c *smartImageProcessor) EncodeImage(ctx context.Context, img image.Image, 
 	return buf.Bytes(), nil
 }
 
+// CheckCompatibility checks if an image of given dimensions is compatible with Smart Fit settings.
+func (c *smartImageProcessor) CheckCompatibility(width, height int) error {
+	mode := c.config.GetSmartFitMode()
+
+	if mode == SmartFitOff {
+		return nil
+	}
+
+	systemWidth, systemHeight, err := c.os.getDesktopDimension()
+	if err != nil {
+		return fmt.Errorf("getting desktop dimensions: %w", err)
+	}
+
+	// Check strict resolution (Must at least cover the screen)
+	if width < systemWidth || height < systemHeight {
+		return fmt.Errorf("image too small for smart fit")
+	}
+
+	imageAspect := float64(width) / float64(height)
+	systemAspect := float64(systemWidth) / float64(systemHeight)
+	aspectDiff := math.Abs(systemAspect - imageAspect)
+
+	// Resolution Bonus (Aggressive Mode)
+	if mode == SmartFitAggressive {
+		wFactor := float64(width) / float64(systemWidth)
+		hFactor := float64(height) / float64(systemHeight)
+		padding := math.Min(wFactor, hFactor)
+
+		if padding > 1.2 {
+			// Sufficient padding to allow aspect mismatch
+			return nil
+		}
+	}
+
+	// Reject if aspect ratio difference is too large to crop reasonably
+	if aspectDiff > c.aspectThreshold {
+		return fmt.Errorf("image aspect ratio not compatible")
+	}
+	return nil
+}
+
 // FitImage fits an image with context awareness.
 func (c *smartImageProcessor) FitImage(ctx context.Context, img image.Image) (image.Image, error) {
-	if !c.config.GetSmartFit() {
+	if c.config.GetSmartFitMode() == SmartFitOff {
 		return img, nil
 	}
 
@@ -106,14 +147,18 @@ func (c *smartImageProcessor) FitImage(ctx context.Context, img image.Image) (im
 	imageHeight := img.Bounds().Dy()
 	systemAspect := float64(systemWidth) / float64(systemHeight)
 	imageAspect := float64(imageWidth) / float64(imageHeight)
-	aspectDiff := math.Abs(systemAspect - imageAspect)
+	// aspectDiff unused now, handled in CheckCompatibility
 
 	r := &resizer{resampler: c.resampler} // Create resizer here
 
+	// Pre-check basic compatibility using shared logic
+	if err := c.CheckCompatibility(imageWidth, imageHeight); err != nil {
+		log.Debugf("FitImage: %v", err)
+		return nil, err
+	}
+
 	switch {
-	case imageWidth < systemWidth || imageHeight < systemHeight || aspectDiff > c.aspectThreshold:
-		log.Debugf("FitImage: Image not compatible (too small or aspect diff too large)")
-		return nil, fmt.Errorf("image not compatible with smart fit")
+	// Case 1 (Incompatibility) is handled by CheckCompatibility above.
 	case imageWidth == systemWidth && imageHeight == systemHeight: // Perfect fit
 		log.Debugf("FitImage: Perfect fit, returning original")
 		return img, nil
