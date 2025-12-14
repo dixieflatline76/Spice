@@ -362,3 +362,42 @@ func TestStoreSync_StrictPruning(t *testing.T) {
 	assert.Error(t, err)
 	assert.True(t, os.IsNotExist(err))
 }
+
+// TestStore_LoadAvoidSet_And_Clear verifies that:
+// 1. `LoadAvoidSet` correctly populates the blocklist.
+// 2. `Add` respects the blocklist.
+// 3. `Clear` preserves the blocklist.
+// 4. `Wipe` clears the blocklist.
+func TestStore_LoadAvoidSet_And_Clear(t *testing.T) {
+	store := NewImageStore()
+	store.SetAsyncSave(false)
+
+	blockedID := "blocked_1"
+	avoidSet := map[string]bool{
+		blockedID: true,
+	}
+
+	// 1. LoadAvoidSet
+	store.LoadAvoidSet(avoidSet)
+
+	// 2. Verify Add respects blocklist
+	added := store.Add(provider.Image{ID: blockedID})
+	assert.False(t, added, "Should reject blocked ID")
+
+	accepted := store.Add(provider.Image{ID: "clean_1"})
+	assert.True(t, accepted, "Should accept non-blocked ID")
+	assert.Equal(t, 1, store.Count())
+
+	// 3. Verify Clear preserves blocklist
+	store.Clear()
+	assert.Equal(t, 0, store.Count(), "Clear should remove images")
+
+	// Try adding blocked ID again
+	addedAgain := store.Add(provider.Image{ID: blockedID})
+	assert.False(t, addedAgain, "Should still reject blocked ID after Clear")
+
+	// 4. Verify Wipe clears blocklist
+	store.Wipe()
+	addedPostWipe := store.Add(provider.Image{ID: blockedID})
+	assert.True(t, addedPostWipe, "Should accept blocked ID after Wipe (reset)")
+}
