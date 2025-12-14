@@ -24,6 +24,11 @@ func NewFileManager(rootDir string) *FileManager {
 	}
 }
 
+// GetDownloadDir returns the root directory where images are downloaded.
+func (fm *FileManager) GetDownloadDir() string {
+	return fm.rootDir
+}
+
 // EnsureDirs creates necessary subdirectories for derivatives.
 func (fm *FileManager) EnsureDirs() error {
 	dirs := []string{

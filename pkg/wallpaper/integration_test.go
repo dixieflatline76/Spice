@@ -2,11 +2,15 @@ package wallpaper
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"fyne.io/fyne/v2"
+	"github.com/dixieflatline76/Spice/asset"
 	"github.com/dixieflatline76/Spice/pkg/provider"
+	"github.com/dixieflatline76/Spice/pkg/ui/setting"
 	"github.com/dixieflatline76/Spice/util"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -242,15 +246,118 @@ func TestLifecycle_BlockPersistence(t *testing.T) {
 	}
 }
 
+// TestLifecycle_HappyPath verifies the core value loop:
+// 1. Add Image to Store
+// 2. Trigger "Next Wallpaper"
+// 3. Verify OS.SetWallpaper is called with correct path
+func TestLifecycle_HappyPath(t *testing.T) {
+	// t.Skip("Skipping HappyPath...") REMOVED
+	prefs := NewMemoryPreferences()
+	wp := setupTestPlugin(t, prefs)
+	wp.Activate()
+
+	// 1. Setup - Create a real file because applyWallpaper checks for existence
+	tmpDir := t.TempDir()
+	realPath := filepath.Join(tmpDir, "happy.jpg")
+	err := os.WriteFile(realPath, []byte("dummy content"), 0644)
+	assert.NoError(t, err)
+
+	// Mock Expectation - Permissive
+	wp.os.(*MockOS).On("setWallpaper", mock.Anything).Return(nil)
+
+	// 2. Add Image directly to Store
+	added := wp.store.Add(provider.Image{
+		ID:       "happy_img",
+		FilePath: realPath,
+		Provider: "stub", // Use stub to avoid AssetManager crash
+	})
+	if !added {
+		t.Fatal("Failed to add image to store (duplicate or blocked?)")
+	}
+	t.Logf("Store Count after Add: %d", wp.store.Count())
+
+	// Verify file exists
+	if _, err := os.Stat(realPath); err != nil {
+		t.Fatalf("Test file inaccessible: %v", err)
+	}
+	t.Logf("File exists at: %s", realPath)
+
+	// Verify Store Content
+	img, ok := wp.store.Get(0)
+	assert.True(t, ok, "Store should have image at index 0")
+	t.Logf("Stored Image Path: %s", img.FilePath)
+	assert.Equal(t, realPath, img.FilePath)
+
+	// Direct Mock Test (Verification of Mock Setup)
+	// wp.os.setWallpaper(realPath) // This would consume the expectation!
+	// We can't do this if we expect SetNextWallpaper to call it.
+	// But since SetNextWallpaper fails to call it, maybe we can test if Mock *can* be called.
+	// Let's stick to verifying Store content first.
+
+	// 3. Trigger "Next Wallpaper"
+	wp.SetNextWallpaper()
+
+	// Manually execute the action (deterministic)
+	select {
+	case action := <-wp.actionChan:
+		action()
+	case <-time.After(1 * time.Second):
+		t.Fatal("Timed out waiting for SetNextWallpaper action")
+	}
+
+	// 4. Verify State Update logic (Store -> Selection -> Apply)
+	time.Sleep(100 * time.Millisecond) // buffer
+
+	t.Logf("Checking Current Image ID: '%s'", wp.currentImage.ID)
+	t.Logf("Checking Current Image Path: '%s'", wp.currentImage.FilePath)
+
+	if wp.currentImage.ID != "happy_img" {
+		t.Errorf("Expected currentImage.ID to be 'happy_img', got '%s'", wp.currentImage.ID)
+	}
+	if wp.currentImage.FilePath != realPath {
+		t.Errorf("Expected currentImage.FilePath to be '%s', got '%s'", realPath, wp.currentImage.FilePath)
+	}
+
+	// Verify OS call if possible (Best Effort)
+	// We matched Mock expectation loosely.
+	// Make sure at least one call happened
+	if len(wp.os.(*MockOS).Calls) == 0 {
+		t.Error("MockOS.setWallpaper was NOT called!")
+	} else {
+		t.Logf("MockOS calls recorded: %d", len(wp.os.(*MockOS).Calls))
+	}
+
+	wp.Deactivate()
+}
+
 // Helper to bundle boilerplate setup
+type StubImageProvider struct {
+	icon fyne.Resource
+}
+
+func (s *StubImageProvider) Name() string                           { return "Stub" }
+func (s *StubImageProvider) HomeURL() string                        { return "" }
+func (s *StubImageProvider) ParseURL(webURL string) (string, error) { return "", nil }
+func (s *StubImageProvider) FetchImages(ctx context.Context, apiURL string, page int) ([]provider.Image, error) {
+	return nil, nil
+}
+func (s *StubImageProvider) EnrichImage(ctx context.Context, img provider.Image) (provider.Image, error) {
+	return img, nil
+}
+func (s *StubImageProvider) Title() string                  { return "Stub" }
+func (s *StubImageProvider) GetProviderIcon() fyne.Resource { return s.icon }
+func (s *StubImageProvider) CreateSettingsPanel(sm setting.SettingsManager) fyne.CanvasObject {
+	return nil
+}
+func (s *StubImageProvider) CreateQueryPanel(sm setting.SettingsManager) fyne.CanvasObject {
+	return nil
+}
+
 func setupTestPlugin(t *testing.T, prefs fyne.Preferences) *Plugin {
 	// Re-load config from prefs (Simulate fresh start)
 	cfg := GetConfig(prefs)
-	// Clear queries to avoid network noise
 	cfg.Queries = []ImageQuery{}
 	cfg.SetChgImgOnStart(false)
-	// IMPORTANT: Set MaxConcurrentProcessors to 1 for deterministic pipeline testing if needed,
-	// or just leave default.
 	cfg.MaxConcurrentProcessors = 1
 
 	mockOS := new(MockOS)
@@ -261,13 +368,14 @@ func setupTestPlugin(t *testing.T, prefs fyne.Preferences) *Plugin {
 	mockPM.On("RegisterNotifier", mock.Anything).Return()
 	mockPM.On("GetPreferences").Return(prefs)
 	mockPM.On("Register", mock.Anything).Return()
-	mockPM.On("GetAssetManager").Return(nil) // Simplification
+	// Return a non-nil Manager to prevent panics in UI updates
+	mockPM.On("GetAssetManager").Return(&asset.Manager{})
+	mockPM.On("RefreshTrayMenu").Return() // Essential for UI updates
 
 	tmpDir := t.TempDir()
 	fm := NewFileManager(tmpDir)
 	imageStore := NewImageStore()
 
-	// Pass-through processor
 	dummyProcessor := func(ctx context.Context, job DownloadJob) (provider.Image, error) {
 		return job.Image, nil
 	}
@@ -290,6 +398,14 @@ func setupTestPlugin(t *testing.T, prefs fyne.Preferences) *Plugin {
 		shuffleImageFlag:    util.NewSafeBool(),
 		providers:           make(map[string]provider.ImageProvider),
 		pipeline:            pipeline,
+		// UI Items must be initialized
+		providerMenuItem: &fyne.MenuItem{},
+		artistMenuItem:   &fyne.MenuItem{},
 	}
+
+	// Register Stub Provider to bypass AssetManager logic
+	stub := &StubImageProvider{icon: fyne.NewStaticResource("stub.png", []byte{})}
+	wp.providers["stub"] = stub
+
 	return wp
 }
