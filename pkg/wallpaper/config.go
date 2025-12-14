@@ -494,6 +494,16 @@ func (c *Config) ResetAvoidSet() {
 	c.save()
 }
 
+// GetAvoidSet returns a copy of the avoid set.
+func (c *Config) GetAvoidSet() map[string]bool {
+	avoidSet := make(map[string]bool)
+	c.avoidMap.Range(func(key, value interface{}) bool {
+		avoidSet[key.(string)] = true
+		return true
+	})
+	return avoidSet
+}
+
 // GetCacheSize returns the cache size enumeration from the config, or the default value if not set or invalid
 func (c *Config) GetCacheSize() CacheSize {
 	c.mu.RLock()
