@@ -288,13 +288,14 @@ func (wp *Plugin) Activate() {
 		log.Printf("Failed to load cache: %v", err)
 	}
 
-	// Sync Store (Self-Healing)
-	// Build target flags
 	targetFlags := map[string]bool{
 		"SmartFit": wp.cfg.GetSmartFit(),
 		"FaceCrop": wp.cfg.GetFaceCropEnabled(),
 	}
 	wp.store.Sync(int(wp.cfg.GetCacheSize().Size()), targetFlags, wp.cfg.GetActiveQueryIDs())
+
+	// Sync Blocklist from Config to Store
+	wp.store.LoadAvoidSet(wp.cfg.GetAvoidSet())
 
 	// Start the pipeline with default worker count (NumCPU)
 	// We should probably get this from config, but for now hardcode or use NumCPU

@@ -253,21 +253,27 @@ func (s *ImageStore) SeenCount() int {
 	return len(s.seen)
 }
 
-// Clear resets the store memory.
-// It does NOT delete files from disk.
+// Clear resets the store memory (Images, IDSet, Seen).
+// It does NOT clear the AvoidSet (Blocklist).
 func (s *ImageStore) Clear() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.images = []provider.Image{}
 	s.idSet = make(map[string]bool)
 	s.seen = make(map[string]bool)
-	s.avoidSet = make(map[string]bool)
+	// Do NOT clear avoidSet here. It should persist across refreshes.
 }
 
 // Wipe clears the store memory AND deletes all files from disk using CleanupOrphans.
 // It effectively resets the application state.
 func (s *ImageStore) Wipe() {
 	s.Clear()
+
+	s.mu.Lock()
+	s.avoidSet = make(map[string]bool) // Explicitly clear avoidSet on Wipe
+	s.mu.Unlock()
+
+	// Trigger full cleanup by passing an empty map of known IDs.
 	// Trigger full cleanup by passing an empty map of known IDs.
 	// This marks ALL files as "orphans" and deletes them.
 	if s.fm != nil {
@@ -325,7 +331,18 @@ func (s *ImageStore) List() []provider.Image {
 	defer s.mu.RUnlock()
 	dest := make([]provider.Image, len(s.images))
 	copy(dest, s.images)
+	copy(dest, s.images)
 	return dest
+}
+
+// LoadAvoidSet populates the avoid set from a map.
+func (s *ImageStore) LoadAvoidSet(avoidSet map[string]bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for id := range avoidSet {
+		s.avoidSet[id] = true
+	}
+	log.Printf("Store: Loaded %d blocked images from config.", len(avoidSet))
 }
 
 // --- Persistence & Sync ---
