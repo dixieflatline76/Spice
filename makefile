@@ -21,6 +21,9 @@ build-win-arm64:
 build-linux-amd64:
 	GOOS=linux GOARCH=amd64 go build -tags release -o bin/Spice-amd64 -ldflags "$(LDFLAGS_COMMON)" ./cmd/spice
 
+build-linux-arm64:
+	GOOS=linux GOARCH=arm64 go build -tags release -o bin/Spice-arm64 -ldflags "$(LDFLAGS_COMMON)" ./cmd/spice
+
 build-darwin-amd64:
 	@echo "Building Go executable for darwin/amd64..."
 	GOOS=darwin GOARCH=amd64 go build -tags release -o bin/Spice-darwin-amd64 -ldflags "$(LDFLAGS_COMMON)" ./cmd/spice
@@ -75,6 +78,9 @@ build-win-console-amd64-dev:
 
 build-linux-amd64-dev:
 	GOOS=linux GOARCH=amd64 go build -o bin/Spice-amd64 -ldflags "$(LDFLAGS_COMMON)" ./cmd/spice
+
+build-linux-arm64-dev:
+	GOOS=linux GOARCH=arm64 go build -o bin/Spice-arm64 -ldflags "$(LDFLAGS_COMMON)" ./cmd/spice
 
 build-darwin-amd64-dev:
 	@echo "Building Go executable for darwin/amd64..."

@@ -54,6 +54,9 @@ type OS interface {
 	TransformToForeground()
 	// TransformToBackground changes the application to be a background-only app.
 	TransformToBackground()
+	// SetupLifecycle sets up OS-specific lifecycle hooks.
+	// This is where Chrome OS "fake tray" logic resides.
+	SetupLifecycle(app fyne.App, sa *SpiceApp)
 }
 
 var (
@@ -148,6 +151,9 @@ func getInstance() *SpiceApp {
 			}
 
 			saInstance.verifyEULA()
+
+			// Setup OS-specific lifecycle hooks (e.g. Chrome OS Pseudo-Tray)
+			saInstance.os.SetupLifecycle(saInstance.App, saInstance)
 		} else {
 			utilLog.Fatal("Spice not supported on this platform")
 		}

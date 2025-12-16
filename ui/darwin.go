@@ -30,7 +30,10 @@ void setActivationPolicy(long policy) {
 */
 import "C"
 
-// linuxOS implements the OS interface for Linux.
+import "fyne.io/fyne/v2"
+
+// linuxOS implements the OS interface for Linux (comment copy-paste error in original file).
+// implements the OS interface for Darwin.
 type darwinOS struct{}
 
 // TransformToForeground changes the application to be a regular app with a Dock icon.
@@ -46,4 +49,9 @@ func (d *darwinOS) TransformToBackground() {
 // getOS returns a new instance of the darwinOS struct.
 func getOS() OS {
 	return &darwinOS{}
+}
+
+// SetupLifecycle sets up OS-specific lifecycle hooks.
+func (d *darwinOS) SetupLifecycle(app fyne.App, sa *SpiceApp) {
+	// No specific lifecycle hooks for macOS yet.
 }
