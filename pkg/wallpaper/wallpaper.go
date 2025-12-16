@@ -86,6 +86,8 @@ type Plugin struct {
 
 	// Testable UI executor
 	runOnUI func(func())
+
+	pendingAddUrl string
 }
 
 var (
@@ -601,6 +603,34 @@ func (wp *Plugin) setNextWallpaper() {
 	wp.history = append(wp.history, newIndex)
 
 	wp.applyWallpaper(img)
+}
+
+// GetOS returns the underlying OS interface.
+func (wp *Plugin) GetOS() OS {
+	return wp.os
+}
+
+// OpenAddCollectionUI opens the preferences window and prompts to add the collection.
+func (wp *Plugin) OpenAddCollectionUI(urlStr string) error {
+	// 1. Identify Provider (Validation)
+	var foundProvider provider.ImageProvider
+	for _, p := range wp.providers {
+		if _, err := p.ParseURL(urlStr); err == nil {
+			foundProvider = p
+			break
+		}
+	}
+	if foundProvider == nil {
+		return fmt.Errorf("URL not supported by any active provider")
+	}
+
+	// 2. Set State
+	wp.pendingAddUrl = urlStr
+
+	// 3. Open Preferences	// Trigger standard UI flow via manager
+	// "Wallpaper" is the tab name for this plugin
+	wp.manager.OpenPreferences("Wallpaper")
+	return nil
 }
 
 // setPrevWallpaper sets the previous wallpaper.

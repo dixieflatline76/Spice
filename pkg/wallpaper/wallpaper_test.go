@@ -67,6 +67,10 @@ func (m *MockPluginManager) OpenURL(url *url.URL) error {
 	return args.Error(0)
 }
 
+func (m *MockPluginManager) OpenPreferences(tab string) {
+	m.Called(tab)
+}
+
 func (m *MockPluginManager) GetPreferences() fyne.Preferences {
 	args := m.Called()
 	if args.Get(0) == nil {
@@ -183,7 +187,7 @@ func (m *MockImageProvider) HomeURL() string { return "https://mock.provider" }
 func (m *MockImageProvider) CreateSettingsPanel(sm setting.SettingsManager) fyne.CanvasObject {
 	return nil
 }
-func (m *MockImageProvider) CreateQueryPanel(sm setting.SettingsManager) fyne.CanvasObject {
+func (m *MockImageProvider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl string) fyne.CanvasObject {
 	return nil
 }
 func (m *MockImageProvider) GetProviderIcon() fyne.Resource { return nil }
@@ -679,5 +683,54 @@ func TestBlockFlow_PreventsReDownload(t *testing.T) {
 
 	// 4. Verify Rejection
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "avoid set")
+	assert.Contains(t, err.Error(), "is in avoid set")
+}
+
+func TestOpenAddCollectionUI(t *testing.T) {
+	// Setup
+	mockPM := new(MockPluginManager)
+	mockProvider := new(MockImageProvider)
+	wp := &Plugin{
+		manager:   mockPM,
+		providers: make(map[string]provider.ImageProvider),
+	}
+
+	testURL := "https://wallhaven.cc/w/12345"
+	wp.providers["Wallhaven"] = mockProvider
+
+	// Expectation: ParseURL
+	mockProvider.On("ParseURL", testURL).Return(testURL, nil)
+
+	// Expectation: OpenPreferences
+	mockPM.On("OpenPreferences", "Wallpaper").Return()
+
+	// Execute
+	err := wp.OpenAddCollectionUI(testURL)
+
+	// Verify
+	assert.NoError(t, err)
+	assert.Equal(t, testURL, wp.pendingAddUrl, "pendingAddUrl should be set")
+	mockPM.AssertExpectations(t)
+	mockProvider.AssertExpectations(t)
+}
+
+func TestOpenAddCollectionUI_InvalidProvider(t *testing.T) {
+	// Setup
+	mockPM := new(MockPluginManager)
+	wp := &Plugin{
+		manager:   mockPM,
+		providers: make(map[string]provider.ImageProvider),
+	}
+
+	// No providers registered (or none match)
+	testURL := "https://unknown.com/w/12345"
+
+	// Execute
+	err := wp.OpenAddCollectionUI(testURL)
+
+	// Verify
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "URL not supported")
+	assert.Empty(t, wp.pendingAddUrl)
+	mockPM.AssertNotCalled(t, "OpenPreferences")
 }

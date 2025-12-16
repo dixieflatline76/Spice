@@ -90,16 +90,29 @@ func (p *WikimediaProvider) ParseURL(input string) (string, error) {
 	}
 
 	// 2. Check for Validation of commons.wikimedia.org domain if http is used
+	// 2. Check for Validation of commons.wikimedia.org domain if http is used
 	if strings.HasPrefix(input, "http") {
 		domainRegex := regexp.MustCompile(WikimediaDomainRegexp)
 		if !domainRegex.MatchString(input) {
 			return "", errors.New("invalid Wikimedia URL: must be commons.wikimedia.org")
 		}
-		// If it's a generic URL that isn't a category, we might treat it as a file?
-		// For now, let's treat generic URLs as search terms derived from the title?
-		// Simpler: Just fail if it's not a category URL, OR treat valid wiki URLs as categories?
-		// Let's fallback to error for complex URLs for V1 unless they are categories.
-		return "", errors.New("only 'Category:' URLs are currently supported directly")
+
+		// Parse standard Search URLs
+		// e.g. https://commons.wikimedia.org/w/index.php?search=dachshund&title=Special%3AMediaSearch&type=image
+		u, err := url.Parse(input)
+		if err != nil {
+			return "", err
+		}
+
+		if u.Path == "/w/index.php" || strings.Contains(u.Path, "Special:MediaSearch") {
+			searchParam := u.Query().Get("search")
+			if searchParam != "" {
+				return "search:" + searchParam, nil
+			}
+		}
+
+		// Fallback for unhandled full URLs
+		return "", errors.New("only 'Category:' or 'Search' URLs are currently supported directly")
 	}
 
 	// 3. Fallback: Treat as Search Term
@@ -295,41 +308,66 @@ func (p *WikimediaProvider) CreateSettingsPanel(sm setting.SettingsManager) fyne
 	)
 }
 
-func (p *WikimediaProvider) CreateQueryPanel(sm setting.SettingsManager) fyne.CanvasObject {
+func (p *WikimediaProvider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl string) fyne.CanvasObject {
 	imgQueryList := p.createImgQueryList(sm)
 	sm.RegisterRefreshFunc(imgQueryList.Refresh)
 
-	// Create "Add" Button using standardized helper
-	addBtn := wallpaper.CreateAddQueryButton(
+	// Create standardized Add Query Config
+	onAdded := func() {
+		imgQueryList.Refresh()
+	}
+
+	addQueryCfg := wallpaper.AddQueryConfig{
+		Title:           "New Wikimedia Query",
+		URLPlaceholder:  "Enter Category URL, Search URL, or plain 'category:Name'",
+		URLValidator:    "", // Custom validation used in ValidateFunc
+		URLErrorMsg:     "",
+		DescPlaceholder: "Add a description",
+		DescValidator:   "", // Basic length validation only
+		DescErrorMsg:    "",
+		ValidateFunc: func(term, desc string) error {
+			if len(desc) < 5 {
+				return fmt.Errorf("description too short")
+			}
+			if len(desc) > wallpaper.MaxDescLength {
+				return fmt.Errorf("description too long")
+			}
+			normalized, err := p.ParseURL(term)
+			if err != nil {
+				return err
+			}
+			id := wallpaper.GenerateQueryID(normalized)
+			if p.cfg.IsDuplicateID(id) {
+				return fmt.Errorf("duplicate query")
+			}
+			return nil
+		},
+		AddHandler: func(desc, term string, active bool) (string, error) {
+			// Parse/Normalize again to be safe
+			normalized, err := p.ParseURL(term)
+			if err != nil {
+				return "", err
+			}
+			return p.cfg.AddWikimediaQuery(desc, normalized, active)
+		},
+	}
+
+	addButton := wallpaper.CreateAddQueryButton(
 		"Add Wikimedia Query",
 		sm,
-		wallpaper.AddQueryConfig{
-			Title:           "New Wikimedia Query",
-			URLPlaceholder:  "Category:Space OR Search Term",
-			DescPlaceholder: "Description (e.g. Space)",
-			ValidateFunc: func(url, desc string) error {
-				// We expect Wikimedia to validate the input string using ParseURL logic
-				// Note: ParseURL in wikimedia provider currently handles both category and search types
-				_, err := p.ParseURL(url)
-				return err
-			},
-			AddHandler: func(desc, url string, active bool) (string, error) {
-				return p.cfg.AddWikimediaQuery(desc, url, active)
-			},
-		},
-		func() {
-			imgQueryList.Refresh()
-			sm.SetRefreshFlag("queries")
-		},
+		addQueryCfg,
+		onAdded,
 	)
 
-	// Layout: Add Button at top (header), List below
-	// We create a custom header container to hold the button
-	header := container.NewVBox(
-		sm.CreateSettingTitleLabel("Wikimedia Queries"),
-		widget.NewLabel("Manage your Wikimedia Commons image queries."),
-		addBtn,
-	)
+	header := container.NewVBox()
+	header.Add(sm.CreateSettingTitleLabel("Wikimedia Commons Queries"))
+	header.Add(sm.CreateSettingDescriptionLabel("Add queries for Wikimedia Commons categories or search results."))
+	// Auto-open if pending URL exists
+	if pendingUrl != "" {
+		wallpaper.OpenAddQueryDialog(sm, addQueryCfg, pendingUrl, "", onAdded)
+	}
+
+	header.Add(addButton)
 
 	return container.NewBorder(header, nil, nil, nil, imgQueryList)
 }

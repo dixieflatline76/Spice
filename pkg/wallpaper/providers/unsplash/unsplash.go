@@ -367,48 +367,57 @@ func (p *UnsplashProvider) CreateSettingsPanel(sm setting.SettingsManager) fyne.
 	return usHeader
 }
 
-func (p *UnsplashProvider) CreateQueryPanel(sm setting.SettingsManager) fyne.CanvasObject {
+func (p *UnsplashProvider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl string) fyne.CanvasObject {
 	imgQueryList := p.createImgQueryList(sm)
 	sm.RegisterRefreshFunc(imgQueryList.Refresh)
+
+	// Create standardized Add Query Config
+	onAdded := func() {
+		imgQueryList.Refresh()
+	}
+
+	addQueryCfg := wallpaper.AddQueryConfig{
+		Title:           "New Unsplash Query",
+		URLPlaceholder:  "Paste an Unsplash search or collection URL",
+		URLValidator:    UnsplashURLRegexp,
+		URLErrorMsg:     "Invalid Unsplash URL (search/collection/photo)",
+		DescPlaceholder: "Add a description",
+		DescValidator:   UnsplashDescRegexp,
+		DescErrorMsg:    fmt.Sprintf("Description must be between 5 and %d alpha numeric characters long", wallpaper.MaxDescLength),
+		ValidateFunc: func(url, desc string) error {
+			// Validate string using Unsplash specific logic
+			if _, err := p.ParseURL(url); err != nil {
+				return fmt.Errorf("Invalid Unsplash URL: %v", err)
+			}
+
+			// Check for duplicates
+			queryID := wallpaper.GenerateQueryID(url)
+			if p.cfg.IsDuplicateID(queryID) {
+				return errors.New("Duplicate query: this URL already exists")
+			}
+			return nil
+		},
+		AddHandler: func(desc, url string, active bool) (string, error) {
+			return p.cfg.AddUnsplashQuery(desc, url, active)
+		},
+	}
 
 	// Create "Add" Button using standardized helper
 	addButton := wallpaper.CreateAddQueryButton(
 		"Add Unsplash URL",
 		sm,
-		wallpaper.AddQueryConfig{
-			Title:           "New Unsplash Query",
-			URLPlaceholder:  "Paste an Unsplash search or collection URL",
-			URLValidator:    UnsplashURLRegexp,
-			URLErrorMsg:     "Invalid Unsplash URL (search/collection/photo)",
-			DescPlaceholder: "Add a description",
-			DescValidator:   UnsplashDescRegexp,
-			DescErrorMsg:    fmt.Sprintf("Description must be between 5 and %d alpha numeric characters long", wallpaper.MaxDescLength),
-			ValidateFunc: func(url, desc string) error {
-				// Validate string using Unsplash specific logic
-				if _, err := p.ParseURL(url); err != nil {
-					return fmt.Errorf("Invalid Unsplash URL: %v", err)
-				}
-
-				// Check for duplicates
-				queryID := wallpaper.GenerateQueryID(url)
-				if p.cfg.IsDuplicateID(queryID) {
-					return errors.New("Duplicate query: this URL already exists")
-				}
-				return nil
-			},
-			AddHandler: func(desc, url string, active bool) (string, error) {
-				return p.cfg.AddUnsplashQuery(desc, url, active)
-			},
-		},
-		func() {
-			imgQueryList.Refresh()
-		},
+		addQueryCfg,
+		onAdded,
 	)
 
 	header := container.NewVBox()
 	header.Add(sm.CreateSettingTitleLabel("Unsplash Queries"))
 	header.Add(sm.CreateSettingDescriptionLabel("Manage your Unsplash image queries here."))
 	header.Add(addButton)
+	// Auto-open if pending URL exists
+	if pendingUrl != "" {
+		wallpaper.OpenAddQueryDialog(sm, addQueryCfg, pendingUrl, "", onAdded)
+	}
 	qpContainer := container.NewBorder(header, nil, nil, nil, imgQueryList)
 	return qpContainer
 }

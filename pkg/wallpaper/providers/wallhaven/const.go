@@ -14,7 +14,7 @@ const (
 
 // Default values for wallhaven.cc image service
 const (
-	WallhavenURLRegexp = `^https:\/\/wallhaven\.cc\/(?:search|api\/v1\/search|api\/v1\/collections\/[a-zA-Z0-9_]+\/[0-9]+|user\/[a-zA-Z0-9_]+\/favorites\/[0-9]+|favorites\/[0-9]+)(?:\?[a-zA-Z0-9_\-.~!$&'()*+,;=:@\/?%]*|)$` // WallhavenURLRegexp is the regular expression used to validate a wallhaven URL
+	WallhavenURLRegexp = `^https:\/\/wallhaven\.cc\/(?:latest|toplist|hot|random|search|api\/v1\/search|api\/v1\/collections\/[a-zA-Z0-9_]+\/[0-9]+|user\/[a-zA-Z0-9_]+\/favorites\/[0-9]+|favorites\/[0-9]+)(?:\?[a-zA-Z0-9_\-.~!$&'()*+,;=:@\/?%]*|)$` // WallhavenURLRegexp is the regular expression used to validate a wallhaven URL
 
 	WallhavenAPIKeyRegexp     = `^[a-zA-Z0-9]{32}$`                             // WallhavenAPIKeyRegexp is the regular expression used to validate a wallhaven API key
 	WallhavenDescRegexp       = `^[^\x00-\x1F\x7F]{5,150}$`                     // WallhavenDescRegexp is the regular expression used to validate an image query description
@@ -40,6 +40,11 @@ var (
 
 	// APISearchRegex checks if a URL starts with the API search path prefix.
 	APISearchRegex = regexp.MustCompile(`^https:\/\/wallhaven\.cc\/api\/v1\/search`)
+
+	// MainCategoryRegex matches /latest, /toplist, /hot, /random
+	// This regex captures the category name to be used in mapping.
+	// Matches: https://wallhaven.cc/latest or https://wallhaven.cc/toplist etc.
+	MainCategoryRegex = regexp.MustCompile(`^https:\/\/wallhaven\.cc\/(latest|toplist|hot|random)\/?(\?.*)?$`)
 )
 
 // URLType indicates the type of Wallhaven source (Search or Collection).

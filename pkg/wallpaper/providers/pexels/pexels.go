@@ -307,45 +307,56 @@ func (p *PexelsProvider) CreateSettingsPanel(sm setting.SettingsManager) fyne.Ca
 	return pexHeader
 }
 
-func (p *PexelsProvider) CreateQueryPanel(sm setting.SettingsManager) fyne.CanvasObject {
+func (p *PexelsProvider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl string) fyne.CanvasObject {
 	imgQueryList := p.createImgQueryList(sm)
 	sm.RegisterRefreshFunc(imgQueryList.Refresh)
+
+	// Create standardized Add Query Config
+	onAdded := func() {
+		imgQueryList.Refresh()
+	}
+
+	addQueryCfg := wallpaper.AddQueryConfig{
+		Title:           "New Pexels Query",
+		URLPlaceholder:  "Pexels Search URL (e.g. https://www.pexels.com/search/nature/)",
+		URLValidator:    PexelsURLRegexp,
+		URLErrorMsg:     "Invalid Pexels URL (search or collection)",
+		DescPlaceholder: "Add a description",
+		DescValidator:   PexelsDescRegexp,
+		DescErrorMsg:    fmt.Sprintf("Description must be between 5 and %d alpha numeric characters long", wallpaper.MaxDescLength),
+		ValidateFunc: func(url, desc string) error {
+			// Validate string using Pexels specific logic
+			// Pexels regex validation happens via InputValidator, so we just check duplicates here
+
+			// Check for duplicates
+			queryID := wallpaper.GenerateQueryID(url)
+			if p.cfg.IsDuplicateID(queryID) {
+				return errors.New("duplicate query: this URL already exists")
+			}
+			return nil
+		},
+		AddHandler: func(desc, url string, active bool) (string, error) {
+			return p.cfg.AddPexelsQuery(desc, url, active)
+		},
+	}
 
 	// Create "Add" Button using standardized helper
 	addButton := wallpaper.CreateAddQueryButton(
 		"Add Pexels Search",
 		sm,
-		wallpaper.AddQueryConfig{
-			Title:           "New Pexels Query",
-			URLPlaceholder:  "Pexels Search URL (e.g. https://www.pexels.com/search/nature/)",
-			URLValidator:    PexelsURLRegexp,
-			URLErrorMsg:     "Invalid Pexels URL (search or collection)",
-			DescPlaceholder: "Add a description",
-			DescValidator:   PexelsDescRegexp,
-			DescErrorMsg:    fmt.Sprintf("Description must be between 5 and %d alpha numeric characters long", wallpaper.MaxDescLength),
-			ValidateFunc: func(url, desc string) error {
-				// Validate string using Pexels specific logic
-				// Pexels regex validation happens via InputValidator, so we just check duplicates here
-
-				// Check for duplicates
-				queryID := wallpaper.GenerateQueryID(url)
-				if p.cfg.IsDuplicateID(queryID) {
-					return errors.New("duplicate query: this URL already exists")
-				}
-				return nil
-			},
-			AddHandler: func(desc, url string, active bool) (string, error) {
-				return p.cfg.AddPexelsQuery(desc, url, active)
-			},
-		},
-		func() {
-			imgQueryList.Refresh()
-		},
+		addQueryCfg,
+		onAdded,
 	)
 
 	header := container.NewVBox()
 	header.Add(sm.CreateSettingTitleLabel("Pexels Queries"))
 	header.Add(sm.CreateSettingDescriptionLabel("Manage your Pexels image queries here."))
+	// Auto-open if pending URL exists
+	if pendingUrl != "" {
+		// Open dialog with pre-filled URL and empty description
+		wallpaper.OpenAddQueryDialog(sm, addQueryCfg, pendingUrl, "", onAdded)
+	}
+
 	header.Add(addButton)
 	qpContainer := container.NewBorder(header, nil, nil, nil, imgQueryList)
 	return qpContainer

@@ -74,6 +74,18 @@ func (p *WallhavenProvider) ParseURL(webURL string) (string, error) {
 		// matches[0]=Full, matches[1]=Username, matches[2]=ID
 		baseURL = fmt.Sprintf(WallhavenAPICollectionURL, matches[1], matches[2])
 
+	case MainCategoryRegex.MatchString(trimmedURL):
+		matches := MainCategoryRegex.FindStringSubmatch(trimmedURL)
+		category := matches[1] // "latest", "toplist", etc.
+		baseURL = WallhavenAPISearchURL + "?" + mapCategoryToParams(category)
+		// If query params exist in original URL, we append/merge them later via parsing.
+		// However, Wallhaven main URLs don't usually have params unless user adds them.
+		// We should account for existing params in match[2] if any.
+		if len(matches) > 2 && matches[2] != "" {
+			// existing query string including ?
+			baseURL += "&" + strings.TrimPrefix(matches[2], "?")
+		}
+
 	case SearchRegex.MatchString(trimmedURL):
 		matches := SearchRegex.FindStringSubmatch(trimmedURL)
 		// matches[0]=Full match, matches[1]=Base ("https://wallhaven.cc/"), matches[2]=Query part ("?q=...") or empty string
@@ -111,6 +123,17 @@ func (p *WallhavenProvider) ParseURL(webURL string) (string, error) {
 		q.Del("page")
 		paramsChanged = true
 	}
+	// Clean seed (if present, to ensure dynamic results for random sorts, unless user explicitly wants it?
+	// For /random main category, we definitely want to strip it.
+	// For general search, we might arguably want to keep it?
+	// Given the user requirement "Seed ignored", let's strip it to be safe for "Wallpaper Switcher" context/
+	// Actually, let's strictly strip it if it came from the MainCategory logic which sets sorting=random.
+	// But detecting "where it came from" here is hard.
+	// Let's strip 'seed' if 'sorting=random' is set?
+	if q.Get("sorting") == "random" && q.Has("seed") {
+		q.Del("seed")
+		paramsChanged = true
+	}
 
 	if paramsChanged {
 		parsedURL.RawQuery = q.Encode()
@@ -135,6 +158,25 @@ func (p *WallhavenProvider) WithResolution(apiURL string, width, height int) str
 	}
 
 	return apiURL
+}
+
+// mapCategoryToParams maps a Wallhaven Main Category to API query parameters reference in alphabetical order.
+func mapCategoryToParams(category string) string {
+	switch category {
+	case "latest":
+		return "order=desc&sorting=date_added"
+	case "toplist":
+		return "order=desc&sorting=toplist&topRange=1M"
+	case "hot":
+		return "order=desc&sorting=hot"
+	case "random":
+		// Random sorting needs a seed to stay consistent during paging, but for a "wallpaper changer"
+		// usually we want freshness. Here we set sorting=random.
+		// If page=2 is requested later, the API handles it if using same seed, but here we are generating the *base* query.
+		return "order=desc&sorting=random"
+	default:
+		return ""
+	}
 }
 
 // FetchImages fetches images from Wallhaven.
@@ -363,46 +405,64 @@ func (p *WallhavenProvider) CreateSettingsPanel(sm setting.SettingsManager) fyne
 	return whHeader
 }
 
-func (p *WallhavenProvider) CreateQueryPanel(sm setting.SettingsManager) fyne.CanvasObject {
+func (p *WallhavenProvider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl string) fyne.CanvasObject {
 	imgQueryList := p.createImgQueryList(sm)
 	sm.RegisterRefreshFunc(imgQueryList.Refresh)
+
+	// Configuration for the Add Query Dialog
+	addCfg := wallpaper.AddQueryConfig{
+		Title:           "New Image Query",
+		URLPlaceholder:  "Paste your Wallhaven Search or Collection (Favorites) URL",
+		URLValidator:    WallhavenURLRegexp,
+		URLErrorMsg:     "Invalid wallhaven image query URL pattern",
+		DescPlaceholder: "Add a description",
+		DescValidator:   WallhavenDescRegexp,
+		DescErrorMsg:    fmt.Sprintf("Description must be between 5 and %d alpha numeric characters long", wallpaper.MaxDescLength),
+		ValidateFunc: func(url, desc string) error {
+			// Wallhaven specific logic: we need to convert the Web URL to API URL
+			apiURL, _, err := CovertWebToAPIURL(url)
+			if err != nil {
+				return fmt.Errorf("URL conversion error: %v", err)
+			}
+
+			// Check for duplicates
+			queryID := wallpaper.GenerateQueryID(apiURL)
+			if p.cfg.IsDuplicateID(queryID) {
+				return errors.New("Duplicate query: this URL already exists")
+			}
+			return nil
+		},
+		AddHandler: func(desc, url string, active bool) (string, error) {
+			// Convert to API URL again (safe as validation passed)
+			apiURL, _, _ := CovertWebToAPIURL(url)
+			return p.cfg.AddImageQuery(desc, apiURL, active)
+		},
+	}
 
 	// Create "Add" Button using standardized helper
 	addButton := wallpaper.CreateAddQueryButton(
 		"Add Wallhaven URL",
 		sm,
-		wallpaper.AddQueryConfig{
-			Title:           "New Image Query",
-			URLPlaceholder:  "Paste your Wallhaven Search or Collection (Favorites) URL",
-			URLValidator:    WallhavenURLRegexp,
-			URLErrorMsg:     "Invalid wallhaven image query URL pattern",
-			DescPlaceholder: "Add a description",
-			DescValidator:   WallhavenDescRegexp,
-			DescErrorMsg:    fmt.Sprintf("Description must be between 5 and %d alpha numeric characters long", wallpaper.MaxDescLength),
-			ValidateFunc: func(url, desc string) error {
-				// Wallhaven specific logic: we need to convert the Web URL to API URL
-				apiURL, _, err := CovertWebToAPIURL(url)
-				if err != nil {
-					return fmt.Errorf("URL conversion error: %v", err)
-				}
-
-				// Check for duplicates
-				queryID := wallpaper.GenerateQueryID(apiURL)
-				if p.cfg.IsDuplicateID(queryID) {
-					return errors.New("Duplicate query: this URL already exists")
-				}
-				return nil
-			},
-			AddHandler: func(desc, url string, active bool) (string, error) {
-				// Convert to API URL again (safe as validation passed)
-				apiURL, _, _ := CovertWebToAPIURL(url)
-				return p.cfg.AddImageQuery(desc, apiURL, active)
-			},
-		},
+		addCfg,
 		func() {
 			imgQueryList.Refresh()
 		},
 	)
+
+	// Check for pending URL to auto-open dialog
+	if pendingUrl != "" {
+		// Verify URL is valid for this provider (Double check)
+		if _, err := p.ParseURL(pendingUrl); err == nil {
+			// Trigger the dialog
+			// We delay slightly to ensure the parent container is effectively part of the window tree if that matters,
+			// though Fyne usually handles dialogs fine if window exists.
+			fyne.Do(func() {
+				wallpaper.OpenAddQueryDialog(sm, addCfg, pendingUrl, "", func() {
+					imgQueryList.Refresh()
+				})
+			})
+		}
+	}
 
 	header := container.NewVBox()
 	header.Add(sm.CreateSettingTitleLabel("Wallhaven Queries and Collections (Favorites)"))

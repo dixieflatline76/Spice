@@ -13,4 +13,8 @@ const (
 
 	// WikimediaCategoryRegexp matches "Category:" pattern (case insensitive)
 	WikimediaCategoryRegexp = `(?i)(Category:|Category%3A)`
+
+	// WikimediaURLRegexp validates full Wikimedia Commons Category or Search URLs.
+	// Matches: https://commons.wikimedia.org/wiki/Category:... or /w/index.php?search=...
+	WikimediaURLRegexp = `^https:\/\/commons\.wikimedia\.org\/(?:wiki\/Category:|w\/index\.php\?).*$`
 )
