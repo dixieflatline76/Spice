@@ -61,8 +61,12 @@ func TestZipDirectory(t *testing.T) {
 	}
 
 	// Create dummy files
-	os.WriteFile(filepath.Join(srcDir, "manifest.json"), []byte(`{"name":"test"}`), 0644)
-	os.WriteFile(filepath.Join(srcDir, "icon.png"), []byte("fake image data"), 0644)
+	if err := os.WriteFile(filepath.Join(srcDir, "manifest.json"), []byte(`{"name":"test"}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(srcDir, "icon.png"), []byte("fake image data"), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	// Target zip file
 	zipFile := filepath.Join(tmpDir, "output.zip")
@@ -94,7 +98,9 @@ func TestZipDirectory(t *testing.T) {
 			t.Fatal(err)
 		}
 		buf := new(bytes.Buffer)
-		buf.ReadFrom(rc)
+		if _, err := buf.ReadFrom(rc); err != nil {
+			t.Fatal(err)
+		}
 		rc.Close()
 		files[f.Name] = buf.Bytes()
 	}
