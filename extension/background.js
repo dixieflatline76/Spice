@@ -1,25 +1,26 @@
-// Spice Background Service Worker
+// Spice Background Service Worker (Verified Keep-Alive Version)
 
 let socket = null;
 let keepAliveInterval = null;
 let animationInterval = null;
-// --- WebSocket Connection ---
 
 const WS_URL = 'ws://127.0.0.1:49452/ws';
 const HEALTH_URL = 'http://127.0.0.1:49452/health';
 
 // Backoff Configuration
-const INITIAL_RETRY_DELAY = 1000; // 1 second (snappy start)
-const MAX_RETRY_DELAY = 10000;    // 10 seconds (aggressive cap)
-const BACKOFF_FACTOR = 1.5;       // Gentler ramp-up
+const INITIAL_RETRY_DELAY = 1000;
+const MAX_RETRY_DELAY = 10000;
+const BACKOFF_FACTOR = 1.5;
 
 let retryDelay = INITIAL_RETRY_DELAY;
 let isConnected = false;
 
+// --- WebSocket Connection ---
+
 function connect() {
     if (socket) return;
 
-    // Only log intent if backoff is significant, to reduce noise
+    // Only log intent if backoff is significant
     if (retryDelay >= 5000) {
         console.log(`Polling Spice Backend (next retry in ${Math.round(retryDelay / 1000)}s)...`);
     } else {
@@ -36,8 +37,6 @@ function connect() {
             }
         })
         .catch(err => {
-            // Backend offline. Silent fail (or log debug).
-            // Exponential Backoff for next POLL
             scheduleReconnect();
         });
 }
@@ -48,25 +47,23 @@ function openSocket() {
     socket.onopen = () => {
         console.log('Connected to Spice Backend.');
         isConnected = true;
-        retryDelay = INITIAL_RETRY_DELAY; // Reset backoff
+        retryDelay = INITIAL_RETRY_DELAY;
         startKeepAlive();
-        chrome.action.setIcon({ path: "/icon_128.png" }); // Reset icon
+        // Reset icon to default (handled by URL check usually, but good safeguard)
+        chrome.action.setIcon({ path: "icon_128.png" });
     };
 
     socket.onmessage = (event) => {
         const msg = JSON.parse(event.data);
-        console.log('Received:', msg);
+        // Handle incoming messages if any (e.g. "Scan Connected")
         handleMessage(msg);
     };
 
     socket.onclose = () => {
-        if (isConnected) {
-            console.log('Disconnected from Spice Backend.');
-        }
+        if (isConnected) console.log('Disconnected from Spice Backend.');
         isConnected = false;
         socket = null;
         stopKeepAlive();
-        // Immediately try to reconnect (which will start polling again)
         scheduleReconnect();
     };
 
@@ -80,82 +77,47 @@ function scheduleReconnect() {
     retryDelay = Math.min(retryDelay * BACKOFF_FACTOR, MAX_RETRY_DELAY);
 }
 
+// --- Keep-Alive / Alarms ---
+
+// Wake up every 30s to prevent Service Worker death
+chrome.alarms.create('keepAlive', { periodInMinutes: 0.5 });
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+    if (alarm.name === 'keepAlive') {
+        // Ping socket to keep connection open
+        if (socket && socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({ type: 'ping' }));
+        } else if (!socket) {
+            connect(); // Reconnect if somehow dead
+        }
+    }
+});
+
 function startKeepAlive() {
     stopKeepAlive();
+    // Also use JS interval as backup for active sessions
     keepAliveInterval = setInterval(() => {
         if (socket && socket.readyState === WebSocket.OPEN) {
             socket.send(JSON.stringify({ type: 'ping' }));
         }
-    }, 20000); // 20s
+    }, 20000);
 }
 
 function stopKeepAlive() {
     if (keepAliveInterval) clearInterval(keepAliveInterval);
+    keepAliveInterval = null;
 }
 
 // --- Message Handling ---
 
-function handleMessage(msg) {
+async function handleMessage(msg) {
     if (msg.type === 'set_wallpaper') {
-        // Check if Chrome OS API is available
-        if (chrome.wallpaper) {
-            // According to Chrome docs, setWallpaper takes binary data or URL.
-            // If 'url' is a local file path (from Go), Chrome Extension CANNOT access it directly 
-            // unless we serve it via HTTP or pass base64.
-            // However, the 'url' sent by server is a local path e.g. /home/user/img.jpg.
-            // On ChromeOS (Crostini), the extension runs in Ash, Go runs in Linux container.
-            // They might share files via "Linux Files".
-            // BUT chrome.wallpaper.setWallpaper expects binary or url.
-            // If we send a URL, chrome will download it.
-            // If Go serves the file via HTTP, we can pass that URL.
-            // HACK: For now, assuming we might need to change Backend to Serve the file?
-            // OR: We send the command, but realize wait...
-            // chrome.wallpaper.setWallpaper is for Setting the Wallpaper of CHROME OS.
-            // It accepts: { url: string, layout: ... }
-            // The URL must be accessible.
-
-            // For now, let's log. We'll refine this "Local File" problem in integration.
-            console.log('Setting Wallpaper:', msg.url);
-
-            // Mock call if strictly testing, real call if API exists
-            chrome.wallpaper.setWallpaper({
-                url: msg.url,
-                layout: 'CENTER_CROPPED',
-                filename: 'spice_wallpaper'
-            }, (res) => {
-                if (chrome.runtime.lastError) {
-                    console.error('Wallpaper Error:', chrome.runtime.lastError);
-                } else {
-                    console.log('Wallpaper Set!');
-                }
-            });
-        } else {
-            console.log('chrome.wallpaper API not available (Not ChromeOS?)');
-        }
+        console.warn("set_wallpaper command received but feature is currently PAUSED.");
     }
 }
 
-// --- Smart Clipper / Icon Animation ---
+// --- Supported Sites & Animation ---
 
-function startAnimation() {
-    if (animationInterval) return;
-    let frame = 0;
-    animationInterval = setInterval(() => {
-        frame = (frame + 1) % 2;
-        // Toggle between two icons
-        const iconPath = frame === 0 ? "/icon_128.png" : "/icon_anim_128.png";
-        chrome.action.setIcon({ path: iconPath });
-    }, 500);
-}
-
-function stopAnimation() {
-    if (animationInterval) clearInterval(animationInterval);
-    animationInterval = null;
-    chrome.action.setIcon({ path: "/icon_128.png" });
-}
-
-// Monitor Tabs for Supported Sites
-// REGEX_START
 const SUPPORTED_PATTERNS = [
     // Wallhaven
     /^https:\/\/wallhaven\.cc\/(?:latest|toplist|hot|random|search|api\/v1\/search|api\/v1\/collections\/[a-zA-Z0-9_]+\/[0-9]+|user\/[a-zA-Z0-9_]+\/favorites\/[0-9]+|favorites\/[0-9]+)(?:\?[a-zA-Z0-9_\-.~!$&'()*+,;=:@\/?%]*|)$/,
@@ -166,24 +128,41 @@ const SUPPORTED_PATTERNS = [
     // Wikimedia
     /^https:\/\/commons\.wikimedia\.org\/(?:wiki\/Category:|w\/index\.php\?).*$/
 ];
-// REGEX_END
 
-// Helper to check URL and update state
+function startAnimation() {
+    if (animationInterval) return;
+    let frame = 0;
+    chrome.action.setIcon({ path: "icon_anim_128.png" }); // Immediate
+    animationInterval = setInterval(() => {
+        frame = (frame + 1) % 2;
+        const iconPath = frame === 0 ? "icon_128.png" : "icon_anim_128.png";
+        chrome.action.setIcon({ path: iconPath });
+    }, 500);
+}
+
+function stopAnimation() {
+    if (animationInterval) clearInterval(animationInterval);
+    animationInterval = null;
+    chrome.action.setIcon({ path: "icon_128.png" });
+}
+
 function checkAndStoreUrl(url) {
     if (!url) {
-        stopAnimation();
         chrome.storage.local.remove("detected_source");
+        stopAnimation();
         return;
     }
     const isSupported = SUPPORTED_PATTERNS.some(regex => regex.test(url));
     if (isSupported) {
-        startAnimation();
         chrome.storage.local.set({ "detected_source": url });
+        startAnimation();
     } else {
-        stopAnimation();
         chrome.storage.local.remove("detected_source");
+        stopAnimation();
     }
 }
+
+// --- Event Listeners ---
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     if (changeInfo.status === 'complete' && tab.url) {
@@ -193,7 +172,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 
 chrome.tabs.onActivated.addListener((activeInfo) => {
     chrome.tabs.get(activeInfo.tabId, (tab) => {
-        if (chrome.runtime.lastError) return; // Tab might be closed
+        if (chrome.runtime.lastError) return;
         checkAndStoreUrl(tab.url);
     });
 });
@@ -207,11 +186,17 @@ chrome.windows.onFocusChanged.addListener((windowId) => {
     });
 });
 
-// Initial Connect
-connect();
-
+// Communication with Popup (Instant Feedback)
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.type === "GET_STATUS") {
         sendResponse({ connected: isConnected });
+    }
+});
+
+// Initial Startup
+connect();
+chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    if (tabs && tabs.length > 0) {
+        checkAndStoreUrl(tabs[0].url);
     }
 });

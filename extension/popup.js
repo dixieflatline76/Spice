@@ -7,8 +7,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const errorDiv = document.getElementById('content_error');
 
-    // Check Backend Connection
+    // Initial State: Hide everything to prevent flashing
+    contentFoundDiv.classList.add('hidden');
+    noContentDiv.classList.add('hidden');
+    errorDiv.classList.add('hidden');
+
+    // Check Backend Connection via Background Script (Instant)
     chrome.runtime.sendMessage({ type: "GET_STATUS" }, (response) => {
+        if (chrome.runtime.lastError) {
+            // Background script might be waking up or dead
+            showError();
+            return;
+        }
+
         if (response && response.connected) {
             // Backend connected, check for content
             checkSource();
