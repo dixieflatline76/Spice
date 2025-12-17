@@ -39,3 +39,6 @@ test_output_*.txt
 cover
 current_coverage_report.txt
 
+
+# Unignore implementation of the mac extension
+!Spice Wallpaper Manager Extension/**
