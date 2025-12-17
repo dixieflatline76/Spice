@@ -113,7 +113,7 @@ jobs:
           name: spice-release-build
           path: |
             bin/
-            dist/ # Includes extension zips
+            dist/
 
   release:
     runs-on: windows-latest
