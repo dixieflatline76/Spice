@@ -1,5 +1,6 @@
 # Go build output
 bin/
+dist/
 *.exe
 *.dll
 *.dmg
