@@ -53,7 +53,7 @@ type ImageProvider interface {
 
 	// CreateQueryPanel creates the image query management panel.
 	// Returns nil if the provider does not support custom queries.
-	CreateQueryPanel(sm setting.SettingsManager) fyne.CanvasObject
+	CreateQueryPanel(sm setting.SettingsManager, pendingUrl string) fyne.CanvasObject
 }
 
 // ResolutionAwareProvider is an optional interface for providers that can filter images based on screen resolution.

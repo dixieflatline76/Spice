@@ -16,6 +16,7 @@ type PluginManager interface {
 	CreateMenuItem(string, func(), string) *fyne.MenuItem                 // Creates a menu item.
 	CreateToggleMenuItem(string, func(bool), string, bool) *fyne.MenuItem // Creates a toggle menu item.
 	OpenURL(*url.URL) error                                               // Opens a URL.
+	OpenPreferences(tab string)                                           // OpenPreferences opens the preferences window, optionally navigating to a specific tab.
 	GetPreferences() fyne.Preferences                                     // Returns the preferences.
 	GetAssetManager() *asset.Manager                                      // Returns the asset manager.
 	RefreshTrayMenu()                                                     // Refreshes the tray menu.

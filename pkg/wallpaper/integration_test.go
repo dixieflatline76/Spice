@@ -349,7 +349,7 @@ func (s *StubImageProvider) GetProviderIcon() fyne.Resource { return s.icon }
 func (s *StubImageProvider) CreateSettingsPanel(sm setting.SettingsManager) fyne.CanvasObject {
 	return nil
 }
-func (s *StubImageProvider) CreateQueryPanel(sm setting.SettingsManager) fyne.CanvasObject {
+func (s *StubImageProvider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl string) fyne.CanvasObject {
 	return nil
 }
 

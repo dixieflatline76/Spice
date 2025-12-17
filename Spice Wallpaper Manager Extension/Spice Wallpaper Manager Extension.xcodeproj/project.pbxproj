@@ -1,0 +1,975 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		FA9732922EF2E652006E8432 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA9732912EF2E652006E8432 /* AppDelegate.swift */; };
+		FA9732942EF2E652006E8432 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA9732932EF2E652006E8432 /* SceneDelegate.swift */; };
+		FA9732972EF2E652006E8432 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = FA9732952EF2E652006E8432 /* LaunchScreen.storyboard */; };
+		FA97329A2EF2E652006E8432 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = FA9732982EF2E652006E8432 /* Main.storyboard */; };
+		FA9732A32EF2E652006E8432 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA9732A22EF2E652006E8432 /* AppDelegate.swift */; };
+		FA9732A62EF2E652006E8432 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = FA9732A42EF2E652006E8432 /* Main.storyboard */; };
+		FA9732AE2EF2E652006E8432 /* Spice Wallpaper Manager Extension Extension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = FA9732AD2EF2E652006E8432 /* Spice Wallpaper Manager Extension Extension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		FA9732B82EF2E652006E8432 /* Spice Wallpaper Manager Extension Extension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = FA9732B72EF2E652006E8432 /* Spice Wallpaper Manager Extension Extension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		FA9732BE2EF2E652006E8432 /* Main.html in Resources */ = {isa = PBXBuildFile; fileRef = FA9732812EF2E651006E8432 /* Main.html */; };
+		FA9732BF2EF2E652006E8432 /* Main.html in Resources */ = {isa = PBXBuildFile; fileRef = FA9732812EF2E651006E8432 /* Main.html */; };
+		FA9732C02EF2E652006E8432 /* Icon.png in Resources */ = {isa = PBXBuildFile; fileRef = FA9732832EF2E651006E8432 /* Icon.png */; };
+		FA9732C12EF2E652006E8432 /* Icon.png in Resources */ = {isa = PBXBuildFile; fileRef = FA9732832EF2E651006E8432 /* Icon.png */; };
+		FA9732C22EF2E652006E8432 /* Style.css in Resources */ = {isa = PBXBuildFile; fileRef = FA9732842EF2E651006E8432 /* Style.css */; };
+		FA9732C32EF2E652006E8432 /* Style.css in Resources */ = {isa = PBXBuildFile; fileRef = FA9732842EF2E651006E8432 /* Style.css */; };
+		FA9732C42EF2E652006E8432 /* Script.js in Resources */ = {isa = PBXBuildFile; fileRef = FA9732852EF2E651006E8432 /* Script.js */; };
+		FA9732C52EF2E652006E8432 /* Script.js in Resources */ = {isa = PBXBuildFile; fileRef = FA9732852EF2E651006E8432 /* Script.js */; };
+		FA9732C62EF2E652006E8432 /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA9732862EF2E651006E8432 /* ViewController.swift */; };
+		FA9732C72EF2E652006E8432 /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA9732862EF2E651006E8432 /* ViewController.swift */; };
+		FA9732C82EF2E652006E8432 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = FA9732872EF2E652006E8432 /* Assets.xcassets */; };
+		FA9732C92EF2E652006E8432 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = FA9732872EF2E652006E8432 /* Assets.xcassets */; };
+		FA9732CA2EF2E652006E8432 /* SafariWebExtensionHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA9732892EF2E652006E8432 /* SafariWebExtensionHandler.swift */; };
+		FA9732CB2EF2E652006E8432 /* SafariWebExtensionHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA9732892EF2E652006E8432 /* SafariWebExtensionHandler.swift */; };
+		FA9732E52EF2E652006E8432 /* popup.js in Resources */ = {isa = PBXBuildFile; fileRef = FA9732DD2EF2E652006E8432 /* popup.js */; };
+		FA9732E62EF2E652006E8432 /* background.js in Resources */ = {isa = PBXBuildFile; fileRef = FA9732DE2EF2E652006E8432 /* background.js */; };
+		FA9732E72EF2E652006E8432 /* popup.html in Resources */ = {isa = PBXBuildFile; fileRef = FA9732DF2EF2E652006E8432 /* popup.html */; };
+		FA9732E82EF2E652006E8432 /* icon_128.png in Resources */ = {isa = PBXBuildFile; fileRef = FA9732E02EF2E652006E8432 /* icon_128.png */; };
+		FA9732E92EF2E652006E8432 /* icon_anim_128.png in Resources */ = {isa = PBXBuildFile; fileRef = FA9732E12EF2E652006E8432 /* icon_anim_128.png */; };
+		FA9732EA2EF2E652006E8432 /* icon_16.png in Resources */ = {isa = PBXBuildFile; fileRef = FA9732E22EF2E652006E8432 /* icon_16.png */; };
+		FA9732EB2EF2E652006E8432 /* manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = FA9732E32EF2E652006E8432 /* manifest.json */; };
+		FA9732EC2EF2E652006E8432 /* icon_48.png in Resources */ = {isa = PBXBuildFile; fileRef = FA9732E42EF2E652006E8432 /* icon_48.png */; };
+		FA9732ED2EF2E652006E8432 /* popup.js in Resources */ = {isa = PBXBuildFile; fileRef = FA9732DD2EF2E652006E8432 /* popup.js */; };
+		FA9732EE2EF2E652006E8432 /* background.js in Resources */ = {isa = PBXBuildFile; fileRef = FA9732DE2EF2E652006E8432 /* background.js */; };
+		FA9732EF2EF2E652006E8432 /* popup.html in Resources */ = {isa = PBXBuildFile; fileRef = FA9732DF2EF2E652006E8432 /* popup.html */; };
+		FA9732F02EF2E652006E8432 /* icon_128.png in Resources */ = {isa = PBXBuildFile; fileRef = FA9732E02EF2E652006E8432 /* icon_128.png */; };
+		FA9732F12EF2E652006E8432 /* icon_anim_128.png in Resources */ = {isa = PBXBuildFile; fileRef = FA9732E12EF2E652006E8432 /* icon_anim_128.png */; };
+		FA9732F22EF2E652006E8432 /* icon_16.png in Resources */ = {isa = PBXBuildFile; fileRef = FA9732E22EF2E652006E8432 /* icon_16.png */; };
+		FA9732F32EF2E652006E8432 /* manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = FA9732E32EF2E652006E8432 /* manifest.json */; };
+		FA9732F42EF2E652006E8432 /* icon_48.png in Resources */ = {isa = PBXBuildFile; fileRef = FA9732E42EF2E652006E8432 /* icon_48.png */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		FA9732AF2EF2E652006E8432 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = FA97327B2EF2E651006E8432 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = FA9732AC2EF2E652006E8432;
+			remoteInfo = "Spice Wallpaper Manager Extension Extension (iOS)";
+		};
+		FA9732B92EF2E652006E8432 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = FA97327B2EF2E651006E8432 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = FA9732B62EF2E652006E8432;
+			remoteInfo = "Spice Wallpaper Manager Extension Extension (macOS)";
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		FA9732D12EF2E652006E8432 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				FA9732AE2EF2E652006E8432 /* Spice Wallpaper Manager Extension Extension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		FA9732D82EF2E652006E8432 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				FA9732B82EF2E652006E8432 /* Spice Wallpaper Manager Extension Extension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		FA9732822EF2E651006E8432 /* Base */ = {isa = PBXFileReference; lastKnownFileType = text.html; name = Base; path = Base.lproj/Main.html; sourceTree = "<group>"; };
+		FA9732832EF2E651006E8432 /* Icon.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = Icon.png; sourceTree = "<group>"; };
+		FA9732842EF2E651006E8432 /* Style.css */ = {isa = PBXFileReference; lastKnownFileType = text.css; path = Style.css; sourceTree = "<group>"; };
+		FA9732852EF2E651006E8432 /* Script.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = Script.js; sourceTree = "<group>"; };
+		FA9732862EF2E651006E8432 /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewController.swift; sourceTree = "<group>"; };
+		FA9732872EF2E652006E8432 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		FA9732892EF2E652006E8432 /* SafariWebExtensionHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariWebExtensionHandler.swift; sourceTree = "<group>"; };
+		FA97328E2EF2E652006E8432 /* Spice Wallpaper Manager Extension.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Spice Wallpaper Manager Extension.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		FA9732912EF2E652006E8432 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		FA9732932EF2E652006E8432 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
+		FA9732962EF2E652006E8432 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
+		FA9732992EF2E652006E8432 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
+		FA97329B2EF2E652006E8432 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		FA9732A02EF2E652006E8432 /* Spice Wallpaper Manager Extension.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Spice Wallpaper Manager Extension.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		FA9732A22EF2E652006E8432 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		FA9732A52EF2E652006E8432 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
+		FA9732A72EF2E652006E8432 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		FA9732A82EF2E652006E8432 /* Spice Wallpaper Manager Extension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Spice Wallpaper Manager Extension.entitlements"; sourceTree = "<group>"; };
+		FA9732AD2EF2E652006E8432 /* Spice Wallpaper Manager Extension Extension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "Spice Wallpaper Manager Extension Extension.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
+		FA9732B22EF2E652006E8432 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		FA9732B72EF2E652006E8432 /* Spice Wallpaper Manager Extension Extension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "Spice Wallpaper Manager Extension Extension.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
+		FA9732BC2EF2E652006E8432 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		FA9732BD2EF2E652006E8432 /* Spice Wallpaper Manager Extension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Spice Wallpaper Manager Extension.entitlements"; sourceTree = "<group>"; };
+		FA9732DD2EF2E652006E8432 /* popup.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = popup.js; path = ../../extension/popup.js; sourceTree = "<group>"; };
+		FA9732DE2EF2E652006E8432 /* background.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = background.js; path = ../../extension/background.js; sourceTree = "<group>"; };
+		FA9732DF2EF2E652006E8432 /* popup.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; name = popup.html; path = ../../extension/popup.html; sourceTree = "<group>"; };
+		FA9732E02EF2E652006E8432 /* icon_128.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = icon_128.png; path = ../../extension/icon_128.png; sourceTree = "<group>"; };
+		FA9732E12EF2E652006E8432 /* icon_anim_128.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = icon_anim_128.png; path = ../../extension/icon_anim_128.png; sourceTree = "<group>"; };
+		FA9732E22EF2E652006E8432 /* icon_16.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = icon_16.png; path = ../../extension/icon_16.png; sourceTree = "<group>"; };
+		FA9732E32EF2E652006E8432 /* manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = manifest.json; path = ../../extension/manifest.json; sourceTree = "<group>"; };
+		FA9732E42EF2E652006E8432 /* icon_48.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = icon_48.png; path = ../../extension/icon_48.png; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		FA97328B2EF2E652006E8432 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		FA97329D2EF2E652006E8432 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		FA9732AA2EF2E652006E8432 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		FA9732B42EF2E652006E8432 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		FA97327A2EF2E651006E8432 = {
+			isa = PBXGroup;
+			children = (
+				FA97327F2EF2E651006E8432 /* Shared (App) */,
+				FA9732882EF2E652006E8432 /* Shared (Extension) */,
+				FA9732902EF2E652006E8432 /* iOS (App) */,
+				FA9732A12EF2E652006E8432 /* macOS (App) */,
+				FA9732B12EF2E652006E8432 /* iOS (Extension) */,
+				FA9732BB2EF2E652006E8432 /* macOS (Extension) */,
+				FA97328F2EF2E652006E8432 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		FA97327F2EF2E651006E8432 /* Shared (App) */ = {
+			isa = PBXGroup;
+			children = (
+				FA9732862EF2E651006E8432 /* ViewController.swift */,
+				FA9732872EF2E652006E8432 /* Assets.xcassets */,
+				FA9732802EF2E651006E8432 /* Resources */,
+			);
+			path = "Shared (App)";
+			sourceTree = "<group>";
+		};
+		FA9732802EF2E651006E8432 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				FA9732812EF2E651006E8432 /* Main.html */,
+				FA9732832EF2E651006E8432 /* Icon.png */,
+				FA9732842EF2E651006E8432 /* Style.css */,
+				FA9732852EF2E651006E8432 /* Script.js */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		FA9732882EF2E652006E8432 /* Shared (Extension) */ = {
+			isa = PBXGroup;
+			children = (
+				FA9732DC2EF2E652006E8432 /* Resources */,
+				FA9732892EF2E652006E8432 /* SafariWebExtensionHandler.swift */,
+			);
+			path = "Shared (Extension)";
+			sourceTree = "<group>";
+		};
+		FA97328F2EF2E652006E8432 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				FA97328E2EF2E652006E8432 /* Spice Wallpaper Manager Extension.app */,
+				FA9732A02EF2E652006E8432 /* Spice Wallpaper Manager Extension.app */,
+				FA9732AD2EF2E652006E8432 /* Spice Wallpaper Manager Extension Extension.appex */,
+				FA9732B72EF2E652006E8432 /* Spice Wallpaper Manager Extension Extension.appex */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		FA9732902EF2E652006E8432 /* iOS (App) */ = {
+			isa = PBXGroup;
+			children = (
+				FA9732912EF2E652006E8432 /* AppDelegate.swift */,
+				FA9732932EF2E652006E8432 /* SceneDelegate.swift */,
+				FA9732952EF2E652006E8432 /* LaunchScreen.storyboard */,
+				FA9732982EF2E652006E8432 /* Main.storyboard */,
+				FA97329B2EF2E652006E8432 /* Info.plist */,
+			);
+			path = "iOS (App)";
+			sourceTree = "<group>";
+		};
+		FA9732A12EF2E652006E8432 /* macOS (App) */ = {
+			isa = PBXGroup;
+			children = (
+				FA9732A22EF2E652006E8432 /* AppDelegate.swift */,
+				FA9732A42EF2E652006E8432 /* Main.storyboard */,
+				FA9732A72EF2E652006E8432 /* Info.plist */,
+				FA9732A82EF2E652006E8432 /* Spice Wallpaper Manager Extension.entitlements */,
+			);
+			path = "macOS (App)";
+			sourceTree = "<group>";
+		};
+		FA9732B12EF2E652006E8432 /* iOS (Extension) */ = {
+			isa = PBXGroup;
+			children = (
+				FA9732B22EF2E652006E8432 /* Info.plist */,
+			);
+			path = "iOS (Extension)";
+			sourceTree = "<group>";
+		};
+		FA9732BB2EF2E652006E8432 /* macOS (Extension) */ = {
+			isa = PBXGroup;
+			children = (
+				FA9732BC2EF2E652006E8432 /* Info.plist */,
+				FA9732BD2EF2E652006E8432 /* Spice Wallpaper Manager Extension.entitlements */,
+			);
+			path = "macOS (Extension)";
+			sourceTree = "<group>";
+		};
+		FA9732DC2EF2E652006E8432 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				FA9732DD2EF2E652006E8432 /* popup.js */,
+				FA9732DE2EF2E652006E8432 /* background.js */,
+				FA9732DF2EF2E652006E8432 /* popup.html */,
+				FA9732E02EF2E652006E8432 /* icon_128.png */,
+				FA9732E12EF2E652006E8432 /* icon_anim_128.png */,
+				FA9732E22EF2E652006E8432 /* icon_16.png */,
+				FA9732E32EF2E652006E8432 /* manifest.json */,
+				FA9732E42EF2E652006E8432 /* icon_48.png */,
+			);
+			name = Resources;
+			path = "Shared (Extension)";
+			sourceTree = SOURCE_ROOT;
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		FA97328D2EF2E652006E8432 /* Spice Wallpaper Manager Extension (iOS) */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = FA9732D22EF2E652006E8432 /* Build configuration list for PBXNativeTarget "Spice Wallpaper Manager Extension (iOS)" */;
+			buildPhases = (
+				FA97328A2EF2E652006E8432 /* Sources */,
+				FA97328B2EF2E652006E8432 /* Frameworks */,
+				FA97328C2EF2E652006E8432 /* Resources */,
+				FA9732D12EF2E652006E8432 /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				FA9732B02EF2E652006E8432 /* PBXTargetDependency */,
+			);
+			name = "Spice Wallpaper Manager Extension (iOS)";
+			packageProductDependencies = (
+			);
+			productName = "Spice Wallpaper Manager Extension (iOS)";
+			productReference = FA97328E2EF2E652006E8432 /* Spice Wallpaper Manager Extension.app */;
+			productType = "com.apple.product-type.application";
+		};
+		FA97329F2EF2E652006E8432 /* Spice Wallpaper Manager Extension (macOS) */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = FA9732D92EF2E652006E8432 /* Build configuration list for PBXNativeTarget "Spice Wallpaper Manager Extension (macOS)" */;
+			buildPhases = (
+				FA97329C2EF2E652006E8432 /* Sources */,
+				FA97329D2EF2E652006E8432 /* Frameworks */,
+				FA97329E2EF2E652006E8432 /* Resources */,
+				FA9732D82EF2E652006E8432 /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				FA9732BA2EF2E652006E8432 /* PBXTargetDependency */,
+			);
+			name = "Spice Wallpaper Manager Extension (macOS)";
+			packageProductDependencies = (
+			);
+			productName = "Spice Wallpaper Manager Extension (macOS)";
+			productReference = FA9732A02EF2E652006E8432 /* Spice Wallpaper Manager Extension.app */;
+			productType = "com.apple.product-type.application";
+		};
+		FA9732AC2EF2E652006E8432 /* Spice Wallpaper Manager Extension Extension (iOS) */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = FA9732CE2EF2E652006E8432 /* Build configuration list for PBXNativeTarget "Spice Wallpaper Manager Extension Extension (iOS)" */;
+			buildPhases = (
+				FA9732A92EF2E652006E8432 /* Sources */,
+				FA9732AA2EF2E652006E8432 /* Frameworks */,
+				FA9732AB2EF2E652006E8432 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "Spice Wallpaper Manager Extension Extension (iOS)";
+			packageProductDependencies = (
+			);
+			productName = "Spice Wallpaper Manager Extension Extension (iOS)";
+			productReference = FA9732AD2EF2E652006E8432 /* Spice Wallpaper Manager Extension Extension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		FA9732B62EF2E652006E8432 /* Spice Wallpaper Manager Extension Extension (macOS) */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = FA9732D52EF2E652006E8432 /* Build configuration list for PBXNativeTarget "Spice Wallpaper Manager Extension Extension (macOS)" */;
+			buildPhases = (
+				FA9732B32EF2E652006E8432 /* Sources */,
+				FA9732B42EF2E652006E8432 /* Frameworks */,
+				FA9732B52EF2E652006E8432 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "Spice Wallpaper Manager Extension Extension (macOS)";
+			packageProductDependencies = (
+			);
+			productName = "Spice Wallpaper Manager Extension Extension (macOS)";
+			productReference = FA9732B72EF2E652006E8432 /* Spice Wallpaper Manager Extension Extension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		FA97327B2EF2E651006E8432 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1640;
+				LastUpgradeCheck = 1640;
+				TargetAttributes = {
+					FA97328D2EF2E652006E8432 = {
+						CreatedOnToolsVersion = 16.4;
+					};
+					FA97329F2EF2E652006E8432 = {
+						CreatedOnToolsVersion = 16.4;
+					};
+					FA9732AC2EF2E652006E8432 = {
+						CreatedOnToolsVersion = 16.4;
+					};
+					FA9732B62EF2E652006E8432 = {
+						CreatedOnToolsVersion = 16.4;
+					};
+				};
+			};
+			buildConfigurationList = FA97327E2EF2E651006E8432 /* Build configuration list for PBXProject "Spice Wallpaper Manager Extension" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = FA97327A2EF2E651006E8432;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = FA97328F2EF2E652006E8432 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				FA97328D2EF2E652006E8432 /* Spice Wallpaper Manager Extension (iOS) */,
+				FA97329F2EF2E652006E8432 /* Spice Wallpaper Manager Extension (macOS) */,
+				FA9732AC2EF2E652006E8432 /* Spice Wallpaper Manager Extension Extension (iOS) */,
+				FA9732B62EF2E652006E8432 /* Spice Wallpaper Manager Extension Extension (macOS) */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		FA97328C2EF2E652006E8432 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FA9732C02EF2E652006E8432 /* Icon.png in Resources */,
+				FA9732972EF2E652006E8432 /* LaunchScreen.storyboard in Resources */,
+				FA9732BE2EF2E652006E8432 /* Main.html in Resources */,
+				FA9732C42EF2E652006E8432 /* Script.js in Resources */,
+				FA9732C82EF2E652006E8432 /* Assets.xcassets in Resources */,
+				FA97329A2EF2E652006E8432 /* Main.storyboard in Resources */,
+				FA9732C22EF2E652006E8432 /* Style.css in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		FA97329E2EF2E652006E8432 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FA9732C12EF2E652006E8432 /* Icon.png in Resources */,
+				FA9732C32EF2E652006E8432 /* Style.css in Resources */,
+				FA9732A62EF2E652006E8432 /* Main.storyboard in Resources */,
+				FA9732C52EF2E652006E8432 /* Script.js in Resources */,
+				FA9732C92EF2E652006E8432 /* Assets.xcassets in Resources */,
+				FA9732BF2EF2E652006E8432 /* Main.html in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		FA9732AB2EF2E652006E8432 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FA9732EE2EF2E652006E8432 /* background.js in Resources */,
+				FA9732F32EF2E652006E8432 /* manifest.json in Resources */,
+				FA9732F42EF2E652006E8432 /* icon_48.png in Resources */,
+				FA9732F22EF2E652006E8432 /* icon_16.png in Resources */,
+				FA9732EF2EF2E652006E8432 /* popup.html in Resources */,
+				FA9732F12EF2E652006E8432 /* icon_anim_128.png in Resources */,
+				FA9732F02EF2E652006E8432 /* icon_128.png in Resources */,
+				FA9732ED2EF2E652006E8432 /* popup.js in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		FA9732B52EF2E652006E8432 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FA9732E62EF2E652006E8432 /* background.js in Resources */,
+				FA9732EB2EF2E652006E8432 /* manifest.json in Resources */,
+				FA9732EC2EF2E652006E8432 /* icon_48.png in Resources */,
+				FA9732EA2EF2E652006E8432 /* icon_16.png in Resources */,
+				FA9732E72EF2E652006E8432 /* popup.html in Resources */,
+				FA9732E92EF2E652006E8432 /* icon_anim_128.png in Resources */,
+				FA9732E82EF2E652006E8432 /* icon_128.png in Resources */,
+				FA9732E52EF2E652006E8432 /* popup.js in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		FA97328A2EF2E652006E8432 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FA9732C62EF2E652006E8432 /* ViewController.swift in Sources */,
+				FA9732922EF2E652006E8432 /* AppDelegate.swift in Sources */,
+				FA9732942EF2E652006E8432 /* SceneDelegate.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		FA97329C2EF2E652006E8432 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FA9732C72EF2E652006E8432 /* ViewController.swift in Sources */,
+				FA9732A32EF2E652006E8432 /* AppDelegate.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		FA9732A92EF2E652006E8432 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FA9732CA2EF2E652006E8432 /* SafariWebExtensionHandler.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		FA9732B32EF2E652006E8432 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FA9732CB2EF2E652006E8432 /* SafariWebExtensionHandler.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		FA9732B02EF2E652006E8432 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = FA9732AC2EF2E652006E8432 /* Spice Wallpaper Manager Extension Extension (iOS) */;
+			targetProxy = FA9732AF2EF2E652006E8432 /* PBXContainerItemProxy */;
+		};
+		FA9732BA2EF2E652006E8432 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = FA9732B62EF2E652006E8432 /* Spice Wallpaper Manager Extension Extension (macOS) */;
+			targetProxy = FA9732B92EF2E652006E8432 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin PBXVariantGroup section */
+		FA9732812EF2E651006E8432 /* Main.html */ = {
+			isa = PBXVariantGroup;
+			children = (
+				FA9732822EF2E651006E8432 /* Base */,
+			);
+			name = Main.html;
+			sourceTree = "<group>";
+		};
+		FA9732952EF2E652006E8432 /* LaunchScreen.storyboard */ = {
+			isa = PBXVariantGroup;
+			children = (
+				FA9732962EF2E652006E8432 /* Base */,
+			);
+			name = LaunchScreen.storyboard;
+			sourceTree = "<group>";
+		};
+		FA9732982EF2E652006E8432 /* Main.storyboard */ = {
+			isa = PBXVariantGroup;
+			children = (
+				FA9732992EF2E652006E8432 /* Base */,
+			);
+			name = Main.storyboard;
+			sourceTree = "<group>";
+		};
+		FA9732A42EF2E652006E8432 /* Main.storyboard */ = {
+			isa = PBXVariantGroup;
+			children = (
+				FA9732A52EF2E652006E8432 /* Base */,
+			);
+			name = Main.storyboard;
+			sourceTree = "<group>";
+		};
+/* End PBXVariantGroup section */
+
+/* Begin XCBuildConfiguration section */
+		FA9732CC2EF2E652006E8432 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		FA9732CD2EF2E652006E8432 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		FA9732CF2EF2E652006E8432 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "iOS (Extension)/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Spice Wallpaper Manager Extension Extension";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.yourCompany.Spice-Wallpaper-Manager-Extension.Extension";
+				PRODUCT_NAME = "Spice Wallpaper Manager Extension Extension";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		FA9732D02EF2E652006E8432 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "iOS (Extension)/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Spice Wallpaper Manager Extension Extension";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.yourCompany.Spice-Wallpaper-Manager-Extension.Extension";
+				PRODUCT_NAME = "Spice Wallpaper Manager Extension Extension";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		FA9732D32EF2E652006E8432 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "iOS (App)/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Spice Wallpaper Manager Extension";
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
+				INFOPLIST_KEY_UIMainStoryboardFile = Main;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+					"-framework",
+					WebKit,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.yourCompany.Spice-Wallpaper-Manager-Extension";
+				PRODUCT_NAME = "Spice Wallpaper Manager Extension";
+				SDKROOT = iphoneos;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		FA9732D42EF2E652006E8432 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "iOS (App)/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Spice Wallpaper Manager Extension";
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
+				INFOPLIST_KEY_UIMainStoryboardFile = Main;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+					"-framework",
+					WebKit,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.yourCompany.Spice-Wallpaper-Manager-Extension";
+				PRODUCT_NAME = "Spice Wallpaper Manager Extension";
+				SDKROOT = iphoneos;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		FA9732D62EF2E652006E8432 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = "macOS (Extension)/Spice Wallpaper Manager Extension.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "macOS (Extension)/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Spice Wallpaper Manager Extension Extension";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 10.14;
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.yourCompany.Spice-Wallpaper-Manager-Extension.Extension";
+				PRODUCT_NAME = "Spice Wallpaper Manager Extension Extension";
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		FA9732D72EF2E652006E8432 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = "macOS (Extension)/Spice Wallpaper Manager Extension.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "macOS (Extension)/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Spice Wallpaper Manager Extension Extension";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 10.14;
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.yourCompany.Spice-Wallpaper-Manager-Extension.Extension";
+				PRODUCT_NAME = "Spice Wallpaper Manager Extension Extension";
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		FA9732DA2EF2E652006E8432 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "macOS (App)/Spice Wallpaper Manager Extension.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "macOS (App)/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Spice Wallpaper Manager Extension";
+				INFOPLIST_KEY_NSMainStoryboardFile = Main;
+				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 10.14;
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+					"-framework",
+					WebKit,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.yourCompany.Spice-Wallpaper-Manager-Extension";
+				PRODUCT_NAME = "Spice Wallpaper Manager Extension";
+				REGISTER_APP_GROUPS = YES;
+				SDKROOT = macosx;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		FA9732DB2EF2E652006E8432 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "macOS (App)/Spice Wallpaper Manager Extension.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "macOS (App)/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Spice Wallpaper Manager Extension";
+				INFOPLIST_KEY_NSMainStoryboardFile = Main;
+				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 10.14;
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+					"-framework",
+					WebKit,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.yourCompany.Spice-Wallpaper-Manager-Extension";
+				PRODUCT_NAME = "Spice Wallpaper Manager Extension";
+				REGISTER_APP_GROUPS = YES;
+				SDKROOT = macosx;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		FA97327E2EF2E651006E8432 /* Build configuration list for PBXProject "Spice Wallpaper Manager Extension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				FA9732CC2EF2E652006E8432 /* Debug */,
+				FA9732CD2EF2E652006E8432 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		FA9732CE2EF2E652006E8432 /* Build configuration list for PBXNativeTarget "Spice Wallpaper Manager Extension Extension (iOS)" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				FA9732CF2EF2E652006E8432 /* Debug */,
+				FA9732D02EF2E652006E8432 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		FA9732D22EF2E652006E8432 /* Build configuration list for PBXNativeTarget "Spice Wallpaper Manager Extension (iOS)" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				FA9732D32EF2E652006E8432 /* Debug */,
+				FA9732D42EF2E652006E8432 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		FA9732D52EF2E652006E8432 /* Build configuration list for PBXNativeTarget "Spice Wallpaper Manager Extension Extension (macOS)" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				FA9732D62EF2E652006E8432 /* Debug */,
+				FA9732D72EF2E652006E8432 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		FA9732D92EF2E652006E8432 /* Build configuration list for PBXNativeTarget "Spice Wallpaper Manager Extension (macOS)" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				FA9732DA2EF2E652006E8432 /* Debug */,
+				FA9732DB2EF2E652006E8432 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = FA97327B2EF2E651006E8432 /* Project object */;
+}

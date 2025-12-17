@@ -16,6 +16,17 @@ import (
 // linuxOS implements the OS interface for Linux.
 type linuxOS struct{}
 
+// getOS returns a new instance of the linuxOS struct.
+// Note: This logic is usually at the bottom or separate, but we are overriding.
+func getOS() OS {
+	// Simple check for Chrome OS environment marker
+	// Crostini usually has /dev/.cros_milestone
+	if _, err := os.Stat("/dev/.cros_milestone"); err == nil {
+		return &ChromeOS{}
+	}
+	return &linuxOS{}
+}
+
 // setWallpaper sets the desktop wallpaper on Linux, supporting X11 and some Wayland compositors.
 func (l *linuxOS) setWallpaper(imagePath string) error {
 	desktopEnv := os.Getenv("XDG_CURRENT_DESKTOP")
@@ -119,9 +130,4 @@ func (l *linuxOS) getXFCEDesktopConfigFile() (string, error) {
 func (l *linuxOS) setWallpaperSway(imagePath string) error {
 	cmd := exec.Command("swaybg", imagePath) // Make sure swaybg is installed
 	return cmd.Run()
-}
-
-// getOS returns a new instance of the linuxOS struct.
-func getOS() OS {
-	return &linuxOS{}
 }

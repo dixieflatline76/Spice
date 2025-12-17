@@ -4,6 +4,13 @@ VERSION := $(shell sh -c "cat version.txt" 2> /dev/null || cmd /c "type version.
 # --- Build flags ---
 LDFLAGS_COMMON := -X main.version=$(VERSION) -X github.com/dixieflatline76/Spice/pkg/wallpaper.UnsplashClientID=$(UNSPLASH_CLIENT_ID) -X github.com/dixieflatline76/Spice/pkg/wallpaper.UnsplashClientSecret=$(UNSPLASH_CLIENT_SECRET)
 
+# --- Extension Utils ---
+sync-extension:
+	go run cmd/util/sync_regex/main.go
+
+pack-extension:
+	go run cmd/util/pack_extension/main.go
+
 # --- Build targets ---
 build-win-amd64:
 	set GOOS=windows&& set GOARCH=amd64&& go build -tags release -o bin/Spice.exe -ldflags "-H=windowsgui $(LDFLAGS_COMMON)" ./cmd/spice
@@ -16,6 +23,9 @@ build-win-arm64:
 
 build-linux-amd64:
 	GOOS=linux GOARCH=amd64 go build -tags release -o bin/Spice-amd64 -ldflags "$(LDFLAGS_COMMON)" ./cmd/spice
+
+build-linux-arm64:
+	GOOS=linux GOARCH=arm64 go build -tags release -o bin/Spice-arm64 -ldflags "$(LDFLAGS_COMMON)" ./cmd/spice
 
 build-darwin-amd64:
 	@echo "Building Go executable for darwin/amd64..."
@@ -47,6 +57,13 @@ build-darwin-arm64:
 	@echo "Creating styled DMG..."
 	mkdir -p dist
 
+	# Copy the separate Safari Extension App to dist if it exists (built by CI)
+	# We expect "Spice Wallpaper Manager Extension.app" to be in the root or build dir
+	if [ -d "Spice Wallpaper Manager Extension.app" ]; then \
+		cp -R "Spice Wallpaper Manager Extension.app" dist/; \
+		codesign --force --deep --options=runtime --sign "${SIGNING_IDENTITY}" --timestamp "dist/Spice Wallpaper Manager Extension.app"; \
+	fi
+
 	create-dmg \
 		--volname "Spice Installer" \
 		--background "images/Spice-dmg-bg.png" \
@@ -56,8 +73,10 @@ build-darwin-arm64:
 		--icon "Spice.app" 175 200 \
 		--hide-extension "Spice.app" \
 		--app-drop-link 465 200 \
+		--icon "Spice Wallpaper Manager Extension.app" 175 350 \
 		"dist/Spice-$(VERSION)-arm64.dmg" \
-		"Spice.app/"
+		"Spice.app/" \
+		"dist/Spice Wallpaper Manager Extension.app" || true # Allow fail if ext missing locally
 
 	@echo "Moving final Spice.app to ./bin/..."
 	rm -rf ./bin/Spice.app && mv Spice.app ./bin/
@@ -71,6 +90,9 @@ build-win-console-amd64-dev:
 
 build-linux-amd64-dev:
 	GOOS=linux GOARCH=amd64 go build -o bin/Spice-amd64 -ldflags "$(LDFLAGS_COMMON)" ./cmd/spice
+
+build-linux-arm64-dev:
+	GOOS=linux GOARCH=arm64 go build -o bin/Spice-arm64 -ldflags "$(LDFLAGS_COMMON)" ./cmd/spice
 
 build-darwin-amd64-dev:
 	@echo "Building Go executable for darwin/amd64..."

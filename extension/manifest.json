@@ -1,0 +1,35 @@
+{
+  "manifest_version": 3,
+  "name": "Spice Wallpaper Manager Extension",
+  "version": "1.0",
+  "description": "Helps you add new image collections to Spice from supported image providers. Adds Spice support for Chrome OS.",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage",
+    "alarms"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1:49452/*",
+    "https://wallhaven.cc/*",
+    "https://*.wikimedia.org/*",
+    "https://www.pexels.com/*",
+    "https://*.unsplash.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icon_16.png",
+      "48": "icon_48.png",
+      "128": "icon_128.png"
+    }
+  },
+  "icons": {
+    "16": "icon_16.png",
+    "48": "icon_48.png",
+    "128": "icon_128.png"
+  }
+}

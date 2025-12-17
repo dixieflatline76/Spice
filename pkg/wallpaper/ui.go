@@ -308,8 +308,24 @@ func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 			continue
 		}
 
+		// Check if this provider handles the pending add URL
+		providerPendingUrl := ""
+		isPendingProvider := false
+		if wp.pendingAddUrl != "" {
+			if _, err := p.ParseURL(wp.pendingAddUrl); err == nil {
+				providerPendingUrl = wp.pendingAddUrl
+				isPendingProvider = true
+				// Consume pending URL (local variable copy usage)
+				// We don't clear wp.pendingAddUrl globally yet, assuming single pass.
+				// Actually we should clear it after this function returns or consumption.
+				// Since CreatePrefsPanel handles UI creation, we should clear it so it doesn't reopen on next render?
+				// Best to clear it at the end of CreatePrefsPanel or now.
+				wp.pendingAddUrl = "" // Consumed
+			}
+		}
+
 		settingsPanel := p.CreateSettingsPanel(sm)
-		queryPanel := p.CreateQueryPanel(sm)
+		queryPanel := p.CreateQueryPanel(sm, providerPendingUrl)
 
 		if settingsPanel == nil && queryPanel == nil {
 			continue // Nothing to show for this provider
@@ -337,7 +353,7 @@ func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 		}{
 			Title:   title,
 			Content: content,
-			Open:    false,
+			Open:    isPendingProvider, // Auto-open if matched
 		})
 	}
 

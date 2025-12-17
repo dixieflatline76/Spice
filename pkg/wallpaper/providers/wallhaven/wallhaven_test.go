@@ -169,6 +169,35 @@ func TestWallhavenProvider_ParseURL(t *testing.T) {
 			input: "https://wallhaven.cc/search",
 			want:  "https://wallhaven.cc/api/v1/search",
 		},
+
+		// Main Categories
+		{
+			name:  "Main Category - Latest",
+			input: "https://wallhaven.cc/latest",
+			want:  "https://wallhaven.cc/api/v1/search?order=desc&sorting=date_added",
+		},
+		{
+			name:  "Main Category - Toplist",
+			input: "https://wallhaven.cc/toplist",
+			want:  "https://wallhaven.cc/api/v1/search?order=desc&sorting=toplist&topRange=1M",
+		},
+		{
+			name:  "Main Category - Hot",
+			input: "https://wallhaven.cc/hot",
+			want:  "https://wallhaven.cc/api/v1/search?order=desc&sorting=hot",
+		},
+		{
+			name:  "Main Category - Random",
+			input: "https://wallhaven.cc/random?seed=123",
+			want:  "https://wallhaven.cc/api/v1/search?order=desc&sorting=random",
+		},
+		{
+			name:  "Main Category - Random (No Seed)",
+			input: "https://wallhaven.cc/random",
+			want:  "https://wallhaven.cc/api/v1/search?order=desc&sorting=random",
+		},
+
+		// Standard Search
 		{
 			name:  "Search URL With Query",
 			input: "https://wallhaven.cc/search?q=anime",
