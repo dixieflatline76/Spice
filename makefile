@@ -57,6 +57,13 @@ build-darwin-arm64:
 	@echo "Creating styled DMG..."
 	mkdir -p dist
 
+	# Copy the separate Safari Extension App to dist if it exists (built by CI)
+	# We expect "Spice Wallpaper Manager Extension.app" to be in the root or build dir
+	if [ -d "Spice Wallpaper Manager Extension.app" ]; then \
+		cp -R "Spice Wallpaper Manager Extension.app" dist/; \
+		codesign --force --deep --options=runtime --sign "${SIGNING_IDENTITY}" --timestamp "dist/Spice Wallpaper Manager Extension.app"; \
+	fi
+
 	create-dmg \
 		--volname "Spice Installer" \
 		--background "images/Spice-dmg-bg.png" \
@@ -66,8 +73,10 @@ build-darwin-arm64:
 		--icon "Spice.app" 175 200 \
 		--hide-extension "Spice.app" \
 		--app-drop-link 465 200 \
+		--icon "Spice Wallpaper Manager Extension.app" 175 350 \
 		"dist/Spice-$(VERSION)-arm64.dmg" \
-		"Spice.app/"
+		"Spice.app/" \
+		"dist/Spice Wallpaper Manager Extension.app" || true # Allow fail if ext missing locally
 
 	@echo "Moving final Spice.app to ./bin/..."
 	rm -rf ./bin/Spice.app && mv Spice.app ./bin/

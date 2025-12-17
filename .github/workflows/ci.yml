@@ -104,11 +104,16 @@ jobs:
           # Pass defines using native PowerShell variables from previous step
           options: /Q /DMyAppPlatform=amd64
 
+      - name: Pack Extensions (Chrome/Firefox)
+        run: make pack-extension
+
       - name: Upload build artifact (contains Spice.exe and maybe Spice-Setup-*.exe)
         uses: actions/upload-artifact@v4
         with:
           name: spice-release-build
-          path: bin/ # Uploads contents of bin directory
+          path: |
+            bin/
+            dist/ # Includes extension zips
 
   release:
     runs-on: windows-latest
@@ -150,10 +155,14 @@ jobs:
       shell: cmd
 
     - name: Calculate checksums and create .sha256 files
-      # This step assumes both files exist in the current directory after download
+      # This step assumes files exist in the current directory after download (bin/ content flattened unless path specified)
+      # Action v4 preserves directory structure if multiple paths uploaded? No, verifies below.
+      # If bin/ and dist/ are side-by-side in artifact, download-artifact puts them in workspace.
       run: |
-        certutil -hashfile "${{ steps.filenames.outputs.EXE_NAME }}" SHA256 | findstr /V /B /C:"CertUtil" /C:"SHA256" > "${{ steps.filenames.outputs.EXE_NAME }}.sha256"
-        certutil -hashfile "${{ steps.filenames.outputs.SETUP_NAME }}" SHA256 | findstr /V /B /C:"CertUtil" /C:"SHA256" > "${{ steps.filenames.outputs.SETUP_NAME }}.sha256"
+        certutil -hashfile "bin/${{ steps.filenames.outputs.EXE_NAME }}" SHA256 | findstr /V /B /C:"CertUtil" /C:"SHA256" > "bin/${{ steps.filenames.outputs.EXE_NAME }}.sha256"
+        certutil -hashfile "bin/${{ steps.filenames.outputs.SETUP_NAME }}" SHA256 | findstr /V /B /C:"CertUtil" /C:"SHA256" > "bin/${{ steps.filenames.outputs.SETUP_NAME }}.sha256"
+        certutil -hashfile "dist/spice-extension-chrome.zip" SHA256 | findstr /V /B /C:"CertUtil" /C:"SHA256" > "dist/spice-extension-chrome.zip.sha256"
+        certutil -hashfile "dist/spice-extension-firefox.zip" SHA256 | findstr /V /B /C:"CertUtil" /C:"SHA256" > "dist/spice-extension-firefox.zip.sha256"
       shell: cmd # Use cmd for certutil and findstr piping
 
     - name: Sign executables with Azure Trusted Signing
@@ -165,7 +174,7 @@ jobs:
         endpoint: https://weu.codesigning.azure.net/
         trusted-signing-account-name: SpiceOSS
         certificate-profile-name: Spice
-        files-folder: ${{ github.workspace }} # Sign files in the root workspace
+        files-folder: ${{ github.workspace }}/bin # Sign files in bin
         # Sign both the raw exe and the setup exe using the step outputs
         files-folder-filter: "${{ steps.filenames.outputs.EXE_NAME }},${{ steps.filenames.outputs.SETUP_NAME }}"
         file-digest: SHA256
@@ -182,10 +191,14 @@ jobs:
       with:
         # List the files to upload using the dynamic names from step outputs
         files: |
-          ${{ steps.filenames.outputs.EXE_NAME }}
-          ${{ steps.filenames.outputs.EXE_NAME }}.sha256
-          ${{ steps.filenames.outputs.SETUP_NAME }}
-          ${{ steps.filenames.outputs.SETUP_NAME }}.sha256
+          bin/${{ steps.filenames.outputs.EXE_NAME }}
+          bin/${{ steps.filenames.outputs.EXE_NAME }}.sha256
+          bin/${{ steps.filenames.outputs.SETUP_NAME }}
+          bin/${{ steps.filenames.outputs.SETUP_NAME }}.sha256
+          dist/spice-extension-chrome.zip
+          dist/spice-extension-chrome.zip.sha256
+          dist/spice-extension-firefox.zip
+          dist/spice-extension-firefox.zip.sha256
 
   build-and-release-mac:
     runs-on: macos-latest
@@ -229,7 +242,24 @@ jobs:
           SIGNING_IDENTITY: "Developer ID Application: Karl Kwong (T96W95GY4U)"
           UNSPLASH_CLIENT_ID: ${{ secrets.UNSPLASH_CLIENT_ID }}
           UNSPLASH_CLIENT_SECRET: ${{ secrets.UNSPLASH_CLIENT_SECRET }}
-        run: make build-darwin-arm64
+        run: |
+          # Build Safari Extension Wrapper (Direct Build)
+          # We use 'build' instead of 'archive' to avoid exportOptions.plist complexity for now.
+          # The Makefile step will handle the final codesign verification/re-sign.
+          xcodebuild -project "Spice Wallpaper Manager Extension/Spice Wallpaper Manager Extension.xcodeproj" \
+            -scheme "Spice Wallpaper Manager Extension (macOS)" \
+            -configuration Release \
+            -derivedDataPath "build" \
+            CODE_SIGN_IDENTITY="${SIGNING_IDENTITY}" \
+            CODE_SIGN_STYLE="Manual" \
+            build
+
+          # Copy the built app to root so Makefile finds it
+          # Expected location: build/Build/Products/Release/Spice Wallpaper Manager Extension.app
+          cp -R "build/Build/Products/Release/Spice Wallpaper Manager Extension.app" .
+
+          # Now build the main app
+          make build-darwin-arm64
         
       - name: Notarize macOS App
         run: make notarize-mac-arm64
