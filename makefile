@@ -8,6 +8,9 @@ LDFLAGS_COMMON := -X main.version=$(VERSION) -X github.com/dixieflatline76/Spice
 sync-extension:
 	go run cmd/util/sync_regex/main.go
 
+pack-extension:
+	go run cmd/util/pack_extension/main.go
+
 # --- Build targets ---
 build-win-amd64:
 	set GOOS=windows&& set GOARCH=amd64&& go build -tags release -o bin/Spice.exe -ldflags "-H=windowsgui $(LDFLAGS_COMMON)" ./cmd/spice
