@@ -181,24 +181,21 @@ jobs:
         timestamp-rfc3161: http://timestamp.acs.microsoft.com
         timestamp-digest: SHA256
 
-    - name: Upload binaries to GitHub Release
-      uses: softprops/action-gh-release@v2
+    - name: Upload binaries to GitHub Release (CLI)
       env:
-        # Use the default GITHUB_TOKEN unless MY_GITHUB_TOKEN is specifically needed
-        # GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }} # Keep if you need specific permissions
-      # No need for explicit 'if' here, job level 'if' handles it
-      with:
-        # List the files to upload using the dynamic names from step outputs
-        files: |
-          bin/${{ steps.filenames.outputs.EXE_NAME }}
-          bin/${{ steps.filenames.outputs.EXE_NAME }}.sha256
-          bin/${{ steps.filenames.outputs.SETUP_NAME }}
-          bin/${{ steps.filenames.outputs.SETUP_NAME }}.sha256
-          dist/spice-extension-chrome.zip
-          dist/spice-extension-chrome.zip.sha256
-          dist/spice-extension-firefox.zip
-          dist/spice-extension-firefox.zip.sha256
+        GH_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
+      run: |
+        gh release upload ${{ github.event.release.tag_name }} `
+          bin/${{ steps.filenames.outputs.EXE_NAME }} `
+          bin/${{ steps.filenames.outputs.EXE_NAME }}.sha256 `
+          bin/${{ steps.filenames.outputs.SETUP_NAME }} `
+          bin/${{ steps.filenames.outputs.SETUP_NAME }}.sha256 `
+          dist/spice-extension-chrome.zip `
+          dist/spice-extension-chrome.zip.sha256 `
+          dist/spice-extension-firefox.zip `
+          dist/spice-extension-firefox.zip.sha256 `
+          --clobber
+      shell: pwsh
 
   build-and-release-mac:
     runs-on: macos-latest
