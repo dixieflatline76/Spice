@@ -1,3 +1,8 @@
+---
+layout: default
+title: Architecture
+---
+
 # Spice Architecture Documentation (Wallpaper Plugin)
 
 > **Status**: Current as of v1.1.1
@@ -216,3 +221,31 @@ To maintain responsiveness under load, the following optimizations are employed:
 
 1. **O(1) Image Store**: The store uses a secondary `idSet map[string]bool` to perform existence checks in constant time (45ns) rather than linear scans (470ns+), ensuring that the Writer Loop never lags even with thousands of images.
 2. **Synchronous Race Prevention**: The Controller synchronously anticipates background work (setting `isDownloading = true` under lock) *before* spawning goroutines. This prevents "job storms" and CPU saturation during rapid UI interactions.
+
+<!-- Mermaid JS Handling -->
+<script>
+  document.addEventListener("DOMContentLoaded", function() {
+    // Find all code blocks with 'language-mermaid'
+    const codeBlocks = document.querySelectorAll('code.language-mermaid');
+    codeBlocks.forEach(code => {
+      // Jekyll usually renders: <div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>...</code></pre></div></div>
+      // We need to allow the text to be processed by Mermaid.
+      // Easiest is to create a new div.mermaid and replace the pre/code block.
+      
+      const div = document.createElement('div');
+      div.className = 'mermaid';
+      div.textContent = code.textContent;
+      
+      // Find the closest container that we want to replace (usually the pre or the div wrapper)
+      const wrapper = code.closest('pre');
+      if (wrapper) {
+        wrapper.replaceWith(div);
+      }
+    });
+  });
+</script>
+
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+  mermaid.initialize({ startOnLoad: true, theme: 'default' });
+</script>
