@@ -5,9 +5,11 @@ package wallpaper
 
 import (
 	"syscall"
+	"time"
 	"unsafe"
 
 	"github.com/dixieflatline76/Spice/pkg/sysinfo"
+	"github.com/dixieflatline76/Spice/util/log"
 )
 
 var (
@@ -40,12 +42,16 @@ func (w *windowsOS) setWallpaper(imagePath string) error {
 		return err
 	}
 
+	log.Debugf("Windows: Setting wallpaper to %s...", imagePath)
+	start := time.Now()
 	ret, _, err := systemParametersInfo.Call(
 		uintptr(SPISetDeskWallpaper),
 		uintptr(0),
 		uintptr(unsafe.Pointer(imagePathUTF16)),
-		uintptr(SPIFUpdateIniFile|SPIFSendChange),
+		uintptr(SPIFUpdateIniFile), // Removed SPIFSendChange to prevent blocking on hung apps
 	)
+	duration := time.Since(start)
+	log.Debugf("Windows: SystemParametersInfoW took %v", duration)
 	if ret == 0 {
 		return err
 	}

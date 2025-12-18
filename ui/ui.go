@@ -709,10 +709,8 @@ func (sa *SpiceApp) RefreshTrayMenu() {
 	// Use fyne.Do to ensure UI updates happen on the main thread
 	fyne.Do(func() {
 		sa.trayMenu.Refresh()
-		utilLog.Debugf("[Timing] RefreshTrayMenu: Calling SetSystemTrayMenu")
 		if desk, ok := sa.App.(desktop.App); ok {
 			desk.SetSystemTrayMenu(sa.trayMenu)
 		}
-		utilLog.Debugf("[Timing] RefreshTrayMenu: Finished SetSystemTrayMenu")
 	})
 }

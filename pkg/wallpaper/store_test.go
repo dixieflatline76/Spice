@@ -358,9 +358,10 @@ func TestStoreSync_StrictPruning(t *testing.T) {
 
 	// Verify File Deletion
 	// img2 file should be deleted (Sync does it inline/deep delete)
-	_, err := os.Stat(img2.FilePath)
-	assert.Error(t, err)
-	assert.True(t, os.IsNotExist(err))
+	assert.Eventually(t, func() bool {
+		_, err := os.Stat(img2.FilePath)
+		return os.IsNotExist(err)
+	}, 2*time.Second, 100*time.Millisecond, "File should be deleted asynchronously")
 }
 
 // TestStore_LoadAvoidSet_And_Clear verifies that:
