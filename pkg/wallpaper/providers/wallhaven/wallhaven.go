@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	_ "embed"
 
@@ -276,7 +277,9 @@ func (p *WallhavenProvider) EnrichImage(ctx context.Context, img provider.Image)
 	}
 	req.Header.Set("User-Agent", "SpiceWallpaperManager/v0.1.0")
 
+	start := time.Now()
 	resp, err := p.httpClient.Do(req)
+	log.Debugf("EnrichImage HTTP Request took %v", time.Since(start))
 	if err != nil {
 		return img, fmt.Errorf("failed to fetch enrichment data: %w", err)
 	}

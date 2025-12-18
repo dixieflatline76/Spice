@@ -86,6 +86,8 @@ func (s *ImageStore) Update(img provider.Image) bool {
 			s.images[i] = img
 			if s.asyncSave {
 				s.scheduleSaveLocked()
+			} else {
+				s.saveCacheInternalOriginalLocked()
 			}
 			return true
 		}
@@ -201,49 +203,56 @@ func (s *ImageStore) MarkSeen(filePath string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.seen[filePath] = true
-	log.Printf("[DEBUG-DUMP] Store: MarkSeen called for '%s'. Total Seen: %d", filePath, len(s.seen))
+
 }
 
 // Remove deletes an image by ID (or index) from the store and blocklists it.
 // Returns true if found and removed.
 // It takes a Write Lock.
+// Remove deletes an image by ID (or index) from the store and blocklists it.
+// Returns true if found and removed.
+// It takes a Write Lock for memory updates, then releases it for I/O.
 func (s *ImageStore) Remove(id string) (provider.Image, bool) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
+	// 1. Check & Memory Update
 	if !s.idSet[id] {
+		s.mu.Unlock()
 		return provider.Image{}, false
 	}
 
+	var removedImg provider.Image
+	found := false
+
 	for i, img := range s.images {
 		if img.ID == id {
-			// Found
+			removedImg = img
+			found = true
+
+			// Update Memory State
 			s.avoidSet[id] = true
 			delete(s.seen, img.FilePath)
 			delete(s.idSet, id)
-
-			// Remove from slice
 			s.images = append(s.images[:i], s.images[i+1:]...)
-
-			// Persistent Cleanup
-			if s.fm != nil {
-				// Deep delete files
-				if err := s.fm.DeepDelete(id); err != nil {
-					log.Printf("Store: Failed to deep delete image %s: %v", id, err)
-				}
-				// Save metadata change
-				// Save metadata change
-				if s.asyncSave {
-					go s.saveCacheInternal()
-				} else {
-					s.saveCacheInternalOriginalLocked()
-				}
-			}
-
-			return img, true
+			break
 		}
 	}
-	return provider.Image{}, false
+	s.mu.Unlock() // Release lock immediately after memory update
+
+	if !found {
+		return provider.Image{}, false
+	}
+
+	// 2. Disk I/O (Outside Lock)
+	if s.fm != nil {
+		if err := s.fm.DeepDelete(id); err != nil {
+			log.Printf("Store: Failed to deep delete image %s: %v", id, err)
+		}
+		// Save changes
+		s.SaveCache()
+	}
+
+	return removedImg, true
 }
 
 // SeenCount returns the number of seen images.
@@ -284,43 +293,51 @@ func (s *ImageStore) Wipe() {
 
 // RemoveByQueryID removes all images associated with the given queryID.
 // It deletes their files and removes them from the memory store.
+// RemoveByQueryID removes all images associated with the given queryID.
+// It deletes their files and removes them from the memory store.
 func (s *ImageStore) RemoveByQueryID(queryID string) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	newImages := make([]provider.Image, 0, len(s.images))
 	idsToRemove := []string{}
 
+	// 1. Memory Filter
 	for _, img := range s.images {
 		if img.SourceQueryID == queryID {
 			idsToRemove = append(idsToRemove, img.ID)
+			delete(s.idSet, img.ID)
+			delete(s.seen, img.ID) // Bug fix: previously using ID for seen map? Wait, seen map uses FilePath usually.
+			// Let's check MarkSeen: s.seen[filePath] = true.
+			// So verify if we should delete by ID or FilePath.
+			// Ideally we should delete by FilePath.
+			// In original code: delete(s.seen, id). That looks like a bug in original code too?
+			// Let's check original.
+			// Original Line 306: delete(s.seen, id).
+			// Yes, seems like a bug. MarkSeen uses FilePath.
+			// I should probably fix it to delete(s.seen, img.FilePath).
+			delete(s.seen, img.FilePath)
 		} else {
 			newImages = append(newImages, img)
 		}
 	}
-
-	// Update store
 	s.images = newImages
-	for _, id := range idsToRemove {
-		delete(s.idSet, id)
-		delete(s.seen, id)
-		// We do NOT remove from AvoidSet, as blocks should persist unless explicitly cleared.
-	}
+	s.mu.Unlock() // Release Lock
 
-	// Persist changes
-	// We always want to save if we remove something.
-	// But we are holding lock.
-	s.saveCacheInternalOriginalLocked()
+	// 2. Disk I/O (Outside Lock)
+	if len(idsToRemove) > 0 {
+		// Save first to persist the removal from list
+		s.SaveCache()
 
-	// Trigger deletions in background
-	if s.fm != nil && len(idsToRemove) > 0 {
-		go func(ids []string) {
-			for _, id := range ids {
-				if err := s.fm.DeepDelete(id); err != nil {
-					log.Printf("Store: Failed to delete image %s: %v", id, err)
+		// Then delete files
+		if s.fm != nil {
+			go func(ids []string) {
+				for _, id := range ids {
+					if err := s.fm.DeepDelete(id); err != nil {
+						log.Printf("Store: Failed to delete image %s: %v", id, err)
+					}
 				}
-			}
-		}(idsToRemove)
+			}(idsToRemove)
+		}
 	}
 }
 
@@ -390,107 +407,130 @@ func (s *ImageStore) SaveCache() {
 // It performs Self-Healing and Grooming.
 // limit: Max number of images to keep. 0 = means MIN limit (50).
 // activeQueryIDs: Map of query IDs that are allowed. If nil, filtering is skipped.
+// Sync validates the in-memory store against disk and config.
+// Optimized: Performs I/O (os.Stat) without holding main lock.
 func (s *ImageStore) Sync(limit int, targetFlags map[string]bool, activeQueryIDs map[string]bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	if s.fm == nil {
 		return
 	}
 
 	log.Printf("Store: Syncing... (Limit: %d)", limit)
-
 	if limit <= 0 {
-		limit = 50 // Enforce minimum
+		limit = 50
 	}
 
-	var validImages []provider.Image
+	// 1. Snapshot for Validation (Read Lock)
+	s.mu.RLock()
+	candidates := make([]provider.Image, len(s.images))
+	copy(candidates, s.images)
+	s.mu.RUnlock()
 
-	// 1. Validation Logic
-	for _, img := range s.images {
-		// Strict Cache Sync: Prune images from inactive queries
+	// 2. Validation (No Lock - Heavy I/O)
+	// We identify IDs that fail validation.
+	// badIDs maps ID to Action: true=Delete(Deep), false=Forget(MemoryOnly)
+	badIDs := make(map[string]bool)
+
+	for _, img := range candidates {
+		// A. Strict Cache Sync (Config Check - Fast)
 		if activeQueryIDs != nil && img.SourceQueryID != "" && !activeQueryIDs[img.SourceQueryID] {
 			log.Printf("Sync: Strict Cache Pruning. Removing image %s from inactive query %s.", img.ID, img.SourceQueryID)
-			// Deep Delete (Async not needed, we are in maintenance mode)
-			// But for safety, lets queue it or do it here. Sync can be slow.
-			// Let's queue strict deletes alongside grooming or do it now.
-			// Doing it now ensures immediate compliance.
-			if err := s.fm.DeepDelete(img.ID); err != nil {
-				log.Printf("Sync: Failed to prune %s: %v", img.ID, err)
-			}
+			badIDs[img.ID] = true
 			continue
 		}
 
-		// A. Check Master Existence
-		masterPath := s.fm.GetMasterPath(img.ID, ".jpg") // Try .jpg default
+		// B. Master Existence (Disk Check - Slow)
+		// Try .jpg
+		masterPath := s.fm.GetMasterPath(img.ID, ".jpg")
 		if _, err := os.Stat(masterPath); os.IsNotExist(err) {
+			// Try .png
 			masterPath = s.fm.GetMasterPath(img.ID, ".png")
 			if _, err := os.Stat(masterPath); os.IsNotExist(err) {
-				// Master missing!
 				log.Printf("Sync: Master missing for %s. Pruning.", img.ID)
-				if err := s.fm.DeepDelete(img.ID); err != nil {
-					log.Printf("Sync: Failed to deep delete %s: %v", img.ID, err)
-				} // Cleanup leftovers
+				badIDs[img.ID] = true
 				continue
 			}
 		}
 
-		// B. Check Flags (Versioning)
-		match := true
+		// C. Flag Mismatch (Logic Check - Fast)
 		if len(targetFlags) > 0 {
+			match := true
 			if len(img.ProcessingFlags) != len(targetFlags) {
 				match = false
-				log.Printf("[DEBUG-DUMP] Flag Mismatch (Len): Img=%d, Target=%d", len(img.ProcessingFlags), len(targetFlags))
 			} else {
 				for k, v := range targetFlags {
 					if img.ProcessingFlags[k] != v {
 						match = false
-						log.Printf("[DEBUG-DUMP] Flag Mismatch (Key: %s): Img=%v, Target=%v", k, img.ProcessingFlags[k], v)
 						break
 					}
 				}
 			}
+			if !match {
+				log.Printf("[DEBUG-DUMP] Sync: Config mismatch for %s. Pruning.", img.ID)
+				badIDs[img.ID] = false // Forget Only! Keep Master for reprocessing.
+			}
 		}
-
-		if !match {
-			log.Printf("[DEBUG-DUMP] Sync: Config mismatch for %s. Pruning to trigger cleanup/reprocess.", img.ID)
-			continue
-		}
-
-		validImages = append(validImages, img)
 	}
 
-	s.images = validImages
-	log.Printf("[DEBUG-DUMP] Store Sync: Final Valid Images Count: %d. (Started with: %d)", len(s.images), len(s.idSet))
+	// 3. Update & Groom (Write Lock)
+	s.mu.Lock()
+	var finalImages []provider.Image
+	var idsToDelete []string
 
-	// 2. Grooming Logic (FIFO)
-	if len(s.images) > limit {
-		excess := len(s.images) - limit
+	// Filter out bad IDs
+	for _, img := range s.images {
+		// New Check: make sure it hasn't been removed by concurrent Remove()
+		// And check if it was marked bad by us.
+		if deleteFile, shouldRemove := badIDs[img.ID]; shouldRemove {
+			if deleteFile {
+				idsToDelete = append(idsToDelete, img.ID)
+			}
+			// Both actions remove from Memory Store
+			delete(s.idSet, img.ID)
+		} else {
+			finalImages = append(finalImages, img)
+		}
+	}
+
+	// Grooming (FIFO - remove excess from start)
+	if len(finalImages) > limit {
+		excess := len(finalImages) - limit
 		log.Printf("Store: Grooming %d excess images.", excess)
 
-		// Assuming appended = newer. Remove from start (Oldest).
-		// Need to delete files for these excess images.
-		toRemove := s.images[:excess]
-		s.images = s.images[excess:]
+		groomingCandidates := finalImages[:excess]
+		finalImages = finalImages[excess:]
 
-		go func(list []provider.Image) {
-			for _, img := range list {
-				// Pacer for low priority (Nightly Groom)
-				time.Sleep(100 * time.Millisecond)
-				if err := s.fm.DeepDelete(img.ID); err != nil {
-					log.Printf("Store: Failed to deep delete (grooming) %s: %v", img.ID, err)
+		for _, img := range groomingCandidates {
+			idsToDelete = append(idsToDelete, img.ID)
+			delete(s.idSet, img.ID)
+		}
+	}
+
+	s.images = finalImages
+
+	// Rebuild IDSet? We updated it incrementally above.
+	// But let's verify consistency if needed.
+	// The incremental delete(s.idSet, ...) is correct only if we processed ALL s.images.
+	// We did.
+
+	log.Printf("[DEBUG-DUMP] Store Sync: Final Valid Images Count: %d. (Deleted: %d)", len(s.images), len(idsToDelete))
+	s.mu.Unlock()
+
+	// 4. Batch Delete Files (No Lock - Heavy I/O)
+	if len(idsToDelete) > 0 {
+		go func(ids []string) {
+			for _, id := range ids {
+				if err := s.fm.DeepDelete(id); err != nil {
+					log.Printf("Store: Failed to deep delete %s: %v", id, err)
 				}
 			}
-		}(toRemove)
-	}
+		}(idsToDelete)
 
-	// Rebuild Map
-	s.idSet = make(map[string]bool)
-	for _, img := range s.images {
-		s.idSet[img.ID] = true
+		// Save the Clean State once
+		s.SaveCache()
+	} else if len(badIDs) > 0 {
+		// Even if only "Forget" happened, we changed the store logic, so save.
+		s.SaveCache()
 	}
-
-	s.saveCacheInternalOriginalLocked() // Save the clean state
 }
 
 // GetKnownIDs returns a set of all known image IDs.
@@ -541,23 +581,4 @@ func (s *ImageStore) saveCacheInternalOriginalLocked() {
 	if err := os.Rename(tmp, s.cachePath); err != nil {
 		log.Printf("Store: Failed to save cache: %v", err)
 	}
-}
-
-// DumpState prints a detailed dump of the store's internal state for debugging.
-func (s *ImageStore) DumpState() {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	log.Printf("=== STORE STATE DUMP ===")
-	log.Printf("Total Images: %d", len(s.images))
-	for i, img := range s.images {
-		seen := s.seen[img.FilePath]
-		log.Printf("  [%d] ID: %s | Source: %s | Seen: %v | Path: %s", i, img.ID, img.SourceQueryID, seen, img.FilePath)
-	}
-	log.Printf("Total Seen Entries: %d", len(s.seen))
-	log.Printf("Seen Map Dump:")
-	for k := range s.seen {
-		log.Printf("  - %s", k)
-	}
-	log.Printf("========================")
 }

@@ -197,6 +197,10 @@ func (wp *Plugin) Init(manager ui.PluginManager) {
 	cachePath := filepath.Join(downloadsPath, "image_cache_map.json")
 	wp.store.SetFileManager(wp.fm, cachePath)
 
+	// Enable Async Persistence to debounce disk writes during batch downloads
+	wp.store.SetAsyncSave(true)
+	wp.store.SetDebounceDuration(1 * time.Second)
+
 	// Inject config into smartImageProcessor
 	if sip, ok := wp.imgProcessor.(*smartImageProcessor); ok {
 		sip.config = wp.cfg
@@ -208,6 +212,7 @@ func (wp *Plugin) Init(manager ui.PluginManager) {
 
 	log.Debugf("Wallpaper Plugin Initialized. Config: FaceBoostEnabled=%v, SmartFit=%v", wp.cfg.GetFaceBoostEnabled(), wp.cfg.GetSmartFit())
 
+	// Start the action worker and enrichment worker
 	// Start the action worker and enrichment worker
 	go wp.actionWorker()
 	go wp.startEnrichmentWorker()
@@ -484,7 +489,8 @@ func (wp *Plugin) applyWallpaper(img provider.Image) {
 		return
 	}
 
-	log.Debugf("Setting wallpaper to: %s", img.FilePath)
+	log.Debugf("Perf: applyWallpaper calling OS.setWallpaper...")
+	osStart := time.Now()
 	if err := wp.os.setWallpaper(img.FilePath); err != nil {
 		log.Printf("failed to set wallpaper: %v", err)
 		// Rollback UI and state to previous image
@@ -494,6 +500,7 @@ func (wp *Plugin) applyWallpaper(img provider.Image) {
 		}
 		return
 	}
+	log.Debugf("Perf: OS.setWallpaper return took %v", time.Since(osStart))
 	log.Debugf("Wallpaper set successfully.")
 
 	// Threshold logic: If we have seen > 80% of local images (approximation), fetch next page.
@@ -501,14 +508,10 @@ func (wp *Plugin) applyWallpaper(img provider.Image) {
 	totalCount := wp.store.Count()
 
 	if totalCount == 0 {
-		log.Printf("[DEBUG-DUMP] Total count is 0, skipping pagination check.")
 		return
 	}
 
 	threshold := int(math.Round(PrcntSeenTillDownload * float64(totalCount)))
-
-	log.Printf("[DEBUG-DUMP] Pagination Check: Seen=%d, Total=%d, MinSeen=%d, Threshold=%d. (Need: Seen > MinSeen && Seen >= Threshold)",
-		seenCount, totalCount, MinSeenImagesForDownload, threshold)
 
 	// Pagination Logic:
 	// User Request: "retrieve the next page once the user has seen 70% of the page's images"
@@ -569,7 +572,7 @@ func (wp *Plugin) applyWallpaper(img provider.Image) {
 
 func (wp *Plugin) setNextWallpaper() {
 	// DEBUG: Dump state to find logic disconnect
-	wp.store.DumpState()
+	// wp.store.DumpState()
 
 	count := wp.store.Count()
 	if count == 0 {
@@ -582,15 +585,15 @@ func (wp *Plugin) setNextWallpaper() {
 	if wp.shuffleImageFlag.Value() {
 		// Rebuild shuffle order if needed
 		if len(wp.shuffleOrder) != count || wp.randomPos >= len(wp.shuffleOrder) {
-			log.Printf("[DEBUG-DUMP] Rebuilding Shuffle Order. Count: %d, RandomPos: %d", count, wp.randomPos)
+			log.Debugf("Rebuilding Shuffle Order. Count: %d, RandomPos: %d", count, wp.randomPos)
 			wp.rebuildShuffleOrder(count)
 		}
 		newIndex = wp.shuffleOrder[wp.randomPos]
-		log.Printf("[DEBUG-DUMP] Shuffle Selection: Index %d from Order[%d] (Order: %v)", newIndex, wp.randomPos, wp.shuffleOrder)
+		log.Debugf("Shuffle Selection: Index %d from Order[%d] (Order: %v)", newIndex, wp.randomPos, wp.shuffleOrder)
 		wp.randomPos++
 	} else {
 		newIndex = (wp.currentIndex + 1) % count
-		log.Printf("[DEBUG-DUMP] Sequential Selection: Index %d (Current: %d, Count: %d)", newIndex, wp.currentIndex, count)
+		log.Debugf("Sequential Selection: Index %d (Current: %d, Count: %d)", newIndex, wp.currentIndex, count)
 	}
 
 	img, ok := wp.store.Get(newIndex)
@@ -602,7 +605,10 @@ func (wp *Plugin) setNextWallpaper() {
 	wp.currentIndex = newIndex
 	wp.history = append(wp.history, newIndex)
 
+	log.Debugf("Perf: setNextWallpaper starting applyWallpaper for %s (Provider: %s)", img.ID, img.Provider)
+	start := time.Now()
 	wp.applyWallpaper(img)
+	log.Debugf("Perf: applyWallpaper took %v", time.Since(start))
 }
 
 // GetOS returns the underlying OS interface.

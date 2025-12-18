@@ -122,7 +122,7 @@ func GetConfig(p fyne.Preferences) *Config {
 		// Load config from file
 		if err := cfgInstance.loadFromPrefs(); err != nil {
 			// Handle error, e.g., log, use defaults
-			fmt.Println("Error loading config:", err)
+			log.Printf("Error loading config: %v", err)
 		}
 	})
 	return cfgInstance

@@ -87,4 +87,4 @@ We have big plans for Spice!
 Found a bug or have an idea? Please open an issue on [GitHub](https://github.com/dixieflatline76/Spice/issues).
 
 ---
-<p align="center">MIT License - Copyright (c) 2025 Karl Kwong</p>
+<p align="center"><a href="docs/privacy_policy.md">Privacy Policy</a> | MIT License - Copyright (c) 2025 Karl Kwong</p>

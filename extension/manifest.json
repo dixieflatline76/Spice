@@ -5,7 +5,6 @@
   "description": "Helps you add new image collections to Spice from supported image providers. Adds Spice support for Chrome OS.",
   "permissions": [
     "activeTab",
-    "scripting",
     "storage",
     "alarms"
   ],
