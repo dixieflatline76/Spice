@@ -675,7 +675,7 @@
 					"-framework",
 					SafariServices,
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "com.yourCompany.Spice-Wallpaper-Manager-Extension.Extension";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.dixieflatline76.Spice.Wrapper.Extension";
 				PRODUCT_NAME = "Spice Wallpaper Manager Extension Extension";
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
@@ -705,7 +705,7 @@
 					"-framework",
 					SafariServices,
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "com.yourCompany.Spice-Wallpaper-Manager-Extension.Extension";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.dixieflatline76.Spice.Wrapper.Extension";
 				PRODUCT_NAME = "Spice Wallpaper Manager Extension Extension";
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
@@ -743,7 +743,7 @@
 					"-framework",
 					WebKit,
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "com.yourCompany.Spice-Wallpaper-Manager-Extension";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.dixieflatline76.Spice.Wrapper";
 				PRODUCT_NAME = "Spice Wallpaper Manager Extension";
 				SDKROOT = iphoneos;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -779,7 +779,7 @@
 					"-framework",
 					WebKit,
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "com.yourCompany.Spice-Wallpaper-Manager-Extension";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.dixieflatline76.Spice.Wrapper";
 				PRODUCT_NAME = "Spice Wallpaper Manager Extension";
 				SDKROOT = iphoneos;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -811,7 +811,7 @@
 					"-framework",
 					SafariServices,
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "com.yourCompany.Spice-Wallpaper-Manager-Extension.Extension";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.dixieflatline76.Spice.Wrapper.Extension";
 				PRODUCT_NAME = "Spice Wallpaper Manager Extension Extension";
 				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
@@ -842,7 +842,7 @@
 					"-framework",
 					SafariServices,
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "com.yourCompany.Spice-Wallpaper-Manager-Extension.Extension";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.dixieflatline76.Spice.Wrapper.Extension";
 				PRODUCT_NAME = "Spice Wallpaper Manager Extension Extension";
 				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
@@ -877,7 +877,7 @@
 					"-framework",
 					WebKit,
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "com.yourCompany.Spice-Wallpaper-Manager-Extension";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.dixieflatline76.Spice.Wrapper";
 				PRODUCT_NAME = "Spice Wallpaper Manager Extension";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = macosx;
@@ -912,7 +912,7 @@
 					"-framework",
 					WebKit,
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "com.yourCompany.Spice-Wallpaper-Manager-Extension";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.dixieflatline76.Spice.Wrapper";
 				PRODUCT_NAME = "Spice Wallpaper Manager Extension";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = macosx;
