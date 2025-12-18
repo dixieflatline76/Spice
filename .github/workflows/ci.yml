@@ -194,6 +194,7 @@ jobs:
           dist/spice-extension-chrome.zip.sha256 `
           dist/spice-extension-firefox.zip `
           dist/spice-extension-firefox.zip.sha256 `
+          --repo ${{ github.repository }} `
           --clobber
       shell: pwsh
 
