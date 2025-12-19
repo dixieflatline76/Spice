@@ -64,6 +64,8 @@ build-darwin-arm64:
 	# Copy and Sign Extension in Staging if it exists
 	if [ -d "Spice Wallpaper Manager Extension.app" ]; then \
 		cp -R "Spice Wallpaper Manager Extension.app" dist/dmg-staging/; \
+		echo "Signing Extension Frameworks..."; \
+		codesign --force --options=runtime --sign "${SIGNING_IDENTITY}" --timestamp "dist/dmg-staging/Spice Wallpaper Manager Extension.app/Contents/Frameworks/"*.dylib; \
 		echo "Signing Extension Appex..."; \
 		codesign --force --options=runtime --entitlements "Spice Wallpaper Manager Extension/macOS (Extension)/Spice Wallpaper Manager Extension.entitlements" --sign "${SIGNING_IDENTITY}" --timestamp "dist/dmg-staging/Spice Wallpaper Manager Extension.app/Contents/PlugIns/Spice Wallpaper Manager Extension Extension.appex"; \
 		echo "Signing Extension Wrapper..."; \
