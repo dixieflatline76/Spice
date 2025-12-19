@@ -69,7 +69,8 @@ build-darwin-arm64:
 		echo "Signing Extension Wrapper..."; \
 		codesign --force --options=runtime --entitlements "Spice Wallpaper Manager Extension/macOS (App)/Spice Wallpaper Manager Extension.entitlements" --sign "${SIGNING_IDENTITY}" --timestamp "dist/dmg-staging/Spice Wallpaper Manager Extension.app"; \
 	fi
-
+	
+	rm -f "dist/Spice-$(VERSION)-arm64.dmg"
 	create-dmg \
 		--volname "Spice Installer" \
 		--background "images/Spice-dmg-bg.png" \
