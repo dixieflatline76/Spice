@@ -50,7 +50,7 @@ func acquireLock() (bool, error) {
 func releaseLock() {
 	if lockFile != nil {
 		//Best effort unlock
-		syscall.FcntlFlock(lockFile.Fd(), syscall.F_SETLK, &syscall.Flock_t{
+		_ = syscall.FcntlFlock(lockFile.Fd(), syscall.F_SETLK, &syscall.Flock_t{
 			Type:   syscall.F_UNLCK,
 			Whence: 0,
 			Start:  0,
