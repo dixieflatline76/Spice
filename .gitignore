@@ -4,6 +4,7 @@ dist/
 *.exe
 *.dll
 *.dmg
+*.app
 
 # Go modules
 vendor/
@@ -39,6 +40,9 @@ test_output_*.txt
 cover
 current_coverage_report.txt
 
+# build artifacts
+build/
+*.obj
 
 # Unignore implementation of the mac extension
 !Spice Wallpaper Manager Extension/**

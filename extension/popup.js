@@ -12,19 +12,28 @@ document.addEventListener('DOMContentLoaded', () => {
     noContentDiv.classList.add('hidden');
     errorDiv.classList.add('hidden');
 
-    // Check Backend Connection via Background Script (Instant)
+    // Check Backend Connection via Background Script with Timeout
+    let responseReceived = false;
+    const timeoutMsg = setTimeout(() => {
+        if (!responseReceived) {
+            console.warn("Background script timed out.");
+            showError();
+        }
+    }, 500);
+
     chrome.runtime.sendMessage({ type: "GET_STATUS" }, (response) => {
+        responseReceived = true;
+        clearTimeout(timeoutMsg);
+
         if (chrome.runtime.lastError) {
-            // Background script might be waking up or dead
+            console.error(chrome.runtime.lastError);
             showError();
             return;
         }
 
         if (response && response.connected) {
-            // Backend connected, check for content
             checkSource();
         } else {
-            // Backend disconnected
             showError();
         }
     });
