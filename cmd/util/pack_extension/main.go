@@ -40,7 +40,7 @@ func run() error {
 	fmt.Println("Packing for Firefox...")
 	manifestModifier := func(path string, content []byte) ([]byte, error) {
 		if filepath.Base(path) == "manifest.json" {
-			return injectFirefoxID(content)
+			return adaptManifestForFirefox(content)
 		}
 		return content, nil
 	}
@@ -105,18 +105,29 @@ func zipDirectory(src, dest string, modifier func(path string, content []byte) (
 	})
 }
 
-// injectFirefoxID adds the browser_specific_settings to manifest.json
-func injectFirefoxID(content []byte) ([]byte, error) {
+// adaptManifestForFirefox adds browser_specific_settings and converts
+// background.service_worker to background.scripts for Firefox compatibility.
+func adaptManifestForFirefox(content []byte) ([]byte, error) {
 	var manifest map[string]interface{}
 	if err := json.Unmarshal(content, &manifest); err != nil {
 		return nil, err
 	}
 
+	// 1. Inject Firefox ID
 	manifest["browser_specific_settings"] = map[string]interface{}{
 		"gecko": map[string]interface{}{
 			"id":                 firefoxID,
 			"strict_min_version": "109.0",
 		},
+	}
+
+	// 2. Convert service_worker to scripts (Firefox MV3 compatibility)
+	if bg, ok := manifest["background"].(map[string]interface{}); ok {
+		if sw, ok := bg["service_worker"].(string); ok {
+			delete(bg, "service_worker")
+			bg["scripts"] = []string{sw}
+			manifest["background"] = bg
+		}
 	}
 
 	return json.MarshalIndent(manifest, "", "  ")

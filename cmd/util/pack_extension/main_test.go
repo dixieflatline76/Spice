@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-func TestInjectFirefoxID(t *testing.T) {
+func TestAdaptManifestForFirefox(t *testing.T) {
 	// Input manifest
 	input := `{
   "name": "Test Extension",
@@ -20,9 +20,9 @@ func TestInjectFirefoxID(t *testing.T) {
 }`
 
 	// Execute
-	output, err := injectFirefoxID([]byte(input))
+	output, err := adaptManifestForFirefox([]byte(input))
 	if err != nil {
-		t.Fatalf("injectFirefoxID failed: %v", err)
+		t.Fatalf("adaptManifestForFirefox failed: %v", err)
 	}
 
 	// Parse output to verify structure
@@ -49,6 +49,22 @@ func TestInjectFirefoxID(t *testing.T) {
 
 	if gecko["id"] != firefoxID {
 		t.Errorf("Expected Gecko ID %s, got %v", firefoxID, gecko["id"])
+	}
+
+	// Verify background conversion
+	bg, ok := manifest["background"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("background key missing")
+	}
+	if _, exists := bg["service_worker"]; exists {
+		t.Errorf("service_worker key still exists, should have been removed")
+	}
+	scripts, ok := bg["scripts"].([]interface{})
+	if !ok {
+		t.Fatalf("scripts key missing or not an array")
+	}
+	if len(scripts) != 1 || scripts[0] != "bg.js" {
+		t.Errorf("scripts array incorrect: %v", scripts)
 	}
 }
 
