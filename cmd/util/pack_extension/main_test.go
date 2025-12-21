@@ -51,6 +51,15 @@ func TestAdaptManifestForFirefox(t *testing.T) {
 		t.Errorf("Expected Gecko ID %s, got %v", firefoxID, gecko["id"])
 	}
 
+	// Verify data_collection_permissions
+	dcp, ok := gecko["data_collection_permissions"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("data_collection_permissions not found")
+	}
+	if val, ok := dcp["data_collection"].(bool); !ok || val != false {
+		t.Errorf("data_collection should be false, got %v", dcp["data_collection"])
+	}
+
 	// Verify background conversion
 	bg, ok := manifest["background"].(map[string]interface{})
 	if !ok {

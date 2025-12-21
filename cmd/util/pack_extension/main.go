@@ -120,6 +120,12 @@ func adaptManifestForFirefox(content []byte) ([]byte, error) {
 			"strict_min_version": "109.0",
 		},
 	}
+	// Add data_collection_permissions to gecko settings (Mozilla requirement Nov 2025)
+	if gecko, ok := manifest["browser_specific_settings"].(map[string]interface{})["gecko"].(map[string]interface{}); ok {
+		gecko["data_collection_permissions"] = map[string]interface{}{
+			"data_collection": false,
+		}
+	}
 
 	// 2. Convert service_worker to scripts (Firefox MV3 compatibility)
 	if bg, ok := manifest["background"].(map[string]interface{}); ok {
