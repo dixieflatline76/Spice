@@ -20,7 +20,7 @@ Spice is a minimalist wallpaper manager that brings a continuous stream of delig
 
 ## ✨ Key Features
 
-* **🔗 Browser Companion:** Use our [**Chrome Extension**](https://chromewebstore.google.com/detail/ekodikedjmhnganfcfleabcfohdjkoeb) to instantly add wallpapers from the web to your desktop with a single click. Supports Chrome, Firefox, and Safari with LiveSync technology.
+* **🔗 Browser Companion:** Use our [**Chrome Extension**](https://chromewebstore.google.com/detail/ekodikedjmhnganfcfleabcfohdjkoeb) to instantly add wallpapers from the web to your desktop with a single click. Supports Chrome and Safari with LiveSync technology (Firefox coming soon).
 
 * **� Automated Inspiration:** Spice handles the heavy lifting—fetching, caching, and cycling wallpapers based on your preferences so you always have something new to look at.
 
