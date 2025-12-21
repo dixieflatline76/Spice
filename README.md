@@ -56,15 +56,26 @@ Spice is a minimalist wallpaper manager that brings a continuous stream of delig
 
 Head to the [**Releases Page**](https://github.com/dixieflatline76/Spice/releases/latest) to download the installer for your OS.
 
+### 🌐 Browser Companion Extension
+
+*   **Chrome / Brave / Edge:** [**Install from Chrome Web Store**](https://chromewebstore.google.com/detail/ekodikedjmhnganfcfleabcfohdjkoeb)
+*   **Firefox:** *Coming Soon*
+*   **Safari:** Included in the macOS App.
+
 ### For Windows
 
-1. Download `Spice-Setup-x.y.z-amd64.exe`.
-2. Double-click to install.
+1.  Download `Spice-Setup-x.y.z-amd64.exe`.
+2.  Double-click to install.
+3.  Install the **Browser Companion** from the link above.
 
 ### For macOS (Apple Silicon)
 
-1. Download `Spice-vx.y.z-arm64.dmg`.
-2. Open the `.dmg` and drag **Spice** into your **Applications** folder.
+1.  Download `Spice-vx.y.z-arm64.dmg`.
+2.  Open the `.dmg` and drag **Spice** into your **Applications** folder.
+3.  **Enable the Safari Extension:**
+    *   Open Safari Settings > Extensions.
+    *   Check the box for **Spice Wallpaper Manager**.
+    *   Click "Always Allow on Every Website" to ensure seamless detection.
 
 ## 🚀 Usage
 
