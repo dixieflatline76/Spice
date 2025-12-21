@@ -66,7 +66,7 @@ Head to the [**Releases Page**](https://github.com/dixieflatline76/Spice/release
 
 1.  Download `Spice-Setup-x.y.z-amd64.exe`.
 2.  Double-click to install.
-3.  Find the **Spice Chrome Extension** on the [**Chrome Web Store**](https://chromewebstore.google.com/detail/ekodikedjmhnganfcfleabcfohdjkoeb) and click **Add to Chrome**.
+3.  *(Optional)* Find the **Spice Chrome Extension** on the [**Chrome Web Store**](https://chromewebstore.google.com/detail/ekodikedjmhnganfcfleabcfohdjkoeb) and click **Add to Chrome**.
 
 ### For macOS (Apple Silicon)
 
