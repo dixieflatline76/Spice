@@ -7,6 +7,7 @@
   <a href="https://github.com/dixieflatline76/Spice/actions/workflows/ci.yml"><img src="https://github.com/dixieflatline76/Spice/actions/workflows/ci.yml/badge.svg" alt="Build Status"></a>
   <a href="https://goreportcard.com/report/github.com/dixieflatline76/Spice"><img src="https://goreportcard.com/badge/github.com/dixieflatline76/Spice" alt="Go Report Card"></a>
   <a href="https://github.com/dixieflatline76/Spice/releases/latest"><img src="https://img.shields.io/github/v/release/dixieflatline76/Spice?include_prereleases&color=blue" alt="Latest Release"></a>
+  <a href="https://chromewebstore.google.com/detail/ekodikedjmhnganfcfleabcfohdjkoeb"><img src="https://img.shields.io/chrome-web-store/v/ekodikedjmhnganfcfleabcfohdjkoeb?style=flat&color=blue&label=Chrome%20Web%20Store" alt="Chrome Web Store"></a>
 </p>
 
 Spice is a minimalist wallpaper manager that brings a continuous stream of delight to your screen while not getting in your way. It automatically downloads high-quality wallpapers from your favorite image services like Wallhaven and Unsplash, keeping your desktop fresh and fun.
@@ -18,6 +19,8 @@ Spice is a minimalist wallpaper manager that brings a continuous stream of delig
 </p>
 
 ## ✨ Key Features
+
+* **🔗 Browser Companion:** Use our [**Chrome Extension**](https://chromewebstore.google.com/detail/ekodikedjmhnganfcfleabcfohdjkoeb) to instantly add wallpapers from the web to your desktop with a single click. Supports Chrome, Firefox, and Safari with LiveSync technology.
 
 * **� Automated Inspiration:** Spice handles the heavy lifting—fetching, caching, and cycling wallpapers based on your preferences so you always have something new to look at.
 
