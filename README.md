@@ -66,13 +66,15 @@ Head to the [**Releases Page**](https://github.com/dixieflatline76/Spice/release
 
 1.  Download `Spice-Setup-x.y.z-amd64.exe`.
 2.  Double-click to install.
-3.  Install the **Browser Companion** from the link above.
+3.  Find the **Spice Chrome Extension** on the [**Chrome Web Store**](https://chromewebstore.google.com/detail/ekodikedjmhnganfcfleabcfohdjkoeb) and click **Add to Chrome**.
 
 ### For macOS (Apple Silicon)
 
 1.  Download `Spice-vx.y.z-arm64.dmg`.
-2.  Open the `.dmg` and drag **Spice** into your **Applications** folder.
-3.  **Enable the Safari Extension:**
+2.  Open the `.dmg`.
+3.  Drag **Spice.app** into your **Applications** folder.
+4.  *(Optional)* Drag **Spice Wallpaper Manager Extension.app** into your **Applications** folder if you want Safari support.
+5.  **Enable the Safari Extension:**
     *   Open Safari Settings > Extensions.
     *   Check the box for **Spice Wallpaper Manager**.
     *   Click "Always Allow on Every Website" to ensure seamless detection.
