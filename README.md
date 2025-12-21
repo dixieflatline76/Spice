@@ -91,7 +91,7 @@ Head to the [**Releases Page**](https://github.com/dixieflatline76/Spice/release
 We have big plans for Spice!
 
 * **Multi-Monitor Support:** Bringing Spice to all your screens, not just the main one.
-* **Linux & Intel Mac Support:** Expanding our platform reach.
+* **Linux & Intel Mac Support:** While we currently focus on Apple Silicon (arm64), we plan to expand our official builds to Intel Macs and Linux.
 * **More Providers:** Adding support for other wallpaper sources.
 
 ## ⚠️ Known Limitations
