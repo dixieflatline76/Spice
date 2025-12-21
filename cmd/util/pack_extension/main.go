@@ -117,13 +117,14 @@ func adaptManifestForFirefox(content []byte) ([]byte, error) {
 	manifest["browser_specific_settings"] = map[string]interface{}{
 		"gecko": map[string]interface{}{
 			"id":                 firefoxID,
-			"strict_min_version": "109.0",
+			"strict_min_version": "140.0", // Bumped for data_collection_permissions support
 		},
 	}
 	// Add data_collection_permissions to gecko settings (Mozilla requirement Nov 2025)
 	if gecko, ok := manifest["browser_specific_settings"].(map[string]interface{})["gecko"].(map[string]interface{}); ok {
 		gecko["data_collection_permissions"] = map[string]interface{}{
-			"data_collection": false,
+			// "required": []string{} implies no data collection
+			"required": []string{},
 		}
 	}
 

@@ -56,8 +56,12 @@ func TestAdaptManifestForFirefox(t *testing.T) {
 	if !ok {
 		t.Fatalf("data_collection_permissions not found")
 	}
-	if val, ok := dcp["data_collection"].(bool); !ok || val != false {
-		t.Errorf("data_collection should be false, got %v", dcp["data_collection"])
+	req, ok := dcp["required"].([]interface{})
+	if !ok {
+		t.Errorf("required property missing or not an array")
+	}
+	if len(req) != 0 {
+		t.Errorf("required array should be empty, got %v", req)
 	}
 
 	// Verify background conversion
