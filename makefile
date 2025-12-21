@@ -12,6 +12,24 @@ pack-extension:
 	go run cmd/util/pack_extension/main.go
 
 # --- Build targets ---
+build-extension:
+	@echo "Checking if we should build Safari Extension..."
+ifneq ($(SKIP_EXTENSION_BUILD),)
+	@echo "SKIP_EXTENSION_BUILD is set. Skipping xcodebuild (assuming CI or manual skip)..."
+	@echo "Ensuring artifact exists..."
+	@if [ ! -d "Spice Wallpaper Manager Extension.app" ]; then echo "Error: Extension app not found but build skipped!"; exit 1; fi
+else
+	@echo "Building Safari Extension..."
+	xcodebuild -project "Spice Wallpaper Manager Extension/Spice Wallpaper Manager Extension.xcodeproj" \
+		-scheme "Spice Wallpaper Manager Extension (macOS)" \
+		-configuration Release \
+		-derivedDataPath "build/extension" \
+		clean build
+	@echo "Moving built extension to root for packaging..."
+	rm -rf "Spice Wallpaper Manager Extension.app"
+	cp -R "build/extension/Build/Products/Release/Spice Wallpaper Manager Extension.app" .
+endif
+
 build-win-amd64:
 	set GOOS=windows&& set GOARCH=amd64&& go build -tags release -o bin/Spice.exe -ldflags "-H=windowsgui $(LDFLAGS_COMMON)" ./cmd/spice
 
@@ -27,7 +45,7 @@ build-linux-amd64:
 build-linux-arm64:
 	GOOS=linux GOARCH=arm64 go build -tags release -o bin/Spice-arm64 -ldflags "$(LDFLAGS_COMMON)" ./cmd/spice
 
-build-darwin-amd64:
+build-darwin-amd64: build-extension
 	@echo "Building Go executable for darwin/amd64..."
 	GOOS=darwin GOARCH=amd64 go build -tags release -o bin/Spice-darwin-amd64 -ldflags "$(LDFLAGS_COMMON)" ./cmd/spice
 
@@ -40,7 +58,7 @@ build-darwin-amd64:
 	@echo "Moving final Spice.app to ./bin/..."
 	rm -rf ./bin/Spice.app && mv Spice.app ./bin/
 
-build-darwin-arm64:
+build-darwin-arm64: build-extension
 	@echo "Building Go executable for darwin/arm64..."
 	GOOS=darwin GOARCH=arm64 go build -tags release -o bin/Spice-darwin-arm64 -ldflags "$(LDFLAGS_COMMON)" ./cmd/spice
 
