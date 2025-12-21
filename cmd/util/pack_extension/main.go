@@ -123,8 +123,8 @@ func adaptManifestForFirefox(content []byte) ([]byte, error) {
 	// Add data_collection_permissions to gecko settings (Mozilla requirement Nov 2025)
 	if gecko, ok := manifest["browser_specific_settings"].(map[string]interface{})["gecko"].(map[string]interface{}); ok {
 		gecko["data_collection_permissions"] = map[string]interface{}{
-			// "required": []string{} implies no data collection
-			"required": []string{},
+			// "required": ["none"] implies no data collection
+			"required": []string{"none"},
 		}
 	}
 

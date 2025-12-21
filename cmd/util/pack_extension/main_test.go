@@ -60,8 +60,8 @@ func TestAdaptManifestForFirefox(t *testing.T) {
 	if !ok {
 		t.Errorf("required property missing or not an array")
 	}
-	if len(req) != 0 {
-		t.Errorf("required array should be empty, got %v", req)
+	if len(req) != 1 || req[0] != "none" {
+		t.Errorf("required array should be [\"none\"], got %v", req)
 	}
 
 	// Verify background conversion
