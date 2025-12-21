@@ -42,15 +42,21 @@ function connect() {
 }
 
 function openSocket() {
-    socket = new WebSocket(WS_URL);
+    try {
+        socket = new WebSocket(WS_URL);
+    } catch (e) {
+        console.error("Critical WebSocket Creation Error:", e);
+        // Retry logic will handle this via scheduleReconnect if socket remains null
+        scheduleReconnect();
+        return;
+    }
 
     socket.onopen = () => {
         console.log('Connected to Spice Backend.');
         isConnected = true;
         retryDelay = INITIAL_RETRY_DELAY;
         startKeepAlive();
-        // Reset icon to default (handled by URL check usually, but good safeguard)
-        chrome.action.setIcon({ path: "icon_128.png" });
+        // Do not reset icon here; let checkAndStoreUrl manage it based on current tab state.
     };
 
     socket.onmessage = (event) => {
@@ -59,8 +65,8 @@ function openSocket() {
         handleMessage(msg);
     };
 
-    socket.onclose = () => {
-        if (isConnected) console.log('Disconnected from Spice Backend.');
+    socket.onclose = (event) => {
+        if (isConnected) console.log('Disconnected from Spice Backend. Code:', event.code);
         isConnected = false;
         socket = null;
         stopKeepAlive();
@@ -69,6 +75,7 @@ function openSocket() {
 
     socket.onerror = (err) => {
         // Suppress errors during connection attempts
+        console.error("WebSocket Error:", err);
     };
 }
 

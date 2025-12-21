@@ -257,7 +257,8 @@ jobs:
           cp -R "build/Build/Products/Release/Spice Wallpaper Manager Extension.app" .
 
           # Now build the main app
-          make build-darwin-arm64
+          # We set SKIP_EXTENSION_BUILD=1 because we just built and signed it above
+          SKIP_EXTENSION_BUILD=1 make build-darwin-arm64
         
       - name: Notarize macOS App
         run: make notarize-mac-arm64
