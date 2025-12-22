@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/theme"
 	"github.com/disintegration/imaging"
 	"github.com/dixieflatline76/Spice/asset"
 	"github.com/dixieflatline76/Spice/config"
@@ -67,7 +68,9 @@ type Plugin struct {
 	pauseMenuItem       *fyne.MenuItem
 	providerMenuItem    *fyne.MenuItem
 	artistMenuItem      *fyne.MenuItem
+	favoriteMenuItem    *fyne.MenuItem
 	providers           map[string]provider.ImageProvider
+	favoriter           provider.Favoriter
 	actionChan          chan func()
 
 	// New Components
@@ -184,9 +187,15 @@ func (wp *Plugin) Init(manager ui.PluginManager) {
 	// Initialize providers via Registry
 	wp.providers = make(map[string]provider.ImageProvider)
 	for _, factory := range GetRegisteredProviders() {
-		provider := factory(wp.cfg, wp.httpClient)
-		wp.providers[provider.Name()] = provider
-		log.Debugf("Registered provider: %s", provider.Name())
+		p := factory(wp.cfg, wp.httpClient)
+		wp.providers[p.Name()] = p
+		log.Debugf("Registered provider: %s", p.Name())
+
+		// Detect Favoriter
+		if f, ok := p.(provider.Favoriter); ok {
+			wp.favoriter = f
+			log.Debugf("Detected Favoriter provider: %s", p.Name())
+		}
 	}
 
 	// Initialize FileManager
@@ -462,6 +471,7 @@ func (wp *Plugin) updateTrayMenuUI(img provider.Image) {
 			if attribution == "" {
 				wp.artistMenuItem.Label = "By: Unknown"
 			}
+			wp.updateFavoriteMenuItem()
 			wp.manager.RefreshTrayMenu()
 		}
 	})
@@ -490,7 +500,7 @@ func (wp *Plugin) applyWallpaper(img provider.Image) {
 		return
 	}
 
-	log.Debugf("Perf: applyWallpaper calling OS.setWallpaper...")
+	log.Debugf("Applying Wallpaper: ID=%s, Provider=%s, Path=%s", img.ID, img.Provider, img.FilePath)
 	osStart := time.Now()
 	if err := wp.os.setWallpaper(img.FilePath); err != nil {
 		log.Printf("failed to set wallpaper: %v", err)
@@ -501,8 +511,7 @@ func (wp *Plugin) applyWallpaper(img provider.Image) {
 		}
 		return
 	}
-	log.Debugf("Perf: OS.setWallpaper return took %v", time.Since(osStart))
-	log.Debugf("Wallpaper set successfully.")
+	log.Debugf("Wallpaper set successfully in %v", time.Since(osStart))
 
 	// Threshold logic: If we have seen > 80% of local images (approximation), fetch next page.
 	seenCount := wp.store.SeenCount()
@@ -540,10 +549,10 @@ func (wp *Plugin) applyWallpaper(img provider.Image) {
 			// This handles cases where a page yielded 0 images (due to filtering/429) and we got stuck.
 			// 15 seconds prevents machine-gunning but allows "Next" button spam to eventually work.
 			if time.Since(wp.lastTriggerTime) > 15*time.Second {
-				log.Printf("[DEBUG] Pagination: Loop prevention cooldown expired (%v). Retrying download despite stalled count.", time.Since(wp.lastTriggerTime))
+				log.Debugf("Pagination: Loop prevention cooldown expired (%v). Retrying download despite stalled count.", time.Since(wp.lastTriggerTime))
 				shouldFetch = true
 			} else {
-				log.Printf("[DEBUG] Pagination: Loop prevented. Seen=%d, LastTrigger=%d. Waiting for new views (Cooldown: %v remaining).",
+				log.Debugf("Pagination: Loop prevented. Seen=%d, LastTrigger=%d. Waiting for new views (Cooldown: %v remaining).",
 					seenCount, wp.lastTriggeredSeenCount, (15*time.Second - time.Since(wp.lastTriggerTime)).Round(time.Second))
 				shouldFetch = false
 			}
@@ -558,7 +567,7 @@ func (wp *Plugin) applyWallpaper(img provider.Image) {
 			wp.lastTriggerTime = time.Now()
 			wp.downloadMutex.Unlock()
 
-			log.Printf("Seen %d/%d images (Trigger: %v). Fetching next page...", seenCount, totalCount, shouldFetch)
+			log.Debugf("Seen %d/%d images (Trigger: %v). Fetching next page...", seenCount, totalCount, shouldFetch)
 			wp.currentDownloadPage.Increment()
 			// Trigged async download
 			go wp.downloadAllImages(nil)
@@ -590,7 +599,7 @@ func (wp *Plugin) setNextWallpaper() {
 			wp.rebuildShuffleOrder(count)
 		}
 		newIndex = wp.shuffleOrder[wp.randomPos]
-		log.Debugf("Shuffle Selection: Index %d from Order[%d] (Order: %v)", newIndex, wp.randomPos, wp.shuffleOrder)
+		log.Debugf("Shuffle Selection: Index %d from position %d/%d", newIndex, wp.randomPos, count)
 		wp.randomPos++
 	} else {
 		newIndex = (wp.currentIndex + 1) % count
@@ -606,10 +615,7 @@ func (wp *Plugin) setNextWallpaper() {
 	wp.currentIndex = newIndex
 	wp.history = append(wp.history, newIndex)
 
-	log.Debugf("Perf: setNextWallpaper starting applyWallpaper for %s (Provider: %s)", img.ID, img.Provider)
-	start := time.Now()
 	wp.applyWallpaper(img)
-	log.Debugf("Perf: applyWallpaper took %v", time.Since(start))
 }
 
 // GetOS returns the underlying OS interface.
@@ -1162,4 +1168,117 @@ func (wp *Plugin) GetProviderTitle(providerID string) string {
 		return p.Title()
 	}
 	return providerID
+}
+
+// isFavorited checks if the current image is in the favorites collection.
+func (wp *Plugin) isFavorited() bool {
+	if wp.favoriter == nil {
+		return false
+	}
+	return wp.favoriter.IsFavorited(wp.currentImage)
+}
+
+// ToggleFavorite adds or removes the current image from the favorites collection.
+func (wp *Plugin) ToggleFavorite() {
+	if wp.favoriter == nil || wp.currentImage.FilePath == "" {
+		return
+	}
+
+	if wp.isFavorited() {
+		// Unfavorite
+		wp.currentImage.IsFavorited = false
+		wp.store.Update(wp.currentImage)
+
+		if err := wp.favoriter.RemoveFavorite(wp.currentImage); err != nil {
+			log.Printf("Failed to remove favorite: %v", err)
+			return
+		}
+		wp.manager.NotifyUser("Favorites", "Removed from favorites.")
+
+		// Aggressive Cleanup: Remove from pipeline/queue and cache
+		if wp.pipeline != nil {
+			wp.pipeline.SendCommand(StateCmd{Type: CmdRemove, Payload: wp.currentImage.ID})
+		}
+
+		// Auto-Skip: Move to next wallpaper immediately
+		go wp.SetNextWallpaper()
+	} else {
+		// Favorite
+
+		// Try to enrich image if attribution is missing (e.g. Wallhaven lazily loaded)
+		if wp.currentImage.Attribution == "" && wp.currentImage.Provider != "" {
+			if p, ok := wp.providers[wp.currentImage.Provider]; ok {
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				if enriched, err := p.EnrichImage(ctx, wp.currentImage); err == nil && enriched.Attribution != "" {
+					wp.currentImage.Attribution = enriched.Attribution
+					log.Printf("Enriched image %s before favoriting: %s", wp.currentImage.ID, wp.currentImage.Attribution)
+				}
+				cancel()
+			}
+		}
+
+		if err := wp.favoriter.AddFavorite(wp.currentImage); err != nil {
+			log.Printf("Failed to add favorite: %v", err)
+			return
+		}
+		wp.currentImage.IsFavorited = true
+		wp.currentImage.SourceQueryID = wp.favoriter.GetSourceQueryID()
+		wp.store.Update(wp.currentImage)
+
+		wp.manager.NotifyUser("Favorites", "Added to favorites.")
+
+		// Auto-Activate: If favorites query is not active, enable it
+		favQueryID := wp.favoriter.GetSourceQueryID()
+		if q, exists := wp.cfg.GetQuery(favQueryID); !exists || !q.Active {
+			log.Println("Auto-activating Favorites source...")
+			// We still use AddFavoritesQuery for convenience as it handles the logic
+			// but we could also just call cfg.EnableImageQuery if it exists.
+			if _, err := wp.cfg.AddFavoritesQuery("Favorite Images", favQueryID, true); err != nil {
+				log.Printf("Failed to auto-activate Favorites: %v", err)
+			}
+			wp.RefreshImagesAndPulse()
+		}
+	}
+
+	// Update UI
+	wp.updateFavoriteMenuItem()
+}
+
+// updateFavoriteMenuItem updates the label and icon of the favorite menu item.
+func (wp *Plugin) updateFavoriteMenuItem() {
+	wp.runOnUI(func() {
+		if wp.favoriteMenuItem == nil || wp.favoriter == nil {
+			return
+		}
+
+		// Visibility: Only visible if Favorites query is active
+		favQueryID := wp.favoriter.GetSourceQueryID()
+		q, exists := wp.cfg.GetQuery(favQueryID)
+		if !exists || !q.Active {
+			// If it's currently showing and should be hidden, we need to rebuild the menu
+			// Actually, CreateTrayMenuItems will filter it out if we update it.
+			// Let's ensure CreateTrayMenuItems handles this.
+			wp.favoriteMenuItem = nil // Reset so it's not reused if hidden?
+			// RebuildTrayMenu is called by whoever toggles the query
+			return
+		}
+
+		if wp.isFavorited() {
+			wp.favoriteMenuItem.Label = "Unfavorite Image"
+			if icon, err := wp.cfg.GetAssetManager().GetIcon("unfavorite.png"); err == nil {
+				wp.favoriteMenuItem.Icon = icon
+			} else {
+				wp.favoriteMenuItem.Icon = theme.DeleteIcon() // Fallback
+			}
+		} else {
+			wp.favoriteMenuItem.Label = "Add to Favorites"
+			if icon, err := wp.cfg.GetAssetManager().GetIcon("favorite.png"); err == nil {
+				wp.favoriteMenuItem.Icon = icon
+			} else {
+				wp.favoriteMenuItem.Icon = theme.ContentAddIcon() // Fallback
+			}
+		}
+
+		wp.manager.RefreshTrayMenu()
+	})
 }

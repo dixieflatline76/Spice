@@ -232,6 +232,19 @@ func (c *Config) loadFromPrefs() error {
 		c.SetBool(FaceBoostPrefKey, false)
 	}
 
+	// Data migration: Prune stale Favorites queries
+	// During development we changed from "favorites://default" to "favorites://favorite_images"
+	var finalQueries []ImageQuery
+	for _, q := range c.Queries {
+		if q.Provider == "Favorites" && q.ID != FavoritesQueryID {
+			log.Printf("Migration: Pruning stale Favorites query: %s", q.ID)
+			queriesChanged = true
+			continue
+		}
+		finalQueries = append(finalQueries, q)
+	}
+	c.Queries = finalQueries
+
 	if queriesChanged {
 		// Re-save the config with the new IDs/Settings immediately
 		c.save()
@@ -701,6 +714,29 @@ func (c *Config) SetGooglePhotosTokenExpiry(expiry time.Time) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.SetString(GooglePhotosTokenExpiryPrefKey, expiry.Format(time.RFC3339))
+}
+
+// AddFavoritesQuery adds a new Favorites query to the list.
+func (c *Config) AddFavoritesQuery(description, url string, active bool) (string, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	id := url // For favorites, the URL is the ID (e.g. favorites://favorite_images)
+	if c.isDuplicateID(id) {
+		return id, nil // Just return it if it already exists
+	}
+
+	newQuery := ImageQuery{
+		ID:          id,
+		Description: description,
+		URL:         url,
+		Active:      active,
+		Provider:    "Favorites",
+	}
+
+	c.Queries = append([]ImageQuery{newQuery}, c.Queries...)
+	c.save()
+	return id, nil
 }
 
 // AddGooglePhotosQuery adds a new Google Photos query to the list.

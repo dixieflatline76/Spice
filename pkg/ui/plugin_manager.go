@@ -20,6 +20,7 @@ type PluginManager interface {
 	GetPreferences() fyne.Preferences                                     // Returns the preferences.
 	GetAssetManager() *asset.Manager                                      // Returns the asset manager.
 	RefreshTrayMenu()                                                     // Refreshes the tray menu.
+	RebuildTrayMenu()                                                     // Rebuilds the tray menu from scratch.
 }
 
 // App is the interface that must be implemented by all applications.

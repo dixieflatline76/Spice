@@ -29,6 +29,12 @@ func (s *Server) handleLocal(w http.ResponseWriter, r *http.Request) {
 	collectionID := parts[1]
 	actionOrType := parts[2] // "images" or "assets"
 
+	// Security: Prevent path traversal in collectionID
+	if collectionID == "." || collectionID == ".." || strings.ContainsAny(collectionID, `/\`) {
+		http.Error(w, "Invalid collection ID", http.StatusBadRequest)
+		return
+	}
+
 	rootPath, ok := s.namespaces[namespace]
 	if !ok {
 		http.Error(w, "Namespace not found", http.StatusNotFound)
@@ -38,6 +44,15 @@ func (s *Server) handleLocal(w http.ResponseWriter, r *http.Request) {
 	// Construct the collection path
 	// e.g. C:\...Temp\spice\google_photos\GUID
 	collectionPath := filepath.Join(rootPath, collectionID)
+
+	// Extra Security: Ensure the resulting path is strictly contained within rootPath
+	// This silences CodeQL "Uncontrolled data used in path expression" by verifying the resolved path.
+	cleanRoot := filepath.Clean(rootPath)
+	cleanCollection := filepath.Clean(collectionPath)
+	if !strings.HasPrefix(cleanCollection, cleanRoot) {
+		http.Error(w, "Accessible path traversal detected", http.StatusBadRequest)
+		return
+	}
 
 	switch actionOrType {
 	case "images":
@@ -111,7 +126,7 @@ func (s *Server) handleLocalListing(w http.ResponseWriter, r *http.Request, coll
 		}
 	}
 	if attribution == "" {
-		attribution = "Local: " + collectionID // Fallback
+		attribution = collectionID // Use name directly instead of "Local: ..."
 	}
 
 	// Read dir
@@ -169,17 +184,29 @@ func (s *Server) handleLocalListing(w http.ResponseWriter, r *http.Request, coll
 	for _, name := range pageImages {
 		url := fmt.Sprintf("%s://%s/local/%s/%s/assets/%s", scheme, host, namespace, collectionID, name)
 
+		imgAttribution := attribution
 		var pUrl string
 		if filesMeta != nil {
 			if v, ok := filesMeta[name]; ok {
-				pUrl, _ = v.(string)
+				if m, ok := v.(map[string]interface{}); ok {
+					// Per-image metadata (Favorites style)
+					if attr, ok := m["attribution"].(string); ok && attr != "" {
+						imgAttribution = attr
+					}
+					if purl, ok := m["product_url"].(string); ok {
+						pUrl = purl
+					}
+				} else {
+					// Legacy string style (Google Photos style)
+					pUrl, _ = v.(string)
+				}
 			}
 		}
 
 		result = append(result, LocalImage{
-			ID:          name,
+			ID:          strings.TrimSuffix(name, filepath.Ext(name)),
 			URL:         url,
-			Attribution: attribution,
+			Attribution: imgAttribution,
 			ProductURL:  pUrl,
 		})
 	}
@@ -197,5 +224,12 @@ func (s *Server) handleLocalAsset(w http.ResponseWriter, r *http.Request, collec
 	}
 
 	fullPath := filepath.Join(collectionPath, filename)
+
+	// Double-check containment for CodeQL compliance
+	if !strings.HasPrefix(filepath.Clean(fullPath), filepath.Clean(collectionPath)) {
+		http.Error(w, "Invalid asset path", http.StatusBadRequest)
+		return
+	}
+
 	http.ServeFile(w, r, fullPath)
 }

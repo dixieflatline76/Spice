@@ -14,6 +14,7 @@ import (
 	"github.com/dixieflatline76/Spice/pkg/api"
 	"github.com/dixieflatline76/Spice/pkg/hotkey"
 	"github.com/dixieflatline76/Spice/pkg/wallpaper"
+	_ "github.com/dixieflatline76/Spice/pkg/wallpaper/providers/favorites"
 	_ "github.com/dixieflatline76/Spice/pkg/wallpaper/providers/googlephotos"
 	_ "github.com/dixieflatline76/Spice/pkg/wallpaper/providers/pexels"
 
@@ -59,6 +60,15 @@ func main() {
 		tempDir := os.TempDir()
 		gpPath := filepath.Join(tempDir, "spice", "google_photos")
 		apiServer.RegisterNamespace("google_photos", gpPath)
+
+		// Register favorites namespace to point to spice folder,
+		// allowing favorite_images to be the collection ID.
+		apiServer.RegisterNamespace(wallpaper.FavoritesNamespace, filepath.Join(tempDir, "spice"))
+
+		favPath := filepath.Join(tempDir, "spice", wallpaper.FavoritesCollection)
+		if err := os.MkdirAll(favPath, 0755); err != nil {
+			log.Printf("Warning: Failed to create favorites directory: %v", err)
+		}
 
 		log.Printf("Starting Local API Server on :49452...")
 		if err := apiServer.Start(); err != nil {

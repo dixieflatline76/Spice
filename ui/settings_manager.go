@@ -280,3 +280,8 @@ func (sm *SettingsManager) GetSettingsWindow() fyne.Window {
 func (sm *SettingsManager) GetCheckAndEnableApplyFunc() func() {
 	return sm.checkAndEnableApply
 }
+
+// RebuildTrayMenu rebuilds the tray menu list from scratch.
+func (sm *SettingsManager) RebuildTrayMenu() {
+	getInstance().RebuildTrayMenu()
+}

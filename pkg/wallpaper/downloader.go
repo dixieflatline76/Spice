@@ -73,6 +73,11 @@ func (wp *Plugin) ProcessImageJob(ctx context.Context, job DownloadJob) (provide
 	// provider.Image doesn't have it, but we can resolve it via ID/FM later if needed.
 	// The important part is FilePath points to what we show.
 
+	if wp.favoriter != nil && wp.favoriter.IsFavorited(img) {
+		img.IsFavorited = true
+	}
+
+	log.Debugf("ProcessImageJob Finished: ID=%s, FilePath=%s, IsFav=%v", img.ID, derivativePath, img.IsFavorited)
 	return img, nil
 }
 

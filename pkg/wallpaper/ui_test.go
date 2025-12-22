@@ -92,6 +92,8 @@ func (m *MockSettingsManager) GetCheckAndEnableApplyFunc() func() {
 	return func() {}
 }
 
+func (m *MockSettingsManager) RebuildTrayMenu() {}
+
 func TestSmartFitEnablesFaceOptions(t *testing.T) {
 	// Initialize Fyne test app
 	test.NewApp()

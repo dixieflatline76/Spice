@@ -359,7 +359,7 @@ func (s *ImageStore) LoadAvoidSet(avoidSet map[string]bool) {
 	for id := range avoidSet {
 		s.avoidSet[id] = true
 	}
-	log.Printf("Store: Loaded %d blocked images from config.", len(avoidSet))
+	log.Debugf("Store: Loaded %d blocked images from config.", len(avoidSet))
 }
 
 // --- Persistence & Sync ---
@@ -394,7 +394,7 @@ func (s *ImageStore) LoadCache() error {
 		s.idSet[img.ID] = true
 	}
 
-	log.Printf("Store: Loaded %d images from cache.", len(s.images))
+	log.Debugf("Store: Loaded %d images from cache.", len(s.images))
 	return nil
 }
 
@@ -414,7 +414,7 @@ func (s *ImageStore) Sync(limit int, targetFlags map[string]bool, activeQueryIDs
 		return
 	}
 
-	log.Printf("Store: Syncing... (Limit: %d)", limit)
+	log.Debugf("Store: Syncing... (Limit: %d)", limit)
 	if limit <= 0 {
 		limit = 50
 	}
@@ -445,7 +445,7 @@ func (s *ImageStore) Sync(limit int, targetFlags map[string]bool, activeQueryIDs
 			// Try .png
 			masterPath = s.fm.GetMasterPath(img.ID, ".png")
 			if _, err := os.Stat(masterPath); os.IsNotExist(err) {
-				log.Printf("Sync: Master missing for %s. Pruning.", img.ID)
+				log.Debugf("Sync: Master missing for ID %s. Pruning.", img.ID)
 				badIDs[img.ID] = true
 				continue
 			}
@@ -465,7 +465,7 @@ func (s *ImageStore) Sync(limit int, targetFlags map[string]bool, activeQueryIDs
 				}
 			}
 			if !match {
-				log.Printf("[DEBUG-DUMP] Sync: Config mismatch for %s. Pruning.", img.ID)
+				log.Debugf("Sync: Config mismatch for %s. Pruning.", img.ID)
 				badIDs[img.ID] = false // Forget Only! Keep Master for reprocessing.
 			}
 		}
@@ -481,8 +481,10 @@ func (s *ImageStore) Sync(limit int, targetFlags map[string]bool, activeQueryIDs
 		// New Check: make sure it hasn't been removed by concurrent Remove()
 		// And check if it was marked bad by us.
 		if deleteFile, shouldRemove := badIDs[img.ID]; shouldRemove {
-			if deleteFile {
+			if deleteFile && !img.IsFavorited {
 				idsToDelete = append(idsToDelete, img.ID)
+			} else if deleteFile && img.IsFavorited {
+				log.Debugf("Sync: Spared favorited image %s from deletion.", img.ID)
 			}
 			// Both actions remove from Memory Store
 			delete(s.idSet, img.ID)
@@ -494,7 +496,7 @@ func (s *ImageStore) Sync(limit int, targetFlags map[string]bool, activeQueryIDs
 	// Grooming (FIFO - remove excess from start)
 	if len(finalImages) > limit {
 		excess := len(finalImages) - limit
-		log.Printf("Store: Grooming %d excess images.", excess)
+		log.Debugf("Store: Grooming %d excess images.", excess)
 
 		groomingCandidates := finalImages[:excess]
 		finalImages = finalImages[excess:]
@@ -512,7 +514,7 @@ func (s *ImageStore) Sync(limit int, targetFlags map[string]bool, activeQueryIDs
 	// The incremental delete(s.idSet, ...) is correct only if we processed ALL s.images.
 	// We did.
 
-	log.Printf("[DEBUG-DUMP] Store Sync: Final Valid Images Count: %d. (Deleted: %d)", len(s.images), len(idsToDelete))
+	log.Debugf("Store Sync: Final Valid Images Count: %d. (Deleted: %d)", len(s.images), len(idsToDelete))
 	s.mu.Unlock()
 
 	// 4. Batch Delete Files (No Lock - Heavy I/O)

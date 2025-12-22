@@ -89,4 +89,5 @@ type SettingsManager interface {
 	RegisterRefreshFunc(refreshFunc func()) // Register a function to be called when the settings need to be refreshed.
 	GetSettingsWindow() fyne.Window         // GetSettingsWindow returns the window associated with the SettingsManager.
 	GetCheckAndEnableApplyFunc() func()     // GetCheckAndEnableApplyFunction returns the check and enable apply function for the SettingsManager.
+	RebuildTrayMenu()                       // Rebuilds the tray menu from scratch.
 }

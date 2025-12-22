@@ -5,11 +5,9 @@ package wallpaper
 
 import (
 	"syscall"
-	"time"
 	"unsafe"
 
 	"github.com/dixieflatline76/Spice/pkg/sysinfo"
-	"github.com/dixieflatline76/Spice/util/log"
 )
 
 var (
@@ -37,21 +35,17 @@ const (
 // setWallpaper sets the wallpaper to the given image file path.
 func (w *windowsOS) setWallpaper(imagePath string) error {
 	// Convert the image path to UTF-16
-	imagePathUTF16, err := syscall.UTF16PtrFromString(imagePath) // Convert the image path to UTF-16
+	imagePathUTF16, err := syscall.UTF16PtrFromString(imagePath)
 	if err != nil {
 		return err
 	}
 
-	log.Debugf("Windows: Setting wallpaper to %s...", imagePath)
-	start := time.Now()
 	ret, _, err := systemParametersInfo.Call(
 		uintptr(SPISetDeskWallpaper),
 		uintptr(0),
 		uintptr(unsafe.Pointer(imagePathUTF16)),
-		uintptr(SPIFUpdateIniFile), // Removed SPIFSendChange to prevent blocking on hung apps
+		uintptr(SPIFUpdateIniFile),
 	)
-	duration := time.Since(start)
-	log.Debugf("Windows: SystemParametersInfoW took %v", duration)
 	if ret == 0 {
 		return err
 	}

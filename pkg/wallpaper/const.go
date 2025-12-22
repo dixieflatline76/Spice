@@ -66,6 +66,10 @@ const (
 	ImageWaitRetryDelay      = 1 * time.Second
 	MaxDescLength            = 50
 	MaxURLLength             = 255
+	MaxFavoritesLimit        = 200
+	FavoritesNamespace       = "favorites" // API Namespace
+	FavoritesCollection      = "favorite_images"
+	FavoritesQueryID         = "favorites://" + FavoritesCollection
 )
 
 // Frequency represents the frequency of a service

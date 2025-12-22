@@ -130,7 +130,7 @@ func getInstance() *SpiceApp {
 			saInstance = &SpiceApp{
 				App:      a,
 				assetMgr: asset.NewManager(),
-				trayMenu: fyne.NewMenu(config.AppName),
+				trayMenu: fyne.NewMenu(""),
 				notifiers: []ui.Notifier{func(title, message string) {
 					a.SendNotification(fyne.NewNotification(title, message))
 				}},
@@ -175,29 +175,32 @@ func (sa *SpiceApp) NotifyUser(title, message string) {
 
 // CreateTrayMenu creates the tray menu for the application
 func (sa *SpiceApp) CreateTrayMenu() {
-	desk := sa.App.(desktop.App)
-	trayIcon, _ := sa.assetMgr.GetIcon("tray.png")
+	desk, ok := sa.App.(desktop.App)
+	if !ok {
+		return
+	}
+
+	items := []*fyne.MenuItem{}
 	for i, plugin := range sa.plugins {
 		if i == 0 {
-			sa.trayMenu.Items = append(sa.trayMenu.Items, plugin.CreateTrayMenuItems()...)
-			sa.trayMenu.Items = append(sa.trayMenu.Items, fyne.NewMenuItemSeparator())
+			items = append(items, plugin.CreateTrayMenuItems()...)
+			items = append(items, fyne.NewMenuItemSeparator())
 		} else {
 			pluginSubmenu := fyne.NewMenuItem(plugin.Name(), nil)
-			pluginSubmenu.ChildMenu.Label = plugin.Name()
-			pluginSubmenu.ChildMenu.Items = plugin.CreateTrayMenuItems()
-			sa.trayMenu.Items = append(sa.trayMenu.Items, pluginSubmenu)
+			pluginSubmenu.ChildMenu = fyne.NewMenu(plugin.Name(), plugin.CreateTrayMenuItems()...)
+			items = append(items, pluginSubmenu)
 		}
 	}
 
-	sa.trayMenu.Items = append(sa.trayMenu.Items, sa.CreateMenuItem("Preferences", func() {
+	items = append(items, sa.CreateMenuItem("Preferences", func() {
 		sa.CreatePreferencesWindow("")
 	}, "prefs.png"))
-	sa.trayMenu.Items = append(sa.trayMenu.Items, fyne.NewMenuItemSeparator())
-	sa.trayMenu.Items = append(sa.trayMenu.Items, sa.CreateMenuItem("About Spice", func() {
+	items = append(items, fyne.NewMenuItemSeparator())
+	items = append(items, sa.CreateMenuItem("About Spice", func() {
 		sa.CreateSplashScreen(aboutSplashTime)
 	}, "tray.png"))
-	sa.trayMenu.Items = append(sa.trayMenu.Items, fyne.NewMenuItemSeparator())
-	sa.trayMenu.Items = append(sa.trayMenu.Items, sa.CreateMenuItem("Quit", func() {
+	items = append(items, fyne.NewMenuItemSeparator())
+	items = append(items, sa.CreateMenuItem("Quit", func() {
 		sa.os.TransformToForeground()     // Ensure the app is in the foreground before quitting
 		time.Sleep(50 * time.Millisecond) // Small delay to ensure the OS processes the state change
 		sa.deactivateAllPlugins()         // Deactivate all plugins before quitting
@@ -206,6 +209,8 @@ func (sa *SpiceApp) CreateTrayMenu() {
 		sa.Quit()
 	}, "quit.png"))
 
+	sa.trayMenu = fyne.NewMenu("", items...)
+	trayIcon, _ := sa.assetMgr.GetIcon("tray.png")
 	sa.SetIcon(trayIcon)
 	desk.SetSystemTrayMenu(sa.trayMenu)
 	desk.SetSystemTrayIcon(trayIcon)
@@ -712,5 +717,12 @@ func (sa *SpiceApp) RefreshTrayMenu() {
 		if desk, ok := sa.App.(desktop.App); ok {
 			desk.SetSystemTrayMenu(sa.trayMenu)
 		}
+	})
+}
+
+// RebuildTrayMenu rebuilds the tray menu list from scratch.
+func (sa *SpiceApp) RebuildTrayMenu() {
+	fyne.Do(func() {
+		sa.CreateTrayMenu()
 	})
 }

@@ -91,6 +91,10 @@ func (m *MockPluginManager) RefreshTrayMenu() {
 	m.Called()
 }
 
+func (m *MockPluginManager) RebuildTrayMenu() {
+	m.Called()
+}
+
 // MockImageProcessor implements ImageProcessor for testing
 type MockImageProcessor struct {
 	mock.Mock
