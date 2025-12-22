@@ -73,7 +73,7 @@ func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 		Options:      setting.StringOptions(GetFrequencies()),
 		InitialValue: int(wp.cfg.GetWallpaperChangeFrequency()),
 		Label:        sm.CreateSettingTitleLabel("Wallpaper Change Frequency:"),
-		HelpContent:  sm.CreateSettingDescriptionLabel("Set how often the wallpaper changes. Set to never to disable wallpaper changes."),
+		HelpContent:  sm.CreateSettingDescriptionLabel("Set how often the wallpaper changes. Set to \"Never\" to disable wallpaper changes."),
 	}
 	frequencyConfig.ApplyFunc = func(val interface{}) {
 		selectedFrequency := Frequency(val.(int))
@@ -89,7 +89,7 @@ func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 		Options:      setting.StringOptions(GetCacheSizes()), // Correctly calling GetCacheSizes
 		InitialValue: int(wp.cfg.GetCacheSize()),
 		Label:        sm.CreateSettingTitleLabel("Cache Size:"),
-		HelpContent:  sm.CreateSettingDescriptionLabel("Set how many images to cache for faster startup and less network usage. Set to none to disable caching."),
+		HelpContent:  sm.CreateSettingDescriptionLabel("Set how many images to cache for faster startup and less network usage. Set to \"None\" to disable caching."),
 	}
 	cacheSizeConfig.ApplyFunc = func(val interface{}) {
 		selectedCacheSize := CacheSize(val.(int))
@@ -111,13 +111,16 @@ func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 		Options:      GetSmartFitModes(), // Pass string slice directly
 		InitialValue: int(wp.cfg.GetSmartFitMode()),
 		Label:        sm.CreateSettingTitleLabel("Smart Fit Mode:"),
-		HelpContent:  sm.CreateSettingDescriptionLabel("Control how images are fitted to your screen:\n- Disabled: Original image.\n- Standard: Strict fit (must match aspect).\n- Relaxed: Allow high-res mismatch."),
+		HelpContent:  sm.CreateSettingDescriptionLabel("Control how images are fitted to your screen:\n- Disabled: Original image.\n- Quality: Rejects images with mismatched aspect ratio.\n- Flexibility: Allows high-res images to crop aggressively."),
 	}
 	smartFitModeConfig.ApplyFunc = func(val interface{}) {
 		mode := SmartFitMode(val.(int))
 		wp.cfg.SetSmartFitMode(mode)
 		smartFitModeConfig.InitialValue = int(mode)
+	}
 
+	smartFitModeConfig.OnChanged = func(s string, val interface{}) {
+		mode := SmartFitMode(val.(int))
 		// Link to Face Crop/Boost logic
 		if faceCropCheck != nil && faceBoostCheck != nil {
 			if mode == SmartFitOff {
@@ -129,6 +132,9 @@ func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 				faceCropCheck.Enable()
 				faceBoostCheck.Enable()
 			}
+			// Force redraw of the widgets to reflect enabled/disabled state
+			faceCropCheck.Refresh()
+			faceBoostCheck.Refresh()
 		}
 	}
 	sm.CreateSelectSetting(&smartFitModeConfig, generalContainer)

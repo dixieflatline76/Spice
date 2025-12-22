@@ -26,6 +26,7 @@ logs/
 # Sensitive configuration (optional - handle with care!)
 config.json 
 .DS_Store
+.spice_secrets
 
 # Test output and coverage
 # Test output and coverage

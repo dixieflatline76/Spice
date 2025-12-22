@@ -429,7 +429,8 @@ func (wp *Plugin) updateTrayMenuUI(img provider.Image) {
 			if len(attribution) > 20 {
 				attribution = attribution[:17] + "..."
 			}
-			wp.providerMenuItem.Label = "Source: " + img.Provider
+			providerName := wp.GetProviderTitle(img.Provider)
+			wp.providerMenuItem.Label = "Source: " + providerName
 			wp.providerMenuItem.Action = func() {
 				var homeURL string
 				if p, ok := wp.providers[img.Provider]; ok {
@@ -922,16 +923,14 @@ func (wp *Plugin) startEnrichmentWorker() {
 func (wp *Plugin) produceJobsForURL(ctx context.Context, query ImageQuery, page int) {
 	// Find provider
 	var downloadProvider provider.ImageProvider
-	for _, p := range wp.providers {
-		_, err := p.ParseURL(query.URL)
-		if err == nil {
+	if query.Provider != "" {
+		if p, ok := wp.providers[query.Provider]; ok {
 			downloadProvider = p
-			break
 		}
 	}
 
 	if downloadProvider == nil {
-		log.Printf("No provider found for URL: %s", query.URL)
+		log.Printf("No active provider found for query: %s (Provider: %s)", query.ID, query.Provider)
 		return
 	}
 
@@ -1155,4 +1154,12 @@ func (wp *Plugin) ClearCache() {
 	// Automatically trigger a refresh to repopulate if possible
 	log.Println("Plugin: Cache cleared. Triggering refresh to repopulate...")
 	go wp.RefreshImagesAndPulse()
+}
+
+// GetProviderTitle returns the display title of a provider, falling back to ID.
+func (wp *Plugin) GetProviderTitle(providerID string) string {
+	if p, ok := wp.providers[providerID]; ok {
+		return p.Title()
+	}
+	return providerID
 }

@@ -22,10 +22,13 @@ const (
 	FaceCropPrefKey         = pluginPrefix + "face_crop_key"          // FaceCropPrefKey is used to set and retrieve the boolean flag for face crop
 
 	// Provider keys (Shared)
-	UnsplashTokenPrefKey   = "unsplash_access_token"
-	WallhavenAPIKeyPrefKey = "wallhaven_api_key"
-	wallhavenConfigPrefKey = "wallhaven_image_queries"
-	PexelsAPIKeyPrefKey    = "pexels_api_key"
+	UnsplashTokenPrefKey            = "unsplash_access_token"
+	GooglePhotosTokenPrefKey        = "google_photos_access_token"
+	GooglePhotosRefreshTokenPrefKey = "google_photos_refresh_token"
+	GooglePhotosTokenExpiryPrefKey  = "google_photos_token_expiry"
+	WallhavenAPIKeyPrefKey          = "wallhaven_api_key"
+	wallhavenConfigPrefKey          = "wallhaven_image_queries"
+	PexelsAPIKeyPrefKey             = "pexels_api_key"
 )
 
 // URLType indicates the type of image source (Search or Collection).

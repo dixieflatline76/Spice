@@ -44,11 +44,11 @@ func (p *UnsplashProvider) SetAccessKeyForTesting(key string) {
 	p.testAccessKey = key
 }
 
-func init() {
-	wallpaper.RegisterProvider("Unsplash", func(cfg *wallpaper.Config, client *http.Client) provider.ImageProvider {
-		return NewUnsplashProvider(cfg, client)
-	})
-}
+// func init() {
+// 	wallpaper.RegisterProvider("Unsplash", func(cfg *wallpaper.Config, client *http.Client) provider.ImageProvider {
+// 		return NewUnsplashProvider(cfg, client)
+// 	})
+// }
 
 // NewUnsplashProvider creates a new UnsplashProvider.
 func NewUnsplashProvider(cfg *wallpaper.Config, client *http.Client) *UnsplashProvider {

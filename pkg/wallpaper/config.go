@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/dixieflatline76/Spice/util/log"
 
@@ -71,9 +72,9 @@ func (m SmartFitMode) String() string {
 	case SmartFitOff:
 		return "Disabled"
 	case SmartFitNormal:
-		return "Standard (Strict)"
+		return "Quality"
 	case SmartFitAggressive:
-		return "Relaxed (Aggressive)"
+		return "Flexibility"
 	default:
 		return "Unknown"
 	}
@@ -93,9 +94,9 @@ func ParseSmartFitMode(s string) SmartFitMode {
 	switch s {
 	case "Disabled":
 		return SmartFitOff
-	case "Standard (Strict)":
+	case "Quality":
 		return SmartFitNormal
-	case "Relaxed (Aggressive)":
+	case "Flexibility":
 		return SmartFitAggressive
 	default:
 		return SmartFitNormal
@@ -629,6 +630,128 @@ func (c *Config) SetPexelsAPIKey(apiKey string) {
 	if err != nil {
 		log.Printf("failed to save Pexels API key to keyring: %v", err)
 	}
+}
+
+// GetGooglePhotosToken returns the Google Photos Access Token from the keyring.
+func (c *Config) GetGooglePhotosToken() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	token, err := keyring.Get(GooglePhotosTokenPrefKey, c.userid)
+	if err != nil {
+		if !errors.Is(err, keyring.ErrNotFound) {
+			log.Printf("failed to retrieve Google Photos token from keyring: %v", err)
+		}
+		return ""
+	}
+	return token
+}
+
+// SetGooglePhotosToken sets the Google Photos Access Token in the keyring.
+func (c *Config) SetGooglePhotosToken(token string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	err := keyring.Set(GooglePhotosTokenPrefKey, c.userid, token)
+	if err != nil {
+		log.Printf("failed to save Google Photos token to keyring: %v", err)
+	}
+}
+
+// GetGooglePhotosRefreshToken returns the Google Photos Refresh Token from the keyring.
+func (c *Config) GetGooglePhotosRefreshToken() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	token, err := keyring.Get(GooglePhotosRefreshTokenPrefKey, c.userid)
+	if err != nil {
+		if !errors.Is(err, keyring.ErrNotFound) {
+			log.Printf("failed to retrieve Google Photos refresh token from keyring: %v", err)
+		}
+		return ""
+	}
+	return token
+}
+
+// SetGooglePhotosRefreshToken sets the Google Photos Refresh Token in the keyring.
+func (c *Config) SetGooglePhotosRefreshToken(token string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	err := keyring.Set(GooglePhotosRefreshTokenPrefKey, c.userid, token)
+	if err != nil {
+		log.Printf("failed to save Google Photos refresh token to keyring: %v", err)
+	}
+}
+
+// GetGooglePhotosTokenExpiry returns the Google Photos Token Expiry from the keyring.
+func (c *Config) GetGooglePhotosTokenExpiry() time.Time {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	expiryStr := c.StringWithFallback(GooglePhotosTokenExpiryPrefKey, "")
+	if expiryStr == "" {
+		return time.Time{}
+	}
+	expiry, err := time.Parse(time.RFC3339, expiryStr)
+	if err != nil {
+		log.Printf("failed to parse Google Photos token expiry: %v", err)
+		return time.Time{}
+	}
+	return expiry
+}
+
+// SetGooglePhotosTokenExpiry sets the Google Photos Token Expiry in the keyring.
+func (c *Config) SetGooglePhotosTokenExpiry(expiry time.Time) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.SetString(GooglePhotosTokenExpiryPrefKey, expiry.Format(time.RFC3339))
+}
+
+// AddGooglePhotosQuery adds a new Google Photos query to the list.
+func (c *Config) AddGooglePhotosQuery(description, url string, active bool) (string, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	id := GenerateQueryID(url)
+	if c.isDuplicateID(id) {
+		return "", fmt.Errorf("duplicate query: this URL already exists")
+	}
+
+	newQuery := ImageQuery{
+		ID:          id,
+		Description: description,
+		URL:         url,
+		Active:      active,
+		Provider:    "GooglePhotos",
+	}
+
+	c.Queries = append([]ImageQuery{newQuery}, c.Queries...)
+	c.save()
+	return id, nil
+}
+
+// RemoveGooglePhotosQuery removes a Google Photos query from the unified list.
+func (c *Config) RemoveGooglePhotosQuery(id string) error {
+	return c.RemoveImageQuery(id) // Reuse generic remove
+}
+
+// EnableGooglePhotosQuery enables a Google Photos query.
+func (c *Config) EnableGooglePhotosQuery(id string) error {
+	return c.EnableImageQuery(id)
+}
+
+// DisableGooglePhotosQuery disables a Google Photos query.
+func (c *Config) DisableGooglePhotosQuery(id string) error {
+	return c.DisableImageQuery(id)
+}
+
+// GetGooglePhotosQueries returns a copy of the Google Photos queries in a thread-safe manner.
+func (c *Config) GetGooglePhotosQueries() []ImageQuery {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	var queries []ImageQuery
+	for _, q := range c.Queries {
+		if q.Provider == "GooglePhotos" {
+			queries = append(queries, q)
+		}
+	}
+	return queries
 }
 
 // SetChgImgOnStart returns the change image on start preference.

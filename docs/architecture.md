@@ -210,9 +210,35 @@ sequenceDiagram
 | **Controller**| `pkg/wallpaper/wallpaper.go` | UI logic, Lifecycle, Optimistic Updates. |
 | **Processor** | `pkg/wallpaper/smart_image_processor.go` | Face detection, cropping (Heavy CPU). |
 
+## 3.5 Resource Management
+
+### 3.5.1 Deep Cache Cleaning (Recursive Deletion)
+
+Spice implements a strict "Zero Orphans" policy for resource management. When a wallpaper collection (Query) is deleted:
+
+1.  **Configuration Callback**: The `Config` triggers a registered callback (`onQueryRemoved`).
+2.  **Store Pruning**: The callback invokes `store.RemoveByQueryID(queryID)`.
+3.  **Deep Delete**: The File Manager's `DeepDelete` function is called for every image ID:
+    - Deletes the **Master Image**.
+    - recursively deletes all **Derivatives** (Smart Fit, Face Crop, Face Boost images) in their respective subdirectories.
+
+### 3.5.2 Provider Strategies
+
+Spice supports two distinct provider interaction models:
+
+*   **API Fetch (Standard)**:
+    *   **Examples**: Wallhaven, Pexels.
+    *   **Flow**: Query API -> Get URLs -> Download One-by-One on demand.
+    *   **State**: Ephemeral. Images are only downloaded when viewed (or pre-fetched).
+
+*   **Import / Pick (Google Photos)**:
+    *   **Example**: Google Photos.
+    *   **Flow**: Launch Picker -> Select N Items -> Bulk Download Immediately to `cache/google_photos/<GUID>`.
+    *   **State**: Local. The provider acts as a local file scanner over the imported directory.
+    *   **Cleanup**: Deleting the collection deletes the entire backing folder.
+
 ## 3.6 Future Considerations
 
-- **Persistence**: Currently `ImageStore` is in-memory. Future versions could persist the JSON state to disk to survive restarts.
 - **Events**: The `cmdChan` pattern can be expanded to a full Event Bus if the application grows complexity (e.g., specific event subscribers).
 
 ## 3.7 Performance Strategies

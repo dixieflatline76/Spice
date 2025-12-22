@@ -19,6 +19,9 @@ type Server struct {
 	clients   map[*websocket.Conn]bool
 	clientsMu sync.Mutex
 
+	// Local file serving
+	namespaces map[string]string // name -> absPath
+
 	// Callbacks
 	onAddCollection func(url string) error
 }
@@ -29,12 +32,11 @@ func NewServer() *Server {
 		mux: http.NewServeMux(),
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
-				// Allow all origins for now (Extension + Localhost)
-				// In production, might restrict to chrome-extension:// IDs if possible
 				return true
 			},
 		},
-		clients: make(map[*websocket.Conn]bool),
+		clients:    make(map[*websocket.Conn]bool),
+		namespaces: make(map[string]string),
 	}
 	s.setupRoutes()
 	return s
@@ -44,6 +46,12 @@ func (s *Server) setupRoutes() {
 	s.mux.HandleFunc("/health", s.enableCORS(s.handleHealth))
 	s.mux.HandleFunc("/ws", s.handleWebSocket)
 	s.mux.HandleFunc("/add", s.enableCORS(s.handleAdd))
+	s.mux.HandleFunc("/local/", s.enableCORS(s.handleLocal))
+}
+
+// RegisterNamespace registers a local directory to be served under /local/{name}.
+func (s *Server) RegisterNamespace(name, path string) {
+	s.namespaces[name] = path
 }
 
 // enableCORS adds CORS headers to the handler.

@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/dixieflatline76/Spice/util/log"
@@ -12,6 +14,7 @@ import (
 	"github.com/dixieflatline76/Spice/pkg/api"
 	"github.com/dixieflatline76/Spice/pkg/hotkey"
 	"github.com/dixieflatline76/Spice/pkg/wallpaper"
+	_ "github.com/dixieflatline76/Spice/pkg/wallpaper/providers/googlephotos"
 	_ "github.com/dixieflatline76/Spice/pkg/wallpaper/providers/pexels"
 	_ "github.com/dixieflatline76/Spice/pkg/wallpaper/providers/unsplash"
 	_ "github.com/dixieflatline76/Spice/pkg/wallpaper/providers/wallhaven"
@@ -51,6 +54,11 @@ func main() {
 	})
 
 	go func() {
+		// Register Namespaces for Local Assets
+		tempDir := os.TempDir()
+		gpPath := filepath.Join(tempDir, "spice", "google_photos")
+		apiServer.RegisterNamespace("google_photos", gpPath)
+
 		log.Printf("Starting Local API Server on :49452...")
 		if err := apiServer.Start(); err != nil {
 			log.Printf("Failed to start API Server: %v", err)
