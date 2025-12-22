@@ -137,7 +137,7 @@ func generateJSBlock(regexMap map[string]string) string {
 		}
 
 		// Capitalize for display comment
-		display := strings.Title(key)
+		display := strings.ToUpper(key[:1]) + key[1:]
 		jsBuilder.WriteString(fmt.Sprintf("    // %s\n", display))
 		jsBuilder.WriteString(fmt.Sprintf("    /%s/", regex))
 
