@@ -11,21 +11,30 @@ import (
 	"strings"
 )
 
-// Config map: Provider Name -> Path to const.go
-var providers = map[string]string{
-	"Wallhaven": "pkg/wallpaper/providers/wallhaven/const.go",
-	"Pexels":    "pkg/wallpaper/providers/pexels/const.go",
-	"Unsplash":  "pkg/wallpaper/providers/unsplash/const.go",
-	"Wikimedia": "pkg/wallpaper/providers/wikimedia/const.go",
+// Known Providers Config: Map from Import Path Suffix -> Path to const.go
+var knownProvidersConfig = map[string]struct {
+	ConstPath string
+	ConstName string
+}{
+	"wallhaven": {
+		ConstPath: "pkg/wallpaper/providers/wallhaven/const.go",
+		ConstName: "WallhavenURLRegexp",
+	},
+	"pexels": {
+		ConstPath: "pkg/wallpaper/providers/pexels/const.go",
+		ConstName: "PexelsURLRegexp",
+	},
+	"unsplash": {
+		ConstPath: "pkg/wallpaper/providers/unsplash/const.go",
+		ConstName: "UnsplashURLRegexp",
+	},
+	"wikimedia": {
+		ConstPath: "pkg/wallpaper/providers/wikimedia/const.go",
+		ConstName: "WikimediaURLRegexp",
+	},
 }
 
-// Config map: Provider Name -> Constant Name to extract
-var constNames = map[string]string{
-	"Wallhaven": "WallhavenURLRegexp",
-	"Pexels":    "PexelsURLRegexp",
-	"Unsplash":  "UnsplashURLRegexp",
-	"Wikimedia": "WikimediaURLRegexp",
-}
+const mainAppPath = "cmd/spice/main.go"
 
 func main() {
 	log.Println("Syncing regex constants from Go to extension...")
@@ -35,38 +44,37 @@ func main() {
 		log.Fatal(err)
 	}
 
+	// 1. Parse main.go to find enabled providers
+	enabledProviders, err := getEnabledProviders(filepath.Join(projectRoot, mainAppPath))
+	if err != nil {
+		log.Fatalf("Failed to parse main.go: %v", err)
+	}
+	log.Printf("Detected enabled providers: %v", enabledProviders)
+
 	regexMap := make(map[string]string)
 
-	for provider, relPath := range providers {
-		fullPath := filepath.Join(projectRoot, relPath)
-		regex, err := extractConstant(fullPath, constNames[provider])
-		if err != nil {
-			log.Fatalf("Failed to extract %s from %s: %v", constNames[provider], provider, err)
+	// 2. Extract regex for each enabled provider
+	for _, providerKey := range enabledProviders {
+		config, exists := knownProvidersConfig[providerKey]
+		if !exists {
+			log.Printf("Warning: Provider '%s' enabled but not configured for regex sync. Skipping.", providerKey)
+			continue
 		}
-		// Convert Go backticks to JS compatible string if needed
-		// Usually Go raw strings `...` need to be converted to /.../ in JS if they are regexes.
-		// But in JS, `new RegExp("string")` requires escaping backslashes.
-		// Literal /.../ handles backslashes differently.
-		// Our Go regexes are `^...$`.
-		// To make it a JS regex literal: /pattern/
-		// We need to ensure forward slashes are escaped?
-		// e.g. https:// -> https:\/\/ (Go regex usually has strict escaping too).
 
-		// Let's assume the Go regex string content is safe to put inside /.../
-		// EXCEPT we must ensure forward slashes are escaped if we use / delimiter.
+		fullPath := filepath.Join(projectRoot, config.ConstPath)
+		regex, err := extractConstant(fullPath, config.ConstName)
+		if err != nil {
+			log.Fatalf("Failed to extract %s from %s: %v", config.ConstName, providerKey, err)
+		}
 
-		// Wait, `extractConstant` returns the CONTENT of the string literal.
-		// e.g. `^https:\/\/wallhaven\.cc\/...`
-		// If we wrap it in /.../, it works IF Go string already escaped /.
-		// Wallhaven URL regex in Go: `^https:\/\/...` -> Yes, it escapes /.
-
-		regexMap[provider] = regex
-		log.Printf("Found %s: %s...", provider, regex[:30])
+		regexMap[providerKey] = regex
+		log.Printf("Found Regex for %s: %s...", providerKey, regex[:30])
 	}
 
+	// 3. Generate JS Block
 	newBlock := generateJSBlock(regexMap)
 
-	// Update background.js
+	// 4. Update background.js
 	extPath := filepath.Join(projectRoot, "extension", "background.js")
 	content, err := os.ReadFile(extPath)
 	if err != nil {
@@ -86,25 +94,57 @@ func main() {
 	log.Println("Successfully synced regex constants to background.js")
 }
 
+// getEnabledProviders parses main.go imports to find enabled providers
+func getEnabledProviders(mainPath string) ([]string, error) {
+	fset := token.NewFileSet()
+	node, err := parser.ParseFile(fset, mainPath, nil, parser.ImportsOnly)
+	if err != nil {
+		return nil, err
+	}
+
+	var providers []string
+	prefix := "github.com/dixieflatline76/Spice/pkg/wallpaper/providers/"
+
+	for _, imp := range node.Imports {
+		// imp.Path.Value includes quotes, e.g. "github.com/..."
+		path := strings.Trim(imp.Path.Value, "\"")
+
+		if strings.HasPrefix(path, prefix) {
+			providerName := strings.TrimPrefix(path, prefix)
+			providers = append(providers, providerName)
+		}
+	}
+	return providers, nil
+}
+
 func generateJSBlock(regexMap map[string]string) string {
 	var jsBuilder strings.Builder
 	jsBuilder.WriteString("// REGEX_START\n")
 	jsBuilder.WriteString("const SUPPORTED_PATTERNS = [\n")
 
-	// Order matters? Not really, but let's be consistent.
-	ordered := []string{"Wallhaven", "Pexels", "Unsplash", "Wikimedia"}
+	// Iterate over the regexMap (order is random, but that's fine for JS array)
+	// Or we can sort keys for stability.
+	// Let's rely on standard map iteration, but maybe better to enable stability.
+	// Actually, iterating map is random. Let's iterate over knownProvidersConfig keys in fixed order
+	// and check if they exist in regexMap.
 
-	for i, p := range ordered {
-		regex := regexMap[p]
-		if regex == "" {
+	orderedKeys := []string{"wallhaven", "pexels", "unsplash", "wikimedia"}
+
+	for i, key := range orderedKeys {
+		regex, exists := regexMap[key]
+		if !exists {
 			continue
 		}
-		jsBuilder.WriteString(fmt.Sprintf("    // %s\n", p))
+
+		// Capitalize for display comment
+		display := strings.Title(key)
+		jsBuilder.WriteString(fmt.Sprintf("    // %s\n", display))
 		jsBuilder.WriteString(fmt.Sprintf("    /%s/", regex))
-		if i < len(ordered)-1 {
-			jsBuilder.WriteString(",")
-		}
-		jsBuilder.WriteString("\n")
+
+		// Add comma if not the last item?
+		// Simpler: Add comma always, trailing comma is valid in JS arrays.
+		jsBuilder.WriteString(",\n")
+		_ = i
 	}
 	jsBuilder.WriteString("];\n")
 	jsBuilder.WriteString("// REGEX_END")
@@ -155,7 +195,6 @@ func extractConstant(filePath string, constName string) (string, error) {
 							value = val[1 : len(val)-1]
 						} else if strings.HasPrefix(val, "\"") && strings.HasSuffix(val, "\"") {
 							value = val[1 : len(val)-1]
-							// Unescape double quotes if needed, but usually raw strings are used for regex
 						} else {
 							value = val
 						}

@@ -16,7 +16,8 @@ import (
 	"github.com/dixieflatline76/Spice/pkg/wallpaper"
 	_ "github.com/dixieflatline76/Spice/pkg/wallpaper/providers/googlephotos"
 	_ "github.com/dixieflatline76/Spice/pkg/wallpaper/providers/pexels"
-	_ "github.com/dixieflatline76/Spice/pkg/wallpaper/providers/unsplash"
+
+	// _ "github.com/dixieflatline76/Spice/pkg/wallpaper/providers/unsplash"
 	_ "github.com/dixieflatline76/Spice/pkg/wallpaper/providers/wallhaven"
 	_ "github.com/dixieflatline76/Spice/pkg/wallpaper/providers/wikimedia"
 )

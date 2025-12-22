@@ -125,16 +125,16 @@ async function handleMessage(msg) {
 
 // --- Supported Sites & Animation ---
 
+// REGEX_START
 const SUPPORTED_PATTERNS = [
     // Wallhaven
     /^https:\/\/wallhaven\.cc\/(?:latest|toplist|hot|random|search|api\/v1\/search|api\/v1\/collections\/[a-zA-Z0-9_]+\/[0-9]+|user\/[a-zA-Z0-9_]+\/favorites\/[0-9]+|favorites\/[0-9]+)(?:\?[a-zA-Z0-9_\-.~!$&'()*+,;=:@\/?%]*|)$/,
     // Pexels
     /^https:\/\/(?:www\.)?pexels\.com\/(?:search\/|collections\/).*$/,
-    // Unsplash
-    /^https:\/\/(?:www\.)?unsplash\.com\/(?:collections\/|s\/photos\/).*$/,
     // Wikimedia
-    /^https:\/\/commons\.wikimedia\.org\/(?:wiki\/Category:|w\/index\.php\?).*$/
+    /^https:\/\/commons\.wikimedia\.org\/(?:wiki\/Category:|w\/index\.php\?).*$/,
 ];
+// REGEX_END
 
 function startAnimation() {
     if (animationInterval) return;
