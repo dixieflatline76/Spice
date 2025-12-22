@@ -288,8 +288,9 @@ func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 		Title   string
 		Content fyne.CanvasObject
 		Open    bool
+		Icon    fyne.Resource
 	}{
-		{"General Settings", generalScroll, true},
+		{"General Settings", generalScroll, true, theme.SettingsIcon()},
 	}
 
 	// We want Wallhaven, Unsplash, Pexels order
@@ -321,12 +322,8 @@ func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 			if _, err := p.ParseURL(wp.pendingAddUrl); err == nil {
 				providerPendingUrl = wp.pendingAddUrl
 				isPendingProvider = true
-				// Consume pending URL (local variable copy usage)
-				// We don't clear wp.pendingAddUrl globally yet, assuming single pass.
-				// Actually we should clear it after this function returns or consumption.
-				// Since CreatePrefsPanel handles UI creation, we should clear it so it doesn't reopen on next render?
-				// Best to clear it at the end of CreatePrefsPanel or now.
-				wp.pendingAddUrl = "" // Consumed
+				// Consume pending URL
+				wp.pendingAddUrl = ""
 			}
 		}
 
@@ -356,10 +353,12 @@ func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 			Title   string
 			Content fyne.CanvasObject
 			Open    bool
+			Icon    fyne.Resource
 		}{
 			Title:   title,
 			Content: content,
 			Open:    isPendingProvider, // Auto-open if matched
+			Icon:    p.GetProviderIcon(),
 		})
 	}
 
@@ -380,18 +379,16 @@ func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 			index := i // Capture loop variable
 			item := &items[index]
 
-			// Header Button
-			var icon fyne.Resource
+			// State Icon (Arrow)
+			var arrowIcon fyne.Resource
 			if item.Open {
-				icon = theme.MoveDownIcon()
+				arrowIcon = theme.MoveDownIcon()
 			} else {
-				icon = theme.NavigateNextIcon()
+				arrowIcon = theme.NavigateNextIcon()
 			}
 
-			// If we don't have icons, we can use text arrows
-			titleText := item.Title
-
-			headerBtn := widget.NewButton(titleText, func() {
+			// Header Action
+			onTapped := func() {
 				if item.Open {
 					// If closing, open the next one (wrapping around)
 					item.Open = false
@@ -404,19 +401,42 @@ func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 					}
 				}
 				refreshAccordion()
-			})
-			headerBtn.Icon = icon
-			headerBtn.Alignment = widget.ButtonAlignLeading
+			}
+
+			// --- Complex Header Layout ---
+			// We use a Stack to put custom content ON TOP of a standard button.
+			// The button provides the background, hover effects, and interaction.
+			// The HBox provides the icon sequence.
+
+			// 1. Interaction Layer (Standard Button)
+			bgBtn := widget.NewButton("", onTapped)
+			bgBtn.Alignment = widget.ButtonAlignLeading
+
+			// 2. Content Layer (Icons + Title)
+			titleLabel := widget.NewLabel(item.Title)
+			titleLabel.TextStyle = fyne.TextStyle{Bold: item.Open} // Visual hint
+
+			headerContent := container.NewHBox(
+				widget.NewIcon(arrowIcon),
+			)
+			if item.Icon != nil {
+				providerIcon := widget.NewIcon(item.Icon)
+				headerContent.Add(providerIcon)
+			}
+			headerContent.Add(titleLabel)
+
+			// Wrap in Padded to align with button internal alignment
+			headerStack := container.NewStack(bgBtn, container.NewPadded(headerContent))
 
 			if item.Open {
-				topHeaders.Add(headerBtn)
+				topHeaders.Add(headerStack)
 				centerContent = item.Content
 				foundOpen = true
 			} else {
 				if foundOpen {
-					bottomHeaders.Add(headerBtn)
+					bottomHeaders.Add(headerStack)
 				} else {
-					topHeaders.Add(headerBtn)
+					topHeaders.Add(headerStack)
 				}
 			}
 		}
