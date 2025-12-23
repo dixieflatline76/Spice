@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/dixieflatline76/Spice/pkg/provider"
 	"github.com/dixieflatline76/Spice/pkg/wallpaper"
@@ -63,9 +64,12 @@ func TestAddAndRemoveFavorite(t *testing.T) {
 	err = p.AddFavorite(img)
 	assert.NoError(t, err)
 
-	// Verify file exists in rootDir
+	// Verify file exists in rootDir (Eventually, as it is async)
 	destPath := filepath.Join(rootDir, "test_image.jpg")
-	assert.FileExists(t, destPath)
+	assert.Eventually(t, func() bool {
+		_, err := os.Stat(destPath)
+		return err == nil
+	}, time.Second*2, time.Millisecond*50)
 
 	// Verify content matches
 	content, _ := os.ReadFile(destPath)
@@ -73,8 +77,10 @@ func TestAddAndRemoveFavorite(t *testing.T) {
 
 	// Verify metadata
 	metaPath := filepath.Join(rootDir, "metadata.json")
-	assert.FileExists(t, metaPath)
-	// (Simple check, assumes JSON valid)
+	assert.Eventually(t, func() bool {
+		_, err := os.Stat(metaPath)
+		return err == nil
+	}, time.Second*2, time.Millisecond*50)
 
 	// 2. Test IsFavorited
 	assert.True(t, p.IsFavorited(img))
@@ -85,8 +91,28 @@ func TestAddAndRemoveFavorite(t *testing.T) {
 	// 3. Test RemoveFavorite
 	err = p.RemoveFavorite(img)
 	assert.NoError(t, err)
-	assert.NoFileExists(t, destPath)
+
+	assert.Eventually(t, func() bool {
+		_, err := os.Stat(destPath)
+		return os.IsNotExist(err)
+	}, time.Second*2, time.Millisecond*50)
+
 	assert.False(t, p.IsFavorited(img))
+}
+
+func TestHomeURL(t *testing.T) {
+	tempDir := t.TempDir()
+	p := NewProvider(&wallpaper.Config{})
+	p.SetTestConfig("", tempDir)
+
+	url := p.HomeURL()
+	assert.NotEmpty(t, url)
+	assert.Contains(t, url, "file://")
+
+	// Basic format check
+	// Should contain the tempDir path, but sanitized
+	normalizedTemp := filepath.ToSlash(tempDir)
+	assert.Contains(t, url, normalizedTemp)
 }
 
 func TestFetchImages(t *testing.T) {

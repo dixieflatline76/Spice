@@ -356,6 +356,7 @@ func (c *smartImageProcessor) cropImage(ctx context.Context, img image.Image) (i
 		img = img.(SubImager).SubImage(finalCrop)
 
 		// Use the context-aware resize.
+		//nolint:gosec // G115: integer overflow conversion (uint -> int). Images > 2B pixels unlikely.
 		resizedImg := r.resizeWithContext(ctx, img, uint(systemWidth), uint(systemHeight))
 
 		if resizedImg == nil {
@@ -424,6 +425,7 @@ type resizer struct {
 // Resize *doesn't* take a context here.  The smartcrop.Resizer interface doesn't
 // support contexts.  We handle cancellation in ResizeWithContext.
 func (r *resizer) Resize(img image.Image, width, height uint) image.Image {
+	//nolint:gosec // G115: integer overflow conversion (uint -> int). Images > 2B pixels unlikely.
 	return imaging.Resize(img, int(width), int(height), r.resampler)
 }
 
@@ -432,6 +434,7 @@ func (r *resizer) resizeWithContext(ctx context.Context, img image.Image, width,
 	resultChan := make(chan image.Image)
 
 	go func() {
+		//nolint:gosec // G115: integer overflow conversion (uint -> int). Images > 2B pixels unlikely.
 		resultChan <- imaging.Resize(img, int(width), int(height), r.resampler)
 	}()
 

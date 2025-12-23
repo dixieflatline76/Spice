@@ -156,6 +156,9 @@ lint:
 	gofmt -w .
 	go run github.com/golangci/golangci-lint/cmd/golangci-lint@latest run --timeout=10m ./...
 
+security:
+	go run github.com/golangci/golangci-lint/cmd/golangci-lint@latest run --timeout=10m --enable gosec --tests=false ./...
+
 test:
 	go test ./...
 

@@ -479,6 +479,7 @@ func (wp *Plugin) updateTrayMenuUI(img provider.Image) {
 
 // applyWallpaper sets the wallpaper to the given image and triggers necessary logic.
 func (wp *Plugin) applyWallpaper(img provider.Image) {
+	start := time.Now()
 	// Trigger download event (async)
 	if img.DownloadLocation != "" {
 		go wp.triggerDownload(img.DownloadLocation)
@@ -488,7 +489,7 @@ func (wp *Plugin) applyWallpaper(img provider.Image) {
 	// This fixes the URL desync issue where "View on Web" would link to the old image while blocks.
 	prevImage := wp.currentImage
 	wp.currentImage = img
-	wp.updateTrayMenuUI(img)
+	go wp.updateTrayMenuUI(img)
 
 	// Mark as seen to update history/pagination logic (Async to avoid blocking UI)
 	go wp.store.MarkSeen(img.FilePath)
@@ -502,6 +503,7 @@ func (wp *Plugin) applyWallpaper(img provider.Image) {
 
 	// log.Debugf("Applying Wallpaper: ID=%s, Provider=%s, Path=%s", img.ID, img.Provider, img.FilePath)
 
+	osStart := time.Now()
 	if err := wp.os.setWallpaper(img.FilePath); err != nil {
 		log.Printf("failed to set wallpaper: %v", err)
 		// Rollback UI and state to previous image
@@ -511,7 +513,8 @@ func (wp *Plugin) applyWallpaper(img provider.Image) {
 		}
 		return
 	}
-	// log.Debugf("Wallpaper set successfully in %v", time.Since(osStart))
+	log.Debugf("[Latency] Wallpaper transition for %s: Total=%v (Worker=%v, OS=%v)",
+		img.ID, time.Since(start), osStart.Sub(start), time.Since(osStart))
 
 	// Threshold logic: If we have seen > 80% of local images (approximation), fetch next page.
 	seenCount := wp.store.SeenCount()

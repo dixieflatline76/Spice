@@ -11,6 +11,29 @@ import (
 	"strings"
 )
 
+// resolveCollectionPath resolves a collection path relative to a namespace root and
+// enforces that the resulting absolute path is contained within the root.
+func (s *Server) resolveCollectionPath(rootPath, collectionID string) (string, error) {
+	absRoot, err := filepath.Abs(rootPath)
+	if err != nil {
+		return "", fmt.Errorf("invalid namespace root: %w", err)
+	}
+	absRoot = filepath.Clean(absRoot)
+
+	absCollection, err := filepath.Abs(filepath.Join(absRoot, collectionID))
+	if err != nil {
+		return "", fmt.Errorf("invalid collection path: %w", err)
+	}
+	absCollection = filepath.Clean(absCollection)
+
+	// Ensure the collection path is strictly within the namespace root.
+	if absCollection != absRoot && !strings.HasPrefix(absCollection, absRoot+string(os.PathSeparator)) {
+		return "", fmt.Errorf("path traversal detected")
+	}
+
+	return absCollection, nil
+}
+
 // handleLocal routes requests to local namespace handlers
 // Path format: /local/{namespace}/{action}/...
 // Supported patterns:
@@ -43,29 +66,11 @@ func (s *Server) handleLocal(w http.ResponseWriter, r *http.Request) {
 
 	// Construct the collection path
 	// Use absolute, cleaned paths and enforce strict containment within rootPath.
-	absRoot, err := filepath.Abs(rootPath)
+	collectionPath, err := s.resolveCollectionPath(rootPath, collectionID)
 	if err != nil {
-		http.Error(w, "Invalid namespace root", http.StatusInternalServerError)
+		http.Error(w, "Invalid collection path or traversal detected", http.StatusBadRequest)
 		return
 	}
-	absRoot = filepath.Clean(absRoot)
-
-	// Extra Security: Ensure the resulting path is strictly contained within rootPath
-	// This silences CodeQL "Uncontrolled data used in path expression" by verifying the resolved path.
-	absCollection, err := filepath.Abs(filepath.Join(absRoot, collectionID))
-	if err != nil {
-		http.Error(w, "Invalid collection path", http.StatusBadRequest)
-		return
-	}
-	absCollection = filepath.Clean(absCollection)
-
-	// Ensure the collection path is strictly within the namespace root.
-	if absCollection != absRoot && !strings.HasPrefix(absCollection, absRoot+string(os.PathSeparator)) {
-		http.Error(w, "Accessible path traversal detected", http.StatusBadRequest)
-		return
-	}
-
-	collectionPath := absCollection
 
 	switch actionOrType {
 	case "images":
@@ -248,7 +253,8 @@ func (s *Server) handleLocalAsset(w http.ResponseWriter, r *http.Request, collec
 	}
 	absCollectionPath = filepath.Clean(absCollectionPath)
 
-	fullPath := filepath.Join(collectionPath, filename)
+	// Build the asset path relative to the normalized collection root
+	fullPath := filepath.Join(absCollectionPath, filename)
 	absFullPath, err := filepath.Abs(fullPath)
 	if err != nil {
 		http.Error(w, "Invalid asset path", http.StatusBadRequest)
@@ -262,7 +268,7 @@ func (s *Server) handleLocalAsset(w http.ResponseWriter, r *http.Request, collec
 		prefix += string(os.PathSeparator)
 	}
 
-	if absFullPath != absCollectionPath && !strings.HasPrefix(absFullPath, prefix) {
+	if !strings.HasPrefix(absFullPath, prefix) {
 		http.Error(w, "Invalid asset path", http.StatusBadRequest)
 		return
 	}

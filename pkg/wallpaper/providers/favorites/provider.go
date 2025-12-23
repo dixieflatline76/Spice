@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -26,10 +27,26 @@ const (
 	ProviderName = "Favorites"
 )
 
+type favJobType int
+
+const (
+	jobAdd favJobType = iota
+	jobRemove
+)
+
+type favJob struct {
+	jobType favJobType
+	img     provider.Image
+}
+
 type Provider struct {
 	cfg     *wallpaper.Config
 	apiHost string
 	rootDir string
+
+	mu      sync.RWMutex
+	favMap  map[string]bool
+	jobChan chan favJob
 }
 
 func init() {
@@ -39,11 +56,16 @@ func init() {
 }
 
 func NewProvider(cfg *wallpaper.Config) *Provider {
-	return &Provider{
+	p := &Provider{
 		cfg:     cfg,
 		apiHost: "127.0.0.1:49452",
 		rootDir: filepath.Join(os.TempDir(), "spice", wallpaper.FavoritesCollection),
+		favMap:  make(map[string]bool),
+		jobChan: make(chan favJob, 100),
 	}
+	p.loadInitialMetadata()
+	go p.runWorker()
+	return p
 }
 
 // SetTestConfig allows tests to override internal paths and hosts
@@ -61,7 +83,18 @@ func (p *Provider) Title() string {
 }
 
 func (p *Provider) HomeURL() string {
-	return ""
+	absPath, err := filepath.Abs(p.rootDir)
+	if err != nil {
+		log.Printf("Failed to resolve favorites dir: %v", err)
+		return ""
+	}
+	// Convert to URI-friendly path (forward slashes)
+	// On Windows: C:/Users/... -> file:///C:/Users/...
+	path := filepath.ToSlash(absPath)
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+	return "file://" + path
 }
 
 func (p *Provider) GetProviderIcon() fyne.Resource {
@@ -85,18 +118,48 @@ func (p *Provider) EnrichImage(ctx context.Context, img provider.Image) (provide
 }
 
 func (p *Provider) IsFavorited(img provider.Image) bool {
-	// If the image is served from the Favorites provider itself, it's definitely favorited.
 	if img.Provider == ProviderName {
 		return true
 	}
 
-	if img.FilePath == "" {
-		return false
-	}
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.favMap[img.ID]
+}
+
+func (p *Provider) loadInitialMetadata() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	favDir := p.rootDir
-	destPath := filepath.Join(favDir, filepath.Base(img.FilePath))
-	_, err := os.Stat(destPath)
-	return err == nil
+	if _, err := os.Stat(favDir); os.IsNotExist(err) {
+		return
+	}
+
+	metaFile := filepath.Join(favDir, "metadata.json")
+	var meta map[string]interface{}
+	if f, err := os.ReadFile(metaFile); err == nil {
+		if err := json.Unmarshal(f, &meta); err == nil {
+			if filesMeta, ok := meta["files"].(map[string]interface{}); ok {
+				for filename := range filesMeta {
+					// ID is filename without extension
+					id := strings.TrimSuffix(filename, filepath.Ext(filename))
+					p.favMap[id] = true
+				}
+			}
+		}
+	}
+}
+
+func (p *Provider) runWorker() {
+	for job := range p.jobChan {
+		switch job.jobType {
+		case jobAdd:
+			p.addFavoriteInternal(job.img)
+		case jobRemove:
+			p.removeFavoriteInternal(job.img)
+		}
+	}
 }
 
 func (p *Provider) GetSourceQueryID() string {
@@ -104,9 +167,19 @@ func (p *Provider) GetSourceQueryID() string {
 }
 
 func (p *Provider) AddFavorite(img provider.Image) error {
+	p.mu.Lock()
+	p.favMap[img.ID] = true
+	p.mu.Unlock()
+
+	p.jobChan <- favJob{jobType: jobAdd, img: img}
+	return nil
+}
+
+func (p *Provider) addFavoriteInternal(img provider.Image) {
 	favDir := p.rootDir
 	if err := os.MkdirAll(favDir, 0755); err != nil {
-		return fmt.Errorf("failed to create favorites directory: %w", err)
+		log.Printf("failed to create favorites directory: %v", err)
+		return
 	}
 
 	filename := filepath.Base(img.FilePath)
@@ -136,6 +209,11 @@ func (p *Provider) AddFavorite(img provider.Image) error {
 			}
 			if oldest != "" {
 				os.Remove(filepath.Join(favDir, oldest))
+				// Also remove from favMap
+				oldestID := strings.TrimSuffix(oldest, filepath.Ext(oldest))
+				p.mu.Lock()
+				delete(p.favMap, oldestID)
+				p.mu.Unlock()
 				log.Printf("FIFO: Removed oldest favorite %s", oldest)
 			}
 		}
@@ -144,10 +222,12 @@ func (p *Provider) AddFavorite(img provider.Image) error {
 	// Perform Copy
 	input, err := os.ReadFile(img.FilePath)
 	if err != nil {
-		return fmt.Errorf("failed to read master for favoriting: %w", err)
+		log.Printf("failed to read master for favoriting: %v", err)
+		return
 	}
 	if err := os.WriteFile(destPath, input, 0644); err != nil {
-		return fmt.Errorf("failed to save favorite: %w", err)
+		log.Printf("failed to save favorite: %v", err)
+		return
 	}
 
 	// Save Metadata
@@ -175,11 +255,18 @@ func (p *Provider) AddFavorite(img provider.Image) error {
 			log.Printf("Failed to save favorites metadata: %v", err)
 		}
 	}
-
-	return nil
 }
 
 func (p *Provider) RemoveFavorite(img provider.Image) error {
+	p.mu.Lock()
+	delete(p.favMap, img.ID)
+	p.mu.Unlock()
+
+	p.jobChan <- favJob{jobType: jobRemove, img: img}
+	return nil
+}
+
+func (p *Provider) removeFavoriteInternal(img provider.Image) {
 	favDir := p.rootDir
 
 	// We cannot rely on filepath.Base(img.FilePath) because img.FilePath might point to a
@@ -223,10 +310,9 @@ func (p *Provider) RemoveFavorite(img provider.Image) error {
 
 	destPath := filepath.Join(favDir, filename)
 	if err := os.Remove(destPath); err != nil {
-		if os.IsNotExist(err) {
-			return nil
+		if !os.IsNotExist(err) {
+			log.Printf("failed to remove favorite file %s: %v", destPath, err)
 		}
-		return fmt.Errorf("failed to remove favorite file %s: %w", destPath, err)
 	}
 
 	// Cleanup Metadata Entry
@@ -242,7 +328,6 @@ func (p *Provider) RemoveFavorite(img provider.Image) error {
 			}
 		}
 	}
-	return nil
 }
 
 func (p *Provider) FetchImages(ctx context.Context, apiURL string, page int) ([]provider.Image, error) {

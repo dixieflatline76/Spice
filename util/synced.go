@@ -29,11 +29,13 @@ func (si *SafeCounter) Decrement() int {
 
 // Add adds a delta to the counter's value and returns the new value.
 func (si *SafeCounter) Add(delta int) int {
+	//nolint:gosec // G115: integer overflow conversion int -> int32. We assume reasonable usage.
 	return int(atomic.AddInt32(&si.value, int32(delta)))
 }
 
 // Subtract subtracts a delta from the counter's value and returns the new value.
 func (si *SafeCounter) Subtract(delta int) int {
+	//nolint:gosec // G115: integer overflow conversion int -> int32. We assume reasonable usage.
 	return int(atomic.AddInt32(&si.value, -int32(delta)))
 }
 

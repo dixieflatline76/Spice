@@ -44,7 +44,7 @@ func (w *windowsOS) setWallpaper(imagePath string) error {
 		uintptr(SPISetDeskWallpaper),
 		uintptr(0),
 		uintptr(unsafe.Pointer(imagePathUTF16)),
-		uintptr(SPIFUpdateIniFile),
+		uintptr(SPIFUpdateIniFile|SPIFSendWinIniChange),
 	)
 	if ret == 0 {
 		return err

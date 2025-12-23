@@ -130,7 +130,7 @@ func (p *Pipeline) stateManagerLoop() {
 			if res.Error != nil {
 				if strings.Contains(res.Error.Error(), "avoid set") {
 					log.Debugf("Pipeline: %v", res.Error)
-				} else if strings.Contains(res.Error.Error(), "smart fit") {
+				} else if strings.Contains(res.Error.Error(), "smart fit") || strings.Contains(res.Error.Error(), "aspect ratio") {
 					log.Debugf("Pipeline: %v", res.Error)
 				} else {
 					log.Printf("Pipeline Error: %v", res.Error)

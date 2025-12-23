@@ -37,12 +37,6 @@ func extractFilenameSimple(urlStr string) string {
 	return urlStr[lastSlashIndex+1:]
 }
 
-// isImageFile checks if a file has a common image extension.
-func isImageFile(path string) bool {
-	ext := filepath.Ext(path)
-	return ext == ".jpg" || ext == ".jpeg" || ext == ".png" || ext == ".gif"
-}
-
 // GenerateQueryID creates a stable hash ID from a URL string.
 func GenerateQueryID(url string) string {
 	h := fnv.New64a()

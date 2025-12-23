@@ -111,7 +111,8 @@ func updateManifestVersion(filename string, v Version) error {
 
 	newData := re.ReplaceAll(data, []byte(replacement))
 
-	return os.WriteFile(filename, newData, 0644)
+	// G306: Expect WriteFile permissions to be 0600
+	return os.WriteFile(filename, newData, 0600)
 }
 
 // readVersionFromFile reads the version string from the specified file.
@@ -169,7 +170,8 @@ func bumpVersion(v Version, bumpType string) (Version, error) {
 
 // writeVersionToFile writes the new version string to the specified file.
 func writeVersionToFile(filename string, v Version) error {
-	return os.WriteFile(filename, []byte(v.String()), 0644)
+	// G306: Expect WriteFile permissions to be 0600
+	return os.WriteFile(filename, []byte(v.String()), 0600)
 }
 
 // String returns the formatted version string (e.g., "v1.2.4").

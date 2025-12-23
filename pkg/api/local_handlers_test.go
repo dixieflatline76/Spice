@@ -61,8 +61,11 @@ func setupCollection(t *testing.T, rootPath, colID, desc, author string) {
 	err := os.MkdirAll(colPath, 0755)
 	assert.NoError(t, err)
 
-	// Create dummy image
-	err = os.WriteFile(filepath.Join(colPath, "test.jpg"), []byte("image_data"), 0644)
+	// Create dummy entries
+	// G306: Expect WriteFile permissions to be 0600
+	err = os.WriteFile(filepath.Join(colPath, "image1.jpg"), []byte("fake image content"), 0600)
+	assert.NoError(t, err)
+	err = os.WriteFile(filepath.Join(colPath, "image2.png"), []byte("fake image content"), 0600)
 	assert.NoError(t, err)
 
 	// Create metadata.json
@@ -93,12 +96,12 @@ func TestLocalHandler_Security_Direct(t *testing.T) {
 	}{
 		{
 			name:       "Valid Asset",
-			path:       "/local/google_photos/safe_col/assets/test.jpg",
+			path:       "/local/google_photos/safe_col/assets/image1.jpg",
 			wantStatus: http.StatusOK,
 		},
 		{
 			name:       "Path Traversal to Root",
-			path:       "/local/google_photos/../safe_col/assets/test.jpg",
+			path:       "/local/google_photos/../safe_col/assets/image1.jpg",
 			wantStatus: http.StatusBadRequest, // Blocked by collectionID strict check
 		},
 		{

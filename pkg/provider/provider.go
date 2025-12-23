@@ -22,6 +22,7 @@ type Image struct {
 	Width            int             // Image Width (if available from source)
 	Height           int             // Image Height (if available from source)
 	IsFavorited      bool            // Flag to protect image from cache pruning
+	Seen             bool            // Flag for pagination/history logic
 }
 
 // Favoriter defines the interface for providers that support favoriting images.
