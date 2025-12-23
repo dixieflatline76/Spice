@@ -74,7 +74,7 @@ func (s *Server) handleLocal(w http.ResponseWriter, r *http.Request) {
 
 	switch actionOrType {
 	case "images":
-		s.handleLocalListing(w, r, collectionPath, namespace, collectionID)
+		s.handleLocalListing(w, r, rootPath, namespace, collectionID)
 	case "assets":
 		if len(parts) < 4 {
 			http.Error(w, "Missing filename", http.StatusBadRequest)
@@ -94,7 +94,14 @@ type LocalImage struct {
 	ProductURL  string `json:"product_url,omitempty"`
 }
 
-func (s *Server) handleLocalListing(w http.ResponseWriter, r *http.Request, collectionPath, namespace, collectionID string) {
+func (s *Server) handleLocalListing(w http.ResponseWriter, r *http.Request, rootPath, namespace, collectionID string) {
+	// Security: Re-resolve path locally to satisfy CodeQL data flow analysis
+	collectionPath, err := s.resolveCollectionPath(rootPath, collectionID)
+	if err != nil {
+		http.Error(w, "Invalid collection path", http.StatusBadRequest)
+		return
+	}
+
 	// Paging params
 	pageStr := r.URL.Query().Get("page")
 	perPageStr := r.URL.Query().Get("per_page")
