@@ -471,7 +471,7 @@ func (wp *Plugin) updateTrayMenuUI(img provider.Image) {
 			if attribution == "" {
 				wp.artistMenuItem.Label = "By: Unknown"
 			}
-			wp.updateFavoriteMenuItem()
+			wp.updateFavoriteMenuItem(false)
 			wp.manager.RefreshTrayMenu()
 		}
 	})
@@ -500,8 +500,8 @@ func (wp *Plugin) applyWallpaper(img provider.Image) {
 		return
 	}
 
-	log.Debugf("Applying Wallpaper: ID=%s, Provider=%s, Path=%s", img.ID, img.Provider, img.FilePath)
-	osStart := time.Now()
+	// log.Debugf("Applying Wallpaper: ID=%s, Provider=%s, Path=%s", img.ID, img.Provider, img.FilePath)
+
 	if err := wp.os.setWallpaper(img.FilePath); err != nil {
 		log.Printf("failed to set wallpaper: %v", err)
 		// Rollback UI and state to previous image
@@ -511,7 +511,7 @@ func (wp *Plugin) applyWallpaper(img provider.Image) {
 		}
 		return
 	}
-	log.Debugf("Wallpaper set successfully in %v", time.Since(osStart))
+	// log.Debugf("Wallpaper set successfully in %v", time.Since(osStart))
 
 	// Threshold logic: If we have seen > 80% of local images (approximation), fetch next page.
 	seenCount := wp.store.SeenCount()
@@ -599,11 +599,11 @@ func (wp *Plugin) setNextWallpaper() {
 			wp.rebuildShuffleOrder(count)
 		}
 		newIndex = wp.shuffleOrder[wp.randomPos]
-		log.Debugf("Shuffle Selection: Index %d from position %d/%d", newIndex, wp.randomPos, count)
+		// log.Debugf("Shuffle Selection: Index %d from position %d/%d", newIndex, wp.randomPos, count)
 		wp.randomPos++
 	} else {
 		newIndex = (wp.currentIndex + 1) % count
-		log.Debugf("Sequential Selection: Index %d (Current: %d, Count: %d)", newIndex, wp.currentIndex, count)
+		// log.Debugf("Sequential Selection: Index %d (Current: %d, Count: %d)", newIndex, wp.currentIndex, count)
 	}
 
 	img, ok := wp.store.Get(newIndex)
@@ -882,8 +882,8 @@ func (wp *Plugin) startEnrichmentWorker() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		processed := 0
 
-		// Look ahead loop
-		for i := 1; i <= windowSize; i++ {
+		// Look ahead loop (including current image at i=0)
+		for i := 0; i <= windowSize; i++ {
 			// CHECK FOR PIVOT: Before doing work, check if user moved again
 			select {
 			case latestIndex := <-wp.enrichmentSignal:
@@ -914,6 +914,12 @@ func (wp *Plugin) startEnrichmentWorker() {
 			if err == nil && enriched.Attribution != "" {
 				wp.store.Update(enriched)
 				processed++
+
+				// If this is the current image, update the UI labels immediately
+				if idx == wp.currentIndex {
+					wp.currentImage = enriched
+					wp.updateTrayMenuUI(enriched)
+				}
 			}
 			// Small pacing
 			time.Sleep(100 * time.Millisecond)
@@ -1195,10 +1201,9 @@ func (wp *Plugin) ToggleFavorite() {
 		}
 		wp.manager.NotifyUser("Favorites", "Removed from favorites.")
 
-		// Aggressive Cleanup: Remove from pipeline/queue and cache
-		if wp.pipeline != nil {
-			wp.pipeline.SendCommand(StateCmd{Type: CmdRemove, Payload: wp.currentImage.ID})
-		}
+		// Aggressive Cleanup: Remove from store immediately (synchronous)
+		// This prevents SetNextWallpaper from picking the same image if it's the only one.
+		wp.store.Remove(wp.currentImage.ID)
 
 		// Auto-Skip: Move to next wallpaper immediately
 		go wp.SetNextWallpaper()
@@ -1241,11 +1246,11 @@ func (wp *Plugin) ToggleFavorite() {
 	}
 
 	// Update UI
-	wp.updateFavoriteMenuItem()
+	wp.updateTrayMenuUI(wp.currentImage) // This includes updateFavoriteMenuItem(false) and Refresh
 }
 
 // updateFavoriteMenuItem updates the label and icon of the favorite menu item.
-func (wp *Plugin) updateFavoriteMenuItem() {
+func (wp *Plugin) updateFavoriteMenuItem(refresh bool) {
 	wp.runOnUI(func() {
 		if wp.favoriteMenuItem == nil || wp.favoriter == nil {
 			return
@@ -1279,6 +1284,8 @@ func (wp *Plugin) updateFavoriteMenuItem() {
 			}
 		}
 
-		wp.manager.RefreshTrayMenu()
+		if refresh {
+			wp.manager.RefreshTrayMenu()
+		}
 	})
 }

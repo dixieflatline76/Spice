@@ -57,9 +57,9 @@ func (wp *Plugin) CreateTrayMenuItems() []*fyne.MenuItem {
 	if exists && q.Active {
 		wp.favoriteMenuItem = wp.manager.CreateMenuItem("Add to Favorites", func() {
 			go wp.ToggleFavorite()
-		}, "add.png")
+		}, "favorite.png")
 		items = append(items, wp.favoriteMenuItem)
-		wp.updateFavoriteMenuItem() // Initialize label/icon
+		wp.updateFavoriteMenuItem(false) // Initialize label/icon
 	}
 
 	items = append(items, wp.manager.CreateMenuItem("Delete and Block Image", func() {

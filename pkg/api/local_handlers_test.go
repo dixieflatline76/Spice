@@ -77,3 +77,62 @@ func setupCollection(t *testing.T, rootPath, colID, desc, author string) {
 	err = json.NewEncoder(f).Encode(meta)
 	assert.NoError(t, err)
 }
+
+func TestLocalHandler_Security_Direct(t *testing.T) {
+	// Setup
+	tempDir := t.TempDir()
+	gpPath := filepath.Join(tempDir, "google_photos")
+	setupCollection(t, gpPath, "safe_col", "Safe", "Alice")
+	s := NewServer()
+	s.RegisterNamespace("google_photos", gpPath)
+
+	tests := []struct {
+		name       string
+		path       string // Raw path to simulate bypass of ServerMux cleaning or RawPath usage
+		wantStatus int
+	}{
+		{
+			name:       "Valid Asset",
+			path:       "/local/google_photos/safe_col/assets/test.jpg",
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "Path Traversal to Root",
+			path:       "/local/google_photos/../safe_col/assets/test.jpg",
+			wantStatus: http.StatusBadRequest, // Blocked by collectionID strict check
+		},
+		{
+			name:       "Collection Traversal",
+			path:       "/local/google_photos/../gp_col_out/assets/test.jpg",
+			wantStatus: http.StatusBadRequest, // Blocked by collectionID strict check
+		},
+		{
+			name:       "Filename Traversal",
+			path:       "/local/google_photos/safe_col/assets/../metadata.json",
+			wantStatus: http.StatusBadRequest, // Blocked by specialized filename check in handleLocalAsset
+		},
+		{
+			name:       "Filename with Windows Separator",
+			path:       "/local/google_photos/safe_col/assets/foo\\bar.jpg",
+			wantStatus: http.StatusBadRequest, // Blocked by filename check
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest("GET", tt.path, nil)
+			// Manually set RequestURI/URL.Path to ensure it's not cleaned by NewRequest if possible,
+			// though NewRequest parses it.
+			// We can manually invoke handleLocal which uses r.URL.Path
+			// For specific ".." testing, we might need to rely on the fact we are passing it directly to split.
+
+			w := httptest.NewRecorder()
+			// Direct call to bypass ServeMux cleaning for testing handler resilience
+			s.handleLocal(w, req)
+
+			if w.Code != tt.wantStatus {
+				t.Errorf("path %q: got status %d, want %d Body: %s", tt.path, w.Code, tt.wantStatus, w.Body.String())
+			}
+		})
+	}
+}

@@ -359,7 +359,7 @@ func (s *ImageStore) LoadAvoidSet(avoidSet map[string]bool) {
 	for id := range avoidSet {
 		s.avoidSet[id] = true
 	}
-	log.Debugf("Store: Loaded %d blocked images from config.", len(avoidSet))
+	// log.Debugf("Store: Loaded %d blocked images from config.", len(avoidSet))
 }
 
 // --- Persistence & Sync ---
@@ -394,7 +394,7 @@ func (s *ImageStore) LoadCache() error {
 		s.idSet[img.ID] = true
 	}
 
-	log.Debugf("Store: Loaded %d images from cache.", len(s.images))
+	// log.Debugf("Store: Loaded %d images from cache.", len(s.images))
 	return nil
 }
 
@@ -414,7 +414,7 @@ func (s *ImageStore) Sync(limit int, targetFlags map[string]bool, activeQueryIDs
 		return
 	}
 
-	log.Debugf("Store: Syncing... (Limit: %d)", limit)
+	// log.Debugf("Store: Syncing... (Limit: %d)", limit)
 	if limit <= 0 {
 		limit = 50
 	}
@@ -496,7 +496,7 @@ func (s *ImageStore) Sync(limit int, targetFlags map[string]bool, activeQueryIDs
 	// Grooming (FIFO - remove excess from start)
 	if len(finalImages) > limit {
 		excess := len(finalImages) - limit
-		log.Debugf("Store: Grooming %d excess images.", excess)
+		// log.Debugf("Store: Grooming %d excess images.", excess)
 
 		groomingCandidates := finalImages[:excess]
 		finalImages = finalImages[excess:]
@@ -514,7 +514,7 @@ func (s *ImageStore) Sync(limit int, targetFlags map[string]bool, activeQueryIDs
 	// The incremental delete(s.idSet, ...) is correct only if we processed ALL s.images.
 	// We did.
 
-	log.Debugf("Store Sync: Final Valid Images Count: %d. (Deleted: %d)", len(s.images), len(idsToDelete))
+	// log.Debugf("Store Sync: Final Valid Images Count: %d. (Deleted: %d)", len(s.images), len(idsToDelete))
 	s.mu.Unlock()
 
 	// 4. Batch Delete Files (No Lock - Heavy I/O)

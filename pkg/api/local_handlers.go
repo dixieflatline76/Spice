@@ -42,17 +42,30 @@ func (s *Server) handleLocal(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Construct the collection path
-	// e.g. C:\...Temp\spice\google_photos\GUID
-	collectionPath := filepath.Join(rootPath, collectionID)
+	// Use absolute, cleaned paths and enforce strict containment within rootPath.
+	absRoot, err := filepath.Abs(rootPath)
+	if err != nil {
+		http.Error(w, "Invalid namespace root", http.StatusInternalServerError)
+		return
+	}
+	absRoot = filepath.Clean(absRoot)
 
 	// Extra Security: Ensure the resulting path is strictly contained within rootPath
 	// This silences CodeQL "Uncontrolled data used in path expression" by verifying the resolved path.
-	cleanRoot := filepath.Clean(rootPath)
-	cleanCollection := filepath.Clean(collectionPath)
-	if !strings.HasPrefix(cleanCollection, cleanRoot) {
+	absCollection, err := filepath.Abs(filepath.Join(absRoot, collectionID))
+	if err != nil {
+		http.Error(w, "Invalid collection path", http.StatusBadRequest)
+		return
+	}
+	absCollection = filepath.Clean(absCollection)
+
+	// Ensure the collection path is strictly within the namespace root.
+	if absCollection != absRoot && !strings.HasPrefix(absCollection, absRoot+string(os.PathSeparator)) {
 		http.Error(w, "Accessible path traversal detected", http.StatusBadRequest)
 		return
 	}
+
+	collectionPath := absCollection
 
 	switch actionOrType {
 	case "images":
@@ -216,20 +229,43 @@ func (s *Server) handleLocalListing(w http.ResponseWriter, r *http.Request, coll
 }
 
 func (s *Server) handleLocalAsset(w http.ResponseWriter, r *http.Request, collectionPath, filename string) {
-	// Security: validate filename (no ..)
+	// Security: validate filename - must be a single path component with no traversal
+	if strings.Contains(filename, "/") || strings.Contains(filename, "\\") || strings.Contains(filename, "..") {
+		http.Error(w, "Invalid filename", http.StatusBadRequest)
+		return
+	}
 	cleanParams := filepath.Base(filename)
 	if cleanParams != filename {
 		http.Error(w, "Invalid filename", http.StatusBadRequest)
 		return
 	}
 
-	fullPath := filepath.Join(collectionPath, filename)
+	// Double-check containment using absolute, cleaned paths to satisfy CodeQL and prevent traversal
+	absCollectionPath, err := filepath.Abs(collectionPath)
+	if err != nil {
+		http.Error(w, "Invalid asset path", http.StatusBadRequest)
+		return
+	}
+	absCollectionPath = filepath.Clean(absCollectionPath)
 
-	// Double-check containment for CodeQL compliance
-	if !strings.HasPrefix(filepath.Clean(fullPath), filepath.Clean(collectionPath)) {
+	fullPath := filepath.Join(collectionPath, filename)
+	absFullPath, err := filepath.Abs(fullPath)
+	if err != nil {
+		http.Error(w, "Invalid asset path", http.StatusBadRequest)
+		return
+	}
+	absFullPath = filepath.Clean(absFullPath)
+
+	// Ensure prefix check includes separator to prevent partial name matching
+	prefix := absCollectionPath
+	if !strings.HasSuffix(prefix, string(os.PathSeparator)) {
+		prefix += string(os.PathSeparator)
+	}
+
+	if absFullPath != absCollectionPath && !strings.HasPrefix(absFullPath, prefix) {
 		http.Error(w, "Invalid asset path", http.StatusBadRequest)
 		return
 	}
 
-	http.ServeFile(w, r, fullPath)
+	http.ServeFile(w, r, absFullPath)
 }

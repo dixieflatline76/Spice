@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -26,7 +27,9 @@ const (
 )
 
 type Provider struct {
-	cfg *wallpaper.Config
+	cfg     *wallpaper.Config
+	apiHost string
+	rootDir string
 }
 
 func init() {
@@ -36,7 +39,17 @@ func init() {
 }
 
 func NewProvider(cfg *wallpaper.Config) *Provider {
-	return &Provider{cfg: cfg}
+	return &Provider{
+		cfg:     cfg,
+		apiHost: "127.0.0.1:49452",
+		rootDir: filepath.Join(os.TempDir(), "spice", wallpaper.FavoritesCollection),
+	}
+}
+
+// SetTestConfig allows tests to override internal paths and hosts
+func (p *Provider) SetTestConfig(host, rootDir string) {
+	p.apiHost = host
+	p.rootDir = rootDir
 }
 
 func (p *Provider) Name() string {
@@ -80,7 +93,7 @@ func (p *Provider) IsFavorited(img provider.Image) bool {
 	if img.FilePath == "" {
 		return false
 	}
-	favDir := filepath.Join(os.TempDir(), "spice", wallpaper.FavoritesCollection)
+	favDir := p.rootDir
 	destPath := filepath.Join(favDir, filepath.Base(img.FilePath))
 	_, err := os.Stat(destPath)
 	return err == nil
@@ -91,7 +104,7 @@ func (p *Provider) GetSourceQueryID() string {
 }
 
 func (p *Provider) AddFavorite(img provider.Image) error {
-	favDir := filepath.Join(os.TempDir(), "spice", wallpaper.FavoritesCollection)
+	favDir := p.rootDir
 	if err := os.MkdirAll(favDir, 0755); err != nil {
 		return fmt.Errorf("failed to create favorites directory: %w", err)
 	}
@@ -167,20 +180,59 @@ func (p *Provider) AddFavorite(img provider.Image) error {
 }
 
 func (p *Provider) RemoveFavorite(img provider.Image) error {
-	favDir := filepath.Join(os.TempDir(), "spice", wallpaper.FavoritesCollection)
-	filename := filepath.Base(img.FilePath)
-	destPath := filepath.Join(favDir, filename)
+	favDir := p.rootDir
 
-	if err := os.Remove(destPath); err != nil {
-		return fmt.Errorf("failed to remove favorite file: %w", err)
-	}
+	// We cannot rely on filepath.Base(img.FilePath) because img.FilePath might point to a
+	// processed/cached copy (e.g. .jpeg) while the original favorite is .png or .jpg.
+	// We use img.ID to find the file.
 
-	// Cleanup Metadata
+	// Strategy:
+	// 1. Check metadata (authoritative source of filenames)
+	// 2. Glob search (fallback)
+
+	var filename string
 	metaFile := filepath.Join(favDir, "metadata.json")
+	var meta map[string]interface{}
+
 	if f, err := os.ReadFile(metaFile); err == nil {
-		var meta map[string]interface{}
 		if err := json.Unmarshal(f, &meta); err == nil {
 			if filesMeta, ok := meta["files"].(map[string]interface{}); ok {
+				// Search for filename matching ID
+				for k := range filesMeta {
+					if strings.TrimSuffix(k, filepath.Ext(k)) == img.ID {
+						filename = k
+						break
+					}
+				}
+			}
+		}
+	}
+
+	// Fallback if not found in metadata (or metadata missing)
+	if filename == "" {
+		matches, err := filepath.Glob(filepath.Join(favDir, img.ID+".*"))
+		if err == nil && len(matches) > 0 {
+			filename = filepath.Base(matches[0])
+		}
+	}
+
+	if filename == "" {
+		// Last resort: use the cached filename (likely wrong extension, but worth a try)
+		filename = filepath.Base(img.FilePath)
+	}
+
+	destPath := filepath.Join(favDir, filename)
+	if err := os.Remove(destPath); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("failed to remove favorite file %s: %w", destPath, err)
+	}
+
+	// Cleanup Metadata Entry
+	if meta != nil {
+		if filesMeta, ok := meta["files"].(map[string]interface{}); ok {
+			if _, exists := filesMeta[filename]; exists {
 				delete(filesMeta, filename)
 				if data, err := json.MarshalIndent(meta, "", "  "); err == nil {
 					if err := os.WriteFile(metaFile, data, 0644); err != nil {
@@ -198,7 +250,7 @@ func (p *Provider) FetchImages(ctx context.Context, apiURL string, page int) ([]
 	// The actual URL built by the system will be local loopback
 
 	// Construct the local API URL
-	host := "127.0.0.1:49452" // Standard Spice API port
+	host := p.apiHost
 	u := fmt.Sprintf("http://%s/local/%s/%s/images?page=%d", host, wallpaper.FavoritesNamespace, wallpaper.FavoritesCollection, page)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", u, nil)
@@ -244,7 +296,7 @@ func (p *Provider) CreateSettingsPanel(sm setting.SettingsManager) fyne.CanvasOb
 	clearBtn := widget.NewButtonWithIcon("Clear All Favorites", theme.DeleteIcon(), func() {
 		dialog.ShowConfirm("Clear All Favorites", "Are you sure you want to delete all saved favorites?", func(b bool) {
 			if b {
-				path := filepath.Join(os.TempDir(), "spice", wallpaper.FavoritesCollection)
+				path := p.rootDir
 				os.RemoveAll(path)
 				if err := os.MkdirAll(path, 0755); err != nil {
 					log.Printf("Failed to create favorites directory: %v", err)
@@ -271,18 +323,6 @@ func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl strin
 	// But for UI display we should ensure it's "visible" or at least represented.
 
 	query, exists := p.cfg.GetQuery(wallpaper.FavoritesQueryID)
-	if !exists {
-		// Placeholder for UI if not yet "favorited" anything?
-		// User said: "be automatically added or visible once a user favorites their first image, or simply have it always available as a source"
-		// Let's make it always available in the UI.
-		query = wallpaper.ImageQuery{
-			ID:          wallpaper.FavoritesQueryID,
-			Description: "Favorite Images",
-			URL:         wallpaper.FavoritesQueryID,
-			Active:      false,
-			Provider:    ProviderName,
-		}
-	}
 
 	label := widget.NewLabel("Favorite Images")
 	activeCheck := widget.NewCheck("Active", nil)

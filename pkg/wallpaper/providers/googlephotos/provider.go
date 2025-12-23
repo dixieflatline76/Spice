@@ -29,6 +29,9 @@ type Provider struct {
 	httpClient *http.Client
 	auth       *Authenticator
 
+	apiHost string
+	rootDir string
+
 	// Callback to update the query panel when auth state changes
 	onAuthStatusChanged func()
 }
@@ -45,7 +48,15 @@ func NewProvider(cfg *wallpaper.Config, client *http.Client) *Provider {
 		cfg:        cfg,
 		httpClient: client,
 		auth:       NewAuthenticator(cfg, client),
+		apiHost:    "127.0.0.1:49452",
+		rootDir:    filepath.Join(os.TempDir(), "spice", "google_photos"),
 	}
+}
+
+// SetTestConfig allows tests to override internal paths and hosts
+func (p *Provider) SetTestConfig(host, rootDir string) {
+	p.apiHost = host
+	p.rootDir = rootDir
 }
 
 func (p *Provider) Name() string {
@@ -98,8 +109,8 @@ func (p *Provider) FetchImages(ctx context.Context, apiURL string, page int) ([]
 
 	// Call Local API
 	// Endpoint: /local/google_photos/{guid}/images?page={page}
-	// Hardcoded port 49452 matching server.go
-	reqURL := fmt.Sprintf("http://127.0.0.1:49452/local/google_photos/%s/images?page=%d&per_page=24", guid, page)
+	// Dynamic port for testing
+	reqURL := fmt.Sprintf("http://%s/local/google_photos/%s/images?page=%d&per_page=24", p.apiHost, guid, page)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
 	if err != nil {
@@ -294,7 +305,7 @@ func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl strin
 			})
 
 			guid := uuid.New().String()
-			storageBase := filepath.Join(os.TempDir(), "spice", "google_photos")
+			storageBase := p.rootDir
 			targetDir := filepath.Join(storageBase, guid)
 
 			// Download and get file links
@@ -339,7 +350,7 @@ func (p *Provider) uiError(sm setting.SettingsManager, title string, err error, 
 
 // updateMetadata updates the description in metadata.json while preserving other fields.
 func (p *Provider) updateMetadata(guid, description string) error {
-	storageBase := filepath.Join(os.TempDir(), "spice", "google_photos")
+	storageBase := p.rootDir
 	targetDir := filepath.Join(storageBase, guid)
 	metaFile := filepath.Join(targetDir, "metadata.json")
 
@@ -376,7 +387,7 @@ func (p *Provider) updateMetadata(guid, description string) error {
 
 // saveInitialMetadata creates the metadata.json with file links.
 func (p *Provider) saveInitialMetadata(guid string, fileLinks map[string]string) error {
-	storageBase := filepath.Join(os.TempDir(), "spice", "google_photos")
+	storageBase := p.rootDir
 	targetDir := filepath.Join(storageBase, guid)
 	metaFile := filepath.Join(targetDir, "metadata.json")
 
@@ -464,7 +475,7 @@ func (p *Provider) openAddGooglePhotosDialog(sm setting.SettingsManager, guid st
 }
 
 func (p *Provider) cleanupDownload(guid string) {
-	path := filepath.Join(os.TempDir(), "spice", "google_photos", guid)
+	path := filepath.Join(p.rootDir, guid)
 	os.RemoveAll(path)
 }
 
