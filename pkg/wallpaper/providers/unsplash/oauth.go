@@ -74,7 +74,11 @@ func (a *UnsplashAuthenticator) StartOAuthFlow(openURLFunc func(*url.URL) error)
 		codeChan <- code
 	})
 
-	server := &http.Server{Addr: ":10999", Handler: mux}
+	server := &http.Server{
+		Addr:              ":10999",
+		Handler:           mux,
+		ReadHeaderTimeout: 3 * time.Second, // G112: Potential Slowloris Attack
+	}
 
 	go func() {
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {

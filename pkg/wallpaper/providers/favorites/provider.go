@@ -225,7 +225,7 @@ func (p *Provider) addFavoriteInternal(img provider.Image) {
 		log.Printf("failed to read master for favoriting: %v", err)
 		return
 	}
-	if err := os.WriteFile(destPath, input, 0644); err != nil {
+	if err := os.WriteFile(destPath, input, 0600); err != nil {
 		log.Printf("failed to save favorite: %v", err)
 		return
 	}
@@ -251,7 +251,7 @@ func (p *Provider) addFavoriteInternal(img provider.Image) {
 	}
 	meta["files"] = filesMeta
 	if data, err := json.MarshalIndent(meta, "", "  "); err == nil {
-		if err := os.WriteFile(metaFile, data, 0644); err != nil {
+		if err := os.WriteFile(metaFile, data, 0600); err != nil {
 			log.Printf("Failed to save favorites metadata: %v", err)
 		}
 	}
@@ -321,7 +321,7 @@ func (p *Provider) removeFavoriteInternal(img provider.Image) {
 			if _, exists := filesMeta[filename]; exists {
 				delete(filesMeta, filename)
 				if data, err := json.MarshalIndent(meta, "", "  "); err == nil {
-					if err := os.WriteFile(metaFile, data, 0644); err != nil {
+					if err := os.WriteFile(metaFile, data, 0600); err != nil {
 						log.Printf("Failed to update favorites metadata: %v", err)
 					}
 				}

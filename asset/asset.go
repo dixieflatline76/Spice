@@ -40,6 +40,11 @@ func (am *Manager) GetImage(name string) (image.Image, error) {
 	return img, nil
 }
 
+// GetRawImage loads and returns the raw bytes of an embedded image asset by name.
+func (am *Manager) GetRawImage(name string) ([]byte, error) {
+	return assets.ReadFile("images/" + name)
+}
+
 // GetIcon loads and returns embedded icon asset by name.
 func (am *Manager) GetIcon(name string) (fyne.Resource, error) {
 	if name == "" {

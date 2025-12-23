@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -85,8 +86,9 @@ func (s *Server) Handler() http.Handler {
 // Start starts the server.
 func (s *Server) Start() error {
 	s.httpServer = &http.Server{
-		Addr:    "127.0.0.1:49452",
-		Handler: s.mux,
+		Addr:              "127.0.0.1:49452",
+		Handler:           s.mux,
+		ReadHeaderTimeout: 3 * time.Second, // G112: Potential Slowloris Attack
 	}
 	// This is blocking
 	return s.httpServer.ListenAndServe()

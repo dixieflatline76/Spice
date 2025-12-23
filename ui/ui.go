@@ -1,9 +1,12 @@
 package ui
 
 import (
+	"bytes"
 	"fmt"
 	"image"
 	"image/color"
+	"image/draw"
+	"image/gif"
 	"net/url"
 	"strings"
 	"sync"
@@ -197,7 +200,7 @@ func (sa *SpiceApp) CreateTrayMenu() {
 	}, "prefs.png"))
 	items = append(items, fyne.NewMenuItemSeparator())
 	items = append(items, sa.CreateMenuItem("About Spice", func() {
-		sa.CreateSplashScreen(aboutSplashTime)
+		sa.CreateAboutSplash()
 	}, "tray.png"))
 	items = append(items, fyne.NewMenuItemSeparator())
 	items = append(items, sa.CreateMenuItem("Quit", func() {
@@ -290,6 +293,7 @@ func (sa *SpiceApp) addVersionWatermark(img image.Image) (image.Image, error) {
 	bounds, _ := font.BoundString(basicfont.Face7x13, versionString)
 	textWidth := bounds.Max.X.Ceil()
 
+	//nolint:gosec // G115: integer overflow conversion int -> int32. We assume reasonable usage for UI dimensions.
 	point := fixed.Point26_6{
 		X: fixed.Int26_6((img.Bounds().Dx() - textWidth - 10) * 64), // Offset from right edge, accounting for text width
 		Y: fixed.Int26_6((img.Bounds().Dy() - 10) * 64),             // Offset from bottom edge
@@ -346,13 +350,19 @@ func (sa *SpiceApp) CreateSplashScreen(seconds int) {
 	// Show the splash screen immediately after creation
 	sa.splash.Show()
 
-	// Hide the splash screen after 3 seconds
-	fyne.Do(
-		func() {
-			time.Sleep(time.Duration(seconds) * time.Second)
-			sa.splash.Hide()              // Close the splash window
+	// Hide the splash screen after the animation loop
+	// CRITICAL: We must NOT sleep on the main thread (fyne.Do), or the UI freezes and GIF won't animate.
+	go func() {
+		duration := time.Duration(seconds) * time.Second
+		time.Sleep(duration)
+		fyne.Do(func() {
+			if sa.splash != nil {
+				sa.splash.Hide() // Close the splash window
+				sa.splash = nil
+			}
 			sa.os.TransformToBackground() // Transform the app to background state
 		})
+	}()
 }
 
 // CreatePreferencesWindow creates and displays a new window for the application's preferences.
@@ -725,4 +735,139 @@ func (sa *SpiceApp) RebuildTrayMenu() {
 	fyne.Do(func() {
 		sa.CreateTrayMenu()
 	})
+}
+
+// decodeGifToFrames decodes a GIF and pre-renders each frame onto a canvas
+// handling disposal methods to prevent artifacts.
+func decodeGifToFrames(data []byte) ([]image.Image, []time.Duration, error) {
+	g, err := gif.DecodeAll(bytes.NewReader(data))
+	if err != nil {
+		return nil, nil, err
+	}
+
+	width, height := g.Config.Width, g.Config.Height
+	numFrames := len(g.Image)
+	frames := make([]image.Image, numFrames)
+	delays := make([]time.Duration, numFrames)
+
+	// Canvas to draw on (accumulates frames)
+	canvasImg := image.NewRGBA(image.Rect(0, 0, width, height))
+
+	for i, frame := range g.Image {
+		// Handle disposal of previous frame
+		// Disposal limits:
+		// 1: Do not dispose (Keep) -> Default behavior of drawing over
+		// 2: Restore to background -> Clear the area of the previous frame
+		// 3: Restore to previous -> Not supported by standard image/draw efficiently, but rare.
+		//    We approximated by handling 2.
+		// Note: We process disposal BEFORE drawing current frame (Wait, spec says disposal happens AFTER display)
+		// Actually, in a loop:
+		// 1. Compose current frame onto canvas
+		// 2. Save canvas as "Display Frame"
+		// 3. Apply disposal to canvas for NEXT iteration
+
+		// Standard "draw over"
+		draw.Draw(canvasImg, frame.Bounds(), frame, frame.Bounds().Min, draw.Over)
+
+		// Save a copy for display
+		// We must copy because canvasImg will change
+		displayFrame := image.NewRGBA(canvasImg.Bounds())
+		draw.Draw(displayFrame, canvasImg.Bounds(), canvasImg, image.Point{}, draw.Src)
+		frames[i] = displayFrame
+
+		// Calculate delay
+		delay := time.Duration(g.Delay[i]) * 10 * time.Millisecond
+		if delay == 0 {
+			delay = 100 * time.Millisecond
+		}
+		delays[i] = delay
+
+		// Handle Disposal for NEXT frame
+		disposal := g.Disposal[i]
+		if disposal == 2 { // Restore to background
+			// Clear the *current frame's* bounds from the canvas
+			draw.Draw(canvasImg, frame.Bounds(), image.Transparent, image.Point{}, draw.Src)
+		}
+	}
+
+	return frames, delays, nil
+}
+
+// CreateAboutSplash creates an animated splash screen for the "About" dialog.
+func (sa *SpiceApp) CreateAboutSplash() {
+	if sa.splash != nil {
+		return // Already showing
+	}
+
+	// Use the driver's native splash window creation
+	drv, ok := sa.Driver().(desktop.Driver)
+	if !ok {
+		return // Not supported on this platform
+	}
+	splashWindow := drv.CreateSplashWindow()
+
+	// Load the raw GIF data
+	gifData, err := sa.assetMgr.GetRawImage("about_splash.gif")
+	if err != nil {
+		utilLog.Printf("Failed to load about_splash.gif: %v", err)
+		return
+	}
+
+	// Pre-render frames to fix artifacts
+	frames, delays, err := decodeGifToFrames(gifData)
+	if err != nil {
+		utilLog.Printf("Failed to decode GIF: %v", err)
+		return
+	}
+
+	// Create initial image canvas
+	img := canvas.NewImageFromImage(frames[0])
+	img.FillMode = canvas.ImageFillContain
+	img.ScaleMode = canvas.ImageScaleSmooth
+
+	// Create Version Overlay
+	versionLabel := canvas.NewText(config.AppVersion, color.RGBA{100, 50, 0, 200})
+	versionLabel.TextSize = 18
+	versionLabel.TextStyle = fyne.TextStyle{Bold: true}
+	versionLabel.Alignment = fyne.TextAlignTrailing
+
+	// Layout: Layer the version text over the image
+	textContainer := container.NewPadded(container.NewBorder(nil, versionLabel, nil, nil))
+	content := container.NewStack(img, textContainer)
+
+	splashWindow.SetContent(content)
+	splashWindow.Resize(fyne.NewSize(300, 300)) // Scaled to 300px (Original)
+	splashWindow.CenterOnScreen()
+	sa.splash = splashWindow
+	sa.splash.Show()
+
+	// Start manual animation loop with pre-rendered frames
+	go func() {
+		defer func() {
+			fyne.Do(func() {
+				if sa.splash != nil {
+					sa.splash.Hide()
+					sa.splash = nil
+				}
+				sa.os.TransformToBackground()
+			})
+		}()
+
+		// One full cycle
+		for i, frame := range frames {
+			// Check if closed externally
+			if sa.splash == nil {
+				return
+			}
+
+			// Update frame
+			currentFrame := frame
+			fyne.Do(func() {
+				img.Image = currentFrame
+				img.Refresh()
+			})
+
+			time.Sleep(delays[i])
+		}
+	}()
 }

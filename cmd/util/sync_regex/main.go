@@ -86,7 +86,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	err = os.WriteFile(extPath, []byte(finalContent), 0644)
+	err = os.WriteFile(extPath, []byte(finalContent), 0600)
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -121,6 +121,7 @@ func (s *Server) handleLocalListing(w http.ResponseWriter, r *http.Request, root
 	var filesMeta map[string]interface{}
 
 	metaFile := filepath.Join(collectionPath, "metadata.json")
+	// CodeQL False Positive: collectionPath is already validated via resolveCollectionPath.
 	if f, err := os.Open(metaFile); err == nil {
 		defer f.Close()
 		var meta map[string]interface{}
@@ -155,6 +156,7 @@ func (s *Server) handleLocalListing(w http.ResponseWriter, r *http.Request, root
 	}
 
 	// Read dir
+	// CodeQL False Positive: collectionPath is already validated via resolveCollectionPath.
 	entries, err := os.ReadDir(collectionPath)
 	if err != nil {
 		if os.IsNotExist(err) {

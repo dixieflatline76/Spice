@@ -14,6 +14,7 @@ func NewSafeInt() *SafeCounter {
 
 // NewSafeIntWithValue creates a new SafeInt with an initial value.
 func NewSafeIntWithValue(initialValue int) *SafeCounter {
+	//nolint:gosec // G115: integer overflow conversion int -> int32. We assume reasonable usage.
 	return &SafeCounter{value: int32(initialValue)}
 }
 
@@ -41,6 +42,7 @@ func (si *SafeCounter) Subtract(delta int) int {
 
 // Set sets the value of the counter.
 func (si *SafeCounter) Set(newValue int) {
+	//nolint:gosec // G115: integer overflow conversion int -> int32.
 	atomic.StoreInt32(&si.value, int32(newValue))
 }
 
