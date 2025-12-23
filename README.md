@@ -29,6 +29,8 @@ Spice is a minimalist wallpaper manager that brings a continuous stream of delig
 * **📸 Native Pexels Integration:** Browse **Pexels** to access millions of professional, high-quality photos. *(Unsplash integration is currently disabled due to API limitations)*.
 
 * **🖼️ Google Photos:** Connect your personal cloud! Securely browse and select your favorite albums or photos from your **Google Photos** library using the native Google Photos Picker.
+  > [!NOTE]
+  > **Google Photos is currently in "Test Mode".** To use this feature, you must be added as a beta tester. Please [**Open a GitHub Issue**](https://github.com/dixieflatline76/Spice/issues) or [**Start a Discussion**](https://github.com/dixieflatline76/Spice/discussions) with your request to be added!
  
 * **❤️ Local Favorites:** Love a wallpaper? Mark it as a favorite to save a permanent local copy. You can then switch to your "Favorite Images" collection to cycle exclusively through your best picks.
 
