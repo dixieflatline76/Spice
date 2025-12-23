@@ -10,7 +10,7 @@ import (
 func TestProviderRegistry(t *testing.T) {
 	// 1. Verify all expected providers are registered
 	providers := GetRegisteredProviders()
-	expectedProviders := []string{"Wallhaven", "Unsplash", "Pexels"}
+	expectedProviders := []string{"Wallhaven", "Pexels"}
 
 	for _, name := range expectedProviders {
 		assert.Contains(t, providers, name, "Provider %s should be registered", name)

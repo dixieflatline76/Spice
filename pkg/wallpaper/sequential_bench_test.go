@@ -39,6 +39,7 @@ func (m *BenchMockPluginManager) OpenPreferences(tab string)       {}
 func (m *BenchMockPluginManager) GetPreferences() fyne.Preferences { return nil }
 func (m *BenchMockPluginManager) GetAssetManager() *asset.Manager  { return nil }
 func (m *BenchMockPluginManager) RefreshTrayMenu()                 {}
+func (m *BenchMockPluginManager) RebuildTrayMenu()                 {}
 
 // BenchMockProvider
 type BenchMockProvider struct {

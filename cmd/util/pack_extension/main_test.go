@@ -90,10 +90,11 @@ func TestZipDirectory(t *testing.T) {
 	}
 
 	// Create dummy files
-	if err := os.WriteFile(filepath.Join(srcDir, "manifest.json"), []byte(`{"name":"test"}`), 0644); err != nil {
+	// G306: Expect WriteFile permissions to be 0600
+	if err := os.WriteFile(filepath.Join(srcDir, "manifest.json"), []byte(`{"name":"test"}`), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(srcDir, "icon.png"), []byte("fake image data"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(srcDir, "icon.png"), []byte("fake image data"), 0600); err != nil {
 		t.Fatal(err)
 	}
 

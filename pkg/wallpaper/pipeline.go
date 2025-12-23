@@ -130,18 +130,14 @@ func (p *Pipeline) stateManagerLoop() {
 			if res.Error != nil {
 				if strings.Contains(res.Error.Error(), "avoid set") {
 					log.Debugf("Pipeline: %v", res.Error)
-				} else if strings.Contains(res.Error.Error(), "smart fit") {
+				} else if strings.Contains(res.Error.Error(), "smart fit") || strings.Contains(res.Error.Error(), "aspect ratio") {
 					log.Debugf("Pipeline: %v", res.Error)
 				} else {
 					log.Printf("Pipeline Error: %v", res.Error)
 				}
 				continue
 			}
-			if added := p.store.Add(res.Image); added {
-				log.Debugf("Pipeline: Added image %s to store.", res.Image.ID)
-			} else {
-				log.Debugf("Pipeline: Skipped duplicate/avoided image %s.", res.Image.ID)
-			}
+			p.store.Add(res.Image)
 
 		case cmd := <-p.cmdChan:
 			switch cmd.Type {
@@ -150,7 +146,7 @@ func (p *Pipeline) stateManagerLoop() {
 			case CmdRemove:
 				id := cmd.Payload.(string)
 				p.store.Remove(id)
-				log.Debugf("Pipeline: Removed image %s from store.", id)
+				// log.Debugf("Pipeline: Removed image %s from store.", id)
 			case CmdClear:
 				p.store.Clear()
 				log.Printf("Pipeline: Store cleared.")

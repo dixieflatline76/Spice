@@ -42,8 +42,8 @@ const (
 
 func TestGenerateJSBlock(t *testing.T) {
 	regexMap := map[string]string{
-		"Wallhaven": "^wallhaven.*$",
-		"Pexels":    "^pexels.*$",
+		"wallhaven": "^wallhaven.*$",
+		"pexels":    "^pexels.*$",
 	}
 
 	block := generateJSBlock(regexMap)

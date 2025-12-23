@@ -24,27 +24,6 @@ func TestExtractFilenameFromURL(t *testing.T) {
 	}
 }
 
-func TestIsImageFile(t *testing.T) {
-	tests := []struct {
-		path     string
-		expected bool
-	}{
-		{"image.jpg", true},
-		{"image.jpeg", true},
-		{"image.png", true},
-		{"image.gif", true},
-		{"image.txt", false},
-		{"image", false},
-		{"path/to/image.JPG", false}, // Case sensitivity check (implementation uses filepath.Ext which is OS dependent but usually case sensitive on Linux/Mac, Windows might be case insensitive but Go implementation is simple string check?)
-		// Actually filepath.Ext returns extension as is. The implementation checks == ".jpg". So it is case sensitive.
-	}
-
-	for _, tt := range tests {
-		result := isImageFile(tt.path)
-		assert.Equal(t, tt.expected, result, "Path: %s", tt.path)
-	}
-}
-
 func TestGenerateQueryID(t *testing.T) {
 	url1 := "https://wallhaven.cc/search?q=anime"
 	url2 := "https://wallhaven.cc/search?q=anime"

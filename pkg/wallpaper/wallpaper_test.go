@@ -91,6 +91,10 @@ func (m *MockPluginManager) RefreshTrayMenu() {
 	m.Called()
 }
 
+func (m *MockPluginManager) RebuildTrayMenu() {
+	m.Called()
+}
+
 // MockImageProcessor implements ImageProcessor for testing
 type MockImageProcessor struct {
 	mock.Mock
@@ -182,7 +186,13 @@ func (m *MockImageProvider) EnrichImage(ctx context.Context, img provider.Image)
 	return args.Get(0).(provider.Image), args.Error(1)
 }
 
-func (m *MockImageProvider) Title() string   { return "Mock" }
+func (m *MockImageProvider) Title() string {
+	args := m.Called()
+	if len(args) == 0 {
+		return "Mock" // Fallback for existing tests that don't set expectation
+	}
+	return args.String(0)
+}
 func (m *MockImageProvider) HomeURL() string { return "https://mock.provider" }
 func (m *MockImageProvider) CreateSettingsPanel(sm setting.SettingsManager) fyne.CanvasObject {
 	return nil
@@ -200,18 +210,9 @@ func TestDownloadAllImages(t *testing.T) {
 
 	// Mock Provider
 	mockProvider := new(MockImageProvider)
-	mockProvider.On("Name").Return("MockProvider")
+	mockProvider.On("Name").Return("Wallhaven") // Pretend to be Wallhaven for default AddImageQuery
 	mockProvider.On("ParseURL", "http://mock.url").Return("http://api.mock.url", nil)
-	mockProvider.On("ParseURL", mock.Anything).Return("", assert.AnError) // Reject others to avoid noise, or allow if logic dictates.
-	// Actually, easier to allow all if produceJobsForURL iterates all queries.
-	// But TestDownloadAllImages sets cfg.Queries = []ImageQuery{} then adds ONE query.
-	// So it should only be called for that one query.
-	// Unless defaults are loaded? ResetConfig() -> GetConfig() -> DefaultConfig().
-	// DefaultConfig HAS queries.
-	// But line 209: cfg.Queries = []ImageQuery{} clears them!
-
-	// So why distinct calls?
-	// Maybe strict mock behavior?
+	mockProvider.On("ParseURL", mock.Anything).Return("", assert.AnError)
 
 	// Mock FetchImages to return one image
 	mockProvider.On("FetchImages", mock.Anything, "http://api.mock.url", 1).Return([]provider.Image{
@@ -220,7 +221,7 @@ func TestDownloadAllImages(t *testing.T) {
 			Path:        "http://example.com/image1.jpg", // We will mock this download
 			ViewURL:     "http://whvn.cc/test_img_1",
 			Attribution: "tester",
-			Provider:    "MockProvider",
+			Provider:    "Wallhaven",
 			FileType:    "image/jpeg",
 		},
 	}, nil)
@@ -291,7 +292,7 @@ func TestDownloadAllImages(t *testing.T) {
 	wp.pipeline = NewPipeline(wp.cfg, wp.store, wp.ProcessImageJob)
 	wp.pipeline.Start(1)
 	defer wp.pipeline.Stop()
-	wp.providers["MockProvider"] = mockProvider
+	wp.providers["Wallhaven"] = mockProvider
 
 	// Expectations
 	mockPM.On("NotifyUser", mock.Anything, mock.Anything).Return()
@@ -586,6 +587,46 @@ func TestGetInstance(t *testing.T) {
 	assert.Equal(t, instance1, instance2)
 }
 
+func TestSmartFitDisabled(t *testing.T) {
+	// Setup
+	ResetConfig()
+	prefs := NewMockPreferences()
+	cfg := GetConfig(prefs)
+	mockPM := new(MockPluginManager)
+	mockIP := new(MockImageProcessorTyped)
+
+	wp := &Plugin{
+		cfg:           cfg,
+		manager:       mockPM,
+		imgProcessor:  mockIP,
+		downloadedDir: t.TempDir(),
+	}
+
+	// 1. Set SmartFit to OFF (Disabled)
+	cfg.SetSmartFitMode(SmartFitOff)
+	// Also set FaceCrop/Boost to TRUE to ensure SmartFit overrides them
+	cfg.SetFaceCropEnabled(true)
+	cfg.SetFaceBoostEnabled(true)
+
+	// 2. Prepare dummy master image
+	masterPath := filepath.Join(wp.downloadedDir, "test_master.jpg")
+	err := os.WriteFile(masterPath, []byte("dummy data"), 0644)
+	assert.NoError(t, err)
+
+	img := provider.Image{ID: "test_img"}
+
+	// 3. Call ensureDerivative
+	// It should return masterPath and err=nil.
+	// It should NOT call FitImage.
+	path, err := wp.ensureDerivative(context.Background(), img, masterPath)
+
+	assert.NoError(t, err)
+	assert.Equal(t, masterPath, path)
+
+	// Verify FitImage was NEVER called
+	mockIP.AssertNotCalled(t, "FitImage", mock.Anything, mock.Anything)
+}
+
 func TestDeleteCurrentImage_PersistsBlock(t *testing.T) {
 	// Setup
 	ResetConfig()
@@ -733,4 +774,21 @@ func TestOpenAddCollectionUI_InvalidProvider(t *testing.T) {
 	assert.Contains(t, err.Error(), "URL not supported")
 	assert.Empty(t, wp.pendingAddUrl)
 	mockPM.AssertNotCalled(t, "OpenPreferences")
+}
+
+func TestGetProviderTitle(t *testing.T) {
+	// Setup
+	mockProvider := new(MockImageProvider)
+	mockProvider.On("Title").Return("Mock Provider Title")
+
+	wp := &Plugin{
+		providers: make(map[string]provider.ImageProvider),
+	}
+	wp.providers["Mock"] = mockProvider
+
+	// 1. Registered Provider -> Return Title
+	assert.Equal(t, "Mock Provider Title", wp.GetProviderTitle("Mock"))
+
+	// 2. Unregistered Provider -> Return ID
+	assert.Equal(t, "UnknownProvider", wp.GetProviderTitle("UnknownProvider"))
 }

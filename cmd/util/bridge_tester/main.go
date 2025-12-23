@@ -53,7 +53,13 @@ func main() {
 	})
 
 	log.Println("📡 Bridge Tester running on :49452. Waiting for Extension...")
-	if err := http.ListenAndServe(":49452", nil); err != nil {
+	log.Println("📡 Bridge Tester running on :49452. Waiting for Extension...")
+	server := &http.Server{
+		Addr:              ":49452",
+		Handler:           nil, // uses DefaultServeMux
+		ReadHeaderTimeout: 3 * time.Second,
+	}
+	if err := server.ListenAndServe(); err != nil {
 		log.Fatal("Server error:", err)
 	}
 }

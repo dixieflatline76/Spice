@@ -51,6 +51,7 @@ require (
 require (
 	github.com/esimov/pigo v1.4.6
 	github.com/google/go-github/v63 v63.0.0
+	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/zalando/go-keyring v0.2.6
 	golang.design/x/hotkey v0.4.1

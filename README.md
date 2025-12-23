@@ -26,7 +26,13 @@ Spice is a minimalist wallpaper manager that brings a continuous stream of delig
 
 * **� Wallhaven Integration:** Our original and primary source! Access the vast library of **Wallhaven.cc** with full support for API keys, NSFW filters, and your private collections (Favorites).
 
-* **📸 Native Unsplash & Pexels Integration:** Securely log in to **Unsplash** or browse **Pexels** to access millions of professional, high-quality photos.
+* **📸 Native Pexels Integration:** Browse **Pexels** to access millions of professional, high-quality photos. *(Unsplash integration is currently disabled due to API limitations)*.
+
+* **🖼️ Google Photos:** Connect your personal cloud! Securely browse and select your favorite albums or photos from your **Google Photos** library using the native Google Photos Picker.
+  > [!NOTE]
+  > **Google Photos is currently in "Test Mode".** To use this feature, you must be added as a beta tester. Please [**Open a GitHub Issue**](https://github.com/dixieflatline76/Spice/issues) or [**Start a Discussion**](https://github.com/dixieflatline76/Spice/discussions) with your request to be added!
+ 
+* **❤️ Local Favorites:** Love a wallpaper? Mark it as a favorite to save a permanent local copy. You can then switch to your "Favorite Images" collection to cycle exclusively through your best picks.
 
 * **🏛️ Wikimedia Commons:** Access the wealth of human history and nature with support for **Featured Pictures** and Category composition on Wikimedia Commons.
 
@@ -83,7 +89,6 @@ Head to the [**Releases Page**](https://github.com/dixieflatline76/Spice/release
 
 ### Tips
 
-* **Unsplash:** You can revoke Spice's access at any time from your [Unsplash Account Settings](https://unsplash.com/oauth/authorized_applications).
 * **Wallhaven Favorites:** To use your private collection, use the URL format with your User ID: `https://wallhaven.cc/user/<username>/favorites/<id>`, rather than the generic favorites link.
 
 ## 🔮 Roadmap

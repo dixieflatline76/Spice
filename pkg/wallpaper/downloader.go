@@ -73,6 +73,11 @@ func (wp *Plugin) ProcessImageJob(ctx context.Context, job DownloadJob) (provide
 	// provider.Image doesn't have it, but we can resolve it via ID/FM later if needed.
 	// The important part is FilePath points to what we show.
 
+	if wp.favoriter != nil && wp.favoriter.IsFavorited(img) {
+		img.IsFavorited = true
+	}
+
+	// log.Debugf("ProcessImageJob Finished: ID=%s, FilePath=%s, IsFav=%v", img.ID, derivativePath, img.IsFavorited)
 	return img, nil
 }
 
@@ -97,8 +102,8 @@ func (wp *Plugin) ensureMaster(ctx context.Context, img provider.Image, imgProvi
 		return masterPath, nil
 	}
 
-	// Download
-	log.Debugf("Downloading master for %s...", img.ID)
+	// Download Remote URL
+	// log.Debugf("Downloading master for %s...", img.ID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, img.Path, nil)
 	if err != nil {
 		return "", err
@@ -141,7 +146,8 @@ func (wp *Plugin) ensureDerivative(ctx context.Context, img provider.Image, mast
 	// Determine Derivative Type based on Config
 	// This logic mirrors old getDownloadedDir logic
 	var derivativeDir string
-	smartFit := wp.cfg.GetSmartFit()
+	mode := wp.cfg.GetSmartFitMode()
+	smartFit := mode != SmartFitOff
 
 	if smartFit {
 		if wp.cfg.GetFaceCropEnabled() {
@@ -173,7 +179,7 @@ func (wp *Plugin) ensureDerivative(ctx context.Context, img provider.Image, mast
 	}
 
 	// Generate
-	log.Debugf("Generating derivative for %s (Dir: %s)...", img.ID, derivativeDir)
+	// log.Debugf("Generating derivative for %s (Dir: %s)...", img.ID, derivativeDir)
 
 	// Open Master
 	// Using generic "Open" might be slow if we need just decode.

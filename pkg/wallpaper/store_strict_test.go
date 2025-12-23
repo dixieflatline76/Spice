@@ -122,9 +122,6 @@ func TestStrictSync_MixedState(t *testing.T) {
 
 	// 2. img2: Inactive Query -> DELETE
 	assert.False(t, known["img2"])
-	_, err = os.Stat(img2.FilePath)
-	assert.Error(t, err)
-	assert.True(t, os.IsNotExist(err))
 
 	// 3. img3: Active Query but File Missing -> DELETE (Validation)
 	assert.False(t, known["img3"])
@@ -133,4 +130,10 @@ func TestStrictSync_MixedState(t *testing.T) {
 	assert.True(t, known["img4"])
 	_, err = os.Stat(img4.FilePath)
 	assert.NoError(t, err)
+
+	// Verify async file deletion
+	assert.Eventually(t, func() bool {
+		_, err2 := os.Stat(img2.FilePath)
+		return os.IsNotExist(err2)
+	}, 2*time.Second, 100*time.Millisecond)
 }

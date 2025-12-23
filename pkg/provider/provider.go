@@ -21,6 +21,16 @@ type Image struct {
 	SourceQueryID    string          // ID of the query that produced this image (for smart cache clearing)
 	Width            int             // Image Width (if available from source)
 	Height           int             // Image Height (if available from source)
+	IsFavorited      bool            // Flag to protect image from cache pruning
+	Seen             bool            // Flag for pagination/history logic
+}
+
+// Favoriter defines the interface for providers that support favoriting images.
+type Favoriter interface {
+	IsFavorited(img Image) bool
+	AddFavorite(img Image) error
+	RemoveFavorite(img Image) error
+	GetSourceQueryID() string
 }
 
 // ImageProvider defines the interface for an image service.

@@ -13,6 +13,8 @@ const (
 )
 
 // Default values for wallhaven.cc image service
+//
+//nolint:gosec // G101: False positive; these are regexes and URLs, not actual secrets.
 const (
 	WallhavenURLRegexp = `^https:\/\/wallhaven\.cc\/(?:latest|toplist|hot|random|search|api\/v1\/search|api\/v1\/collections\/[a-zA-Z0-9_]+\/[0-9]+|user\/[a-zA-Z0-9_]+\/favorites\/[0-9]+|favorites\/[0-9]+)(?:\?[a-zA-Z0-9_\-.~!$&'()*+,;=:@\/?%]*|)$` // WallhavenURLRegexp is the regular expression used to validate a wallhaven URL
 

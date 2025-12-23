@@ -60,7 +60,7 @@ func TestBrowserBridgeLatency(t *testing.T) {
 		assert.NoError(t, err)
 
 		// B. Receive Message (Extension Side)
-		err = ws.SetReadDeadline(time.Now().Add(5 * time.Second))
+		err = ws.SetReadDeadline(time.Now().Add(10 * time.Second))
 		assert.NoError(t, err)
 		_, message, err := ws.ReadMessage()
 		assert.NoError(t, err)

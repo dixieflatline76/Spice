@@ -12,9 +12,21 @@ The Developer grants you a non-exclusive, non-transferable license to use the So
 * Modify, reverse engineer, decompile, or disassemble the Software.
 * Use the Software for any illegal or unauthorized purpose.
 
-## 2. Wallhaven API
+## 2. Third-Party Services
 
-The Software utilizes the Wallhaven API to provide wallpaper images. You are solely responsible for obtaining and using your own Wallhaven API key in compliance with Wallhaven's terms of service. The Developer is not responsible for your use of the Wallhaven API or any content obtained through it.
+The Software allows you to access content from various third-party services, including but not limited to Wallhaven, Google Photos, Pexels, and Wikimedia Commons.
+
+### 2.1 Wallhaven
+You are solely responsible for obtaining and using your own Wallhaven API key in compliance with Wallhaven's terms of service.
+
+### 2.2 Google Photos
+Use of Google Photos integration is subject to Google's Terms of Service and Privacy Policy. The Software uses the Google Photos Picker API to access only the photos you explicitly select.
+
+### 2.3 Pexels
+Use of Pexels content is subject to the Pexels License.
+
+### 2.4 Wikimedia Commons
+Content from Wikimedia Commons is subject to the specific Creative Commons license applicable to each image, which is displayed in the Software's attribution field.
 
 ## 3. Disclaimer of Warranty
 
