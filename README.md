@@ -8,6 +8,7 @@
   <a href="https://goreportcard.com/report/github.com/dixieflatline76/Spice"><img src="https://goreportcard.com/badge/github.com/dixieflatline76/Spice" alt="Go Report Card"></a>
   <a href="https://github.com/dixieflatline76/Spice/releases/latest"><img src="https://img.shields.io/github/v/release/dixieflatline76/Spice?include_prereleases&color=blue" alt="Latest Release"></a>
   <a href="https://chromewebstore.google.com/detail/ekodikedjmhnganfcfleabcfohdjkoeb"><img src="https://img.shields.io/chrome-web-store/v/ekodikedjmhnganfcfleabcfohdjkoeb?style=flat&color=blue&label=Chrome%20Web%20Store" alt="Chrome Web Store"></a>
+  <a href="https://addons.mozilla.org/en-US/firefox/addon/spice-wallpaper-manager/"><img src="https://img.shields.io/amo/v/spice-wallpaper-manager?style=flat&color=orange&label=Firefox%20Add-ons" alt="Firefox Add-ons"></a>
 </p>
 
 Spice is a minimalist wallpaper manager that brings a continuous stream of delight to your screen while not getting in your way. It automatically downloads high-quality wallpapers from your favorite image services like Wallhaven and Unsplash, keeping your desktop fresh and fun.
@@ -20,19 +21,21 @@ Spice is a minimalist wallpaper manager that brings a continuous stream of delig
 
 ## ✨ Key Features
 
-* **🔗 Browser Companion:** Use our [**Chrome Extension**](https://chromewebstore.google.com/detail/ekodikedjmhnganfcfleabcfohdjkoeb) to instantly add wallpapers from the web to your desktop with a single click. Supports Chrome and Safari with LiveSync technology (Firefox coming soon).
+* **🔗 Browser Companion:** Use our [**Chrome Extension**](https://chromewebstore.google.com/detail/ekodikedjmhnganfcfleabcfohdjkoeb) or [**Firefox Add-on**](https://addons.mozilla.org/en-US/firefox/addon/spice-wallpaper-manager/) to instantly add wallpapers from the web to your desktop.
+  > **Pin the extension to your toolbar.** It will flash when it detects a supported image collection (like Wallhaven or Unsplash). Simply click the Spice icon to send the current view to your desktop! Supports Chrome, Firefox, and Safari with LiveSync technology.
 
 * **� Automated Inspiration:** Spice handles the heavy lifting—fetching, caching, and cycling wallpapers based on your preferences so you always have something new to look at.
 
 * **� Wallhaven Integration:** Our original and primary source! Access the vast library of **Wallhaven.cc** with full support for API keys, NSFW filters, and your private collections (Favorites).
 
-* **📸 Native Pexels Integration:** Browse **Pexels** to access millions of professional, high-quality photos. *(Unsplash integration is currently disabled due to API limitations)*.
+* **📸 Native Pexels Integration:** Browse **Pexels** to access millions of professional, high-quality photos.
 
 * **🖼️ Google Photos:** Connect your personal cloud! Securely browse and select your favorite albums or photos from your **Google Photos** library using the native Google Photos Picker.
   > [!NOTE]
   > **Google Photos is currently in "Test Mode".** To use this feature, you must be added as a beta tester. Please [**Open a GitHub Issue**](https://github.com/dixieflatline76/Spice/issues) or [**Start a Discussion**](https://github.com/dixieflatline76/Spice/discussions) with your request to be added!
  
 * **❤️ Local Favorites:** Love a wallpaper? Mark it as a favorite to save a permanent local copy. You can then switch to your "Favorite Images" collection to cycle exclusively through your best picks.
+  > **Tip:** Selected "Favorite Images" as your source? Click the **"Favorite Images"** text in the menu to instantly open your local favorites folder in Finder/Explorer.
 
 * **🏛️ Wikimedia Commons:** Access the wealth of human history and nature with support for **Featured Pictures** and Category composition on Wikimedia Commons.
 
@@ -65,7 +68,7 @@ Head to the [**Releases Page**](https://github.com/dixieflatline76/Spice/release
 ### 🌐 Browser Companion Extension
 
 *   **Chrome / Brave / Edge:** [**Install from Chrome Web Store**](https://chromewebstore.google.com/detail/ekodikedjmhnganfcfleabcfohdjkoeb)
-*   **Firefox:** *Coming Soon*
+*   **Firefox:** [**Install from Firefox Add-ons**](https://addons.mozilla.org/en-US/firefox/addon/spice-wallpaper-manager/)
 *   **Safari:** Included in the macOS App.
 
 ### For Windows
@@ -97,7 +100,8 @@ We have big plans for Spice!
 
 * **Multi-Monitor Support:** Bringing Spice to all your screens, not just the main one.
 * **Linux & Intel Mac Support:** While we currently focus on Apple Silicon (arm64), we plan to expand our official builds to Intel Macs and Linux.
-* **More Providers:** Adding support for other wallpaper sources.
+* **More Providers:** Adding support for other wallpaper sources like **Pixabay** and **The Met Open Access**.
+* **Local Collections:** Point Spice to any folder on your computer to use your existing wallpaper library.
 
 ## ⚠️ Known Limitations
 
