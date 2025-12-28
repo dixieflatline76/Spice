@@ -35,7 +35,7 @@ Spice is a minimalist wallpaper manager that brings a continuous stream of delig
   > **Google Photos is currently in "Test Mode".** To use this feature, you must be added as a beta tester. Please [**Open a GitHub Issue**](https://github.com/dixieflatline76/Spice/issues) or [**Start a Discussion**](https://github.com/dixieflatline76/Spice/discussions) with your request to be added!
  
 * **❤️ Local Favorites:** Love a wallpaper? Mark it as a favorite to save a permanent local copy. You can then switch to your "Favorite Images" collection to cycle exclusively through your best picks.
-  > **Tip:** Selected "Favorite Images" as your source? Click the **"Favorite Images"** text in the menu to instantly open your local favorites folder in Finder/Explorer.
+  > **Tip:** Selected "Favorite Images" as your source? Click the **"Source: Favorites"** text in the menu to instantly open your local favorites folder in Finder/Explorer.
 
 * **🏛️ Wikimedia Commons:** Access the wealth of human history and nature with support for **Featured Pictures** and Category composition on Wikimedia Commons.
 
@@ -93,6 +93,7 @@ Head to the [**Releases Page**](https://github.com/dixieflatline76/Spice/release
 ### Tips
 
 * **Wallhaven Favorites:** To use your private collection, use the URL format with your User ID: `https://wallhaven.cc/user/<username>/favorites/<id>`, rather than the generic favorites link.
+* **Disable Local Favorites:** To turn off the "Favorite Images" provider, simply uncheck the "Active" box next to its query in the **Spice Preferences** > **Wallpaper** tab.
 
 ## 🔮 Roadmap
 

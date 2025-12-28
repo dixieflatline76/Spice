@@ -163,7 +163,7 @@ func (c *smartImageProcessor) FitImage(ctx context.Context, img image.Image) (im
 		log.Debugf("FitImage: Perfect fit, returning original")
 		return img, nil
 	case imageAspect == systemAspect: // Perfect aspect ratio
-		resizedImg := r.resizeWithContext(ctx, img, uint(systemWidth), uint(systemHeight)) // Correct call
+		resizedImg := r.resizeWithContext(ctx, img, uint(systemWidth), uint(systemHeight)) //nolint:gosec // G115: Safe conversion, screen dims usually positive
 		if resizedImg == nil {
 			return nil, ctx.Err() // Context was canceled during resize.
 		}
@@ -208,7 +208,7 @@ func (c *smartImageProcessor) cropImage(ctx context.Context, img image.Image) (i
 				}
 				img = img.(SubImager).SubImage(cropRect)
 
-				resizedImg := r.resizeWithContext(ctx, img, uint(systemWidth), uint(systemHeight))
+				resizedImg := r.resizeWithContext(ctx, img, uint(systemWidth), uint(systemHeight)) //nolint:gosec // G115: Safe conversion
 				if resizedImg == nil {
 					return nil, ctx.Err()
 				}
@@ -232,15 +232,15 @@ func (c *smartImageProcessor) cropImage(ctx context.Context, img image.Image) (i
 					for x := faceBox.Min.X; x < faceBox.Max.X; x += blockSize {
 						// Generate high-contrast RGB value for the whole block
 						r := uint8(0)
-						if rand.Intn(2) == 1 {
+						if rand.Intn(2) == 1 { //nolint:gosec // Weak RNG safe for image processing
 							r = 255
 						}
 						g := uint8(0)
-						if rand.Intn(2) == 1 {
+						if rand.Intn(2) == 1 { //nolint:gosec // Weak RNG safe for image processing
 							g = 255
 						}
 						b := uint8(0)
-						if rand.Intn(2) == 1 {
+						if rand.Intn(2) == 1 { //nolint:gosec // Weak RNG safe for image processing
 							b = 255
 						}
 						c := color.RGBA{r, g, b, 255}

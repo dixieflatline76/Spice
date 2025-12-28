@@ -142,7 +142,13 @@ func TestFetchImages(t *testing.T) {
 	host := ts.URL[7:] // Strip http://
 
 	p := NewProvider(&wallpaper.Config{})
-	p.SetTestConfig(host, t.TempDir())
+	tempDir := t.TempDir()
+	p.SetTestConfig(host, tempDir)
+
+	// Create a dummy file to bypass empty-folder optimization
+	// The optimization checks for file existence but relies on API for actual data in this test
+	dummy := filepath.Join(tempDir, "dummy.jpg")
+	_ = os.WriteFile(dummy, []byte(""), 0644)
 
 	images, err := p.FetchImages(context.Background(), "", 1)
 	assert.NoError(t, err)

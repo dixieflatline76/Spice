@@ -235,7 +235,11 @@ func (c *Config) loadFromPrefs() error {
 	// Data migration: Prune stale Favorites queries
 	// During development we changed from "favorites://default" to "favorites://favorite_images"
 	var finalQueries []ImageQuery
+	foundFavorites := false
 	for _, q := range c.Queries {
+		if q.Provider == "Favorites" && q.ID == FavoritesQueryID {
+			foundFavorites = true
+		}
 		if q.Provider == "Favorites" && q.ID != FavoritesQueryID {
 			log.Printf("Migration: Pruning stale Favorites query: %s", q.ID)
 			queriesChanged = true
@@ -243,6 +247,55 @@ func (c *Config) loadFromPrefs() error {
 		}
 		finalQueries = append(finalQueries, q)
 	}
+
+	// Data migration: Auto-Enable Favorites
+	if !foundFavorites {
+		log.Println("Migration: Auto-enabling Favorites...")
+		favQuery := ImageQuery{
+			ID:          FavoritesQueryID,
+			Description: "Favorite Images",
+			URL:         FavoritesQueryID,
+			Active:      true,
+			Provider:    "Favorites",
+		}
+		// Insert at top or just append?
+		// We append to ensure we don't disrupt custom ordering too much, but ideally favorites is prominent.
+		// Let's prepend it.
+		finalQueries = append([]ImageQuery{favQuery}, finalQueries...)
+		queriesChanged = true
+	}
+
+	// Data migration: Auto-Enable Wikimedia Featured
+	foundWikiFeatured := false
+	wikiFeaturedURL := "category:Featured_pictures_on_Wikimedia_Commons"
+	for _, q := range finalQueries {
+		if q.URL == wikiFeaturedURL && q.Provider == "Wikimedia" {
+			foundWikiFeatured = true
+			break
+		}
+	}
+
+	if !foundWikiFeatured {
+		log.Println("Migration: Auto-enabling Wikimedia Featured...")
+		wikiID := GenerateQueryID(wikiFeaturedURL)
+		wikiQuery := ImageQuery{
+			ID:          wikiID,
+			Description: "Wikimedia Featured",
+			URL:         wikiFeaturedURL,
+			Active:      true,
+			Provider:    "Wikimedia",
+		}
+		// Insert after Favorites (index 1) or at top if Favorites missing (unlikely)
+		if len(finalQueries) > 0 && finalQueries[0].Provider == "Favorites" {
+			// Insert at index 1
+			finalQueries = append(finalQueries[:1], append([]ImageQuery{wikiQuery}, finalQueries[1:]...)...)
+		} else {
+			// Prepend
+			finalQueries = append([]ImageQuery{wikiQuery}, finalQueries...)
+		}
+		queriesChanged = true
+	}
+
 	c.Queries = finalQueries
 
 	if queriesChanged {

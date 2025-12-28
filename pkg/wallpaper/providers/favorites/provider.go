@@ -334,6 +334,31 @@ func (p *Provider) FetchImages(ctx context.Context, apiURL string, page int) ([]
 	// Call Local API: /local/favorites/default/images
 	// The actual URL built by the system will be local loopback
 
+	// Optimization: Short-circuit if local folder is empty (or only has metadata)
+	// This prevents "micro pauses" from unnecessary HTTP requests to the local server
+	entries, err := os.ReadDir(p.rootDir)
+	if err == nil {
+		hasImages := false
+		for _, e := range entries {
+			if e.IsDir() {
+				continue
+			}
+			name := strings.ToLower(e.Name())
+			if name == "metadata.json" || name == ".ds_store" {
+				continue
+			}
+			// Check for common image extensions
+			if strings.HasSuffix(name, ".jpg") || strings.HasSuffix(name, ".jpeg") ||
+				strings.HasSuffix(name, ".png") || strings.HasSuffix(name, ".webp") {
+				hasImages = true
+				break
+			}
+		}
+		if !hasImages {
+			return []provider.Image{}, nil
+		}
+	}
+
 	// Construct the local API URL
 	host := p.apiHost
 	u := fmt.Sprintf("http://%s/local/%s/%s/images?page=%d", host, wallpaper.FavoritesNamespace, wallpaper.FavoritesCollection, page)

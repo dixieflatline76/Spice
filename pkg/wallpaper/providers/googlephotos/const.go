@@ -15,5 +15,5 @@ const (
 	GooglePhotosAuthURL = "https://accounts.google.com/o/oauth2/auth"
 
 	// GooglePhotosTokenURL is the URL to exchange the authorization code for an access token.
-	GooglePhotosTokenURL = "https://oauth2.googleapis.com/token"
+	GooglePhotosTokenURL = "https://oauth2.googleapis.com/token" //nolint:gosec // Public URL
 )

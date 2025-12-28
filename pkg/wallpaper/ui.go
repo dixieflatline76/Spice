@@ -1,6 +1,9 @@
 package wallpaper
 
 import (
+	"fmt"
+	"sort"
+
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/theme"
@@ -303,21 +306,13 @@ func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 		{"General Settings", generalScroll, true, theme.SettingsIcon()},
 	}
 
-	// We want Wallhaven, Unsplash, Pexels order
-	orderedNames := []string{"Wallhaven", "Unsplash", "Pexels"}
-	// Add other providers found in map but not in orderedNames
+	// Collect all provider names
+	var orderedNames []string
 	for name := range wp.providers {
-		found := false
-		for _, on := range orderedNames {
-			if on == name {
-				found = true
-				break
-			}
-		}
-		if !found {
-			orderedNames = append(orderedNames, name)
-		}
+		orderedNames = append(orderedNames, name)
 	}
+	// Sort all alphabetically for deterministic order
+	sort.Strings(orderedNames)
 
 	for _, name := range orderedNames {
 		p, ok := wp.providers[name]
@@ -357,6 +352,21 @@ func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 		title := p.Title()
 		if title == "" {
 			title = "Image Sources (" + p.Name() + ")"
+		}
+
+		// Count active queries for this provider
+		activeCount := 0
+		for _, q := range wp.cfg.GetQueries() {
+			if q.Provider == p.Name() && q.Active {
+				activeCount++
+			}
+		}
+		if activeCount > 0 {
+			if activeCount == 1 {
+				title = fmt.Sprintf("%s (1 active)", title)
+			} else {
+				title = fmt.Sprintf("%s (%d active)", title, activeCount)
+			}
 		}
 
 		items = append(items, struct {

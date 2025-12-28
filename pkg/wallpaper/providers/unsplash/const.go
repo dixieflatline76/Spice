@@ -13,7 +13,7 @@ var UnsplashClientID = "YOUR_UNSPLASH_ACCESS_KEY"
 
 // UnsplashClientSecret is the client secret for the Unsplash application.
 // This is injected at build time via -ldflags.
-var UnsplashClientSecret = "YOUR_UNSPLASH_SECRET_KEY"
+var UnsplashClientSecret = "YOUR_UNSPLASH_SECRET_KEY" //nolint:gosec // Placeholder value
 
 const (
 
@@ -24,7 +24,7 @@ const (
 	UnsplashAuthURL = "https://unsplash.com/oauth/authorize"
 
 	// UnsplashTokenURL is the URL to exchange the authorization code for an access token.
-	UnsplashTokenURL = "https://unsplash.com/oauth/token"
+	UnsplashTokenURL = "https://unsplash.com/oauth/token" //nolint:gosec // Public URL
 
 	// UnsplashURLRegexp validates Unsplash URLs (search, collections).
 	// Matches: https://unsplash.com/collections/..., https://unsplash.com/s/photos/...

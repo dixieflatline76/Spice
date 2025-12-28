@@ -26,9 +26,9 @@ const (
 	GooglePhotosTokenPrefKey        = "google_photos_access_token"
 	GooglePhotosRefreshTokenPrefKey = "google_photos_refresh_token"
 	GooglePhotosTokenExpiryPrefKey  = "google_photos_token_expiry"
-	WallhavenAPIKeyPrefKey          = "wallhaven_api_key"
+	WallhavenAPIKeyPrefKey          = "wallhaven_api_key" //nolint:gosec // Preference key, not a secret
 	wallhavenConfigPrefKey          = "wallhaven_image_queries"
-	PexelsAPIKeyPrefKey             = "pexels_api_key"
+	PexelsAPIKeyPrefKey             = "pexels_api_key" //nolint:gosec // Preference key, not a secret
 )
 
 // URLType indicates the type of image source (Search or Collection).

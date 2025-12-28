@@ -181,7 +181,7 @@ func (v Version) String() string {
 
 // createGitTag creates a Git tag with the given version string.
 func createGitTag(versionString string) error {
-	cmd := exec.Command("git", "tag", "-a", versionString, "-m", fmt.Sprintf("Release %s", versionString))
+	cmd := exec.Command("git", "tag", "-a", versionString, "-m", fmt.Sprintf("Release %s", versionString)) //nolint:gosec // Dev tool, input controlled
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	err := cmd.Run()
