@@ -21,10 +21,14 @@ func GetScreenDimensions() (int, int, error) {
 
 	// Regex to find "Resolution: <width> x <height>", handling extra text like "Retina"
 	// \s* = optional whitespace, (\d+) = capture digits (width/height)
+	return parseScreenResolution(string(out))
+}
+
+func parseScreenResolution(output string) (int, int, error) {
 	re := regexp.MustCompile(`Resolution:\s*(\d+)\s*x\s*(\d+)`)
 
 	// Find the first match in the output (usually the primary display)
-	matches := re.FindStringSubmatch(string(out))
+	matches := re.FindStringSubmatch(output)
 
 	// matches slice: [0]=full match, [1]=width string, [2]=height string
 	if len(matches) == 3 {
@@ -42,6 +46,5 @@ func GetScreenDimensions() (int, int, error) {
 		return width, height, nil
 	}
 
-	// If no resolution pattern was found
 	return 0, 0, fmt.Errorf("failed to parse screen resolution from system_profiler output")
 }

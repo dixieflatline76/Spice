@@ -224,6 +224,11 @@ func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl strin
 	statusLabel := widget.NewLabel("")
 
 	addBtn := widget.NewButton("Select Photos via Google Picker", nil)
+	cancelBtn := widget.NewButton("Cancel", nil)
+	cancelBtn.Importance = widget.LowImportance // Subtle
+	cancelBtn.Hide()
+
+	var cancelFunc context.CancelFunc
 
 	// Logic to update button state based on auth
 	updateBtnState := func() {
@@ -246,6 +251,18 @@ func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl strin
 	// Set initial state
 	updateBtnState()
 
+	// Cancel Action
+	cancelBtn.OnTapped = func() {
+		if cancelFunc != nil {
+			cancelFunc() // Stop the background process
+			statusLabel.SetText("Operation cancelled.")
+		}
+		cancelBtn.Hide()
+		progressBar.Hide()
+		addBtn.Show()
+		addBtn.Enable()
+	}
+
 	addBtn.OnTapped = func() {
 		if p.cfg.GetGooglePhotosToken() == "" {
 			dialog.ShowError(fmt.Errorf("please authorize first"), sm.GetSettingsWindow())
@@ -253,15 +270,30 @@ func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl strin
 		}
 
 		addBtn.Disable()
+		addBtn.Hide()    // Hide "Select" to avoid confusion
+		cancelBtn.Show() // Show "Cancel"
+
 		statusLabel.SetText("Creating Picker Session...")
 		progressBar.Show()
 
+		// Create Cancellable Context
+		ctx, cancel := context.WithCancel(context.Background())
+		cancelFunc = cancel
+
 		go func() {
+			defer func() {
+				// Cleanup context on exit if not cancelled manually
+				// But wait, if we defer cancel(), it's fine.
+				// We just need to make sure UI reset happens.
+			}()
+
 			// 1. Create Session
-			ctx := context.Background() // TODO: timeouts?
 			session, err := p.CreatePickerSession(ctx)
 			if err != nil {
-				p.uiError(sm, "Session Error", err, addBtn, progressBar, statusLabel)
+				if ctx.Err() == context.Canceled {
+					return
+				} // Silent exit
+				p.uiError(sm, "Session Error", err, addBtn, progressBar, statusLabel, cancelBtn)
 				return
 			}
 
@@ -270,7 +302,10 @@ func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl strin
 				statusLabel.SetText("Please select photos in your browser...")
 			})
 			if err := p.OpenBrowser(session.PickerURI); err != nil {
-				p.uiError(sm, "Browser Error", err, addBtn, progressBar, statusLabel)
+				if ctx.Err() == context.Canceled {
+					return
+				}
+				p.uiError(sm, "Browser Error", err, addBtn, progressBar, statusLabel, cancelBtn)
 				return
 			}
 
@@ -280,7 +315,10 @@ func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl strin
 			})
 			finalSession, err := p.PollSession(ctx, session.ID, session.PollingConfig.PollInterval)
 			if err != nil {
-				p.uiError(sm, "Polling Error (Timed out?)", err, addBtn, progressBar, statusLabel)
+				if ctx.Err() == context.Canceled {
+					return
+				}
+				p.uiError(sm, "Polling Error (Timed out?)", err, addBtn, progressBar, statusLabel, cancelBtn)
 				return
 			}
 
@@ -290,12 +328,15 @@ func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl strin
 			})
 			items, err := p.GetSessionItems(ctx, finalSession.ID)
 			if err != nil {
-				p.uiError(sm, "Retrieval Error", err, addBtn, progressBar, statusLabel)
+				if ctx.Err() == context.Canceled {
+					return
+				}
+				p.uiError(sm, "Retrieval Error", err, addBtn, progressBar, statusLabel, cancelBtn)
 				return
 			}
 
 			if len(items) == 0 {
-				p.uiError(sm, "No Items", fmt.Errorf("no photos selected"), addBtn, progressBar, statusLabel)
+				p.uiError(sm, "No Items", fmt.Errorf("no photos selected"), addBtn, progressBar, statusLabel, cancelBtn)
 				return
 			}
 
@@ -311,38 +352,50 @@ func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl strin
 			// Download and get file links
 			urlMap, err := p.DownloadItems(ctx, items, targetDir)
 			if err != nil {
-				p.uiError(sm, "Download Error", err, addBtn, progressBar, statusLabel)
+				if ctx.Err() == context.Canceled {
+					return
+				}
+				p.uiError(sm, "Download Error", err, addBtn, progressBar, statusLabel, cancelBtn)
 				return
 			}
 
 			// Pre-save metadata with links
 			if err := p.saveInitialMetadata(guid, urlMap); err != nil {
 				log.Printf("Failed to save initial metadata: %v", err)
-				// Warn but continue?
 			}
 
 			// 6. Spawn Add Dialog (Main Thread)
 			fyne.Do(func() {
 				p.openAddGooglePhotosDialog(sm, guid, len(items), imgQueryList)
+
+				// Reset UI
+				cancelBtn.Hide()
+				addBtn.Show()
 				addBtn.Enable()
 				progressBar.Hide()
 				statusLabel.SetText("")
+				cancelFunc = nil
 			})
 		}()
 	}
 
 	return container.NewBorder(
-		container.NewVBox(info, addBtn, progressBar, statusLabel, widget.NewSeparator(), widget.NewLabel("My Collections:")),
+		container.NewVBox(info, container.NewStack(addBtn, cancelBtn), progressBar, statusLabel, widget.NewSeparator(), widget.NewLabel("My Collections:")),
 		nil, nil, nil,
 		imgQueryList,
 	)
 }
 
-func (p *Provider) uiError(sm setting.SettingsManager, title string, err error, btn *widget.Button, bar *widget.ProgressBarInfinite, label *widget.Label) {
+func (p *Provider) uiError(sm setting.SettingsManager, title string, err error, addBtn *widget.Button, bar *widget.ProgressBarInfinite, label *widget.Label, cancelBtn *widget.Button) {
 	log.Printf("%s: %v", title, err)
 	fyne.Do(func() {
+		// dialog.ShowError(fmt.Errorf("%s: %v", title, err), sm.GetSettingsWindow()) // Optional: Don't popup on every error? User feedback in label is often enough.
+		// Actually, let's keep it for real errors.
 		dialog.ShowError(fmt.Errorf("%s: %v", title, err), sm.GetSettingsWindow())
-		btn.Enable()
+
+		cancelBtn.Hide()
+		addBtn.Show()
+		addBtn.Enable()
 		bar.Hide()
 		label.SetText("Error: " + err.Error())
 	})

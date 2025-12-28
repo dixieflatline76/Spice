@@ -45,11 +45,13 @@ Spice is a minimalist wallpaper manager that brings a continuous stream of delig
 
 * **⏯️ Pause & Resume:** Found a wallpaper you absolutely love? Simply **Pause** the rotation to keep it for as long as you want, then **Resume** when you're ready for something new.
 
+
 * **⌨️ Global Hotkeys:** Control Spice instantly from anywhere:
-  * **Next:** `Ctrl + Alt + Right Arrow`
-  * **Previous:** `Ctrl + Alt + Left Arrow`
-  * **Pause/Resume:** `Ctrl + Alt + Up Arrow`
-  * **Trash/Block:** `Ctrl + Alt + Down Arrow`
+  * **Next / Previous:** `Ctrl + Alt + Right/Left` (Windows) / `Cmd + Opt + Right/Left` (macOS)
+  * **Favorite:** `Ctrl + Alt + Up` / `Cmd + Opt + Up` (Strict Add)
+  * **Trash/Block:** `Ctrl + Alt + Down` / `Cmd + Opt + Down`
+  * **Pause/Resume:** `Ctrl + Alt + P` / `Cmd + Opt + P`
+  * **Preferences:** `Ctrl + Alt + O` / `Cmd + Opt + O`
 
 * **🏷️ Enhanced Attribution:** Know the artist! Spice displays the real uploader or photographer name directly in the tray menu, updating *instantly* with every wallpaper change.
 

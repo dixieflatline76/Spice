@@ -407,13 +407,22 @@ func (sa *SpiceApp) CreatePreferencesWindow(initialTab string) {
 	sa.prefsWindow = prefsWindow // Store reference
 
 	// Set window size based on screen dimensions
+	// Set window size based on screen dimensions
 	_, height, err := sysinfo.GetScreenDimensions()
 	if err != nil {
 		utilLog.Printf("Failed to get screen dimensions: %v", err)
 		prefsWindow.Resize(fyne.NewSize(800, 600)) // Fallback size
 	} else {
+		// Calculate target dimensions
 		targetHeight := float32(height) * PreferencesWindowHeightRatio
 		targetWidth := targetHeight * PreferencesWindowWidthRatio
+
+		// Fix 1: Clamp width for HiDPI/Ultrawide displays
+		// A width > 1000 starts to look empty for a settings panel.
+		if targetWidth > 1000 {
+			targetWidth = 1000
+		}
+
 		prefsWindow.Resize(fyne.NewSize(targetWidth, targetHeight))
 	}
 

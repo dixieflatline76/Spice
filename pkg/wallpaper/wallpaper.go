@@ -795,6 +795,51 @@ func (wp *Plugin) GetCurrentImage() provider.Image {
 	return wp.currentImage
 }
 
+// TriggerFavorite adds the current image to favorites if supported, respecting Strict Add logic.
+// This is used by the Global Hotkey.
+func (wp *Plugin) TriggerFavorite() {
+	if wp.favoriter == nil {
+		// Log or notify? Silent failure is probably best if feature unavailable.
+		return
+	}
+	img := wp.currentImage
+	if img.ID == "" {
+		return
+	}
+
+	// Strict Add Check
+	if wp.favoriter.IsFavorited(img) {
+		wp.manager.NotifyUser("Favorite", "Already in favorites")
+		return
+	}
+
+	if err := wp.favoriter.AddFavorite(img); err != nil {
+		log.Printf("Failed to add favorite via hotkey: %v", err)
+		wp.manager.NotifyUser("Favorite", "Failed to save")
+		return
+	}
+
+	wp.manager.NotifyUser("Favorite", "Added to favorites")
+
+	// Update UI state (e.g. tray checkmark)
+	go func() {
+		// Small delay to allow file system propagation if needed, though updateTrayMenuUI is robust.
+		wp.runOnUI(func() {
+			if wp.providerMenuItem != nil {
+				wp.updateFavoriteMenuItem(false)
+			}
+		})
+	}()
+}
+
+// TriggerOpenSettings is a helper to open the main preferences window.
+// This is used by the Global Hotkey.
+func (wp *Plugin) TriggerOpenSettings() {
+	if wp.manager != nil {
+		wp.manager.OpenPreferences("")
+	}
+}
+
 // ChangeWallpaperFrequency changes the wallpaper frequency.
 func (wp *Plugin) ChangeWallpaperFrequency(newFrequency Frequency) {
 	wp.changeFrequency(newFrequency)
