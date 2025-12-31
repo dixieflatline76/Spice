@@ -29,6 +29,10 @@ You must implement the following 6 methods.
   * **Purpose**: User-facing display name.
   * **Format**: Short, Title Case (e.g., "Bing Daily").
 
+* **`Type() ProviderType`**:
+  * **Purpose**: Categorizes the provider for the Tabbed UI.
+  * **Returns**: One of `provider.TypeOnline` (APIs), `provider.TypeLocal` (Filesystem), or `provider.TypeAI` (Generative).
+
 * **`ParseURL(webURL string) (string, error)`**:
   * **Input**: A URL copied from the browser (e.g., `bing.com/images/search?q=foo`).
   * **Output**: A clean API-ready string (e.g., `search:foo`) or the input if it's already compliant.

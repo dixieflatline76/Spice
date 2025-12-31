@@ -78,6 +78,10 @@ func (p *Provider) Name() string {
 	return ProviderName
 }
 
+func (p *Provider) Type() provider.ProviderType {
+	return provider.TypeLocal
+}
+
 func (p *Provider) Title() string {
 	return "Favorites"
 }

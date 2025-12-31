@@ -8,6 +8,7 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	"github.com/dixieflatline76/Spice/pkg/provider"
 	"github.com/dixieflatline76/Spice/pkg/ui/setting"
 	utilLog "github.com/dixieflatline76/Spice/util/log"
 )
@@ -289,7 +290,7 @@ func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 		ConfirmMessage: "This cannot be undone. Are you sure?",
 		OnPressed:      wp.cfg.ResetAvoidSet,
 	}
-	sm.CreateButtonWithConfirmationSetting(&resetButtonConfig, generalContainer) // Use the SettingsManager
+	sm.CreateButtonWithConfirmationSetting(&resetButtonConfig, generalContainer)
 
 	// --- Dynamic Provider Settings ---
 
@@ -297,14 +298,8 @@ func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 	generalScroll := container.NewVScroll(generalContainer)
 
 	// Accordion Items
-	items := []struct {
-		Title   string
-		Content fyne.CanvasObject
-		Open    bool
-		Icon    fyne.Resource
-	}{
-		{"General Settings", generalScroll, true, theme.SettingsIcon()},
-	}
+	var onlineItems []accordionItem
+	var localItems []accordionItem
 
 	// Collect all provider names
 	var orderedNames []string
@@ -313,6 +308,9 @@ func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 	}
 	// Sort all alphabetically for deterministic order
 	sort.Strings(orderedNames)
+
+	// Logic to auto-select tab if a pending provider is found
+	targetTabIndex := 0 // Default to General loop
 
 	for _, name := range orderedNames {
 		p, ok := wp.providers[name]
@@ -327,6 +325,17 @@ func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 			if _, err := p.ParseURL(wp.pendingAddUrl); err == nil {
 				providerPendingUrl = wp.pendingAddUrl
 				isPendingProvider = true
+
+				// Determine target tab index
+				switch p.Type() {
+				case provider.TypeLocal:
+					targetTabIndex = 2 // Local
+				case provider.TypeAI:
+					targetTabIndex = 3 // AI
+				default:
+					targetTabIndex = 1 // Online
+				}
+
 				// Consume pending URL
 				wp.pendingAddUrl = ""
 			}
@@ -369,19 +378,53 @@ func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 			}
 		}
 
-		items = append(items, struct {
-			Title   string
-			Content fyne.CanvasObject
-			Open    bool
-			Icon    fyne.Resource
-		}{
+		item := accordionItem{
 			Title:   title,
 			Content: content,
 			Open:    isPendingProvider, // Auto-open if matched
 			Icon:    p.GetProviderIcon(),
-		})
+		}
+
+		switch p.Type() {
+		case provider.TypeLocal:
+			localItems = append(localItems, item)
+		case provider.TypeAI:
+			// aiItems = append(aiItems, item) // TODO: Implement AI tab logic when ready
+			continue
+		default: // TypeOnline
+			onlineItems = append(onlineItems, item)
+		}
 	}
 
+	onlineTab := createAccordion(onlineItems)
+	localTab := createAccordion(localItems)
+	// Placeholder for AI tab
+	aiTab := container.NewStack(widget.NewLabelWithStyle("AI features coming soon...", fyne.TextAlignCenter, fyne.TextStyle{Italic: true}))
+
+	tabs := container.NewAppTabs(
+		container.NewTabItemWithIcon("General", theme.SettingsIcon(), generalScroll),
+		container.NewTabItemWithIcon("Online", theme.GridIcon(), onlineTab),
+		container.NewTabItemWithIcon("Local", theme.FolderIcon(), localTab),
+		container.NewTabItemWithIcon("AI", theme.ComputerIcon(), aiTab),
+	)
+	tabs.SetTabLocation(container.TabLocationLeading)
+
+	if targetTabIndex > 0 && targetTabIndex < len(tabs.Items) {
+		tabs.SelectIndex(targetTabIndex)
+	}
+
+	return container.NewStack(tabs)
+}
+
+// Helper struct for accordion items
+type accordionItem struct {
+	Title   string
+	Content fyne.CanvasObject
+	Open    bool
+	Icon    fyne.Resource
+}
+
+func createAccordion(items []accordionItem) fyne.CanvasObject {
 	// Container to hold the accordion
 	accordionContainer := container.NewStack()
 
@@ -394,6 +437,13 @@ func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 		var centerContent fyne.CanvasObject
 
 		foundOpen := false
+
+		// If no items, show a placeholder or empty
+		if len(items) == 0 {
+			accordionContainer.Objects = []fyne.CanvasObject{widget.NewLabel("No providers in this category.")}
+			accordionContainer.Refresh()
+			return
+		}
 
 		for i := range items {
 			index := i // Capture loop variable
@@ -415,7 +465,7 @@ func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 					nextIndex := (index + 1) % len(items)
 					items[nextIndex].Open = true
 				} else {
-					// If opening, close all others (Single Expansion)
+					// If opening, close all others
 					for j := range items {
 						items[j].Open = (j == index)
 					}
@@ -424,17 +474,11 @@ func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 			}
 
 			// --- Complex Header Layout ---
-			// We use a Stack to put custom content ON TOP of a standard button.
-			// The button provides the background, hover effects, and interaction.
-			// The HBox provides the icon sequence.
-
-			// 1. Interaction Layer (Standard Button)
 			bgBtn := widget.NewButton("", onTapped)
 			bgBtn.Alignment = widget.ButtonAlignLeading
 
-			// 2. Content Layer (Icons + Title)
 			titleLabel := widget.NewLabel(item.Title)
-			titleLabel.TextStyle = fyne.TextStyle{Bold: item.Open} // Visual hint
+			titleLabel.TextStyle = fyne.TextStyle{Bold: item.Open}
 
 			headerContent := container.NewHBox(
 				widget.NewIcon(arrowIcon),
@@ -445,7 +489,6 @@ func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 			}
 			headerContent.Add(titleLabel)
 
-			// Wrap in Padded to align with button internal alignment
 			headerStack := container.NewStack(bgBtn, container.NewPadded(headerContent))
 
 			if item.Open {
@@ -461,16 +504,13 @@ func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 			}
 		}
 
-		// Create the border layout
-		borderLayout := container.NewBorder(topHeaders, bottomHeaders, nil, nil, centerContent)
-
-		accordionContainer.Objects = []fyne.CanvasObject{borderLayout}
+		// Use Border Layout: Top headers | Bottom headers | Center Content
+		// This ensures the Center Content (Provider UI) expands to fill available space.
+		content := container.NewBorder(topHeaders, bottomHeaders, nil, nil, centerContent)
+		accordionContainer.Objects = []fyne.CanvasObject{content}
 		accordionContainer.Refresh()
 	}
 
-	// Initial Render
 	refreshAccordion()
-
-	// Wrap accordion in a container to return.
-	return container.NewStack(accordionContainer)
+	return accordionContainer
 }

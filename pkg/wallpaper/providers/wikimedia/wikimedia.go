@@ -48,6 +48,10 @@ func (p *WikimediaProvider) Name() string {
 	return "Wikimedia"
 }
 
+func (p *WikimediaProvider) Type() provider.ProviderType {
+	return provider.TypeOnline
+}
+
 func (p *WikimediaProvider) HomeURL() string {
 	return "https://commons.wikimedia.org"
 }

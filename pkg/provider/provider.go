@@ -33,10 +33,21 @@ type Favoriter interface {
 	GetSourceQueryID() string
 }
 
+// ProviderType enum defines the category of an image provider.
+type ProviderType int
+
+const (
+	TypeOnline ProviderType = iota
+	TypeLocal
+	TypeAI
+)
+
 // ImageProvider defines the interface for an image service.
 type ImageProvider interface {
 	// Name returns the provider name.
 	Name() string
+	// Type returns the provider category (Online, Local, AI).
+	Type() ProviderType
 	// HomeURL returns the home URL of the provider service.
 	HomeURL() string
 	// ParseURL checks if the given web URL is valid for this provider and returns the API URL.

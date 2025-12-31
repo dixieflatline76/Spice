@@ -63,6 +63,10 @@ func (p *Provider) Name() string {
 	return "GooglePhotos"
 }
 
+func (p *Provider) Type() provider.ProviderType {
+	return provider.TypeOnline
+}
+
 func (p *Provider) Title() string {
 	return "Google Photos"
 }

@@ -165,6 +165,10 @@ func (m *MockImageProvider) Name() string {
 	return args.String(0)
 }
 
+func (m *MockImageProvider) Type() provider.ProviderType {
+	return provider.TypeOnline
+}
+
 func (m *MockImageProvider) ParseURL(webURL string) (string, error) {
 	args := m.Called(webURL)
 	return args.String(0), args.Error(1)
