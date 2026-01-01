@@ -78,14 +78,18 @@ type Plugin struct {
 	fm       *FileManager
 	pipeline *Pipeline
 
+	// Concurrency Control
+	fetchingInProgress *util.SafeFlag
+
 	// Session State (Local Navigation)
-	currentIndex           int
-	history                []int
-	shuffleOrder           []int
-	randomPos              int
-	lastTriggeredSeenCount int       // Anti-loop state
-	lastTriggerTime        time.Time // Anti-loop cooldown state
-	enrichmentSignal       chan int  // Signal for lazy enrichment worker
+	currentIndex            int
+	history                 []int
+	shuffleOrder            []int
+	randomPos               int
+	lastTriggeredSeenCount  int // Anti-loop state
+	lastTriggeredTotalCount int
+	lastTriggerTime         time.Time // Anti-loop cooldown state
+	enrichmentSignal        chan int  // Signal for lazy enrichment worker
 
 	// Testable UI executor
 	runOnUI func(func())
@@ -162,6 +166,7 @@ func getPlugin() *Plugin {
 			actionChan:         make(chan func(), 5),
 			store:              store,
 			pipeline:           nil, // Initialized in Init
+			fetchingInProgress: util.NewSafeBool(),
 			runOnUI:            fyne.Do,
 		}
 
@@ -526,6 +531,10 @@ func (wp *Plugin) applyWallpaper(img provider.Image) {
 
 	threshold := int(math.Round(PrcntSeenTillDownload * float64(totalCount)))
 
+	// debug: dump precise pagination state
+	// log.Debugf("Pagination Check: Seen=%d, Total=%d, Threshold=%d, LastTrigger=%d, InProgress=%v",
+	// 	seenCount, totalCount, threshold, wp.lastTriggeredSeenCount, wp.fetchingInProgress.Value())
+
 	// Pagination Logic:
 	// User Request: "retrieve the next page once the user has seen 70% of the page's images"
 	// We use totalCount as proxy for "page's images" (or total loaded).
@@ -545,12 +554,26 @@ func (wp *Plugin) applyWallpaper(img provider.Image) {
 
 	if shouldFetch {
 		// Anti-Loop Check: ensure we are making progress
-		// If we've already triggered a download at this Seen count (or higher), don't trigger again
-		// until we see NEW images or enough time has passed (to retry after stalled/filtered page).
-		if seenCount <= wp.lastTriggeredSeenCount {
+
+		// CASE 1: Starvation/Dry Source
+		// We triggered a download previously, but the TotalCount did NOT increase.
+		// This suggests the provider returned 0 new images (duplicates or end of list).
+		// If we simply check 'seen > lastTrigger', we will infinite loop because Seen keeps growing.
+		// We must enforce a cooldown if TotalCount is stuck.
+		if totalCount <= wp.lastTriggeredTotalCount && seenCount > wp.lastTriggeredSeenCount {
+			// Starvation Cooldown: 60 seconds (Wait for new content or user to back off)
+			// This is critical for providers like MetMuseum with strict filtering or limited paging.
+			if time.Since(wp.lastTriggerTime) > 60*time.Second {
+				log.Debugf("Pagination: Starvation cooldown expired (%v). Retrying download.", time.Since(wp.lastTriggerTime))
+				shouldFetch = true
+			} else {
+				log.Debugf("Pagination: Starvation prevented. Total (%d) stuck. Seen (%d) advancing. Waiting for cooldown (%v).",
+					totalCount, seenCount, (60*time.Second - time.Since(wp.lastTriggerTime)).Round(time.Second))
+				shouldFetch = false
+			}
+		} else if seenCount <= wp.lastTriggeredSeenCount {
+			// CASE 2: Retrying same threshold (e.g. rapid clicks before Seen advances)
 			// Cooldown Override: If it's been > 15 seconds since last trigger, allow retry.
-			// This handles cases where a page yielded 0 images (due to filtering/429) and we got stuck.
-			// 15 seconds prevents machine-gunning but allows "Next" button spam to eventually work.
 			if time.Since(wp.lastTriggerTime) > 15*time.Second {
 				log.Debugf("Pagination: Loop prevention cooldown expired (%v). Retrying download despite stalled count.", time.Since(wp.lastTriggerTime))
 				shouldFetch = true
@@ -564,18 +587,34 @@ func (wp *Plugin) applyWallpaper(img provider.Image) {
 
 	if shouldFetch {
 		wp.downloadMutex.Lock()
+		// Double check inside lock (legacy), but mainly check atomic flag
 		if !wp.isDownloading {
-			wp.isDownloading = true
-			wp.lastTriggeredSeenCount = seenCount
-			wp.lastTriggerTime = time.Now()
-			wp.downloadMutex.Unlock()
+			// Atomic Check: Prevent overlapping fetches from rapid UI triggers
+			if wp.fetchingInProgress.CompareAndSwap(false, true) {
+				wp.isDownloading = true
+				wp.lastTriggeredSeenCount = seenCount
+				wp.lastTriggeredTotalCount = totalCount // Trace total at time of trigger
+				wp.lastTriggerTime = time.Now()
+				wp.downloadMutex.Unlock()
 
-			log.Debugf("Seen %d/%d images (Trigger: %v). Fetching next page...", seenCount, totalCount, shouldFetch)
-			wp.currentDownloadPage.Increment()
-			// Trigged async download
-			go wp.downloadAllImages(nil)
+				// log.Debugf("Seen %d/%d images (Trigger: %v). Fetching next page... (CAS Success)", seenCount, totalCount, shouldFetch)
+				wp.currentDownloadPage.Increment()
+
+				// Trigged async download
+				go func() {
+					defer func() {
+						log.Debugf("Pagination: Async download finished. Resetting flag.")
+						wp.fetchingInProgress.Set(false)
+					}()
+					wp.downloadAllImages(nil)
+				}()
+			} else {
+				wp.downloadMutex.Unlock()
+				log.Debugf("Pagination: Fetch skipped - already in progress (CAS Failed). Seen=%d", seenCount)
+			}
 		} else {
 			wp.downloadMutex.Unlock()
+			log.Debugf("Pagination: Fetch skipped - isDownloading=true mutex check.")
 		}
 	}
 }

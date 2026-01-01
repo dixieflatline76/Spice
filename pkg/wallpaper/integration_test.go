@@ -400,6 +400,7 @@ func setupTestPlugin(t *testing.T, prefs fyne.Preferences) *Plugin {
 		currentDownloadPage: util.NewSafeIntWithValue(1),
 		fitImageFlag:        util.NewSafeBool(),
 		shuffleImageFlag:    util.NewSafeBool(),
+		fetchingInProgress:  util.NewSafeBool(),
 		providers:           make(map[string]provider.ImageProvider),
 		pipeline:            pipeline,
 		// UI Items must be initialized

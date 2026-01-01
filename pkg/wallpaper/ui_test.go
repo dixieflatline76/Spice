@@ -84,6 +84,10 @@ func (m *MockSettingsManager) RegisterRefreshFunc(refreshFunc func()) {
 	// No-op
 }
 
+func (m *MockSettingsManager) RegisterOnSettingsSaved(callback func()) {
+	// No-op
+}
+
 func (m *MockSettingsManager) GetSettingsWindow() fyne.Window {
 	return nil
 }

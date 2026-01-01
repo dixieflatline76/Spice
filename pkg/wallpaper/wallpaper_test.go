@@ -285,6 +285,7 @@ func TestDownloadAllImages(t *testing.T) {
 		currentDownloadPage: util.NewSafeIntWithValue(1),
 		fitImageFlag:        util.NewSafeBool(),
 		shuffleImageFlag:    util.NewSafeBool(),
+		fetchingInProgress:  util.NewSafeBool(),
 		providers:           make(map[string]provider.ImageProvider),
 		store:               NewImageStore(),
 	}
@@ -404,6 +405,7 @@ func TestDownloadAllImages_EnrichmentFailure(t *testing.T) {
 		currentDownloadPage: util.NewSafeIntWithValue(1),
 		fitImageFlag:        util.NewSafeBool(),
 		shuffleImageFlag:    util.NewSafeBool(),
+		fetchingInProgress:  util.NewSafeBool(),
 		providers:           make(map[string]provider.ImageProvider),
 		store:               NewImageStore(),
 		runOnUI:             func(f func()) { f() }, // Run synchronously in tests
@@ -451,6 +453,7 @@ func TestNavigation(t *testing.T) {
 		currentDownloadPage: util.NewSafeIntWithValue(1),
 		fitImageFlag:        util.NewSafeBool(),
 		shuffleImageFlag:    util.NewSafeBool(),
+		fetchingInProgress:  util.NewSafeBool(),
 		store:               NewImageStore(),
 		actionChan:          make(chan func(), 10),
 		runOnUI:             func(f func()) { f() }, // Run synchronously in tests
@@ -652,6 +655,7 @@ func TestDeleteCurrentImage_PersistsBlock(t *testing.T) {
 		currentDownloadPage: util.NewSafeIntWithValue(1),
 		fitImageFlag:        util.NewSafeBool(),
 		shuffleImageFlag:    util.NewSafeBool(),
+		fetchingInProgress:  util.NewSafeBool(),
 		store:               NewImageStore(),
 		runOnUI:             func(f func()) { f() },
 		currentIndex:        -1,

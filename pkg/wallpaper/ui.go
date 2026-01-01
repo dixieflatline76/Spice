@@ -358,31 +358,35 @@ func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 			content = queryPanel
 		}
 
-		title := p.Title()
-		if title == "" {
-			title = "Image Sources (" + p.Name() + ")"
-		}
+		// Define Title Generator
+		titleFunc := func() string {
+			title := p.Title()
+			if title == "" {
+				title = "Image Sources (" + p.Name() + ")"
+			}
 
-		// Count active queries for this provider
-		activeCount := 0
-		for _, q := range wp.cfg.GetQueries() {
-			if q.Provider == p.Name() && q.Active {
-				activeCount++
+			// Count active queries for this provider
+			activeCount := 0
+			for _, q := range wp.cfg.GetQueries() {
+				if q.Provider == p.Name() && q.Active {
+					activeCount++
+				}
 			}
-		}
-		if activeCount > 0 {
-			if activeCount == 1 {
-				title = fmt.Sprintf("%s (1 active)", title)
-			} else {
-				title = fmt.Sprintf("%s (%d active)", title, activeCount)
+			if activeCount > 0 {
+				if activeCount == 1 {
+					return fmt.Sprintf("%s (1 active)", title)
+				}
+				return fmt.Sprintf("%s (%d active)", title, activeCount)
 			}
+			return title
 		}
 
 		item := accordionItem{
-			Title:   title,
-			Content: content,
-			Open:    isPendingProvider, // Auto-open if matched
-			Icon:    p.GetProviderIcon(),
+			Title:     titleFunc(), // Initial title
+			TitleFunc: titleFunc,   // Dynamic title generator
+			Content:   content,
+			Open:      isPendingProvider, // Auto-open if matched
+			Icon:      p.GetProviderIcon(),
 		}
 
 		switch p.Type() {
@@ -396,10 +400,20 @@ func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 		}
 	}
 
-	onlineTab := createAccordion(onlineItems)
-	localTab := createAccordion(localItems)
+	onlineTab, refreshOnline := createAccordion(onlineItems)
+	localTab, refreshLocal := createAccordion(localItems)
 	// Placeholder for AI tab
 	aiTab := container.NewStack(widget.NewLabelWithStyle("AI features coming soon...", fyne.TextAlignCenter, fyne.TextStyle{Italic: true}))
+
+	// Register Refresh Callbacks with SettingsManager
+	sm.RegisterOnSettingsSaved(func() {
+		if refreshOnline != nil {
+			refreshOnline()
+		}
+		if refreshLocal != nil {
+			refreshLocal()
+		}
+	})
 
 	tabs := container.NewAppTabs(
 		container.NewTabItemWithIcon("General", theme.SettingsIcon(), generalScroll),
@@ -418,13 +432,14 @@ func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 
 // Helper struct for accordion items
 type accordionItem struct {
-	Title   string
-	Content fyne.CanvasObject
-	Open    bool
-	Icon    fyne.Resource
+	Title     string
+	TitleFunc func() string // Optional: Function to generate title dynamically
+	Content   fyne.CanvasObject
+	Open      bool
+	Icon      fyne.Resource
 }
 
-func createAccordion(items []accordionItem) fyne.CanvasObject {
+func createAccordion(items []accordionItem) (fyne.CanvasObject, func()) {
 	// Container to hold the accordion
 	accordionContainer := container.NewStack()
 
@@ -477,7 +492,14 @@ func createAccordion(items []accordionItem) fyne.CanvasObject {
 			bgBtn := widget.NewButton("", onTapped)
 			bgBtn.Alignment = widget.ButtonAlignLeading
 
-			titleLabel := widget.NewLabel(item.Title)
+			// Dynamic Title Support
+			// If TitleFunc is provided, use it to fetch the latest title (e.g. updated counts)
+			title := item.Title
+			if item.TitleFunc != nil {
+				title = item.TitleFunc()
+			}
+
+			titleLabel := widget.NewLabel(title)
 			titleLabel.TextStyle = fyne.TextStyle{Bold: item.Open}
 
 			headerContent := container.NewHBox(
@@ -511,6 +533,19 @@ func createAccordion(items []accordionItem) fyne.CanvasObject {
 		accordionContainer.Refresh()
 	}
 
+	// EXPORTED via return closure? No, we simply register this closure if we had access to SM.
+	// But createAccordion is generic.
+	// HACK: We attach a "Refresh" method to the container? No.
+	// Better: We return the refreshFunc as a second return value, OR we inject it into the items?
+	// Actually, we need to call refreshAccordion from OUTSIDE when settings change.
+
+	// Since we can't easily change the signature of createAccordion locally without refactoring,
+	// checking if we can attach a callback to the returned container or rely on the caller to rebuild?
+	// Caller (CreatePrefsPanel) builds it once.
+
+	// Let's modify createAccordion signature to return (CanvasObject, func())
+	// and update the caller.
+
 	refreshAccordion()
-	return accordionContainer
+	return accordionContainer, refreshAccordion
 }

@@ -86,8 +86,9 @@ type SettingsManager interface {
 	SetRefreshFlag(settingName string)                             // Set a flag to indicate that a specific setting needs a refresh.
 	UnsetRefreshFlag(settingName string)                           // Unset the refresh flag for a specific setting.
 
-	RegisterRefreshFunc(refreshFunc func()) // Register a function to be called when the settings need to be refreshed.
-	GetSettingsWindow() fyne.Window         // GetSettingsWindow returns the window associated with the SettingsManager.
-	GetCheckAndEnableApplyFunc() func()     // GetCheckAndEnableApplyFunction returns the check and enable apply function for the SettingsManager.
-	RebuildTrayMenu()                       // Rebuilds the tray menu from scratch.
+	RegisterRefreshFunc(refreshFunc func())  // Register a function to be called when the settings need to be refreshed.
+	RegisterOnSettingsSaved(callback func()) // Register a function to be called after settings are saved.
+	GetSettingsWindow() fyne.Window          // GetSettingsWindow returns the window associated with the SettingsManager.
+	GetCheckAndEnableApplyFunc() func()      // GetCheckAndEnableApplyFunction returns the check and enable apply function for the SettingsManager.
+	RebuildTrayMenu()                        // Rebuilds the tray menu from scratch.
 }

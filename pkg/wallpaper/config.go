@@ -1045,3 +1045,54 @@ func (c *Config) GetActiveQueries() []ImageQuery {
 	}
 	return active
 }
+
+// AddMetMuseumQuery adds a new Met Museum query to the list.
+func (c *Config) AddMetMuseumQuery(description, url string, active bool) (string, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	id := GenerateQueryID(url)
+	if c.isDuplicateID(id) {
+		return "", fmt.Errorf("duplicate query: this URL already exists")
+	}
+
+	newQuery := ImageQuery{
+		ID:          id,
+		Description: description,
+		URL:         url,
+		Active:      active,
+		Provider:    "MetMuseum",
+	}
+
+	c.Queries = append([]ImageQuery{newQuery}, c.Queries...)
+	c.save()
+	return id, nil
+}
+
+// RemoveMetMuseumQuery removes a Met Museum query.
+func (c *Config) RemoveMetMuseumQuery(id string) error {
+	return c.RemoveImageQuery(id)
+}
+
+// EnableMetMuseumQuery enables a Met Museum query.
+func (c *Config) EnableMetMuseumQuery(id string) error {
+	return c.EnableImageQuery(id)
+}
+
+// DisableMetMuseumQuery disables a Met Museum query.
+func (c *Config) DisableMetMuseumQuery(id string) error {
+	return c.DisableImageQuery(id)
+}
+
+// GetMetMuseumQueries returns a copy of the Met Museum queries.
+func (c *Config) GetMetMuseumQueries() []ImageQuery {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	var queries []ImageQuery
+	for _, q := range c.Queries {
+		if q.Provider == "MetMuseum" {
+			queries = append(queries, q)
+		}
+	}
+	return queries
+}
