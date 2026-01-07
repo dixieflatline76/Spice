@@ -416,9 +416,17 @@ func (s *ImageStore) Sync(limit int, targetFlags map[string]bool, activeQueryIDs
 			continue
 		}
 
-		masterPath := s.fm.GetMasterPath(img.ID, ".jpg")
+		masterPath, err := s.fm.GetMasterPath(img.ID, ".jpg")
+		if err != nil {
+			badIDs[img.ID] = true
+			continue
+		}
 		if _, err := os.Stat(masterPath); os.IsNotExist(err) {
-			masterPath = s.fm.GetMasterPath(img.ID, ".png")
+			masterPath, err = s.fm.GetMasterPath(img.ID, ".png")
+			if err != nil {
+				badIDs[img.ID] = true
+				continue
+			}
 			if _, err := os.Stat(masterPath); os.IsNotExist(err) {
 				badIDs[img.ID] = true
 				continue

@@ -46,18 +46,41 @@ func (fm *FileManager) EnsureDirs() error {
 	return nil
 }
 
+// validateID ensures the ID does not contain path traversal characters.
+func (fm *FileManager) validateID(id string) error {
+	if strings.Contains(id, "..") || strings.Contains(id, string(filepath.Separator)) {
+		return fmt.Errorf("invalid id: contains illegal characters")
+	}
+	// Strict: Alphanumeric + standard symbols (-_.) only?
+	// For now, blocking traversal is the main goal.
+	return nil
+}
+
 // GetMasterPath returns the absolute path for the Master (Raw) image.
 // Master images are stored directly in the root directory.
-func (fm *FileManager) GetMasterPath(id string, ext string) string {
-	return filepath.Join(fm.rootDir, id+ext)
+func (fm *FileManager) GetMasterPath(id string, ext string) (string, error) {
+	if err := fm.validateID(id); err != nil {
+		return "", err
+	}
+	// Sanitize extension just in case
+	if strings.Contains(ext, "..") || strings.Contains(ext, string(filepath.Separator)) {
+		return "", fmt.Errorf("invalid extension")
+	}
+	return filepath.Join(fm.rootDir, id+ext), nil
 }
 
 // GetDerivativePath returns the path for a processed image based on the type.
-func (fm *FileManager) GetDerivativePath(id string, ext string, derivativeType string) string {
-	// derivativeType should be one of FittedImgDir, FittedFaceCropImgDir, etc.
-	// If empty or unknown, it falls back to master location (safeguard) implies no derivation?
-	// Strictly, derivatives live in subfolders.
-	return filepath.Join(fm.rootDir, derivativeType, id+ext)
+func (fm *FileManager) GetDerivativePath(id string, ext string, derivativeType string) (string, error) {
+	if err := fm.validateID(id); err != nil {
+		return "", err
+	}
+	// Validate derivative type via whitelist? Or just directory check?
+	// derivativeType should strictly be one of the known folders.
+	// But as long as it doesn't have "..", it stays in root.
+	if strings.Contains(derivativeType, "..") {
+		return "", fmt.Errorf("invalid derivative type")
+	}
+	return filepath.Join(fm.rootDir, derivativeType, id+ext), nil
 }
 
 // DeepDelete removes the Master image and ALL its derivatives.

@@ -255,7 +255,7 @@ func (p *Provider) resolveQueryToIDs(ctx context.Context, query string) ([]int, 
 
 	// 2. Shuffle if enabled (Stable per session)
 	if p.cfg.GetImgShuffle() {
-		r := rand.New(rand.NewSource(time.Now().UnixNano()))
+		r := rand.New(rand.NewSource(time.Now().UnixNano())) //nolint:gosec // Not security-sensitive (UI Shuffle)
 		r.Shuffle(len(ids), func(i, j int) {
 			ids[i], ids[j] = ids[j], ids[i]
 		})

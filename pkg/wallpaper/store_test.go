@@ -147,7 +147,7 @@ func TestStoreSync_Validation(t *testing.T) {
 	img2 := provider.Image{ID: "img2", Path: "http://url/2.png"} // Master -> 2.png
 
 	// Create Master file for img1
-	master1 := fm.GetMasterPath("img1", ".jpg")
+	master1, _ := fm.GetMasterPath("img1", ".jpg")
 	err := os.MkdirAll(filepath.Dir(master1), 0755)
 	assert.NoError(t, err)
 	err = os.WriteFile(master1, []byte("fake"), 0644)
@@ -180,7 +180,7 @@ func TestStoreSync_Grooming(t *testing.T) {
 	// All have masters
 	ids := []string{"oldest", "middle", "newest"}
 	for _, id := range ids {
-		master := fm.GetMasterPath(id, ".jpg")
+		master, _ := fm.GetMasterPath(id, ".jpg")
 		err := os.MkdirAll(filepath.Dir(master), 0755)
 		assert.NoError(t, err)
 		err = os.WriteFile(master, []byte(id), 0644)
@@ -200,7 +200,7 @@ func TestStoreSync_Grooming(t *testing.T) {
 
 	// Verify File Deletion
 	// Verify File Deletion (Validation works async with pacer)
-	oldestPath := fm.GetMasterPath("oldest", ".jpg")
+	oldestPath, _ := fm.GetMasterPath("oldest", ".jpg")
 	assert.Eventually(t, func() bool {
 		_, err := os.Stat(oldestPath)
 		return os.IsNotExist(err)
@@ -222,7 +222,7 @@ func TestStoreSync_CacheInvalidation(t *testing.T) {
 		ProcessingFlags: map[string]bool{"SmartFit": true},
 	}
 	// Create master so it survives validation check
-	master1 := fm.GetMasterPath("img1", ".jpg")
+	master1, _ := fm.GetMasterPath("img1", ".jpg")
 	err := os.MkdirAll(filepath.Dir(master1), 0755)
 	assert.NoError(t, err)
 	err = os.WriteFile(master1, []byte("fake"), 0644)

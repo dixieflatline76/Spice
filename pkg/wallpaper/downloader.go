@@ -94,7 +94,10 @@ func (wp *Plugin) ensureMaster(ctx context.Context, img provider.Image, imgProvi
 		}
 	}
 
-	masterPath := wp.fm.GetMasterPath(img.ID, ext)
+	masterPath, err := wp.fm.GetMasterPath(img.ID, ext)
+	if err != nil {
+		return "", fmt.Errorf("security check failed for master path: %w", err)
+	}
 
 	// Check existence
 	if _, err := os.Stat(masterPath); !os.IsNotExist(err) {
@@ -171,7 +174,10 @@ func (wp *Plugin) ensureDerivative(ctx context.Context, img provider.Image, mast
 	}
 
 	ext := filepath.Ext(masterPath)
-	targetPath := wp.fm.GetDerivativePath(img.ID, ext, derivativeDir)
+	targetPath, err := wp.fm.GetDerivativePath(img.ID, ext, derivativeDir)
+	if err != nil {
+		return "", fmt.Errorf("security check failed for derivative path: %w", err)
+	}
 
 	// Check existence
 	if _, err := os.Stat(targetPath); !os.IsNotExist(err) {
