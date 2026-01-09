@@ -52,6 +52,10 @@ func (p *WikimediaProvider) Type() provider.ProviderType {
 	return provider.TypeOnline
 }
 
+func (p *WikimediaProvider) SupportsUserQueries() bool {
+	return true
+}
+
 func (p *WikimediaProvider) HomeURL() string {
 	return "https://commons.wikimedia.org"
 }
@@ -75,6 +79,11 @@ func (p *WikimediaProvider) ParseURL(input string) (string, error) {
 	}
 	// Treat "File:" explicitly as a direct file lookup
 	if strings.HasPrefix(lowerInput, "file:") {
+		// Fix idempotency: If input is already normalized (e.g. "file:File:Name"), return as is.
+		// "file:File:" becomes "file:file:" in lowerInput.
+		if strings.HasPrefix(lowerInput, "file:file:") {
+			return input, nil
+		}
 		return "file:" + input, nil
 	}
 

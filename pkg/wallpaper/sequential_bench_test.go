@@ -62,6 +62,10 @@ func (m *BenchMockProvider) EnrichImage(ctx context.Context, img provider.Image)
 func (m *BenchMockProvider) Type() provider.ProviderType {
 	return provider.TypeOnline
 }
+
+func (m *BenchMockProvider) SupportsUserQueries() bool {
+	return true
+}
 func (m *BenchMockProvider) CreateSettingsPanel(sm setting.SettingsManager) fyne.CanvasObject {
 	return nil
 }

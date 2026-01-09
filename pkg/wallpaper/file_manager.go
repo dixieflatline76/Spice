@@ -31,16 +31,23 @@ func (fm *FileManager) GetDownloadDir() string {
 
 // EnsureDirs creates necessary subdirectories for derivatives.
 func (fm *FileManager) EnsureDirs() error {
-	dirs := []string{
-		fm.rootDir,
-		filepath.Join(fm.rootDir, FittedImgDir),
-		filepath.Join(fm.rootDir, FittedFaceBoostImgDir),
-		filepath.Join(fm.rootDir, FittedFaceCropImgDir),
+	// Root dirs
+	if err := os.MkdirAll(fm.rootDir, 0755); err != nil {
+		return fmt.Errorf("failed to create root directory %s: %w", fm.rootDir, err)
 	}
 
-	for _, dir := range dirs {
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			return fmt.Errorf("failed to create directory %s: %w", dir, err)
+	fittedRoot := filepath.Join(fm.rootDir, FittedRootDir)
+
+	// Create structure: fitted/{quality,flexibility}/{standard,faceboost,facecrop}
+	modes := []string{QualityDir, FlexibilityDir}
+	types := []string{StandardDir, FaceBoostDir, FaceCropDir}
+
+	for _, mode := range modes {
+		for _, t := range types {
+			dir := filepath.Join(fittedRoot, mode, t)
+			if err := os.MkdirAll(dir, 0755); err != nil {
+				return fmt.Errorf("failed to create directory %s: %w", dir, err)
+			}
 		}
 	}
 	return nil
@@ -51,8 +58,6 @@ func (fm *FileManager) validateID(id string) error {
 	if strings.Contains(id, "..") || strings.Contains(id, string(filepath.Separator)) {
 		return fmt.Errorf("invalid id: contains illegal characters")
 	}
-	// Strict: Alphanumeric + standard symbols (-_.) only?
-	// For now, blocking traversal is the main goal.
 	return nil
 }
 
@@ -62,7 +67,6 @@ func (fm *FileManager) GetMasterPath(id string, ext string) (string, error) {
 	if err := fm.validateID(id); err != nil {
 		return "", err
 	}
-	// Sanitize extension just in case
 	if strings.Contains(ext, "..") || strings.Contains(ext, string(filepath.Separator)) {
 		return "", fmt.Errorf("invalid extension")
 	}
@@ -70,13 +74,12 @@ func (fm *FileManager) GetMasterPath(id string, ext string) (string, error) {
 }
 
 // GetDerivativePath returns the path for a processed image based on the type.
+// derivativeType is now a relative path segment (e.g., "fitted/quality/standard")
 func (fm *FileManager) GetDerivativePath(id string, ext string, derivativeType string) (string, error) {
 	if err := fm.validateID(id); err != nil {
 		return "", err
 	}
-	// Validate derivative type via whitelist? Or just directory check?
-	// derivativeType should strictly be one of the known folders.
-	// But as long as it doesn't have "..", it stays in root.
+	// Basic sanitation for derivative path segments
 	if strings.Contains(derivativeType, "..") {
 		return "", fmt.Errorf("invalid derivative type")
 	}
@@ -86,10 +89,6 @@ func (fm *FileManager) GetDerivativePath(id string, ext string, derivativeType s
 // DeepDelete removes the Master image and ALL its derivatives.
 // It searches for files with the given ID in all known directories.
 func (fm *FileManager) DeepDelete(id string) error {
-	// 1. Delete Master (try common extensions if not provided, or search glob?)
-	// Since we don't store extension in ID, we need to find the file.
-	// Helper to find and delete by ID key.
-
 	filesToDelete := []string{}
 
 	// Helper to find file by ID in a dir
@@ -101,25 +100,39 @@ func (fm *FileManager) DeepDelete(id string) error {
 		return ""
 	}
 
-	// Master
+	// 1. Master (Root)
 	if f := findFile(fm.rootDir); f != "" {
 		filesToDelete = append(filesToDelete, f)
 	}
 
-	// Derivatives
-	subDirs := []string{FittedImgDir, FittedFaceBoostImgDir, FittedFaceCropImgDir}
-	for _, sub := range subDirs {
-		dir := filepath.Join(fm.rootDir, sub)
-		if f := findFile(dir); f != "" {
-			filesToDelete = append(filesToDelete, f)
+	// 2. Derivatives (Recursive in FittedRoot)
+	fittedRoot := filepath.Join(fm.rootDir, FittedRootDir)
+	err := filepath.Walk(fittedRoot, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil // Skip access errors
 		}
+		if !info.IsDir() {
+			name := info.Name()
+			ext := filepath.Ext(name)
+			fileID := strings.TrimSuffix(name, ext)
+			if fileID == id {
+				filesToDelete = append(filesToDelete, path)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		log.Printf("DeepDelete: Error walking fitted dir: %v", err)
 	}
 
 	for _, f := range filesToDelete {
 		if err := os.Remove(f); err != nil {
-			// Log error but continue? Or return?
-			// For deep clean, we want to try deleting everything.
-			return fmt.Errorf("failed to delete %s: %v", f, err)
+			// Suppress "used by another process" errors (benign race with active download/usage)
+			if strings.Contains(err.Error(), "used by another process") || strings.Contains(err.Error(), "access is denied") {
+				log.Debugf("DeepDelete: Skipped locked file %s: %v", f, err)
+			} else {
+				log.Printf("DeepDelete: Failed to delete %s: %v", f, err)
+			}
 		}
 	}
 
@@ -128,54 +141,54 @@ func (fm *FileManager) DeepDelete(id string) error {
 
 // CleanupOrphans removes files from the root directory and subdirectories
 // that are NOT present in the knownIDs map.
-// It includes a pacer (sleep) to run as a low-priority background task.
 func (fm *FileManager) CleanupOrphans(knownIDs map[string]bool) {
 	log.Print("FileManager: Starting orphan cleanup...")
 	deletedCount := 0
 
-	// Helper to walk and clean
-	cleanDir := func(dir string) {
-		entries, err := os.ReadDir(dir)
-		if err != nil {
-			log.Printf("FileManager: Failed to read dir %s: %v", dir, err)
-			return
-		}
-
+	// 1. Clean Root (Masters)
+	entries, err := os.ReadDir(fm.rootDir)
+	if err == nil {
 		for _, entry := range entries {
 			if entry.IsDir() {
 				continue
 			}
-
-			// Extract ID from filename (remove extension)
 			ext := filepath.Ext(entry.Name())
 			id := strings.TrimSuffix(entry.Name(), ext)
 
 			if !knownIDs[id] {
-				// ORPHAN! Matches no known ID.
-				// (Assuming no other files exist in these folders except images)
-				// Safeguard: Check if it looks like an image? NO, we control the folders.
-
-				fullPath := filepath.Join(dir, entry.Name())
-				// Pacer
-				time.Sleep(100 * time.Millisecond)
-
-				if err := os.Remove(fullPath); err != nil {
-					log.Printf("FileManager: Failed to delete orphan %s: %v", fullPath, err)
-				} else {
-					// log.Debugf("FileManager: Deleted orphan %s", fullPath) // Verbose
+				fullPath := filepath.Join(fm.rootDir, entry.Name())
+				time.Sleep(50 * time.Millisecond) // Pacer
+				if err := os.Remove(fullPath); err == nil {
 					deletedCount++
 				}
 			}
 		}
 	}
 
-	// Clean Root (Masters)
-	cleanDir(fm.rootDir)
+	// 2. Clean Derivatives (Recursive in FittedRoot)
+	fittedRoot := filepath.Join(fm.rootDir, FittedRootDir)
+	err = filepath.Walk(fittedRoot, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		if !info.IsDir() {
+			name := info.Name()
+			ext := filepath.Ext(name)
+			id := strings.TrimSuffix(name, ext)
 
-	// Clean Derivatives
-	subDirs := []string{FittedImgDir, FittedFaceBoostImgDir, FittedFaceCropImgDir}
-	for _, sub := range subDirs {
-		cleanDir(filepath.Join(fm.rootDir, sub))
+			if !knownIDs[id] {
+				// Orphan
+				time.Sleep(50 * time.Millisecond) // Pacer
+				if err := os.Remove(path); err == nil {
+					deletedCount++
+				}
+			}
+		}
+		return nil
+	})
+
+	if err != nil && !os.IsNotExist(err) {
+		log.Printf("FileManager: Error walking fitted dir during cleanup: %v", err)
 	}
 
 	log.Printf("FileManager: Orphan cleanup finished. Removed %d files.", deletedCount)

@@ -132,6 +132,7 @@ func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 		wp.cfg.SetSmartFitMode(mode)
 		smartFitModeConfig.InitialValue = int(mode)
 	}
+	smartFitModeConfig.NeedsRefresh = true
 
 	smartFitModeConfig.OnChanged = func(s string, val interface{}) {
 		mode := SmartFitMode(val.(int))
@@ -341,6 +342,12 @@ func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 			}
 		}
 
+		// Check if this provider is requested for focus (Settings shortcut)
+		if wp.focusProviderName == name {
+			isPendingProvider = true
+			wp.focusProviderName = "" // Consume focus request
+		}
+
 		settingsPanel := p.CreateSettingsPanel(sm)
 		queryPanel := p.CreateQueryPanel(sm, providerPendingUrl)
 
@@ -421,6 +428,7 @@ func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 		container.NewTabItemWithIcon("Local", theme.FolderIcon(), localTab),
 		container.NewTabItemWithIcon("AI", theme.ComputerIcon(), aiTab),
 	)
+	wp.settingsTabs = tabs // Store reference for dynamic switching
 	tabs.SetTabLocation(container.TabLocationLeading)
 
 	if targetTabIndex > 0 && targetTabIndex < len(tabs.Items) {
@@ -447,90 +455,93 @@ func createAccordion(items []accordionItem) (fyne.CanvasObject, func()) {
 	var refreshAccordion func()
 
 	refreshAccordion = func() {
-		topHeaders := container.NewVBox()
-		bottomHeaders := container.NewVBox()
-		var centerContent fyne.CanvasObject
+		// Use fyne.Do to ensure this runs on the main thread
+		fyne.Do(func() {
+			topHeaders := container.NewVBox()
+			bottomHeaders := container.NewVBox()
+			var centerContent fyne.CanvasObject
 
-		foundOpen := false
+			foundOpen := false
 
-		// If no items, show a placeholder or empty
-		if len(items) == 0 {
-			accordionContainer.Objects = []fyne.CanvasObject{widget.NewLabel("No providers in this category.")}
-			accordionContainer.Refresh()
-			return
-		}
-
-		for i := range items {
-			index := i // Capture loop variable
-			item := &items[index]
-
-			// State Icon (Arrow)
-			var arrowIcon fyne.Resource
-			if item.Open {
-				arrowIcon = theme.MoveDownIcon()
-			} else {
-				arrowIcon = theme.NavigateNextIcon()
+			// If no items, show a placeholder or empty
+			if len(items) == 0 {
+				accordionContainer.Objects = []fyne.CanvasObject{widget.NewLabel("No providers in this category.")}
+				accordionContainer.Refresh()
+				return
 			}
 
-			// Header Action
-			onTapped := func() {
+			for i := range items {
+				index := i // Capture loop variable
+				item := &items[index]
+
+				// State Icon (Arrow)
+				var arrowIcon fyne.Resource
 				if item.Open {
-					// If closing, open the next one (wrapping around)
-					item.Open = false
-					nextIndex := (index + 1) % len(items)
-					items[nextIndex].Open = true
+					arrowIcon = theme.MoveDownIcon()
 				} else {
-					// If opening, close all others
-					for j := range items {
-						items[j].Open = (j == index)
+					arrowIcon = theme.NavigateNextIcon()
+				}
+
+				// Header Action
+				onTapped := func() {
+					if item.Open {
+						// If closing, open the next one (wrapping around)
+						item.Open = false
+						nextIndex := (index + 1) % len(items)
+						items[nextIndex].Open = true
+					} else {
+						// If opening, close all others
+						for j := range items {
+							items[j].Open = (j == index)
+						}
+					}
+					refreshAccordion()
+				}
+
+				// --- Complex Header Layout ---
+				bgBtn := widget.NewButton("", onTapped)
+				bgBtn.Alignment = widget.ButtonAlignLeading
+
+				// Dynamic Title Support
+				// If TitleFunc is provided, use it to fetch the latest title (e.g. updated counts)
+				title := item.Title
+				if item.TitleFunc != nil {
+					title = item.TitleFunc()
+				}
+
+				titleLabel := widget.NewLabel(title)
+				titleLabel.TextStyle = fyne.TextStyle{Bold: item.Open}
+
+				headerContent := container.NewHBox(
+					widget.NewIcon(arrowIcon),
+				)
+				if item.Icon != nil {
+					providerIcon := widget.NewIcon(item.Icon)
+					headerContent.Add(providerIcon)
+				}
+				headerContent.Add(titleLabel)
+
+				headerStack := container.NewStack(bgBtn, container.NewPadded(headerContent))
+
+				if item.Open {
+					topHeaders.Add(headerStack)
+					centerContent = item.Content
+					foundOpen = true
+				} else {
+					if foundOpen {
+						bottomHeaders.Add(headerStack)
+					} else {
+						topHeaders.Add(headerStack)
 					}
 				}
-				refreshAccordion()
 			}
 
-			// --- Complex Header Layout ---
-			bgBtn := widget.NewButton("", onTapped)
-			bgBtn.Alignment = widget.ButtonAlignLeading
-
-			// Dynamic Title Support
-			// If TitleFunc is provided, use it to fetch the latest title (e.g. updated counts)
-			title := item.Title
-			if item.TitleFunc != nil {
-				title = item.TitleFunc()
-			}
-
-			titleLabel := widget.NewLabel(title)
-			titleLabel.TextStyle = fyne.TextStyle{Bold: item.Open}
-
-			headerContent := container.NewHBox(
-				widget.NewIcon(arrowIcon),
-			)
-			if item.Icon != nil {
-				providerIcon := widget.NewIcon(item.Icon)
-				headerContent.Add(providerIcon)
-			}
-			headerContent.Add(titleLabel)
-
-			headerStack := container.NewStack(bgBtn, container.NewPadded(headerContent))
-
-			if item.Open {
-				topHeaders.Add(headerStack)
-				centerContent = item.Content
-				foundOpen = true
-			} else {
-				if foundOpen {
-					bottomHeaders.Add(headerStack)
-				} else {
-					topHeaders.Add(headerStack)
-				}
-			}
-		}
-
-		// Use Border Layout: Top headers | Bottom headers | Center Content
-		// This ensures the Center Content (Provider UI) expands to fill available space.
-		content := container.NewBorder(topHeaders, bottomHeaders, nil, nil, centerContent)
-		accordionContainer.Objects = []fyne.CanvasObject{content}
-		accordionContainer.Refresh()
+			// Use Border Layout: Top headers | Bottom headers | Center Content
+			// This ensures the Center Content (Provider UI) expands to fill available space.
+			content := container.NewBorder(topHeaders, bottomHeaders, nil, nil, centerContent)
+			accordionContainer.Objects = []fyne.CanvasObject{content}
+			accordionContainer.Refresh()
+		})
 	}
 
 	// EXPORTED via return closure? No, we simply register this closure if we had access to SM.

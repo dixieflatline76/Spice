@@ -353,6 +353,10 @@ func (s *StubImageProvider) CreateSettingsPanel(sm setting.SettingsManager) fyne
 func (s *StubImageProvider) Type() provider.ProviderType {
 	return provider.TypeOnline
 }
+
+func (s *StubImageProvider) SupportsUserQueries() bool {
+	return true
+}
 func (s *StubImageProvider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl string) fyne.CanvasObject {
 	return nil
 }

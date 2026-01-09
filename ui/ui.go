@@ -45,7 +45,8 @@ type SpiceApp struct {
 	plugins     []ui.Plugin   // List of plugins to activate
 	os          OS            // Operating system interface
 	appConfig   *config.AppConfig
-	prefsWindow fyne.Window // Singleton preferences window
+	prefsWindow fyne.Window        // Singleton preferences window
+	prefsTabs   *container.AppTabs // Reference to the main tabs in preferences
 }
 
 // OS interface defines methods for transforming the application state
@@ -380,25 +381,11 @@ func (sa *SpiceApp) CreateSplashScreen(seconds int) {
 func (sa *SpiceApp) CreatePreferencesWindow(initialTab string) {
 	sa.os.TransformToForeground()
 
-	// If window already exists, focus it and return
+	// If window already exists, focus it and REBUILD it to update state (e.g. Add Query)
 	if sa.prefsWindow != nil {
 		sa.prefsWindow.Show()
 		sa.prefsWindow.RequestFocus()
-		// TODO: Switch tab if window already exists?
-		// We should probably reorganize this to allow switching tab on existing window.
-		// For now we assume typical flow.
-		// Actually, if called programmatically, we WANT to switch tab.
-		// But sa.prefsWindow is just fyne.Window. We don't have reference to the Tabs container here easily
-		// unless we store it in SpiceApp struct or finding it in content.
-		// Given time constraints, we might skip hot-switching existing window tab for now,
-		// OR we can rebuild content? Rebuilding is safe but might lose state.
-		// Let's close and reopen? No, bad UX.
-		// Let's just create it if nil. If not nil, maybe we just focus.
-		// But user reported "window open at wallpaper plugin tab".
-		// If window was closed, this code runs.
-		// If window was OPEN, lines 353-356 return.
-		// If the user ALREADY has prefs open, we might fail to switch.
-		// We should fix this if possible. But for now let's focus on the "fresh open" case or just ignore tab switch on existing.
+		sa.RebuildPreferencesContent(initialTab)
 		return
 	}
 
@@ -430,8 +417,21 @@ func (sa *SpiceApp) CreatePreferencesWindow(initialTab string) {
 	prefsWindow.SetOnClosed(func() {
 		sa.os.TransformToBackground()
 		sa.prefsWindow = nil // Clear reference on close
+		sa.prefsTabs = nil   // Clear tabs reference
 	})
-	sm := NewSettingsManager(prefsWindow)
+
+	sa.RebuildPreferencesContent(initialTab)
+	prefsWindow.Show()
+}
+
+// RebuildPreferencesContent rebuilds the content of the preferences window.
+// This allows refreshing the UI (e.g. to show "Add Query" dialogs) even if the window is already open.
+func (sa *SpiceApp) RebuildPreferencesContent(initialTab string) {
+	if sa.prefsWindow == nil {
+		return
+	}
+
+	sm := NewSettingsManager(sa.prefsWindow)
 
 	// --- General Tab ---
 	generalContainer := container.NewVBox()
@@ -521,6 +521,7 @@ func (sa *SpiceApp) CreatePreferencesWindow(initialTab string) {
 
 	// Combine all tabs
 	tabs := container.NewAppTabs(generalTabItem)
+	sa.prefsTabs = tabs // Store reference for dynamic switching
 	for _, item := range pluginTabItems {
 		tabs.Append(item)
 	}
@@ -536,14 +537,13 @@ func (sa *SpiceApp) CreatePreferencesWindow(initialTab string) {
 	}
 
 	closeButton := widget.NewButton("Close", func() {
-		prefsWindow.Close()
+		sa.prefsWindow.Close()
 	})
 
 	// Layout: Tabs take up the main space, Apply/Close buttons at the bottom
 	prefsWindowLayout := container.NewBorder(nil, container.NewVBox(sm.GetApplySettingsButton(), container.NewHBox(layout.NewSpacer(), closeButton)), nil, nil, tabs)
 
-	prefsWindow.SetContent(prefsWindowLayout)
-	prefsWindow.Show()
+	sa.prefsWindow.SetContent(prefsWindowLayout)
 }
 
 // forcedVariantTheme is a theme that forces a specific variant (Dark or Light)

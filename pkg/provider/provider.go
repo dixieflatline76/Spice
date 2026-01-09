@@ -58,6 +58,9 @@ type ImageProvider interface {
 	FetchImages(ctx context.Context, apiURL string, page int) ([]Image, error)
 	// EnrichImage fetches additional details for the image (e.g. attribution) if missing.
 	EnrichImage(ctx context.Context, img Image) (Image, error)
+	// SupportsUserQueries returns true if the provider allows users to add custom queries (e.g. search terms, URLs).
+	// Returns false if the provider is curated-only (e.g. Museums, Daily Photo).
+	SupportsUserQueries() bool
 
 	// --- UI Integration ---
 

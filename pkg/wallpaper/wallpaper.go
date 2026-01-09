@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/theme"
 	"github.com/disintegration/imaging"
 	"github.com/dixieflatline76/Spice/asset"
@@ -94,7 +95,9 @@ type Plugin struct {
 	// Testable UI executor
 	runOnUI func(func())
 
-	pendingAddUrl string
+	pendingAddUrl     string
+	focusProviderName string             // State to focus specific provider settings
+	settingsTabs      *container.AppTabs // Reference to the settings tabs for dynamic switching
 }
 
 var (
@@ -165,9 +168,10 @@ func getPlugin() *Plugin {
 			providers:          make(map[string]provider.ImageProvider),
 			actionChan:         make(chan func(), 5),
 			store:              store,
-			pipeline:           nil, // Initialized in Init
+			// pipeline:           nil, // Initialized in Init
 			fetchingInProgress: util.NewSafeBool(),
 			runOnUI:            fyne.Do,
+			focusProviderName:  "",
 		}
 
 		// Pipeline depends on wpInstance methods, so we init it here but config is nil.
@@ -446,13 +450,16 @@ func (wp *Plugin) updateTrayMenuUI(img provider.Image) {
 			providerName := wp.GetProviderTitle(img.Provider)
 			wp.providerMenuItem.Label = "Source: " + providerName
 			wp.providerMenuItem.Action = func() {
-				var homeURL string
-				if p, ok := wp.providers[img.Provider]; ok {
-					homeURL = p.HomeURL()
+				// Focus Provider Settings instead of opening website
+				if _, ok := wp.providers[img.Provider]; ok {
+					go func() {
+						if err := wp.FocusProviderSettings(img.Provider); err != nil {
+							log.Printf("Failed to focus provider settings: %v", err)
+						}
+					}()
 				} else {
-					homeURL = "https://github.com/dixieflatline76/Spice"
-				}
-				if homeURL != "" {
+					// Fallback for unknown providers (e.g. from old version or manual add)
+					homeURL := "https://github.com/dixieflatline76/Spice"
 					if u, err := url.Parse(homeURL); err == nil {
 						if err := wp.manager.OpenURL(u); err != nil {
 							log.Printf("Failed to open URL %s: %v", homeURL, err)
@@ -670,6 +677,10 @@ func (wp *Plugin) OpenAddCollectionUI(urlStr string) error {
 	// 1. Identify Provider (Validation)
 	var foundProvider provider.ImageProvider
 	for _, p := range wp.providers {
+		// Skip providers that don't support custom queries (e.g. curated museums)
+		if !p.SupportsUserQueries() {
+			continue
+		}
 		if _, err := p.ParseURL(urlStr); err == nil {
 			foundProvider = p
 			break
@@ -682,9 +693,65 @@ func (wp *Plugin) OpenAddCollectionUI(urlStr string) error {
 	// 2. Set State
 	wp.pendingAddUrl = urlStr
 
-	// 3. Open Preferences	// Trigger standard UI flow via manager
-	// "Wallpaper" is the tab name for this plugin
+	// 3. Open Preferences (Outer Layer)
 	wp.manager.OpenPreferences("Wallpaper")
+
+	// 4. Switch Inner Tab (Inner Layer)
+	// If the settings panel is already built, switch logic in CreatePrefsPanel won't run.
+	// We must manually switch it here.
+	if wp.settingsTabs != nil {
+		targetTabIndex := 1 // Default to Online
+		switch foundProvider.Type() {
+		case provider.TypeLocal:
+			targetTabIndex = 2 // Local
+		case provider.TypeAI:
+			targetTabIndex = 3 // AI
+		}
+
+		// Ensure we are on UI thread? Fyne methods are usually safe if called from event cycle,
+		// but this might be called from API server goroutine.
+		// OpenPreferences handles UI thread via `sa.NewWindow`.
+		// We should wrap this in runOnUI just in case.
+		wp.runOnUI(func() {
+			if targetTabIndex < len(wp.settingsTabs.Items) {
+				wp.settingsTabs.SelectIndex(targetTabIndex)
+			}
+		})
+	}
+
+	return nil
+}
+
+// FocusProviderSettings opens the preferences and focuses the settings for the given provider.
+func (wp *Plugin) FocusProviderSettings(providerName string) error {
+	// 1. Verify Provider
+	p, ok := wp.providers[providerName]
+	if !ok {
+		return fmt.Errorf("provider %s not found", providerName)
+	}
+
+	// 2. Set State
+	wp.focusProviderName = providerName
+
+	// 3. Open Preferences (Outer Layer)
+	wp.manager.OpenPreferences("Wallpaper")
+
+	// 4. Switch Inner Tab (Inner Layer)
+	if wp.settingsTabs != nil {
+		targetTabIndex := 1 // Default to Online
+		switch p.Type() {
+		case provider.TypeLocal:
+			targetTabIndex = 2 // Local
+		case provider.TypeAI:
+			targetTabIndex = 3 // AI
+		}
+
+		wp.runOnUI(func() {
+			if targetTabIndex < len(wp.settingsTabs.Items) {
+				wp.settingsTabs.SelectIndex(targetTabIndex)
+			}
+		})
+	}
 	return nil
 }
 

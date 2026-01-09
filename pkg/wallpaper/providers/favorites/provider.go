@@ -82,6 +82,10 @@ func (p *Provider) Type() provider.ProviderType {
 	return provider.TypeLocal
 }
 
+func (p *Provider) SupportsUserQueries() bool {
+	return false
+}
+
 func (p *Provider) Title() string {
 	return "Favorites"
 }

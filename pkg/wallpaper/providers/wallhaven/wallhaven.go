@@ -62,6 +62,10 @@ func (p *WallhavenProvider) Type() provider.ProviderType {
 	return provider.TypeOnline
 }
 
+func (p *WallhavenProvider) SupportsUserQueries() bool {
+	return true
+}
+
 func (p *WallhavenProvider) HomeURL() string {
 	return "https://wallhaven.cc"
 }

@@ -51,7 +51,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := os.WriteFile(outputFile, []byte(sb.String()), 0644); err != nil {
+	if err := os.WriteFile(outputFile, []byte(sb.String()), 0600); err != nil {
 		fmt.Fprintf(os.Stderr, "failed to write output file: %v\n", err)
 		os.Exit(1)
 	}

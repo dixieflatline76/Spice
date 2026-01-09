@@ -80,6 +80,10 @@ func (p *Provider) Type() provider.ProviderType {
 	return provider.TypeOnline
 }
 
+func (p *Provider) SupportsUserQueries() bool {
+	return false
+}
+
 //go:embed MetMuseum.png
 var iconData []byte
 
@@ -93,7 +97,16 @@ func (p *Provider) ParseURL(url string) (string, error) {
 	if len(matches) > 1 {
 		return "object:" + matches[1], nil
 	}
-	// TODO: Handle search URLs?
+
+	// Reject foreign URLs (fix for deep linking theft)
+	lower := strings.ToLower(url)
+	if strings.Contains(lower, "://") || strings.HasPrefix(lower, "www.") {
+		if !strings.Contains(lower, "metmuseum.org") {
+			return "", fmt.Errorf("invalid Met Museum URL")
+		}
+	}
+
+	// Treat remaining as search URLs
 	return url, nil
 }
 

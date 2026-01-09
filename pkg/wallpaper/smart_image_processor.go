@@ -99,31 +99,46 @@ func (c *smartImageProcessor) CheckCompatibility(width, height int) error {
 		return fmt.Errorf("getting desktop dimensions: %w", err)
 	}
 
-	// Check strict resolution (Must at least cover the screen)
+	// 1. Strict Resolution Floor
+	// User Requirement: Both width and height must be >= desktop resolution.
 	if width < systemWidth || height < systemHeight {
-		return fmt.Errorf("image too small for smart fit")
+		log.Debugf("SmartFit: Image too small (%dx%d vs %dx%d)", width, height, systemWidth, systemHeight)
+		return fmt.Errorf("image resolution too low (must be at least desktop size)")
 	}
+
+	// 2. Dynamic Aspect Ratio Tolerance
+	// 2. Dynamic Aspect Ratio Tolerance
+	// "Quality" Mode (SmartFitNormal): Strict adherence to compositional integrity.
+	// We ignore resolution surplus and stick to the base threshold (e.g., 20%).
+	// "Flexibility" Mode (SmartFitAggressive): Relaxed adherence based on resolution.
+	// We allow aspect deviation to scale linearly with surplus resolution.
 
 	imageAspect := float64(width) / float64(height)
 	systemAspect := float64(systemWidth) / float64(systemHeight)
 	aspectDiff := math.Abs(systemAspect - imageAspect)
 
-	// Resolution Bonus (Aggressive Mode)
+	var effectiveThreshold float64
+
 	if mode == SmartFitAggressive {
-		wFactor := float64(width) / float64(systemWidth)
-		hFactor := float64(height) / float64(systemHeight)
-		padding := math.Min(wFactor, hFactor)
+		// Calculate how much "surplus" resolution we have relative to the screen.
+		scaleX := float64(width) / float64(systemWidth)
+		scaleY := float64(height) / float64(systemHeight)
+		surplus := math.Min(scaleX, scaleY)
 
-		if padding > 1.2 {
-			// Sufficient padding to allow aspect mismatch
-			return nil
-		}
+		// Dynamic Formula: Base * Surplus * AggressiveMultiplier (1.5)
+		effectiveThreshold = c.aspectThreshold * surplus * 1.5
+		log.Debugf("SmartFit [Flexibility]: Check (Surplus: %.2f, DynamicThreshold: %.2f, Diff: %.2f)", surplus, effectiveThreshold, aspectDiff)
+	} else {
+		// SmartFitNormal ("Quality")
+		// Fixed Base Threshold
+		effectiveThreshold = c.aspectThreshold
+		log.Debugf("SmartFit [Quality]: Check (FixedThreshold: %.2f, Diff: %.2f)", effectiveThreshold, aspectDiff)
 	}
 
-	// Reject if aspect ratio difference is too large to crop reasonably
-	if aspectDiff > c.aspectThreshold {
-		return fmt.Errorf("image aspect ratio not compatible")
+	if aspectDiff > effectiveThreshold {
+		return fmt.Errorf("image aspect ratio not compatible (Diff: %.2f > Limit: %.2f)", aspectDiff, effectiveThreshold)
 	}
+
 	return nil
 }
 

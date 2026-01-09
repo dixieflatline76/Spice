@@ -122,7 +122,9 @@ func NewArtInstituteChicagoProvider(cfg Config, httpClient *http.Client) *Provid
 	}
 
 	serializedClient := &http.Client{
-		Timeout: httpClient.Timeout,
+		// Increase timeout to 5 minutes (300s) to allow for queueing delays.
+		// Since requests are serialized and delayed by 1.5s, a backed-up queue can take minutes.
+		Timeout: 300 * time.Second,
 		Transport: &aicSerializedRoundTripper{
 			next: next,
 		},
@@ -149,20 +151,41 @@ func (p *Provider) Name() string {
 	return ProviderName
 }
 
-func (p *Provider) GetClient() *http.Client {
-	return p.httpClient
-}
-
 func (p *Provider) Title() string {
 	return ProviderTitle
+}
+
+func (p *Provider) GetClient() *http.Client {
+	return p.httpClient
 }
 
 func (p *Provider) Type() provider.ProviderType {
 	return provider.TypeOnline
 }
 
+func (p *Provider) SupportsUserQueries() bool {
+	return false
+}
+
 func (p *Provider) HomeURL() string {
 	return "https://www.artic.edu"
+}
+
+// WithResolution implements ResolutionAwareProvider to dynamically scale IIIF images.
+func (p *Provider) WithResolution(apiURL string, width, height int) string {
+	// If it's a IIIF URL, we can adjust the size parameter
+	// Format: .../full/!1920,1080/0/default.jpg -> .../full/!W,H/0/default.jpg
+	if strings.Contains(apiURL, "/iiif/2/") && strings.Contains(apiURL, "/full/!") {
+		// Replace the size part
+		parts := strings.Split(apiURL, "/full/!")
+		if len(parts) == 2 {
+			subParts := strings.Split(parts[1], "/0/default.jpg")
+			if len(subParts) == 2 {
+				return fmt.Sprintf("%s/full/!%d,%d/0/default.jpg", parts[0], width, height)
+			}
+		}
+	}
+	return apiURL
 }
 
 // ParseURL transforms a web URL into an internal identifier.
@@ -311,8 +334,9 @@ func (p *Provider) fetchArtworkDetails(ctx context.Context, id int) (*provider.I
 	}
 
 	// Use IIIF for high-res landscape
-	// We'll use 1920x1080 as a safe target for "fit within"
-	imgURL := getIIIFURL(result.Data.ImageID, 1920, 1080)
+	// We use 4K (4096x4096) as our "Ultra-Premium" target to ensure it looks great on all monitors.
+	// The downloader can further refine this via WithResolution if a specific screen size is known.
+	imgURL := getIIIFURL(result.Data.ImageID, 4096, 4096)
 
 	return &provider.Image{
 		ID:          fmt.Sprintf("%d", result.Data.ID),
@@ -334,7 +358,13 @@ func (p *Provider) EnrichImage(ctx context.Context, img provider.Image) (provide
 
 func (p *Provider) GetDownloadHeaders() map[string]string {
 	return map[string]string{
-		"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+		"User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+		"Accept":          "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+		"Accept-Language": "en-US,en;q=0.9",
+		"Referer":         "https://www.artic.edu/",
+		"Sec-Fetch-Dest":  "image",
+		"Sec-Fetch-Mode":  "no-cors",
+		"Sec-Fetch-Site":  "same-site",
 	}
 }
 
