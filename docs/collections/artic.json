@@ -6,9 +6,11 @@
             "name": "AIC Highlights: The Big Picture",
             "ids": [
                 27992,
+                24645,
                 20684,
                 28560,
-                16568
+                16568,
+                117302
             ]
         },
         "artic_impressionism": {
@@ -17,6 +19,7 @@
                 27992,
                 20684,
                 16568,
+                117302,
                 16571,
                 16545,
                 16546
@@ -25,6 +28,10 @@
         "artic_modern": {
             "name": "Modern Landscapes",
             "ids": [
+                20701,
+                60072,
+                76244,
+                115206,
                 14620,
                 87088
             ]
@@ -32,6 +39,7 @@
         "artic_asia": {
             "name": "Arts of Asia: Landscape Prints",
             "ids": [
+                24645,
                 59056,
                 199092,
                 199093,
