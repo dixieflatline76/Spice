@@ -1,3 +1,5 @@
+//go:generate go run ../util/gen_providers/main.go
+
 package main
 
 import (
@@ -14,14 +16,6 @@ import (
 	"github.com/dixieflatline76/Spice/pkg/api"
 	"github.com/dixieflatline76/Spice/pkg/hotkey"
 	"github.com/dixieflatline76/Spice/pkg/wallpaper"
-	_ "github.com/dixieflatline76/Spice/pkg/wallpaper/providers/favorites"
-	_ "github.com/dixieflatline76/Spice/pkg/wallpaper/providers/googlephotos"
-	_ "github.com/dixieflatline76/Spice/pkg/wallpaper/providers/pexels"
-
-	// _ "github.com/dixieflatline76/Spice/pkg/wallpaper/providers/unsplash"
-	_ "github.com/dixieflatline76/Spice/pkg/wallpaper/providers/metmuseum"
-	_ "github.com/dixieflatline76/Spice/pkg/wallpaper/providers/wallhaven"
-	_ "github.com/dixieflatline76/Spice/pkg/wallpaper/providers/wikimedia"
 )
 
 var version = "0.0.0"

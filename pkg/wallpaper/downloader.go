@@ -49,7 +49,11 @@ func (wp *Plugin) ProcessImageJob(ctx context.Context, job DownloadJob) (provide
 	// 2. Ensure Master (Raw Image)
 	masterPath, err := wp.ensureMaster(ctx, img, downloadProvider)
 	if err != nil {
-		return provider.Image{}, fmt.Errorf("failed to ensure master: %w", err)
+		providerName := "Unknown"
+		if downloadProvider != nil {
+			providerName = downloadProvider.Name()
+		}
+		return provider.Image{}, fmt.Errorf("failed to ensure master (%s): %w", providerName, err)
 	}
 
 	// 3. Ensure Derivative (Processed Image)
@@ -120,7 +124,12 @@ func (wp *Plugin) ensureMaster(ctx context.Context, img provider.Image, imgProvi
 		}
 	}
 
-	resp, err := wp.httpClient.Do(req)
+	client := wp.httpClient
+	if cp, ok := imgProvider.(provider.CustomClientProvider); ok {
+		client = cp.GetClient()
+	}
+
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", err
 	}

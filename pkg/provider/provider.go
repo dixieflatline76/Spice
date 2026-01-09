@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"net/http"
 
 	"fyne.io/fyne/v2"
 	"github.com/dixieflatline76/Spice/pkg/ui/setting"
@@ -87,4 +88,10 @@ type ResolutionAwareProvider interface {
 // HeaderProvider is an optional interface for providers that need custom headers for image downloads.
 type HeaderProvider interface {
 	GetDownloadHeaders() map[string]string
+}
+
+// CustomClientProvider is an optional interface for providers that require a specialized http.Client
+// for image downloads (e.g. for strict rate limiting or serialization).
+type CustomClientProvider interface {
+	GetClient() *http.Client
 }
