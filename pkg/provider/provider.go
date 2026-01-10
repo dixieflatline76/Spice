@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"net/http"
 
 	"fyne.io/fyne/v2"
 	"github.com/dixieflatline76/Spice/pkg/ui/setting"
@@ -33,10 +34,21 @@ type Favoriter interface {
 	GetSourceQueryID() string
 }
 
+// ProviderType enum defines the category of an image provider.
+type ProviderType int
+
+const (
+	TypeOnline ProviderType = iota
+	TypeLocal
+	TypeAI
+)
+
 // ImageProvider defines the interface for an image service.
 type ImageProvider interface {
 	// Name returns the provider name.
 	Name() string
+	// Type returns the provider category (Online, Local, AI).
+	Type() ProviderType
 	// HomeURL returns the home URL of the provider service.
 	HomeURL() string
 	// ParseURL checks if the given web URL is valid for this provider and returns the API URL.
@@ -46,6 +58,9 @@ type ImageProvider interface {
 	FetchImages(ctx context.Context, apiURL string, page int) ([]Image, error)
 	// EnrichImage fetches additional details for the image (e.g. attribution) if missing.
 	EnrichImage(ctx context.Context, img Image) (Image, error)
+	// SupportsUserQueries returns true if the provider allows users to add custom queries (e.g. search terms, URLs).
+	// Returns false if the provider is curated-only (e.g. Museums, Daily Photo).
+	SupportsUserQueries() bool
 
 	// --- UI Integration ---
 
@@ -76,4 +91,10 @@ type ResolutionAwareProvider interface {
 // HeaderProvider is an optional interface for providers that need custom headers for image downloads.
 type HeaderProvider interface {
 	GetDownloadHeaders() map[string]string
+}
+
+// CustomClientProvider is an optional interface for providers that require a specialized http.Client
+// for image downloads (e.g. for strict rate limiting or serialization).
+type CustomClientProvider interface {
+	GetClient() *http.Client
 }

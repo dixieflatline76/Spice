@@ -132,7 +132,7 @@ const SUPPORTED_PATTERNS = [
     // Pexels
     /^https:\/\/(?:www\.)?pexels\.com\/(?:search\/|collections\/).*$/,
     // Wikimedia
-    /^https:\/\/commons\.wikimedia\.org\/(?:wiki\/Category:|w\/index\.php\?).*$/,
+    /^https:\/\/commons\.wikimedia\.org\/(?:wiki\/(?:Category:|File:)|w\/index\.php\?).*$/,
 ];
 // REGEX_END
 

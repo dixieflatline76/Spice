@@ -296,6 +296,20 @@ func (c *Config) loadFromPrefs() error {
 		queriesChanged = true
 	}
 
+	// Data migration: Update query IDs to prevent collisions (Provider:URL)
+	for i := range finalQueries {
+		if finalQueries[i].Provider == "Favorites" {
+			continue
+		}
+		// Generate new ID using provider + URL to prevent object:ID collisions between museums
+		newID := GenerateQueryID(finalQueries[i].Provider + ":" + finalQueries[i].URL)
+		if finalQueries[i].ID != newID {
+			log.Printf("Migration: Updating query ID for %s: %s -> %s", finalQueries[i].Provider, finalQueries[i].ID, newID)
+			finalQueries[i].ID = newID
+			queriesChanged = true
+		}
+	}
+
 	c.Queries = finalQueries
 
 	if queriesChanged {
@@ -306,96 +320,59 @@ func (c *Config) loadFromPrefs() error {
 	return nil
 }
 
-// AddImageQuery adds a new image query to the list and returns its new ID.
+// AddProviderQuery is the unified method for adding a query for ANY provider.
+func (c *Config) AddProviderQuery(description, url, provider string, active bool) (string, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	var id string
+	if provider == "Favorites" {
+		// Favorites uses the URL itself as the ID (legacy behavior)
+		id = url
+	} else {
+		// Include provider in ID to prevent collisions across different providers using same IDs (e.g. object:123)
+		id = GenerateQueryID(provider + ":" + url)
+	}
+
+	if c.isDuplicateID(id) {
+		// If it's favorites and already exists, just return it (no error)
+		if provider == "Favorites" {
+			return id, nil
+		}
+		return "", fmt.Errorf("duplicate query: this URL already exists")
+	}
+
+	newQuery := ImageQuery{
+		ID:          id,
+		Description: description,
+		URL:         url,
+		Active:      active,
+		Provider:    provider,
+	}
+
+	c.Queries = append([]ImageQuery{newQuery}, c.Queries...)
+	c.save()
+	return id, nil
+}
+
+// AddImageQuery adds a new Wallhaven image query.
 func (c *Config) AddImageQuery(desc, url string, active bool) (string, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	newID := GenerateQueryID(url)
-	// Check for duplicates across unified list
-	if c.isDuplicateID(newID) {
-		return "", errors.New("duplicate query: this URL already exists")
-	}
-
-	newItem := ImageQuery{
-		ID:          newID,
-		Description: desc,
-		URL:         url,
-		Active:      active,
-		Provider:    "Wallhaven",
-	}
-	c.Queries = append([]ImageQuery{newItem}, c.Queries...)
-	c.save()
-	return newID, nil
+	return c.AddProviderQuery(desc, url, "Wallhaven", active)
 }
 
-// AddUnsplashQuery adds a new Unsplash query to the list.
+// AddUnsplashQuery adds a new Unsplash query.
 func (c *Config) AddUnsplashQuery(description, url string, active bool) (string, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	id := GenerateQueryID(url)
-	if c.isDuplicateID(id) {
-		return "", fmt.Errorf("duplicate query: this URL already exists")
-	}
-
-	newQuery := ImageQuery{
-		ID:          id,
-		Description: description,
-		URL:         url,
-		Active:      active,
-		Provider:    "Unsplash",
-	}
-
-	c.Queries = append([]ImageQuery{newQuery}, c.Queries...)
-	c.save()
-	return id, nil
+	return c.AddProviderQuery(description, url, "Unsplash", active)
 }
 
-// AddPexelsQuery adds a new Pexels query to the list.
+// AddPexelsQuery adds a new Pexels query.
 func (c *Config) AddPexelsQuery(description, url string, active bool) (string, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	id := GenerateQueryID(url)
-	if c.isDuplicateID(id) {
-		return "", fmt.Errorf("duplicate query: this URL already exists")
-	}
-
-	newQuery := ImageQuery{
-		ID:          id,
-		Description: description,
-		URL:         url,
-		Active:      active,
-		Provider:    "Pexels",
-	}
-
-	c.Queries = append([]ImageQuery{newQuery}, c.Queries...)
-	c.save()
-	return id, nil
+	return c.AddProviderQuery(description, url, "Pexels", active)
 }
 
-// AddWikimediaQuery adds a new Wikimedia query to the list.
+// AddWikimediaQuery adds a new Wikimedia query.
 func (c *Config) AddWikimediaQuery(description, url string, active bool) (string, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	id := GenerateQueryID(url)
-	if c.isDuplicateID(id) {
-		return "", fmt.Errorf("duplicate query: this URL already exists")
-	}
-
-	newQuery := ImageQuery{
-		ID:          id,
-		Description: description,
-		URL:         url,
-		Active:      active,
-		Provider:    "Wikimedia",
-	}
-
-	c.Queries = append([]ImageQuery{newQuery}, c.Queries...)
-	c.save()
-	return id, nil
+	return c.AddProviderQuery(description, url, "Wikimedia", active)
 }
 
 // isDuplicateID checks if a query ID already exists in the unified list.
@@ -769,50 +746,14 @@ func (c *Config) SetGooglePhotosTokenExpiry(expiry time.Time) {
 	c.SetString(GooglePhotosTokenExpiryPrefKey, expiry.Format(time.RFC3339))
 }
 
-// AddFavoritesQuery adds a new Favorites query to the list.
+// AddFavoritesQuery adds a new Favorites query.
 func (c *Config) AddFavoritesQuery(description, url string, active bool) (string, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	id := url // For favorites, the URL is the ID (e.g. favorites://favorite_images)
-	if c.isDuplicateID(id) {
-		return id, nil // Just return it if it already exists
-	}
-
-	newQuery := ImageQuery{
-		ID:          id,
-		Description: description,
-		URL:         url,
-		Active:      active,
-		Provider:    "Favorites",
-	}
-
-	c.Queries = append([]ImageQuery{newQuery}, c.Queries...)
-	c.save()
-	return id, nil
+	return c.AddProviderQuery(description, url, "Favorites", active)
 }
 
-// AddGooglePhotosQuery adds a new Google Photos query to the list.
+// AddGooglePhotosQuery adds a new Google Photos query.
 func (c *Config) AddGooglePhotosQuery(description, url string, active bool) (string, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	id := GenerateQueryID(url)
-	if c.isDuplicateID(id) {
-		return "", fmt.Errorf("duplicate query: this URL already exists")
-	}
-
-	newQuery := ImageQuery{
-		ID:          id,
-		Description: description,
-		URL:         url,
-		Active:      active,
-		Provider:    "GooglePhotos",
-	}
-
-	c.Queries = append([]ImageQuery{newQuery}, c.Queries...)
-	c.save()
-	return id, nil
+	return c.AddProviderQuery(description, url, "GooglePhotos", active)
 }
 
 // RemoveGooglePhotosQuery removes a Google Photos query from the unified list.
@@ -1044,4 +985,65 @@ func (c *Config) GetActiveQueries() []ImageQuery {
 		}
 	}
 	return active
+}
+
+// AddMetMuseumQuery adds a new Met Museum query.
+func (c *Config) AddMetMuseumQuery(description, url string, active bool) (string, error) {
+	return c.AddProviderQuery(description, url, "MetMuseum", active)
+}
+
+// RemoveMetMuseumQuery removes a Met Museum query.
+func (c *Config) RemoveMetMuseumQuery(id string) error {
+	return c.RemoveImageQuery(id)
+}
+
+// EnableMetMuseumQuery enables a Met Museum query.
+func (c *Config) EnableMetMuseumQuery(id string) error {
+	return c.EnableImageQuery(id)
+}
+
+// DisableMetMuseumQuery disables a Met Museum query.
+func (c *Config) DisableMetMuseumQuery(id string) error {
+	return c.DisableImageQuery(id)
+}
+
+// GetMetMuseumQueries returns a copy of the Met Museum queries.
+func (c *Config) GetMetMuseumQueries() []ImageQuery {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	var queries []ImageQuery
+	for _, q := range c.Queries {
+		if q.Provider == "MetMuseum" {
+			queries = append(queries, q)
+		}
+	}
+	return queries
+}
+
+// AddArtInstituteChicagoQuery adds a new AIC query.
+func (c *Config) AddArtInstituteChicagoQuery(description, url string, active bool) (string, error) {
+	return c.AddProviderQuery(description, url, "ArtInstituteChicago", active)
+}
+
+// EnableArtInstituteChicagoQuery enables an AIC query.
+func (c *Config) EnableArtInstituteChicagoQuery(id string) error {
+	return c.EnableImageQuery(id)
+}
+
+// DisableArtInstituteChicagoQuery disables an AIC query.
+func (c *Config) DisableArtInstituteChicagoQuery(id string) error {
+	return c.DisableImageQuery(id)
+}
+
+// GetArtInstituteChicagoQueries returns a copy of the AIC queries.
+func (c *Config) GetArtInstituteChicagoQueries() []ImageQuery {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	var queries []ImageQuery
+	for _, q := range c.Queries {
+		if q.Provider == "ArtInstituteChicago" {
+			queries = append(queries, q)
+		}
+	}
+	return queries
 }

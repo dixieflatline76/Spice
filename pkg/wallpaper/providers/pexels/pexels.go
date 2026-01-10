@@ -59,6 +59,14 @@ func (p *PexelsProvider) Name() string {
 	return "Pexels"
 }
 
+func (p *PexelsProvider) Type() provider.ProviderType {
+	return provider.TypeOnline
+}
+
+func (p *PexelsProvider) SupportsUserQueries() bool {
+	return true
+}
+
 func (p *PexelsProvider) HomeURL() string {
 	return "https://www.pexels.com"
 }

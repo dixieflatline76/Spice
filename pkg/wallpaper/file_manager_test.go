@@ -16,18 +16,20 @@ func TestDeepDelete(t *testing.T) {
 	id := "test_img"
 
 	// Create Master
-	masterPath := fm.GetMasterPath(id, ".jpg")
+	masterPath, _ := fm.GetMasterPath(id, ".jpg")
 	if err := os.WriteFile(masterPath, []byte("master"), 0644); err != nil {
 		t.Fatalf("Failed to create master: %v", err)
 	}
 
-	// Create Derivatives
-	fittedPath := fm.GetDerivativePath(id, ".jpg", FittedImgDir)
+	// Scenario 1: New Setup
+	// Use joined constants for new nested paths
+	fittedPath, _ := fm.GetDerivativePath(id, ".jpg", filepath.Join(FittedRootDir, QualityDir, StandardDir))
 	if err := os.WriteFile(fittedPath, []byte("fitted"), 0644); err != nil {
 		t.Fatalf("Failed to create fitted: %v", err)
 	}
 
-	faceCropPath := fm.GetDerivativePath(id, ".jpg", FittedFaceCropImgDir)
+	// Create a "Flexibility FaceCrop" file (to test Deep Clean functionality across branches)
+	faceCropPath, _ := fm.GetDerivativePath(id, ".jpg", filepath.Join(FittedRootDir, FlexibilityDir, FaceCropDir))
 	if err := os.WriteFile(faceCropPath, []byte("facecrop"), 0644); err != nil {
 		t.Fatalf("Failed to create facecrop: %v", err)
 	}
@@ -37,12 +39,12 @@ func TestDeepDelete(t *testing.T) {
 		t.Fatal("Master not created")
 	}
 
-	// Delete
+	// 2. Execute Deep Delete
 	if err := fm.DeepDelete(id); err != nil {
-		t.Errorf("DeepDelete failed: %v", err)
+		t.Fatalf("DeepDelete failed: %v", err)
 	}
 
-	// Verify Deletion
+	// 3. Verify
 	if _, err := os.Stat(masterPath); !os.IsNotExist(err) {
 		t.Errorf("Master should be deleted: %s", masterPath)
 	}
@@ -50,7 +52,7 @@ func TestDeepDelete(t *testing.T) {
 		t.Errorf("Fitted should be deleted: %s", fittedPath)
 	}
 	if _, err := os.Stat(faceCropPath); !os.IsNotExist(err) {
-		t.Errorf("FaceCrop should be deleted: %s", faceCropPath)
+		t.Errorf("FaceCrop (Flexible) should be deleted: %s", faceCropPath)
 	}
 }
 
@@ -58,16 +60,42 @@ func TestResolvePaths(t *testing.T) {
 	tmpDir := t.TempDir()
 	fm := NewFileManager(tmpDir)
 
-	master := fm.GetMasterPath("id", ".jpg")
+	master, err := fm.GetMasterPath("id", ".jpg")
+	if err != nil {
+		t.Fatalf("GetMasterPath failed: %v", err)
+	}
 	expectedMaster := filepath.Join(tmpDir, "id.jpg")
 	if master != expectedMaster {
 		t.Errorf("Expected master %s, got %s", expectedMaster, master)
 	}
 
-	deriv := fm.GetDerivativePath("id", ".jpg", "subdir")
+	deriv, err := fm.GetDerivativePath("id", ".jpg", "subdir")
+	if err != nil {
+		t.Fatalf("GetDerivativePath failed: %v", err)
+	}
 	expectedDeriv := filepath.Join(tmpDir, "subdir", "id.jpg")
 	if deriv != expectedDeriv {
 		t.Errorf("Expected derivative %s, got %s", expectedDeriv, deriv)
+	}
+}
+
+func TestSecurityValidation(t *testing.T) {
+	tmpDir := t.TempDir()
+	fm := NewFileManager(tmpDir)
+
+	// Case 1: Path Traversal
+	if _, err := fm.GetMasterPath("../../etc/passwd", ".jpg"); err == nil {
+		t.Error("Expected error for path traversal ID, got nil")
+	}
+
+	// Case 2: Extension Traversal (Should be failed by string check or caller)
+	if _, err := fm.GetMasterPath("safe", "../.jpg"); err == nil {
+		t.Error("Expected error for path traversal Extension, got nil")
+	}
+
+	// Case 3: Derivative Traversal
+	if _, err := fm.GetDerivativePath("safe", ".jpg", "../../../root"); err == nil {
+		t.Error("Expected error for path traversal DerivativeType, got nil")
 	}
 }
 
@@ -82,17 +110,27 @@ func TestCleanupOrphans(t *testing.T) {
 	// "valid": Known ID. Should remain.
 	// "orphan": Unknown ID. Should be deleted.
 
-	// Create Valid Files
-	validMaster := fm.GetMasterPath("valid", ".jpg")
-	validDeriv := fm.GetDerivativePath("valid", ".jpg", FittedImgDir)
-	_ = os.WriteFile(validMaster, []byte("keep"), 0644)
-	_ = os.WriteFile(validDeriv, []byte("keep"), 0644)
+	// 1. Create "valid" files
+	validMaster := filepath.Join(tmpDir, "valid.jpg")
+	if err := os.WriteFile(validMaster, []byte("data"), 0644); err != nil {
+		t.Fatal(err)
+	}
 
-	// Create Orphan Files
-	orphanMaster := fm.GetMasterPath("orphan", ".png")
-	orphanDeriv := fm.GetDerivativePath("orphan", ".png", FittedFaceCropImgDir)
-	_ = os.WriteFile(orphanMaster, []byte("delete"), 0644)
-	_ = os.WriteFile(orphanDeriv, []byte("delete"), 0644)
+	validDeriv, _ := fm.GetDerivativePath("valid", ".jpg", filepath.Join(FittedRootDir, QualityDir, StandardDir))
+	if err := os.WriteFile(validDeriv, []byte("data"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// 2. Create "orphan" files
+	orphanMaster := filepath.Join(tmpDir, "orphan.png")
+	if err := os.WriteFile(orphanMaster, []byte("trash"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	orphanDeriv, _ := fm.GetDerivativePath("orphan", ".png", filepath.Join(FittedRootDir, FlexibilityDir, FaceBoostDir))
+	if err := os.WriteFile(orphanDeriv, []byte("trash"), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	// Known Set
 	known := map[string]bool{"valid": true}
@@ -102,7 +140,7 @@ func TestCleanupOrphans(t *testing.T) {
 
 	// Verify Valid Remain
 	if _, err := os.Stat(validMaster); os.IsNotExist(err) {
-		t.Error("Valid master delete incorrectly")
+		t.Error("Valid master deleted incorrectly")
 	}
 	if _, err := os.Stat(validDeriv); os.IsNotExist(err) {
 		t.Error("Valid derivative deleted incorrectly")

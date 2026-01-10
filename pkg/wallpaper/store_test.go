@@ -147,7 +147,7 @@ func TestStoreSync_Validation(t *testing.T) {
 	img2 := provider.Image{ID: "img2", Path: "http://url/2.png"} // Master -> 2.png
 
 	// Create Master file for img1
-	master1 := fm.GetMasterPath("img1", ".jpg")
+	master1, _ := fm.GetMasterPath("img1", ".jpg")
 	err := os.MkdirAll(filepath.Dir(master1), 0755)
 	assert.NoError(t, err)
 	err = os.WriteFile(master1, []byte("fake"), 0644)
@@ -180,7 +180,7 @@ func TestStoreSync_Grooming(t *testing.T) {
 	// All have masters
 	ids := []string{"oldest", "middle", "newest"}
 	for _, id := range ids {
-		master := fm.GetMasterPath(id, ".jpg")
+		master, _ := fm.GetMasterPath(id, ".jpg")
 		err := os.MkdirAll(filepath.Dir(master), 0755)
 		assert.NoError(t, err)
 		err = os.WriteFile(master, []byte(id), 0644)
@@ -200,7 +200,7 @@ func TestStoreSync_Grooming(t *testing.T) {
 
 	// Verify File Deletion
 	// Verify File Deletion (Validation works async with pacer)
-	oldestPath := fm.GetMasterPath("oldest", ".jpg")
+	oldestPath, _ := fm.GetMasterPath("oldest", ".jpg")
 	assert.Eventually(t, func() bool {
 		_, err := os.Stat(oldestPath)
 		return os.IsNotExist(err)
@@ -222,7 +222,7 @@ func TestStoreSync_CacheInvalidation(t *testing.T) {
 		ProcessingFlags: map[string]bool{"SmartFit": true},
 	}
 	// Create master so it survives validation check
-	master1 := fm.GetMasterPath("img1", ".jpg")
+	master1, _ := fm.GetMasterPath("img1", ".jpg")
 	err := os.MkdirAll(filepath.Dir(master1), 0755)
 	assert.NoError(t, err)
 	err = os.WriteFile(master1, []byte("fake"), 0644)
@@ -345,13 +345,15 @@ func TestStoreSync_StrictPruning(t *testing.T) {
 	store.Sync(100, nil, activeIDs)
 
 	// Verify Store Content
-	assert.Equal(t, 2, store.Count())
+	assert.Equal(t, 1, store.Count())
 
 	known := store.GetKnownIDs()
 
-	// Expect img1 and img3 to remain
+	// Expect img1 to remain (Active Query)
 	assert.True(t, known["img1"])
-	assert.True(t, known["img3"])
+
+	// Expect img3 to be gone (Orphan/Legacy pruned in Strict Mode)
+	assert.False(t, known["img3"])
 
 	// Expect img2 to be gone from store
 	assert.False(t, known["img2"])

@@ -49,7 +49,11 @@ func (wp *Plugin) ProcessImageJob(ctx context.Context, job DownloadJob) (provide
 	// 2. Ensure Master (Raw Image)
 	masterPath, err := wp.ensureMaster(ctx, img, downloadProvider)
 	if err != nil {
-		return provider.Image{}, fmt.Errorf("failed to ensure master: %w", err)
+		providerName := "Unknown"
+		if downloadProvider != nil {
+			providerName = downloadProvider.Name()
+		}
+		return provider.Image{}, fmt.Errorf("failed to ensure master (%s): %w", providerName, err)
 	}
 
 	// 3. Ensure Derivative (Processed Image)
@@ -94,7 +98,10 @@ func (wp *Plugin) ensureMaster(ctx context.Context, img provider.Image, imgProvi
 		}
 	}
 
-	masterPath := wp.fm.GetMasterPath(img.ID, ext)
+	masterPath, err := wp.fm.GetMasterPath(img.ID, ext)
+	if err != nil {
+		return "", fmt.Errorf("security check failed for master path: %w", err)
+	}
 
 	// Check existence
 	if _, err := os.Stat(masterPath); !os.IsNotExist(err) {
@@ -104,7 +111,22 @@ func (wp *Plugin) ensureMaster(ctx context.Context, img provider.Image, imgProvi
 
 	// Download Remote URL
 	// log.Debugf("Downloading master for %s...", img.ID)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, img.Path, nil)
+	client := wp.httpClient
+	if cp, ok := imgProvider.(provider.CustomClientProvider); ok {
+		client = cp.GetClient()
+	}
+
+	reqUrl := img.Path
+	if rap, ok := imgProvider.(provider.ResolutionAwareProvider); ok {
+		// Attempt to get screen resolution to request a perfectly sized image
+		prefs := wp.manager.GetPreferences()
+		w, h := prefs.Int("screen_width"), prefs.Int("screen_height")
+		if w > 0 && h > 0 {
+			reqUrl = rap.WithResolution(reqUrl, w, h)
+		}
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqUrl, nil)
 	if err != nil {
 		return "", err
 	}
@@ -117,14 +139,19 @@ func (wp *Plugin) ensureMaster(ctx context.Context, img provider.Image, imgProvi
 		}
 	}
 
-	resp, err := wp.httpClient.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("status %d", resp.StatusCode)
+		// Improved error message to include provider name
+		providerName := "Unknown"
+		if imgProvider != nil {
+			providerName = imgProvider.Name()
+		}
+		return "", fmt.Errorf("failed to ensure master (%s): status %d", providerName, resp.StatusCode)
 	}
 
 	file, err := os.Create(masterPath)
@@ -144,34 +171,42 @@ func (wp *Plugin) ensureMaster(ctx context.Context, img provider.Image, imgProvi
 // If missing, generates it from masterPath.
 func (wp *Plugin) ensureDerivative(ctx context.Context, img provider.Image, masterPath string) (string, error) {
 	// Determine Derivative Type based on Config
-	// This logic mirrors old getDownloadedDir logic
+	// New Nested Architecture:
+	// fitted / [quality|flexibility] / [standard|faceboost|facecrop]
 	var derivativeDir string
 	mode := wp.cfg.GetSmartFitMode()
-	smartFit := mode != SmartFitOff
 
-	if smartFit {
-		if wp.cfg.GetFaceCropEnabled() {
-			derivativeDir = FittedFaceCropImgDir
-		} else if wp.cfg.GetFaceBoostEnabled() {
-			derivativeDir = FittedFaceBoostImgDir
+	if mode != SmartFitOff {
+		// 1. Determine Mode Segment
+		var modeDir string
+		if mode == SmartFitAggressive {
+			modeDir = FlexibilityDir
 		} else {
-			derivativeDir = FittedImgDir
+			modeDir = QualityDir
 		}
+
+		// 2. Determine Type Segment
+		var typeDir string
+		if wp.cfg.GetFaceCropEnabled() {
+			typeDir = FaceCropDir
+		} else if wp.cfg.GetFaceBoostEnabled() {
+			typeDir = FaceBoostDir
+		} else {
+			typeDir = StandardDir
+		}
+
+		// 3. Construct Relative Path
+		derivativeDir = filepath.Join(FittedRootDir, modeDir, typeDir)
 	} else {
 		// Raw/None logic.
-		// If SmartFit is OFF, we use the Master as the source?
-		// OR do we copy Master to "Raw" derivative folder?
-		// User said: "Source + Derivative".
-		// If NO processing is needed, we can just return MasterPath?
-		// Advantage: Saves disk space.
-		// Disadvantage: "Deep Delete" logic currently deletes derivatives based on ID.
-		// If we use MasterPath as FilePath in Store, DeepDelete works (it deletes Master).
-		// So checking "SmartFit=False" implies "Use Master".
 		return masterPath, nil
 	}
 
 	ext := filepath.Ext(masterPath)
-	targetPath := wp.fm.GetDerivativePath(img.ID, ext, derivativeDir)
+	targetPath, err := wp.fm.GetDerivativePath(img.ID, ext, derivativeDir)
+	if err != nil {
+		return "", fmt.Errorf("security check failed for derivative path: %w", err)
+	}
 
 	// Check existence
 	if _, err := os.Stat(targetPath); !os.IsNotExist(err) {

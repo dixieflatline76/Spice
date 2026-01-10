@@ -8,6 +8,7 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	"github.com/dixieflatline76/Spice/pkg/provider"
 	"github.com/dixieflatline76/Spice/pkg/ui/setting"
 	utilLog "github.com/dixieflatline76/Spice/util/log"
 )
@@ -131,6 +132,7 @@ func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 		wp.cfg.SetSmartFitMode(mode)
 		smartFitModeConfig.InitialValue = int(mode)
 	}
+	smartFitModeConfig.NeedsRefresh = true
 
 	smartFitModeConfig.OnChanged = func(s string, val interface{}) {
 		mode := SmartFitMode(val.(int))
@@ -289,7 +291,7 @@ func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 		ConfirmMessage: "This cannot be undone. Are you sure?",
 		OnPressed:      wp.cfg.ResetAvoidSet,
 	}
-	sm.CreateButtonWithConfirmationSetting(&resetButtonConfig, generalContainer) // Use the SettingsManager
+	sm.CreateButtonWithConfirmationSetting(&resetButtonConfig, generalContainer)
 
 	// --- Dynamic Provider Settings ---
 
@@ -297,14 +299,8 @@ func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 	generalScroll := container.NewVScroll(generalContainer)
 
 	// Accordion Items
-	items := []struct {
-		Title   string
-		Content fyne.CanvasObject
-		Open    bool
-		Icon    fyne.Resource
-	}{
-		{"General Settings", generalScroll, true, theme.SettingsIcon()},
-	}
+	var onlineItems []accordionItem
+	var localItems []accordionItem
 
 	// Collect all provider names
 	var orderedNames []string
@@ -313,6 +309,9 @@ func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 	}
 	// Sort all alphabetically for deterministic order
 	sort.Strings(orderedNames)
+
+	// Logic to auto-select tab if a pending provider is found
+	targetTabIndex := 0 // Default to General loop
 
 	for _, name := range orderedNames {
 		p, ok := wp.providers[name]
@@ -327,9 +326,26 @@ func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 			if _, err := p.ParseURL(wp.pendingAddUrl); err == nil {
 				providerPendingUrl = wp.pendingAddUrl
 				isPendingProvider = true
+
+				// Determine target tab index
+				switch p.Type() {
+				case provider.TypeLocal:
+					targetTabIndex = 2 // Local
+				case provider.TypeAI:
+					targetTabIndex = 3 // AI
+				default:
+					targetTabIndex = 1 // Online
+				}
+
 				// Consume pending URL
 				wp.pendingAddUrl = ""
 			}
+		}
+
+		// Check if this provider is requested for focus (Settings shortcut)
+		if wp.focusProviderName == name {
+			isPendingProvider = true
+			wp.focusProviderName = "" // Consume focus request
 		}
 
 		settingsPanel := p.CreateSettingsPanel(sm)
@@ -349,39 +365,89 @@ func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 			content = queryPanel
 		}
 
-		title := p.Title()
-		if title == "" {
-			title = "Image Sources (" + p.Name() + ")"
+		// Define Title Generator
+		titleFunc := func() string {
+			title := p.Title()
+			if title == "" {
+				title = "Image Sources (" + p.Name() + ")"
+			}
+
+			// Count active queries for this provider
+			activeCount := 0
+			for _, q := range wp.cfg.GetQueries() {
+				if q.Provider == p.Name() && q.Active {
+					activeCount++
+				}
+			}
+			if activeCount > 0 {
+				if activeCount == 1 {
+					return fmt.Sprintf("%s (1 active)", title)
+				}
+				return fmt.Sprintf("%s (%d active)", title, activeCount)
+			}
+			return title
 		}
 
-		// Count active queries for this provider
-		activeCount := 0
-		for _, q := range wp.cfg.GetQueries() {
-			if q.Provider == p.Name() && q.Active {
-				activeCount++
-			}
-		}
-		if activeCount > 0 {
-			if activeCount == 1 {
-				title = fmt.Sprintf("%s (1 active)", title)
-			} else {
-				title = fmt.Sprintf("%s (%d active)", title, activeCount)
-			}
+		item := accordionItem{
+			Title:     titleFunc(), // Initial title
+			TitleFunc: titleFunc,   // Dynamic title generator
+			Content:   content,
+			Open:      isPendingProvider, // Auto-open if matched
+			Icon:      p.GetProviderIcon(),
 		}
 
-		items = append(items, struct {
-			Title   string
-			Content fyne.CanvasObject
-			Open    bool
-			Icon    fyne.Resource
-		}{
-			Title:   title,
-			Content: content,
-			Open:    isPendingProvider, // Auto-open if matched
-			Icon:    p.GetProviderIcon(),
-		})
+		switch p.Type() {
+		case provider.TypeLocal:
+			localItems = append(localItems, item)
+		case provider.TypeAI:
+			// aiItems = append(aiItems, item) // TODO: Implement AI tab logic when ready
+			continue
+		default: // TypeOnline
+			onlineItems = append(onlineItems, item)
+		}
 	}
 
+	onlineTab, refreshOnline := createAccordion(onlineItems)
+	localTab, refreshLocal := createAccordion(localItems)
+	// Placeholder for AI tab
+	aiTab := container.NewStack(widget.NewLabelWithStyle("AI features coming soon...", fyne.TextAlignCenter, fyne.TextStyle{Italic: true}))
+
+	// Register Refresh Callbacks with SettingsManager
+	sm.RegisterOnSettingsSaved(func() {
+		if refreshOnline != nil {
+			refreshOnline()
+		}
+		if refreshLocal != nil {
+			refreshLocal()
+		}
+	})
+
+	tabs := container.NewAppTabs(
+		container.NewTabItemWithIcon("General", theme.SettingsIcon(), generalScroll),
+		container.NewTabItemWithIcon("Online", theme.GridIcon(), onlineTab),
+		container.NewTabItemWithIcon("Local", theme.FolderIcon(), localTab),
+		container.NewTabItemWithIcon("AI", theme.ComputerIcon(), aiTab),
+	)
+	wp.settingsTabs = tabs // Store reference for dynamic switching
+	tabs.SetTabLocation(container.TabLocationLeading)
+
+	if targetTabIndex > 0 && targetTabIndex < len(tabs.Items) {
+		tabs.SelectIndex(targetTabIndex)
+	}
+
+	return container.NewStack(tabs)
+}
+
+// Helper struct for accordion items
+type accordionItem struct {
+	Title     string
+	TitleFunc func() string // Optional: Function to generate title dynamically
+	Content   fyne.CanvasObject
+	Open      bool
+	Icon      fyne.Resource
+}
+
+func createAccordion(items []accordionItem) (fyne.CanvasObject, func()) {
 	// Container to hold the accordion
 	accordionContainer := container.NewStack()
 
@@ -389,88 +455,108 @@ func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 	var refreshAccordion func()
 
 	refreshAccordion = func() {
-		topHeaders := container.NewVBox()
-		bottomHeaders := container.NewVBox()
-		var centerContent fyne.CanvasObject
+		// Use fyne.Do to ensure this runs on the main thread
+		fyne.Do(func() {
+			topHeaders := container.NewVBox()
+			bottomHeaders := container.NewVBox()
+			var centerContent fyne.CanvasObject
 
-		foundOpen := false
+			foundOpen := false
 
-		for i := range items {
-			index := i // Capture loop variable
-			item := &items[index]
-
-			// State Icon (Arrow)
-			var arrowIcon fyne.Resource
-			if item.Open {
-				arrowIcon = theme.MoveDownIcon()
-			} else {
-				arrowIcon = theme.NavigateNextIcon()
+			// If no items, show a placeholder or empty
+			if len(items) == 0 {
+				accordionContainer.Objects = []fyne.CanvasObject{widget.NewLabel("No providers in this category.")}
+				accordionContainer.Refresh()
+				return
 			}
 
-			// Header Action
-			onTapped := func() {
+			for i := range items {
+				index := i // Capture loop variable
+				item := &items[index]
+
+				// State Icon (Arrow)
+				var arrowIcon fyne.Resource
 				if item.Open {
-					// If closing, open the next one (wrapping around)
-					item.Open = false
-					nextIndex := (index + 1) % len(items)
-					items[nextIndex].Open = true
+					arrowIcon = theme.MoveDownIcon()
 				} else {
-					// If opening, close all others (Single Expansion)
-					for j := range items {
-						items[j].Open = (j == index)
+					arrowIcon = theme.NavigateNextIcon()
+				}
+
+				// Header Action
+				onTapped := func() {
+					if item.Open {
+						// If closing, open the next one (wrapping around)
+						item.Open = false
+						nextIndex := (index + 1) % len(items)
+						items[nextIndex].Open = true
+					} else {
+						// If opening, close all others
+						for j := range items {
+							items[j].Open = (j == index)
+						}
+					}
+					refreshAccordion()
+				}
+
+				// --- Complex Header Layout ---
+				bgBtn := widget.NewButton("", onTapped)
+				bgBtn.Alignment = widget.ButtonAlignLeading
+
+				// Dynamic Title Support
+				// If TitleFunc is provided, use it to fetch the latest title (e.g. updated counts)
+				title := item.Title
+				if item.TitleFunc != nil {
+					title = item.TitleFunc()
+				}
+
+				titleLabel := widget.NewLabel(title)
+				titleLabel.TextStyle = fyne.TextStyle{Bold: item.Open}
+
+				headerContent := container.NewHBox(
+					widget.NewIcon(arrowIcon),
+				)
+				if item.Icon != nil {
+					providerIcon := widget.NewIcon(item.Icon)
+					headerContent.Add(providerIcon)
+				}
+				headerContent.Add(titleLabel)
+
+				headerStack := container.NewStack(bgBtn, container.NewPadded(headerContent))
+
+				if item.Open {
+					topHeaders.Add(headerStack)
+					centerContent = item.Content
+					foundOpen = true
+				} else {
+					if foundOpen {
+						bottomHeaders.Add(headerStack)
+					} else {
+						topHeaders.Add(headerStack)
 					}
 				}
-				refreshAccordion()
 			}
 
-			// --- Complex Header Layout ---
-			// We use a Stack to put custom content ON TOP of a standard button.
-			// The button provides the background, hover effects, and interaction.
-			// The HBox provides the icon sequence.
-
-			// 1. Interaction Layer (Standard Button)
-			bgBtn := widget.NewButton("", onTapped)
-			bgBtn.Alignment = widget.ButtonAlignLeading
-
-			// 2. Content Layer (Icons + Title)
-			titleLabel := widget.NewLabel(item.Title)
-			titleLabel.TextStyle = fyne.TextStyle{Bold: item.Open} // Visual hint
-
-			headerContent := container.NewHBox(
-				widget.NewIcon(arrowIcon),
-			)
-			if item.Icon != nil {
-				providerIcon := widget.NewIcon(item.Icon)
-				headerContent.Add(providerIcon)
-			}
-			headerContent.Add(titleLabel)
-
-			// Wrap in Padded to align with button internal alignment
-			headerStack := container.NewStack(bgBtn, container.NewPadded(headerContent))
-
-			if item.Open {
-				topHeaders.Add(headerStack)
-				centerContent = item.Content
-				foundOpen = true
-			} else {
-				if foundOpen {
-					bottomHeaders.Add(headerStack)
-				} else {
-					topHeaders.Add(headerStack)
-				}
-			}
-		}
-
-		// Create the border layout
-		borderLayout := container.NewBorder(topHeaders, bottomHeaders, nil, nil, centerContent)
-
-		accordionContainer.Objects = []fyne.CanvasObject{borderLayout}
-		accordionContainer.Refresh()
+			// Use Border Layout: Top headers | Bottom headers | Center Content
+			// This ensures the Center Content (Provider UI) expands to fill available space.
+			content := container.NewBorder(topHeaders, bottomHeaders, nil, nil, centerContent)
+			accordionContainer.Objects = []fyne.CanvasObject{content}
+			accordionContainer.Refresh()
+		})
 	}
 
-	// Initial Render
-	refreshAccordion()
+	// EXPORTED via return closure? No, we simply register this closure if we had access to SM.
+	// But createAccordion is generic.
+	// HACK: We attach a "Refresh" method to the container? No.
+	// Better: We return the refreshFunc as a second return value, OR we inject it into the items?
+	// Actually, we need to call refreshAccordion from OUTSIDE when settings change.
 
-	// Wrap accordion in a container to return.
-	return container.NewStack(accordionContainer)
+	// Since we can't easily change the signature of createAccordion locally without refactoring,
+	// checking if we can attach a callback to the returned container or rely on the caller to rebuild?
+	// Caller (CreatePrefsPanel) builds it once.
+
+	// Let's modify createAccordion signature to return (CanvasObject, func())
+	// and update the caller.
+
+	refreshAccordion()
+	return accordionContainer, refreshAccordion
 }

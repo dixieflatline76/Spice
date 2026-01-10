@@ -48,6 +48,14 @@ func (p *WikimediaProvider) Name() string {
 	return "Wikimedia"
 }
 
+func (p *WikimediaProvider) Type() provider.ProviderType {
+	return provider.TypeOnline
+}
+
+func (p *WikimediaProvider) SupportsUserQueries() bool {
+	return true
+}
+
 func (p *WikimediaProvider) HomeURL() string {
 	return "https://commons.wikimedia.org"
 }
@@ -58,6 +66,25 @@ func (p *WikimediaProvider) ParseURL(input string) (string, error) {
 	input = strings.TrimSpace(input)
 	if input == "" {
 		return "", errors.New("input cannot be empty")
+	}
+
+	// 0. Idempotency & Prefix Normalization
+	// checks if the input is already a valid internal query string.
+	lowerInput := strings.ToLower(input)
+	if strings.HasPrefix(lowerInput, "search:") {
+		return "search:" + input[7:], nil
+	}
+	if strings.HasPrefix(lowerInput, "category:") {
+		return "category:" + input[9:], nil
+	}
+	// Treat "File:" explicitly as a direct file lookup
+	if strings.HasPrefix(lowerInput, "file:") {
+		// Fix idempotency: If input is already normalized (e.g. "file:File:Name"), return as is.
+		// "file:File:" becomes "file:file:" in lowerInput.
+		if strings.HasPrefix(lowerInput, "file:file:") {
+			return input, nil
+		}
+		return "file:" + input, nil
 	}
 
 	// 1. Check for Category Match (explicit "Category:" prefix)
@@ -111,8 +138,16 @@ func (p *WikimediaProvider) ParseURL(input string) (string, error) {
 			}
 		}
 
+		// If the user pasted a direct file URL like "https://commons.wikimedia.org/wiki/File:Foo.jpg"
+		if strings.Contains(u.Path, "/wiki/File:") {
+			parts := strings.Split(u.Path, "/wiki/")
+			if len(parts) > 1 {
+				return "file:" + parts[1], nil
+			}
+		}
+
 		// Fallback for unhandled full URLs
-		return "", errors.New("only 'Category:' or 'Search' URLs are currently supported directly")
+		return "", errors.New("only 'Category:', 'File:' or component Search URLs are currently supported directly")
 	}
 
 	// 3. Fallback: Treat as Search Term
@@ -162,6 +197,11 @@ func (p *WikimediaProvider) WithResolution(query string, width, height int) stri
 		return fmt.Sprintf("search:incategory:\"%s\"%s", catName, constraint)
 	}
 
+	// Case 3: File Query -> No resolution constraint needed (we want specific file)
+	if strings.HasPrefix(query, "file:") {
+		return query
+	}
+
 	// Fallback (unknown format)
 	return query
 }
@@ -200,6 +240,16 @@ func (p *WikimediaProvider) FetchImages(ctx context.Context, query string, page 
 		params.Set("gsrsearch", searchTerm)
 		params.Set("gsrnamespace", "6") // File namespace
 		params.Set("gsrlimit", strconv.Itoa(limit))
+		params.Set("prop", "imageinfo")
+		params.Set("iiprop", "url|extmetadata")
+		params.Set("format", "json")
+	} else if strings.HasPrefix(query, "file:") {
+		// Specific file lookup (Exact Title)
+		fileTitle := strings.TrimPrefix(query, "file:")
+		apiURL = p.baseURL
+		params = url.Values{}
+		params.Set("action", "query")
+		params.Set("titles", fileTitle) // Not generator, direct titles lookup
 		params.Set("prop", "imageinfo")
 		params.Set("iiprop", "url|extmetadata")
 		params.Set("format", "json")

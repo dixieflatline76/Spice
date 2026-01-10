@@ -349,6 +349,14 @@ func (s *StubImageProvider) GetProviderIcon() fyne.Resource { return s.icon }
 func (s *StubImageProvider) CreateSettingsPanel(sm setting.SettingsManager) fyne.CanvasObject {
 	return nil
 }
+
+func (s *StubImageProvider) Type() provider.ProviderType {
+	return provider.TypeOnline
+}
+
+func (s *StubImageProvider) SupportsUserQueries() bool {
+	return true
+}
 func (s *StubImageProvider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl string) fyne.CanvasObject {
 	return nil
 }
@@ -396,6 +404,7 @@ func setupTestPlugin(t *testing.T, prefs fyne.Preferences) *Plugin {
 		currentDownloadPage: util.NewSafeIntWithValue(1),
 		fitImageFlag:        util.NewSafeBool(),
 		shuffleImageFlag:    util.NewSafeBool(),
+		fetchingInProgress:  util.NewSafeBool(),
 		providers:           make(map[string]provider.ImageProvider),
 		pipeline:            pipeline,
 		// UI Items must be initialized

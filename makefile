@@ -16,6 +16,10 @@ sync-extension:
 pack-extension:
 	go run cmd/util/pack_extension/main.go
 
+# --- Code Generation ---
+generate:
+	go generate ./...
+
 # --- Build targets ---
 build-extension:
 	@echo "Checking if we should build Safari Extension..."
@@ -180,21 +184,21 @@ list-updates:
 	@echo "Review the list above. Update major versions manually using 'go get module/vX@latest'."
 
 # --- Main build targets ---
-win-amd64: update-patch-deps lint test build-win-amd64 build-win-console-amd64
+win-amd64: generate update-patch-deps lint test build-win-amd64 build-win-console-amd64
 
-win-amd64-dev: update-patch-deps lint test build-win-amd64-dev build-win-console-amd64-dev
+win-amd64-dev: generate update-patch-deps lint test build-win-amd64-dev build-win-console-amd64-dev
 
-linux-amd64: update-patch-deps lint test build-linux-amd64
+linux-amd64: generate update-patch-deps lint test build-linux-amd64
 
-linux-amd64-dev: update-patch-deps lint test build-linux-amd64-dev
+linux-amd64-dev: generate update-patch-deps lint test build-linux-amd64-dev
 
-darwin-amd64: update-patch-deps lint test build-darwin-amd64
+darwin-amd64: generate update-patch-deps lint test build-darwin-amd64
 
-darwin-amd64-dev: update-patch-deps lint test build-darwin-amd64-dev
+darwin-amd64-dev: generate update-patch-deps lint test build-darwin-amd64-dev
 
-darwin-arm64: update-patch-deps lint test build-darwin-arm64
+darwin-arm64: generate update-patch-deps lint test build-darwin-arm64
 
-darwin-arm64-dev: update-patch-deps lint test build-darwin-arm64-dev
+darwin-arm64-dev: generate update-patch-deps lint test build-darwin-arm64-dev
 
 # --- Clean target (cross-platform) ---
 clean:

@@ -17,6 +17,7 @@ type SettingsManager struct {
 	checkAndEnableApply func()
 	applyButton         *widget.Button
 	prefsWindow         fyne.Window
+	onSettingsSaved     []func()
 }
 
 // NewSettingsManager creates a new SettingsManager.
@@ -57,6 +58,18 @@ func createApplyButton(sm *SettingsManager) *widget.Button {
 		sm.applyButton.Refresh()
 		fyne.Do(func() {
 			defer func() {
+				// Rebuild tray menu (if needed)
+				// sm.RebuildTrayMenu() // This function does not exist in the provided code, commenting out.
+
+				// Notify listeners that settings have been saved (e.g. refresh UI counters)
+				for _, cb := range sm.onSettingsSaved {
+					cb()
+				}
+
+				// Disable the Apply button after saving
+				if sm.applyButton != nil {
+					sm.applyButton.Disable()
+				}
 				sm.applyButton.SetText(originalText)
 				sm.applyButton.Refresh()
 			}()
@@ -262,6 +275,11 @@ func (sm *SettingsManager) SetRefreshFlag(settingName string) {
 // UnsetRefreshFlag removes the refresh flag for a specific setting.
 func (sm *SettingsManager) UnsetRefreshFlag(settingName string) {
 	delete(sm.refreshFlags, settingName)
+}
+
+// RegisterOnSettingsSaved registers a function to be called after settings are applied.
+func (sm *SettingsManager) RegisterOnSettingsSaved(callback func()) {
+	sm.onSettingsSaved = append(sm.onSettingsSaved, callback)
 }
 
 // RegisterRefreshFunc registers a function to be called when the settings need to be refreshed.

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -76,6 +77,14 @@ func (p *Provider) SetTestConfig(host, rootDir string) {
 
 func (p *Provider) Name() string {
 	return ProviderName
+}
+
+func (p *Provider) Type() provider.ProviderType {
+	return provider.TypeLocal
+}
+
+func (p *Provider) SupportsUserQueries() bool {
+	return false
 }
 
 func (p *Provider) Title() string {
@@ -419,9 +428,21 @@ func (p *Provider) CreateSettingsPanel(sm setting.SettingsManager) fyne.CanvasOb
 	})
 	clearBtn.Importance = widget.DangerImportance
 
+	openFolderBtn := widget.NewButtonWithIcon("Open Favorites Folder", theme.FolderOpenIcon(), func() {
+		u, err := url.Parse(p.HomeURL())
+		if err != nil {
+			log.Printf("Failed to parse favorites URL: %v", err)
+			return
+		}
+		if err := fyne.CurrentApp().OpenURL(u); err != nil {
+			log.Printf("Failed to open favorites folder: %v", err)
+		}
+	})
+
 	return container.NewVBox(
 		widget.NewLabelWithStyle("Favorites Management", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		widget.NewLabel("Wipe all local favorites from your temp folder."),
+		openFolderBtn,
 		clearBtn,
 	)
 }

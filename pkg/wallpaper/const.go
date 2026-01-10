@@ -56,9 +56,18 @@ func (qt URLType) String() string {
 
 // Internal constants
 const (
-	FittedImgDir             = "fitted"
-	FittedFaceBoostImgDir    = "fitted_faceboost"
-	FittedFaceCropImgDir     = "fitted_facecrop"
+	// Cache Directory Segments
+	// Structure: FittedRootDir / [Quality|Flexibility] / [Standard|FaceBoost|FaceCrop]
+	FittedRootDir = "fitted"
+
+	// Mode Segments
+	QualityDir     = "quality"
+	FlexibilityDir = "flexibility"
+
+	// Type Segments
+	StandardDir              = "standard"
+	FaceBoostDir             = "faceboost"
+	FaceCropDir              = "facecrop"
 	PrcntSeenTillDownload    = 0.8
 	MinSeenImagesForDownload = 5
 	MinLocalImageBeforePulse = 1

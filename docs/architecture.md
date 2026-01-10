@@ -237,7 +237,14 @@ Spice supports two distinct provider interaction models:
     *   **State**: Local. The provider acts as a local file scanner over the imported directory.
     *   **Cleanup**: Deleting the collection deletes the entire backing folder.
 
-## 3.6 Future Considerations
+### 3.5.3 Provider Categorization
+
+To manage the growing number of providers, Spice categorizes them into three distinct types (`provider.ProviderType`), which dictates their UI placement:
+
+*   **TypeOnline**: Remote APIs (Unsplash, Pexels). Placed in the "Online" tab working via network fetch.
+*   **TypeLocal**: Local filesystem interactions (Favorites, Local Files). Placed in the "Local" tab.
+*   **TypeAI**: Generative or logical providers. Placed in the "AI" tab (Future).
+
 
 - **Events**: The `cmdChan` pattern can be expanded to a full Event Bus if the application grows complexity (e.g., specific event subscribers).
 

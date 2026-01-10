@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/theme"
 	"github.com/disintegration/imaging"
 	"github.com/dixieflatline76/Spice/asset"
@@ -78,19 +79,25 @@ type Plugin struct {
 	fm       *FileManager
 	pipeline *Pipeline
 
+	// Concurrency Control
+	fetchingInProgress *util.SafeFlag
+
 	// Session State (Local Navigation)
-	currentIndex           int
-	history                []int
-	shuffleOrder           []int
-	randomPos              int
-	lastTriggeredSeenCount int       // Anti-loop state
-	lastTriggerTime        time.Time // Anti-loop cooldown state
-	enrichmentSignal       chan int  // Signal for lazy enrichment worker
+	currentIndex            int
+	history                 []int
+	shuffleOrder            []int
+	randomPos               int
+	lastTriggeredSeenCount  int // Anti-loop state
+	lastTriggeredTotalCount int
+	lastTriggerTime         time.Time // Anti-loop cooldown state
+	enrichmentSignal        chan int  // Signal for lazy enrichment worker
 
 	// Testable UI executor
 	runOnUI func(func())
 
-	pendingAddUrl string
+	pendingAddUrl     string
+	focusProviderName string             // State to focus specific provider settings
+	settingsTabs      *container.AppTabs // Reference to the settings tabs for dynamic switching
 }
 
 var (
@@ -161,8 +168,10 @@ func getPlugin() *Plugin {
 			providers:          make(map[string]provider.ImageProvider),
 			actionChan:         make(chan func(), 5),
 			store:              store,
-			pipeline:           nil, // Initialized in Init
+			// pipeline:           nil, // Initialized in Init
+			fetchingInProgress: util.NewSafeBool(),
 			runOnUI:            fyne.Do,
+			focusProviderName:  "",
 		}
 
 		// Pipeline depends on wpInstance methods, so we init it here but config is nil.
@@ -441,13 +450,16 @@ func (wp *Plugin) updateTrayMenuUI(img provider.Image) {
 			providerName := wp.GetProviderTitle(img.Provider)
 			wp.providerMenuItem.Label = "Source: " + providerName
 			wp.providerMenuItem.Action = func() {
-				var homeURL string
-				if p, ok := wp.providers[img.Provider]; ok {
-					homeURL = p.HomeURL()
+				// Focus Provider Settings instead of opening website
+				if _, ok := wp.providers[img.Provider]; ok {
+					go func() {
+						if err := wp.FocusProviderSettings(img.Provider); err != nil {
+							log.Printf("Failed to focus provider settings: %v", err)
+						}
+					}()
 				} else {
-					homeURL = "https://github.com/dixieflatline76/Spice"
-				}
-				if homeURL != "" {
+					// Fallback for unknown providers (e.g. from old version or manual add)
+					homeURL := "https://github.com/dixieflatline76/Spice"
 					if u, err := url.Parse(homeURL); err == nil {
 						if err := wp.manager.OpenURL(u); err != nil {
 							log.Printf("Failed to open URL %s: %v", homeURL, err)
@@ -526,6 +538,10 @@ func (wp *Plugin) applyWallpaper(img provider.Image) {
 
 	threshold := int(math.Round(PrcntSeenTillDownload * float64(totalCount)))
 
+	// debug: dump precise pagination state
+	// log.Debugf("Pagination Check: Seen=%d, Total=%d, Threshold=%d, LastTrigger=%d, InProgress=%v",
+	// 	seenCount, totalCount, threshold, wp.lastTriggeredSeenCount, wp.fetchingInProgress.Value())
+
 	// Pagination Logic:
 	// User Request: "retrieve the next page once the user has seen 70% of the page's images"
 	// We use totalCount as proxy for "page's images" (or total loaded).
@@ -545,12 +561,26 @@ func (wp *Plugin) applyWallpaper(img provider.Image) {
 
 	if shouldFetch {
 		// Anti-Loop Check: ensure we are making progress
-		// If we've already triggered a download at this Seen count (or higher), don't trigger again
-		// until we see NEW images or enough time has passed (to retry after stalled/filtered page).
-		if seenCount <= wp.lastTriggeredSeenCount {
+
+		// CASE 1: Starvation/Dry Source
+		// We triggered a download previously, but the TotalCount did NOT increase.
+		// This suggests the provider returned 0 new images (duplicates or end of list).
+		// If we simply check 'seen > lastTrigger', we will infinite loop because Seen keeps growing.
+		// We must enforce a cooldown if TotalCount is stuck.
+		if totalCount <= wp.lastTriggeredTotalCount && seenCount > wp.lastTriggeredSeenCount {
+			// Starvation Cooldown: 60 seconds (Wait for new content or user to back off)
+			// This is critical for providers like MetMuseum with strict filtering or limited paging.
+			if time.Since(wp.lastTriggerTime) > 60*time.Second {
+				log.Debugf("Pagination: Starvation cooldown expired (%v). Retrying download.", time.Since(wp.lastTriggerTime))
+				shouldFetch = true
+			} else {
+				log.Debugf("Pagination: Starvation prevented. Total (%d) stuck. Seen (%d) advancing. Waiting for cooldown (%v).",
+					totalCount, seenCount, (60*time.Second - time.Since(wp.lastTriggerTime)).Round(time.Second))
+				shouldFetch = false
+			}
+		} else if seenCount <= wp.lastTriggeredSeenCount {
+			// CASE 2: Retrying same threshold (e.g. rapid clicks before Seen advances)
 			// Cooldown Override: If it's been > 15 seconds since last trigger, allow retry.
-			// This handles cases where a page yielded 0 images (due to filtering/429) and we got stuck.
-			// 15 seconds prevents machine-gunning but allows "Next" button spam to eventually work.
 			if time.Since(wp.lastTriggerTime) > 15*time.Second {
 				log.Debugf("Pagination: Loop prevention cooldown expired (%v). Retrying download despite stalled count.", time.Since(wp.lastTriggerTime))
 				shouldFetch = true
@@ -564,18 +594,34 @@ func (wp *Plugin) applyWallpaper(img provider.Image) {
 
 	if shouldFetch {
 		wp.downloadMutex.Lock()
+		// Double check inside lock (legacy), but mainly check atomic flag
 		if !wp.isDownloading {
-			wp.isDownloading = true
-			wp.lastTriggeredSeenCount = seenCount
-			wp.lastTriggerTime = time.Now()
-			wp.downloadMutex.Unlock()
+			// Atomic Check: Prevent overlapping fetches from rapid UI triggers
+			if wp.fetchingInProgress.CompareAndSwap(false, true) {
+				wp.isDownloading = true
+				wp.lastTriggeredSeenCount = seenCount
+				wp.lastTriggeredTotalCount = totalCount // Trace total at time of trigger
+				wp.lastTriggerTime = time.Now()
+				wp.downloadMutex.Unlock()
 
-			log.Debugf("Seen %d/%d images (Trigger: %v). Fetching next page...", seenCount, totalCount, shouldFetch)
-			wp.currentDownloadPage.Increment()
-			// Trigged async download
-			go wp.downloadAllImages(nil)
+				// log.Debugf("Seen %d/%d images (Trigger: %v). Fetching next page... (CAS Success)", seenCount, totalCount, shouldFetch)
+				wp.currentDownloadPage.Increment()
+
+				// Trigged async download
+				go func() {
+					defer func() {
+						log.Debugf("Pagination: Async download finished. Resetting flag.")
+						wp.fetchingInProgress.Set(false)
+					}()
+					wp.downloadAllImages(nil)
+				}()
+			} else {
+				wp.downloadMutex.Unlock()
+				log.Debugf("Pagination: Fetch skipped - already in progress (CAS Failed). Seen=%d", seenCount)
+			}
 		} else {
 			wp.downloadMutex.Unlock()
+			log.Debugf("Pagination: Fetch skipped - isDownloading=true mutex check.")
 		}
 	}
 }
@@ -631,6 +677,10 @@ func (wp *Plugin) OpenAddCollectionUI(urlStr string) error {
 	// 1. Identify Provider (Validation)
 	var foundProvider provider.ImageProvider
 	for _, p := range wp.providers {
+		// Skip providers that don't support custom queries (e.g. curated museums)
+		if !p.SupportsUserQueries() {
+			continue
+		}
 		if _, err := p.ParseURL(urlStr); err == nil {
 			foundProvider = p
 			break
@@ -643,9 +693,65 @@ func (wp *Plugin) OpenAddCollectionUI(urlStr string) error {
 	// 2. Set State
 	wp.pendingAddUrl = urlStr
 
-	// 3. Open Preferences	// Trigger standard UI flow via manager
-	// "Wallpaper" is the tab name for this plugin
+	// 3. Open Preferences (Outer Layer)
 	wp.manager.OpenPreferences("Wallpaper")
+
+	// 4. Switch Inner Tab (Inner Layer)
+	// If the settings panel is already built, switch logic in CreatePrefsPanel won't run.
+	// We must manually switch it here.
+	if wp.settingsTabs != nil {
+		targetTabIndex := 1 // Default to Online
+		switch foundProvider.Type() {
+		case provider.TypeLocal:
+			targetTabIndex = 2 // Local
+		case provider.TypeAI:
+			targetTabIndex = 3 // AI
+		}
+
+		// Ensure we are on UI thread? Fyne methods are usually safe if called from event cycle,
+		// but this might be called from API server goroutine.
+		// OpenPreferences handles UI thread via `sa.NewWindow`.
+		// We should wrap this in runOnUI just in case.
+		wp.runOnUI(func() {
+			if targetTabIndex < len(wp.settingsTabs.Items) {
+				wp.settingsTabs.SelectIndex(targetTabIndex)
+			}
+		})
+	}
+
+	return nil
+}
+
+// FocusProviderSettings opens the preferences and focuses the settings for the given provider.
+func (wp *Plugin) FocusProviderSettings(providerName string) error {
+	// 1. Verify Provider
+	p, ok := wp.providers[providerName]
+	if !ok {
+		return fmt.Errorf("provider %s not found", providerName)
+	}
+
+	// 2. Set State
+	wp.focusProviderName = providerName
+
+	// 3. Open Preferences (Outer Layer)
+	wp.manager.OpenPreferences("Wallpaper")
+
+	// 4. Switch Inner Tab (Inner Layer)
+	if wp.settingsTabs != nil {
+		targetTabIndex := 1 // Default to Online
+		switch p.Type() {
+		case provider.TypeLocal:
+			targetTabIndex = 2 // Local
+		case provider.TypeAI:
+			targetTabIndex = 3 // AI
+		}
+
+		wp.runOnUI(func() {
+			if targetTabIndex < len(wp.settingsTabs.Items) {
+				wp.settingsTabs.SelectIndex(targetTabIndex)
+			}
+		})
+	}
 	return nil
 }
 
@@ -1054,6 +1160,24 @@ func (wp *Plugin) RefreshImagesAndPulse() {
 		}
 		wp.store.Sync(int(wp.cfg.GetCacheSize().Size()), targetFlags, wp.cfg.GetActiveQueryIDs())
 
+		// CRITICAL: Reset playback state via Action Worker.
+		// Since the Store was just synced, the indices in shuffleOrder and history might now be invalid (out of bounds)
+		// or pointing to the wrong images (shifted). We must force a rebuild.
+		doneReset := make(chan struct{})
+		wp.actionChan <- func() {
+			log.Println("State: Resetting playback history and shuffle order due to refresh.")
+			wp.shuffleOrder = nil
+			wp.history = nil // Or keep history? No, indices are invalid.
+			wp.randomPos = 0
+			// wp.currentIndex remains, but verify it?
+			// If currentIndex is out of bounds, SetNextWallpaper handles it?
+			// Ideally we don't change wallpaper immediately, just the *future* order.
+			// But since history is cleared, previous button breaks.
+			// That is acceptable for a "Refresh/Apply" action.
+			close(doneReset)
+		}
+		<-doneReset
+
 		wp.currentDownloadPage.Set(1)
 
 		downloadDone := make(chan struct{})
@@ -1270,7 +1394,30 @@ func (wp *Plugin) ToggleFavorite() {
 			}
 		}
 
-		if err := wp.favoriter.AddFavorite(wp.currentImage); err != nil {
+		// Quality Improvement: Prefer Master (Original) Image for Favorites
+		// This avoids saving an already-cropped or resized version.
+		// We try common extensions since GetMasterPath requires one.
+		candidates := []string{".jpg", ".png", ".jpeg", ".webp"}
+		var masterPath string
+		for _, ext := range candidates {
+			path, err := wp.fm.GetMasterPath(wp.currentImage.ID, ext)
+			if err == nil {
+				if info, err := os.Stat(path); err == nil && !info.IsDir() {
+					masterPath = path
+					break
+				}
+			}
+		}
+
+		imgToSave := wp.currentImage
+		if masterPath != "" {
+			imgToSave.FilePath = masterPath // Point to the pristine master
+			log.Printf("Saving Favorite from Master: %s", masterPath)
+		} else {
+			log.Printf("Saving Favorite from cached version (Master not found): %s", imgToSave.FilePath)
+		}
+
+		if err := wp.favoriter.AddFavorite(imgToSave); err != nil {
 			log.Printf("Failed to add favorite: %v", err)
 			return
 		}

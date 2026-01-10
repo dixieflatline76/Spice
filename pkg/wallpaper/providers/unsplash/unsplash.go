@@ -62,6 +62,14 @@ func (p *UnsplashProvider) Name() string {
 	return "Unsplash"
 }
 
+func (p *UnsplashProvider) Type() provider.ProviderType {
+	return provider.TypeOnline
+}
+
+func (p *UnsplashProvider) SupportsUserQueries() bool {
+	return true
+}
+
 func (p *UnsplashProvider) HomeURL() string {
 	// Construct URL with UTM parameters if needed, or just home.
 	// Legacy code: "https://unsplash.com/?utm_source=" + UnsplashClientID + "&utm_medium=referral"

@@ -89,3 +89,15 @@ func (sb *SafeFlag) Value() bool {
 func (sb *SafeFlag) Toggle() bool {
 	return sb.Set(!sb.Value())
 }
+
+// CompareAndSwap executes the compare-and-swap operation for the boolean value.
+func (sb *SafeFlag) CompareAndSwap(oldVal, newVal bool) bool {
+	var oldInt, newInt int32
+	if oldVal {
+		oldInt = 1
+	}
+	if newVal {
+		newInt = 1
+	}
+	return atomic.CompareAndSwapInt32(&sb.value, oldInt, newInt)
+}

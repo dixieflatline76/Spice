@@ -29,6 +29,10 @@ You must implement the following 6 methods.
   * **Purpose**: User-facing display name.
   * **Format**: Short, Title Case (e.g., "Bing Daily").
 
+* **`Type() ProviderType`**:
+  * **Purpose**: Categorizes the provider for the Tabbed UI.
+  * **Returns**: One of `provider.TypeOnline` (APIs), `provider.TypeLocal` (Filesystem), or `provider.TypeAI` (Generative).
+
 * **`ParseURL(webURL string) (string, error)`**:
   * **Input**: A URL copied from the browser (e.g., `bing.com/images/search?q=foo`).
   * **Output**: A clean API-ready string (e.g., `search:foo`) or the input if it's already compliant.
@@ -108,38 +112,119 @@ Constructs the image source list.
 
 ## 4. The "Apply" Lifecycle (Critical)
 
-Spice uses a deferred-save model. Changes are staged until "Apply" is clicked.
-**You must implement this wiring:**
+## 4. The "Apply" Lifecycle (Critical Pattern)
 
-1. **Change Detected**: Inside `OnChanged`:
+Spice uses a **Strict Deferred-Save Model**. Changes made in the UI must NOT be saved immediately to disk. They must be queued and only committed when the user clicks "Apply".
 
-    ```go
-    sm.SetRefreshFlag("setting.id") // Enables "Apply" button
-    ```
+### 4.1 Correct Implementation Pattern
 
-2. **Queue Action**:
+You must implement the following wiring in your `OnChanged` callbacks (e.g., Checkboxes, Entries):
 
-    ```go
-    sm.SetSettingChangedCallback("setting.id", func() {
-        // Logic to run ONLY when Apply is clicked
-        prefs.SetString("key", newValue)
-    })
-    ```
-
-3. **Revert**: If user cancels/reverts:
+1.  **Verify Against Live Config**:
+    *   **Anti-Pattern**: Comparing `newValue` against a variable captured at closure creation (e.g., `initialState`). This variable becomes stale after an Apply.
+    *   **Correct Pattern**: Always fetch the *current* persistent state from your config struct inside the callback.
 
     ```go
-    sm.UnsetRefreshFlag("setting.id")
-    sm.RemoveSettingChangedCallback("setting.id")
+    chk.OnChanged = func(on bool) {
+        // 1. Fetch Request: Get the TRUE current state from config
+        // "getDetails" should look up the value in p.cfg
+        isSavedActive, _ := getDetails(col.Key)
+
+        // 2. Define Unique Keys
+        dirtyKey := fmt.Sprintf("myprovider_%s", col.Key)
+        callbackKey := fmt.Sprintf("myprovider_cb_%s", col.Key)
+
+        // 3. Compare New vs Saved
+        if on != isSavedActive {
+            // A. Queue the Save Action
+            sm.SetSettingChangedCallback(callbackKey, func() {
+                // This runs ONLY when "Apply" is clicked
+                if on {
+                    p.cfg.EnableQuery(...)
+                } else {
+                    p.cfg.DisableQuery(...)
+                }
+            })
+
+            // B. Flag as Dirty (Enables "Apply")
+            // Use a unique key. Do NOT use global keys like "queries" here unless necessary for delete.
+            sm.SetRefreshFlag(dirtyKey)
+        } else {
+            // C. Revert: User changed it back to match saved state
+            sm.RemoveSettingChangedCallback(callbackKey)
+            sm.UnsetRefreshFlag(dirtyKey)
+        }
+
+        // 4. Update UI
+        sm.GetCheckAndEnableApplyFunc()()
+    }
     ```
 
-4. **UI Update**: Trigger visual update:
+### 4.2 Common Pitfalls
 
-    ```go
-    sm.GetCheckAndEnableApplyFunc()()
-    ```
+*   **Immediate Saving**: `p.cfg.Save()` inside the `OnChanged` callback.
+    *   *Result*: The "Apply" button becomes a "Pulse" button because the dirty state is instantly cleared (or never technically dirty).
+*   **Stale Closures**: `if on != capturedActive`.
+    *   *Result*: After clicking Apply, the UI thinks `capturedActive` is the truth, but the config has updated. Toggling back will mistakenly leave the "Apply" button enabled.
+*   **Sticky Global Flags**: `sm.SetRefreshFlag("queries")` on toggle.
+    *   *Result*: Global flags are often not cleared by `UnsetRefreshFlag(uniqueKey)`. If a user reverts a change, the global flag remains, leaving the "Apply" button stuck on. Only use global flags for destructive actions (Delete) or inside the *Apply Callback* itself.
 
-## 5. Registration (The Hook)
+## 5. Pagination & Randomization Stability
+
+APIs often return results in inconsistent orders (e.g., "Page 2" might contain items from "Page 1").
+If your provider supports **Pagination** AND **Shuffling**, you must implement the **"Cache-First Stable Shuffle"** pattern.
+
+### 5.1 The Pattern (resolveQueryToIDs)
+
+1.  **Cache First**: Check an internal `map[string][]int` for already resolved IDs.
+    *   *Why*: Ensures Page 2 sees the exact same list as Page 1.
+2.  **Fetch & Sort**: Download all IDs, then `sort.Ints(ids)`.
+    *   *Why*: Creates a deterministic baseline, fixing API jitter.
+3.  **Shuffle (If Enabled)**: If `cfg.GetImgShuffle()` is true, shuffle the sorted list using a session-stable seed.
+    *   *Why*: Supports the user's "Shuffle" feature without breaking pagination.
+4.  **Store**: Save the final list to the cache.
+
+### 5.2 Example Implementation
+
+```go
+type Provider struct {
+    // ...
+    idCache   map[string][]int
+    idCacheMu sync.RWMutex
+}
+
+func (p *Provider) resolveIDs(query string) ([]int, error) {
+    p.idCacheMu.RLock()
+    if cached, ok := p.idCache[query]; ok {
+        p.idCacheMu.RUnlock()
+        return cached, nil
+    }
+    p.idCacheMu.RUnlock()
+
+    // 1. Fetch
+    ids, _ := fetchFromAPI(query)
+
+    // 2. Sort (Deterministic Baseline)
+    sort.Ints(ids)
+
+    // 3. Shuffle (If User Wants It)
+    if p.cfg.GetImgShuffle() {
+        r := rand.New(rand.NewSource(time.Now().UnixNano()))
+        r.Shuffle(len(ids), func(i, j int) {
+            ids[i], ids[j] = ids[j], ids[i]
+        })
+    }
+
+    // 4. Cache
+    p.idCacheMu.Lock()
+    p.idCache[query] = ids
+    p.idCacheMu.Unlock()
+
+    return ids, nil
+}
+```
+
+## 6. Registration (The Hook)
 
 In `myprovider.go`, add:
 
@@ -183,4 +268,25 @@ If your provider supports "copy-pasting" URLs from the browser (like Wallhaven o
 
 ## Reference
 
-See `pkg/wallpaper/providers/wikimedia/wikimedia.go` or `pkg/wallpaper/providers/pexels/pexels.go` for the reference implementation of all these patterns.
+## 8. The Museum Template (v1.6+)
+
+For cultural institutions (Museums, Archives), Spice provides a standardized "Evangelist" UI template designed to drive engagement rather than just utility.
+
+### 8.1 Core Components (`ui_museum.go`)
+
+*   **Header**: Use `wallpaper.CreateMuseumHeader`.
+    *   **Arguments**: Name, Location, Description, MapURL, WebURL, DonateURL, SettingsManager.
+    *   **Features**:
+        *   **"Plan a Visit" Button**: Automatically renders if `MapURL` is provided. Use this to drive foot traffic.
+        *   **Clickable License**: Supports explicit licensing links (e.g., CC0) in the header metadata.
+        *   **Romance Copy**: Supports long-form, evocative descriptions to "sell the magic" of the institution.
+
+### 8.2 Collections as Tours
+Instead of raw database categories, frame collections as curated experiences:
+*   **Bad**: "Department 1", "Asian Art".
+*   **Good**: "Director's Cut", "Arts of Asia", "The Impressionist Era".
+
+### 8.3 Interaction Model
+*   **Fixed List**: Use a fixed set of checkboxes (via `widget.NewCheck`) for collections.
+*   **No Delete**: Unlike generic queries, these are permanent fixtures of the provider.
+*   **Toggle Logic**: Map checkbox states directly to `cfg.Enable/DisableQuery`.

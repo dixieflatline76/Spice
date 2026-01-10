@@ -59,6 +59,13 @@ func (m *BenchMockProvider) HomeURL() string { return "" }
 func (m *BenchMockProvider) EnrichImage(ctx context.Context, img provider.Image) (provider.Image, error) {
 	return img, nil
 }
+func (m *BenchMockProvider) Type() provider.ProviderType {
+	return provider.TypeOnline
+}
+
+func (m *BenchMockProvider) SupportsUserQueries() bool {
+	return true
+}
 func (m *BenchMockProvider) CreateSettingsPanel(sm setting.SettingsManager) fyne.CanvasObject {
 	return nil
 }

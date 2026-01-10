@@ -410,15 +410,38 @@ func (s *ImageStore) Sync(limit int, targetFlags map[string]bool, activeQueryIDs
 	s.mu.RUnlock()
 
 	badIDs := make(map[string]bool)
+
 	for _, img := range candidates {
-		if activeQueryIDs != nil && img.SourceQueryID != "" && !activeQueryIDs[img.SourceQueryID] {
+		// Strict Sync: If activeQueryIDs is provided (Strict Mode),
+		// we filter out images that:
+		// 1. Have a SourceQueryID that is NOT in the active set.
+		// 2. Have NO SourceQueryID (Orphan/Legacy), as they cannot be verified against the active set.
+		// Exception: Favorites are protected from deletion later (check below),
+		// but they are still removed from the *active rotation* here unless their SourceQuery is active.
+		isOrphan := img.SourceQueryID == ""
+		isActive := false
+		if img.SourceQueryID != "" && activeQueryIDs != nil {
+			isActive = activeQueryIDs[img.SourceQueryID]
+		}
+
+		if activeQueryIDs != nil {
+			if isOrphan || !isActive {
+				badIDs[img.ID] = true
+				continue
+			}
+		}
+
+		masterPath, err := s.fm.GetMasterPath(img.ID, ".jpg")
+		if err != nil {
 			badIDs[img.ID] = true
 			continue
 		}
-
-		masterPath := s.fm.GetMasterPath(img.ID, ".jpg")
 		if _, err := os.Stat(masterPath); os.IsNotExist(err) {
-			masterPath = s.fm.GetMasterPath(img.ID, ".png")
+			masterPath, err = s.fm.GetMasterPath(img.ID, ".png")
+			if err != nil {
+				badIDs[img.ID] = true
+				continue
+			}
 			if _, err := os.Stat(masterPath); os.IsNotExist(err) {
 				badIDs[img.ID] = true
 				continue

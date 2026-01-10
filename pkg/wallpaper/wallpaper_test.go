@@ -165,6 +165,14 @@ func (m *MockImageProvider) Name() string {
 	return args.String(0)
 }
 
+func (m *MockImageProvider) Type() provider.ProviderType {
+	return provider.TypeOnline
+}
+
+func (m *MockImageProvider) SupportsUserQueries() bool {
+	return true
+}
+
 func (m *MockImageProvider) ParseURL(webURL string) (string, error) {
 	args := m.Called(webURL)
 	return args.String(0), args.Error(1)
@@ -281,6 +289,7 @@ func TestDownloadAllImages(t *testing.T) {
 		currentDownloadPage: util.NewSafeIntWithValue(1),
 		fitImageFlag:        util.NewSafeBool(),
 		shuffleImageFlag:    util.NewSafeBool(),
+		fetchingInProgress:  util.NewSafeBool(),
 		providers:           make(map[string]provider.ImageProvider),
 		store:               NewImageStore(),
 	}
@@ -400,6 +409,7 @@ func TestDownloadAllImages_EnrichmentFailure(t *testing.T) {
 		currentDownloadPage: util.NewSafeIntWithValue(1),
 		fitImageFlag:        util.NewSafeBool(),
 		shuffleImageFlag:    util.NewSafeBool(),
+		fetchingInProgress:  util.NewSafeBool(),
 		providers:           make(map[string]provider.ImageProvider),
 		store:               NewImageStore(),
 		runOnUI:             func(f func()) { f() }, // Run synchronously in tests
@@ -447,6 +457,7 @@ func TestNavigation(t *testing.T) {
 		currentDownloadPage: util.NewSafeIntWithValue(1),
 		fitImageFlag:        util.NewSafeBool(),
 		shuffleImageFlag:    util.NewSafeBool(),
+		fetchingInProgress:  util.NewSafeBool(),
 		store:               NewImageStore(),
 		actionChan:          make(chan func(), 10),
 		runOnUI:             func(f func()) { f() }, // Run synchronously in tests
@@ -648,6 +659,7 @@ func TestDeleteCurrentImage_PersistsBlock(t *testing.T) {
 		currentDownloadPage: util.NewSafeIntWithValue(1),
 		fitImageFlag:        util.NewSafeBool(),
 		shuffleImageFlag:    util.NewSafeBool(),
+		fetchingInProgress:  util.NewSafeBool(),
 		store:               NewImageStore(),
 		runOnUI:             func(f func()) { f() },
 		currentIndex:        -1,
@@ -773,6 +785,41 @@ func TestOpenAddCollectionUI_InvalidProvider(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "URL not supported")
 	assert.Empty(t, wp.pendingAddUrl)
+	mockPM.AssertNotCalled(t, "OpenPreferences")
+}
+
+type CuratedMockProvider struct {
+	MockImageProvider
+}
+
+func (m *CuratedMockProvider) SupportsUserQueries() bool {
+	return false
+}
+
+func TestOpenAddCollectionUI_CuratedSkipped(t *testing.T) {
+	// Setup
+	mockPM := new(MockPluginManager)
+	mockProvider := new(CuratedMockProvider)
+	wp := &Plugin{
+		manager:   mockPM,
+		providers: make(map[string]provider.ImageProvider),
+	}
+
+	testURL := "https://museum.org/collection/123"
+	wp.providers["Museum"] = mockProvider
+
+	// Expectation: ParseURL should NOT be called because SupportsUserQueries() checks first
+	// Actually, wait. SupportsUserQueries() is called on the interface.
+	// If SupportsUserQueries returns false, loop continues.
+	// So ParseURL is NEVER called.
+
+	// Execute
+	err := wp.OpenAddCollectionUI(testURL)
+
+	// Verify
+	assert.Error(t, err) // Should error "URL not supported"
+	assert.Contains(t, err.Error(), "URL not supported")
+	mockProvider.AssertNotCalled(t, "ParseURL", mock.Anything)
 	mockPM.AssertNotCalled(t, "OpenPreferences")
 }
 
