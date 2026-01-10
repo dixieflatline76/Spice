@@ -62,17 +62,17 @@ func TestStrictSync_UncheckAll(t *testing.T) {
 	activeIDs := make(map[string]bool)
 	store.Sync(100, nil, activeIDs)
 
-	// Verify: img1 gone, img2 stays
-	assert.Equal(t, 1, store.Count())
+	// Verify: img1 gone, img2 gone (Untagged/Orphan now pruned)
+	assert.Equal(t, 0, store.Count())
 	known := store.GetKnownIDs()
 	assert.False(t, known["img1"], "img1 should be pruned")
-	assert.True(t, known["img2"], "img2 (untagged) should remain")
+	assert.False(t, known["img2"], "img2 (untagged) should be pruned in strict mode")
 
 	// Verify files
 	assert.Eventually(t, func() bool {
 		_, err1 := os.Stat(img1.FilePath)
 		_, err2 := os.Stat(img2.FilePath)
-		return os.IsNotExist(err1) && err2 == nil
+		return os.IsNotExist(err1) && os.IsNotExist(err2)
 	}, 2*time.Second, 100*time.Millisecond)
 }
 
@@ -126,10 +126,12 @@ func TestStrictSync_MixedState(t *testing.T) {
 	// 3. img3: Active Query but File Missing -> DELETE (Validation)
 	assert.False(t, known["img3"])
 
-	// 4. img4: Untagged -> KEEP
-	assert.True(t, known["img4"])
-	_, err = os.Stat(img4.FilePath)
-	assert.NoError(t, err)
+	// 4. img4: Untagged -> DELETE (Strict Mode)
+	assert.False(t, known["img4"])
+	assert.Eventually(t, func() bool {
+		_, err := os.Stat(img4.FilePath)
+		return os.IsNotExist(err)
+	}, 2*time.Second, 100*time.Millisecond)
 
 	// Verify async file deletion
 	assert.Eventually(t, func() bool {
