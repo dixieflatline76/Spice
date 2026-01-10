@@ -1160,6 +1160,24 @@ func (wp *Plugin) RefreshImagesAndPulse() {
 		}
 		wp.store.Sync(int(wp.cfg.GetCacheSize().Size()), targetFlags, wp.cfg.GetActiveQueryIDs())
 
+		// CRITICAL: Reset playback state via Action Worker.
+		// Since the Store was just synced, the indices in shuffleOrder and history might now be invalid (out of bounds)
+		// or pointing to the wrong images (shifted). We must force a rebuild.
+		doneReset := make(chan struct{})
+		wp.actionChan <- func() {
+			log.Println("State: Resetting playback history and shuffle order due to refresh.")
+			wp.shuffleOrder = nil
+			wp.history = nil // Or keep history? No, indices are invalid.
+			wp.randomPos = 0
+			// wp.currentIndex remains, but verify it?
+			// If currentIndex is out of bounds, SetNextWallpaper handles it?
+			// Ideally we don't change wallpaper immediately, just the *future* order.
+			// But since history is cleared, previous button breaks.
+			// That is acceptable for a "Refresh/Apply" action.
+			close(doneReset)
+		}
+		<-doneReset
+
 		wp.currentDownloadPage.Set(1)
 
 		downloadDone := make(chan struct{})

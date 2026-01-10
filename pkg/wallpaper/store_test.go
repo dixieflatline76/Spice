@@ -345,13 +345,15 @@ func TestStoreSync_StrictPruning(t *testing.T) {
 	store.Sync(100, nil, activeIDs)
 
 	// Verify Store Content
-	assert.Equal(t, 2, store.Count())
+	assert.Equal(t, 1, store.Count())
 
 	known := store.GetKnownIDs()
 
-	// Expect img1 and img3 to remain
+	// Expect img1 to remain (Active Query)
 	assert.True(t, known["img1"])
-	assert.True(t, known["img3"])
+
+	// Expect img3 to be gone (Orphan/Legacy pruned in Strict Mode)
+	assert.False(t, known["img3"])
 
 	// Expect img2 to be gone from store
 	assert.False(t, known["img2"])
