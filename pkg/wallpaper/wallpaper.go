@@ -1394,7 +1394,30 @@ func (wp *Plugin) ToggleFavorite() {
 			}
 		}
 
-		if err := wp.favoriter.AddFavorite(wp.currentImage); err != nil {
+		// Quality Improvement: Prefer Master (Original) Image for Favorites
+		// This avoids saving an already-cropped or resized version.
+		// We try common extensions since GetMasterPath requires one.
+		candidates := []string{".jpg", ".png", ".jpeg", ".webp"}
+		var masterPath string
+		for _, ext := range candidates {
+			path, err := wp.fm.GetMasterPath(wp.currentImage.ID, ext)
+			if err == nil {
+				if info, err := os.Stat(path); err == nil && !info.IsDir() {
+					masterPath = path
+					break
+				}
+			}
+		}
+
+		imgToSave := wp.currentImage
+		if masterPath != "" {
+			imgToSave.FilePath = masterPath // Point to the pristine master
+			log.Printf("Saving Favorite from Master: %s", masterPath)
+		} else {
+			log.Printf("Saving Favorite from cached version (Master not found): %s", imgToSave.FilePath)
+		}
+
+		if err := wp.favoriter.AddFavorite(imgToSave); err != nil {
 			log.Printf("Failed to add favorite: %v", err)
 			return
 		}
