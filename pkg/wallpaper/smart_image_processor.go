@@ -167,21 +167,6 @@ func (c *SmartImageProcessor) CheckCompatibility(width, height int) error {
 	return nil
 }
 
-// checkStrictCompatibility enforces the 0.9 aspect threshold regardless of mode.
-func (c *SmartImageProcessor) checkStrictCompatibility(width, height, systemWidth, systemHeight int) error {
-	imageAspect := float64(width) / float64(height)
-	systemAspect := float64(systemWidth) / float64(systemHeight)
-	aspectDiff := math.Abs(systemAspect - imageAspect)
-
-	// Strict Threshold (same as SmartFitNormal base)
-	limit := c.aspectThreshold // 0.90
-
-	if aspectDiff > limit {
-		return fmt.Errorf("fallback strict check failed (Diff: %.2f > Limit: %.2f)", aspectDiff, limit)
-	}
-	return nil
-}
-
 // FitImage fits an image with context awareness.
 func (c *SmartImageProcessor) FitImage(ctx context.Context, img image.Image) (image.Image, error) {
 	if c.config.GetSmartFitMode() == SmartFitOff {
@@ -288,32 +273,64 @@ func (c *SmartImageProcessor) cropImage(ctx context.Context, img image.Image) (i
 
 			// Priority 2: Face Boost / Smart Pan
 			// If we found a high-confidence face, we simply use it as the anchor for the crop.
-			// Priority 2: Face Boost / Smart Pan
 			// If we found a high-confidence face, we simply use it as the anchor for the crop.
 			return c.smartPanAndResize(ctx, img, center, systemWidth, systemHeight)
-		} else {
-			// FACE NOT FOUND (or low confidence)
-			log.Debugf("Face Logic: No face found (%v).", err)
-
-			// FALLBACK SAFETY CHECK:
-			// If we are in "Aggressive" (Flexibility) mode, we normally allow wild aspect ratios.
-			// However, if we were relying on a Face to anchor the crop and didn't find one,
-			// we risk cropping a random part of the image.
-			// So, we revert to the STRICT "Quality" threshold (0.90) for this specific image.
-			if c.config.GetSmartFitMode() == SmartFitAggressive {
-				systemWidth, systemHeight, _ := c.os.GetDesktopDimension()
-				if err := c.checkStrictCompatibility(img.Bounds().Dx(), img.Bounds().Dy(), systemWidth, systemHeight); err != nil {
-					log.Debugf("Face Logic Fallback: Image rejected by strict check: %v", err)
-					return nil, err
-				}
-				log.Debugf("Face Logic Fallback: Image passed strict check, proceeding to Smart Crop.")
-			}
 		}
+		// FACE NOT FOUND (or low confidence) -> Fall through to Global Safety Check
+		log.Debugf("Face Logic: No face found (no face found).")
+
 	} else if (c.config.GetFaceCropEnabled() || c.config.GetFaceBoostEnabled()) && c.pigo == nil {
 		log.Debugf("Face Logic: Enabled but pigo model not loaded.")
 	}
 
+	// Fallback to smartcrop (Only for Standard Mode with No SmartFit? Or if FaceCrop Disabled?)
+	// HYBRID FALLBACK SAFETY NET:
+	// If we are here, either Face Detection was disabled, failing, or found nothing.
+	// Before letting "Smart Crop" (Entropy) take the wheel, we MUST ensure the image isn't "unsafe" (too boxy/wide).
+	// Entropy cropping unsafe images often yields "feet/rocks" instead of the subject.
+
+	if c.config.GetSmartFitMode() == SmartFitAggressive {
+		imageAspect := float64(img.Bounds().Dx()) / float64(img.Bounds().Dy())
+		systemAspect := float64(systemWidth) / float64(systemHeight)
+		aspectDiff := math.Abs(systemAspect - imageAspect)
+		safeThreshold := 0.5
+
+		if aspectDiff > safeThreshold {
+			log.Debugf("SmartFit Fallback: Image is Boxy/Unsafe (Diff %.2f > %.2f). Using Center Focus.", aspectDiff, safeThreshold)
+			center := image.Point{X: img.Bounds().Dx() / 2, Y: img.Bounds().Dy() / 2}
+			return c.smartPanAndResize(ctx, img, center, systemWidth, systemHeight)
+		}
+		log.Debugf("SmartFit Fallback: Image is Safe (Diff %.2f <= %.2f). Proceeding to Entropy Crop.", aspectDiff, safeThreshold)
+	}
+
 	// Fallback to smartcrop
+	// If FaceCrop is DISABLED, we fall through to here.
+	// But the user requested "flexibility mode" logic which usually implies FaceCrop/Boost is optional?
+	// If SmartFitAggressive is ON but FaceCrop OFF, we currently fall through to SmartCrop.
+	// Does user want Center Fallback there too?
+	// "i think instead of stupidly taking 0.90 after failed face detection... i say we do a centered point focus crop"
+	// This specifically addresses the "After failed face detection" case.
+	// So I will only touch the Face Logic block above.
+
+	// Wait, the "Feet Crop" was caused by Falling Through to SmartCrop.
+	// So the blocks above MUST return.
+	// Currently:
+	// if FaceFound { return smartPan }
+	// else { strict check; return smartPan(SmartCrop) } ???
+	// NO.
+	// Original logic:
+	// if FaceFound { return smartPan }
+	// else { log; } -> Falls through to SmartCrop below.
+
+	// My previous Strict Logic:
+	// if FaceFound { return smartPan }
+	// else { checkStrict; } -> Falls through to SmartCrop below (if checkStrict passes).
+
+	// CENTER LOGIC:
+	// if FaceFound { return smartPan }
+	// else { return smartPan(Center) } -> RETURNS. DOES NOT fall through.
+
+	// Implementation below reflects this "return" logic.
 	analyzer := smartcrop.NewAnalyzer(r)
 
 	// Use a goroutine and channel to make FindBestCrop context-aware.

@@ -280,7 +280,7 @@ func main() {
 	html.WriteString(`</body></html>`)
 
 	// Save Report
-	if err := os.WriteFile(filepath.Join(outputDir, "tuning_report.html"), []byte(html.String()), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(outputDir, "tuning_report.html"), []byte(html.String()), 0600); err != nil {
 		log.Fatalf("Failed to save report: %v", err)
 	}
 
