@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Spice Wallpaper Manager Extension",
-  "version": "1.6",
+  "version": "1.6.1",
   "description": "Helps you add new image collections to Spice from supported image providers.",
   "permissions": [
     "activeTab",
