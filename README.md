@@ -37,14 +37,16 @@ Spice is a minimalist wallpaper manager that brings a continuous stream of delig
 * **❤️ Local Favorites:** Love a wallpaper? Mark it as a favorite to save a permanent local copy. You can then switch to your "Favorite Images" collection to cycle exclusively through your best picks.
   > **Tip:** Selected "Favorite Images" as your source? Click the **"Source: Favorites"** text in the menu to instantly open your local favorites folder in Finder/Explorer.
 
-* **🏛️ Wikimedia Commons:** Access the wealth of human history and nature with support for **Featured Pictures** and Category composition on Wikimedia Commons.
+* **🏛️ The Museum Experience:** Turn your desktop into a gallery. Deep integration with **The Metropolitan Museum of Art** and **Art Institute of Chicago** offers typically 4K+ Open Access masterpieces. Features a specialized "Museum UI" with location context and license details.
 
-* **📏 Smart Fit with Face Detection:** Never worry about bad crops again.
-  * **Quality Mode (Strict):** Rejects images that don't match your aspect ratio, unless a high-confidence face is detected ("Face Rescue"), ensuring you only get perfect compositions.
-  * **Flexibility Mode:** Accepts a wider range of images. Includes a "Safety Fallback" that automatically centers 4:3 images on widescreen displays to avoid awkward crops of feet or ground textures.
-  * **Face Boost:** Ensures people are always perfectly framed—no more chopped-off heads!
+*   **📏 Smart Fit with Face Detection:** Never worry about bad crops again.
+  *   **Quality Mode (Strict):** Rejects images that don't match your aspect ratio, unless a high-confidence face is detected ("Face Rescue"), ensuring you only get perfect compositions.
+  *   **Flexibility Mode:** Accepts a wider range of images. Includes a "Safety Fallback" that automatically centers 4:3 images on widescreen displays to avoid awkward crops of feet or ground textures.
+  *   **Face Boost:** Ensures people are always perfectly framed—no more chopped-off heads!
 
-* **⚡ Ultra-Responsive:** Built with advanced concurrency patterns and "Debounced Persistence" to ensure the UI stays buttery smooth, even when managing large collections or downloading in the background.
+*   **⚙️ Tabbed Preferences:** A completely redesigned settings panel organizes your providers into **Online**, **Local**, **Museum**, and **AI** tabs, making it easy to manage your growing collection of sources.
+
+*   **⚡ Ultra-Responsive:** Built with advanced concurrency patterns and "Debounced Persistence" to ensure the UI stays buttery smooth, even when managing large collections or downloading in the background.
 
 * **⏯️ Pause & Resume:** Found a wallpaper you absolutely love? Simply **Pause** the rotation to keep it for as long as you want, then **Resume** when you're ready for something new.
 
@@ -106,7 +108,7 @@ We have big plans for Spice!
 
 * **Multi-Monitor Support:** Bringing Spice to all your screens, not just the main one.
 * **Linux & Intel Mac Support:** While we currently focus on Apple Silicon (arm64), we plan to expand our official builds to Intel Macs and Linux.
-* **More Providers:** Adding support for other wallpaper sources like **Pixabay** and **The Met Open Access**.
+* **More Providers:** Adding support for other awesome sources like **NASA Astronomy Picture of the Day** and **Bing Daily**.
 * **Local Collections:** Point Spice to any folder on your computer to use your existing wallpaper library.
 
 ## ⚠️ Known Limitations
