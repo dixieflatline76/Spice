@@ -58,9 +58,17 @@ func (wp *Plugin) ProcessImageJob(ctx context.Context, job DownloadJob) (provide
 
 	// 3. Ensure Derivative (Processed Image)
 	// Determine target flags for cache invalidation tracking
+	// Determine mode flags for cleaner invalidation
+	mode := wp.cfg.GetSmartFitMode()
+	isFlex := mode == SmartFitAggressive
+	isQuality := mode == SmartFitNormal
+
 	processingFlags := map[string]bool{
-		"SmartFit": wp.cfg.GetSmartFit(),
-		"FaceCrop": wp.cfg.GetFaceCropEnabled(),
+		"SmartFit":       wp.cfg.GetSmartFit(),
+		"FitFlexibility": isFlex,
+		"FitQuality":     isQuality,
+		"FaceCrop":       wp.cfg.GetFaceCropEnabled(),
+		"FaceBoost":      wp.cfg.GetFaceBoostEnabled(),
 	}
 
 	derivativePath, err := wp.ensureDerivative(ctx, img, masterPath)

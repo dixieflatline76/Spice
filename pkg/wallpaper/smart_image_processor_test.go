@@ -30,14 +30,14 @@ func TestSmartImageProcessor_FitImage(t *testing.T) {
 
 	t.Run("FitImage_Resize", func(t *testing.T) {
 		mockOS := new(MockOS)
-		processor := &smartImageProcessor{
+		processor := &SmartImageProcessor{
 			os:              mockOS,
 			config:          cfg,
 			aspectThreshold: 2.0,
 		}
 
 		// Desktop: 1920x1080
-		mockOS.On("getDesktopDimension").Return(1920, 1080, nil)
+		mockOS.On("GetDesktopDimension").Return(1920, 1080, nil)
 
 		// Input: 3840x2160 (16:9, same aspect ratio)
 		inputImg := createTestImage(3840, 2160)
@@ -53,14 +53,14 @@ func TestSmartImageProcessor_FitImage(t *testing.T) {
 
 	t.Run("FitImage_Crop", func(t *testing.T) {
 		mockOS := new(MockOS)
-		processor := &smartImageProcessor{
+		processor := &SmartImageProcessor{
 			os:              mockOS,
 			config:          cfg,
 			aspectThreshold: 2.0,
 		}
 
 		// Desktop: 1920x1080 (16:9)
-		mockOS.On("getDesktopDimension").Return(1920, 1080, nil)
+		mockOS.On("GetDesktopDimension").Return(1920, 1080, nil)
 
 		// Input: 2000x2000 (1:1)
 		inputImg := createTestImage(2000, 2000)
@@ -81,7 +81,7 @@ func TestSmartImageProcessor_FitImage(t *testing.T) {
 	t.Run("FitImage_SmartFitDisabled", func(t *testing.T) {
 		cfg.SetSmartFitMode(SmartFitOff)
 		mockOS := new(MockOS)
-		processor := &smartImageProcessor{
+		processor := &SmartImageProcessor{
 			os:              mockOS,
 			config:          cfg,
 			aspectThreshold: 2.0,
@@ -95,7 +95,7 @@ func TestSmartImageProcessor_FitImage(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, inputImg, outputImg)
 
-		mockOS.AssertNotCalled(t, "getDesktopDimension")
+		mockOS.AssertNotCalled(t, "GetDesktopDimension")
 	})
 }
 
@@ -131,9 +131,13 @@ func TestFaceDetection(t *testing.T) {
 	cfg.SetFaceBoostEnabled(true)
 	cfg.SetFaceCropEnabled(true)
 
-	processor := &smartImageProcessor{
-		os:     new(MockOS),
-		config: cfg,
+	mockOS := new(MockOS)
+	mockConfig := cfg
+
+	// Create processor with config (Fit Off)
+	processor := &SmartImageProcessor{
+		os:     mockOS,
+		config: mockConfig,
 		pigo:   pigoInstance,
 	}
 

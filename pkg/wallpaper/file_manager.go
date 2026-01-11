@@ -193,3 +193,42 @@ func (fm *FileManager) CleanupOrphans(knownIDs map[string]bool) {
 
 	log.Printf("FileManager: Orphan cleanup finished. Removed %d files.", deletedCount)
 }
+
+// DeleteDerivatives removes ONLY the processed versions of an image, keeping the Master.
+// This is used when invalidating cache due to settings changes (Smart Fit, etc.).
+func (fm *FileManager) DeleteDerivatives(id string) error {
+	filesToDelete := []string{}
+
+	// Recursive walk in fitted directory
+	fittedRoot := filepath.Join(fm.rootDir, FittedRootDir)
+	err := filepath.Walk(fittedRoot, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil // Skip access errors
+		}
+		if !info.IsDir() {
+			name := info.Name()
+			ext := filepath.Ext(name)
+			fileID := strings.TrimSuffix(name, ext)
+			if fileID == id {
+				filesToDelete = append(filesToDelete, path)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		log.Printf("DeleteDerivatives: Error walking fitted dir: %v", err)
+	}
+
+	for _, f := range filesToDelete {
+		if err := os.Remove(f); err != nil {
+			// Suppress benign errors
+			if strings.Contains(err.Error(), "used by another process") || strings.Contains(err.Error(), "access is denied") {
+				log.Debugf("DeleteDerivatives: Skipped locked file %s: %v", f, err)
+			} else {
+				log.Printf("DeleteDerivatives: Failed to delete %s: %v", f, err)
+			}
+		}
+	}
+
+	return nil
+}

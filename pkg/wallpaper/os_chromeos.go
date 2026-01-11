@@ -11,8 +11,8 @@ type ChromeOS struct {
 	bridgeCallback func(string) error
 }
 
-// setWallpaper delegates to the bridge callback.
-func (c *ChromeOS) setWallpaper(path string) error {
+// SetWallpaper delegates to the bridge callback.
+func (c *ChromeOS) SetWallpaper(path string) error {
 	c.mu.Lock()
 	cb := c.bridgeCallback
 	c.mu.Unlock()
@@ -23,8 +23,8 @@ func (c *ChromeOS) setWallpaper(path string) error {
 	return cb(path)
 }
 
-// getDesktopDimension returns the desktop dimensions.
-func (c *ChromeOS) getDesktopDimension() (int, int, error) {
+// GetDesktopDimension returns the desktop dimensions.
+func (c *ChromeOS) GetDesktopDimension() (int, int, error) {
 	// Standard full HD default, or could query chrome.system.display via bridge too!
 	// For now, static default is safe as we rely on 'smart fit' mostly.
 	return 1920, 1080, nil

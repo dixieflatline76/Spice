@@ -263,7 +263,7 @@ func TestLifecycle_HappyPath(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Mock Expectation - Permissive
-	wp.os.(*MockOS).On("setWallpaper", mock.Anything).Return(nil)
+	wp.os.(*MockOS).On("SetWallpaper", mock.Anything).Return(nil)
 
 	// 2. Add Image directly to Store
 	added := wp.store.Add(provider.Image{
@@ -369,7 +369,7 @@ func setupTestPlugin(t *testing.T, prefs fyne.Preferences) *Plugin {
 	cfg.MaxConcurrentProcessors = 1
 
 	mockOS := new(MockOS)
-	mockOS.On("getDesktopDimension").Return(1920, 1080)
+	mockOS.On("GetDesktopDimension").Return(1920, 1080)
 
 	mockPM := new(MockPluginManager)
 	mockPM.On("NotifyUser", mock.Anything, mock.Anything).Return()
