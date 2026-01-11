@@ -112,6 +112,7 @@ func (c *SmartImageProcessor) EncodeImage(ctx context.Context, img image.Image, 
 }
 
 // CheckCompatibility checks if an image of given dimensions is compatible with Smart Fit settings.
+// CheckCompatibility checks if an image of given dimensions is compatible with Smart Fit settings.
 func (c *SmartImageProcessor) CheckCompatibility(width, height int) error {
 	mode := c.config.GetSmartFitMode()
 
@@ -131,18 +132,21 @@ func (c *SmartImageProcessor) CheckCompatibility(width, height int) error {
 		return fmt.Errorf("image resolution too low (must be at least desktop size)")
 	}
 
-	// 2. Dynamic Aspect Ratio Tolerance
-	// 2. Dynamic Aspect Ratio Tolerance
-	// "Quality" Mode (SmartFitNormal): Strict adherence to compositional integrity.
-	// We ignore resolution surplus and stick to the base threshold (e.g., 20%).
-	// "Flexibility" Mode (SmartFitAggressive): Relaxed adherence based on resolution.
-	// We allow aspect deviation to scale linearly with surplus resolution.
+	// 2. Aspect Ratio Tolerance
+	// "Quality" Mode:
+	// Normally we reject if Diff > 0.9.
+	// HOWEVER, we now support "Face Rescue" (Accepting > 0.9 IF Face Q > 20).
+	// Since usage in downloader.go cannot see faces/pixels, we MUST accept here to allow the download proceed.
+	// We will enforce the strict rejection in FitImage if no face is found.
+	if mode == SmartFitNormal {
+		return nil
+	}
 
+	// "Flexibility" Mode (SmartFitAggressive):
+	// Relaxed adherence based on resolution.
 	imageAspect := float64(width) / float64(height)
 	systemAspect := float64(systemWidth) / float64(systemHeight)
 	aspectDiff := math.Abs(systemAspect - imageAspect)
-
-	var effectiveThreshold float64
 
 	if mode == SmartFitAggressive {
 		// Calculate how much "surplus" resolution we have relative to the screen.
@@ -151,17 +155,12 @@ func (c *SmartImageProcessor) CheckCompatibility(width, height int) error {
 		surplus := math.Min(scaleX, scaleY)
 
 		// Dynamic Formula: Base * Surplus * AggressiveMultiplier (1.9)
-		effectiveThreshold = c.aspectThreshold * surplus * 1.9
+		effectiveThreshold := c.aspectThreshold * surplus * 1.9
 		log.Debugf("SmartFit [Flexibility]: Check (Surplus: %.2f, DynamicThreshold: %.2f, Diff: %.2f)", surplus, effectiveThreshold, aspectDiff)
-	} else {
-		// SmartFitNormal ("Quality")
-		// Fixed Base Threshold
-		effectiveThreshold = c.aspectThreshold
-		log.Debugf("SmartFit [Quality]: Check (FixedThreshold: %.2f, Diff: %.2f)", effectiveThreshold, aspectDiff)
-	}
 
-	if aspectDiff > effectiveThreshold {
-		return fmt.Errorf("image aspect ratio not compatible (Diff: %.2f > Limit: %.2f)", aspectDiff, effectiveThreshold)
+		if aspectDiff > effectiveThreshold {
+			return fmt.Errorf("image aspect ratio not compatible (Diff: %.2f > Limit: %.2f)", aspectDiff, effectiveThreshold)
+		}
 	}
 
 	return nil
@@ -179,7 +178,6 @@ func (c *SmartImageProcessor) FitImage(ctx context.Context, img image.Image) (im
 		return nil, fmt.Errorf("getting desktop dimensions: %w", err)
 	}
 
-	// Keep the context check, even though getDesktopDimension doesn't use it yet.
 	if err := checkContext(ctx); err != nil {
 		return nil, err
 	}
@@ -188,152 +186,128 @@ func (c *SmartImageProcessor) FitImage(ctx context.Context, img image.Image) (im
 	imageHeight := img.Bounds().Dy()
 	systemAspect := float64(systemWidth) / float64(systemHeight)
 	imageAspect := float64(imageWidth) / float64(imageHeight)
-	// aspectDiff unused now, handled in CheckCompatibility
+	aspectDiff := math.Abs(systemAspect - imageAspect)
 
-	r := &resizer{resampler: c.resampler} // Create resizer here
+	r := &resizer{resampler: c.resampler}
 
-	// Pre-check basic compatibility using shared logic
+	// Pre-check basic compatibility (Resolution mainly)
 	if err := c.CheckCompatibility(imageWidth, imageHeight); err != nil {
 		log.Debugf("FitImage: %v", err)
 		return nil, err
 	}
 
-	switch {
-	// Case 1 (Incompatibility) is handled by CheckCompatibility above.
-	case imageWidth == systemWidth && imageHeight == systemHeight: // Perfect fit
-		log.Debugf("FitImage: Perfect fit, returning original")
+	// Perfect fits
+	if imageWidth == systemWidth && imageHeight == systemHeight {
 		return img, nil
-	case imageAspect == systemAspect: // Perfect aspect ratio
-		resizedImg := r.resizeWithContext(ctx, img, uint(systemWidth), uint(systemHeight)) //nolint:gosec // G115: Safe conversion, screen dims usually positive
+	}
+	if imageAspect == systemAspect {
+		resizedImg := r.resizeWithContext(ctx, img, uint(systemWidth), uint(systemHeight)) //nolint:gosec
 		if resizedImg == nil {
-			return nil, ctx.Err() // Context was canceled during resize.
+			return nil, ctx.Err()
 		}
 		return resizedImg, nil
-	default:
-		croppedImg, err := c.cropImage(ctx, img) // Pass context
-		if err != nil {
-			return nil, fmt.Errorf("cropping image: %w", err)
-		}
-		return croppedImg, nil
-	}
-}
-
-// cropImage crops an image with context awareness.
-func (c *SmartImageProcessor) cropImage(ctx context.Context, img image.Image) (image.Image, error) {
-	systemWidth, systemHeight, err := c.os.GetDesktopDimension()
-	if err != nil {
-		return nil, fmt.Errorf("getting desktop dimensions: %w", err)
 	}
 
+	// --- CROP LOGIC START ---
 	c.lastStats = FaceDetectionStats{}
 	start := time.Now()
 	defer func() {
 		c.lastStats.Processing = time.Since(start)
 	}()
 
-	// Keep the context check, even though getDesktopDimension doesn't use it yet.
-	if err := checkContext(ctx); err != nil {
-		return nil, err
-	}
+	// 1. Face Detection Strategy
+	// We run this early because Quality Mode relies on it for the "Rescue" decision.
+	var faceBox image.Rectangle
+	faceFound := false
+	var faceQ float32
 
-	r := &resizer{resampler: c.resampler} // Create resizer here
-
-	// Variable to hold the image used for analysis (potentially boosted)
-	imgForAnalysis := img // Initialize with original image
-
-	// Check for face crop/boost
 	if (c.config.GetFaceCropEnabled() || c.config.GetFaceBoostEnabled()) && c.pigo != nil {
-		faceBox, err := c.findBestFace(imgForAnalysis)
+		// Variable to hold the image used for analysis
+		// (We use original img here, unlike prev code which shadowed it? prev code used imgForAnalysis = img)
+		fb, err := c.findBestFace(img)
 		if err == nil {
-			// Found a face!
+			faceFound = true
+			faceBox = fb
+			faceQ = c.lastStats.Q
 			c.lastStats.Found = true
 			c.lastStats.Rect = faceBox
+			log.Debugf("Face Logic: Found face (Q:%.1f)", faceQ)
+		} else {
+			log.Debugf("Face Logic: No face found.")
+		}
+	} else if c.pigo == nil {
+		log.Debugf("Face Logic: Skipped (Pigo model not loaded or disabled).")
+	}
 
-			center := image.Point{X: faceBox.Min.X + faceBox.Dx()/2, Y: faceBox.Min.Y + faceBox.Dy()/2}
-			log.Debugf("Face Logic: Found high-confidence face (Q:%.1f), proceeding with face-aware crop.", c.lastStats.Q)
+	// 2. Logic Branching: Quality vs Flexibility
 
-			// Priority 1: Face Crop (Hard Crop)
-			if c.config.GetFaceCropEnabled() {
-				// Use the center for a smart crop AND resize strategy
-				// Re-implementing the original logic:
-				cropRect := c.cropAroundFace(img.Bounds(), faceBox, systemWidth, systemHeight)
-
-				// Crop and resize
-				type SubImager interface {
-					SubImage(r image.Rectangle) image.Image
-				}
-				img = img.(SubImager).SubImage(cropRect)
-
-				resizedImg := r.resizeWithContext(ctx, img, uint(systemWidth), uint(systemHeight)) //nolint:gosec // G115: Safe conversion
-				if resizedImg == nil {
-					return nil, ctx.Err()
-				}
-				return resizedImg, nil
+	// MODE: QUALITY (SmartFitNormal)
+	if c.config.GetSmartFitMode() == SmartFitNormal {
+		// Strict Aspect Check (0.9)
+		if aspectDiff > c.aspectThreshold {
+			// RETRY: Check for "Rescue" (Strong Face)
+			if faceFound && faceQ > 20.0 {
+				log.Debugf("SmartFit [Quality]: EXCEPTION! Image preserved despite Aspect Diff %.2f (> %.2f) due to Strong Face (Q=%.1f)", aspectDiff, c.aspectThreshold, faceQ)
+				// Proceed to use the face!
+			} else {
+				// REJECT
+				return nil, fmt.Errorf("quality mode rejected: aspect diff %.2f > %.2f and no strong face (Q>20) to rescue", aspectDiff, c.aspectThreshold)
 			}
-
-			// Priority 2: Face Boost / Smart Pan
-			// If we found a high-confidence face, we simply use it as the anchor for the crop.
-			// If we found a high-confidence face, we simply use it as the anchor for the crop.
-			return c.smartPanAndResize(ctx, img, center, systemWidth, systemHeight)
+		} else {
+			log.Debugf("SmartFit [Quality]: Accepted (Diff %.2f <= %.2f)", aspectDiff, c.aspectThreshold)
 		}
-		// FACE NOT FOUND (or low confidence) -> Fall through to Global Safety Check
-		log.Debugf("Face Logic: No face found (no face found).")
-
-	} else if (c.config.GetFaceCropEnabled() || c.config.GetFaceBoostEnabled()) && c.pigo == nil {
-		log.Debugf("Face Logic: Enabled but pigo model not loaded.")
 	}
 
-	// Fallback to smartcrop (Only for Standard Mode with No SmartFit? Or if FaceCrop Disabled?)
-	// HYBRID FALLBACK SAFETY NET:
-	// If we are here, either Face Detection was disabled, failing, or found nothing.
-	// Before letting "Smart Crop" (Entropy) take the wheel, we MUST ensure the image isn't "unsafe" (too boxy/wide).
-	// Entropy cropping unsafe images often yields "feet/rocks" instead of the subject.
-
+	// MODE: FLEXIBILITY (SmartFitAggressive)
 	if c.config.GetSmartFitMode() == SmartFitAggressive {
-		imageAspect := float64(img.Bounds().Dx()) / float64(img.Bounds().Dy())
-		systemAspect := float64(systemWidth) / float64(systemHeight)
-		aspectDiff := math.Abs(systemAspect - imageAspect)
-		safeThreshold := 0.5
-
-		if aspectDiff > safeThreshold {
-			log.Debugf("SmartFit Fallback: Image is Boxy/Unsafe (Diff %.2f > %.2f). Using Center Focus.", aspectDiff, safeThreshold)
-			center := image.Point{X: img.Bounds().Dx() / 2, Y: img.Bounds().Dy() / 2}
-			return c.smartPanAndResize(ctx, img, center, systemWidth, systemHeight)
+		// Validation was already done in CheckCompatibility (Dynamic Threshold).
+		// Here we just handle the "Feet Crop" Safety Fallback.
+		// If No Face is found, and image is "Unsafe" (Diff > 0.4), use Center.
+		if !faceFound {
+			safeThreshold := 0.4 // Tuned down from 0.5
+			if aspectDiff > safeThreshold {
+				log.Debugf("SmartFit [Flexibility]: Fallback to Center. Diff %.2f > %.2f (Unsafe for Entropy)", aspectDiff, safeThreshold)
+				center := image.Point{X: img.Bounds().Dx() / 2, Y: img.Bounds().Dy() / 2}
+				return c.smartPanAndResize(ctx, img, center, systemWidth, systemHeight)
+			}
 		}
-		log.Debugf("SmartFit Fallback: Image is Safe (Diff %.2f <= %.2f). Proceeding to Entropy Crop.", aspectDiff, safeThreshold)
 	}
 
-	// Fallback to smartcrop
-	// If FaceCrop is DISABLED, we fall through to here.
-	// But the user requested "flexibility mode" logic which usually implies FaceCrop/Boost is optional?
-	// If SmartFitAggressive is ON but FaceCrop OFF, we currently fall through to SmartCrop.
-	// Does user want Center Fallback there too?
-	// "i think instead of stupidly taking 0.90 after failed face detection... i say we do a centered point focus crop"
-	// This specifically addresses the "After failed face detection" case.
-	// So I will only touch the Face Logic block above.
+	// 3. Execution (Face or Smart)
 
-	// Wait, the "Feet Crop" was caused by Falling Through to SmartCrop.
-	// So the blocks above MUST return.
-	// Currently:
-	// if FaceFound { return smartPan }
-	// else { strict check; return smartPan(SmartCrop) } ???
-	// NO.
-	// Original logic:
-	// if FaceFound { return smartPan }
-	// else { log; } -> Falls through to SmartCrop below.
+	// If Face Found (and we are still here), use it.
+	if faceFound {
+		center := image.Point{X: faceBox.Min.X + faceBox.Dx()/2, Y: faceBox.Min.Y + faceBox.Dy()/2}
 
-	// My previous Strict Logic:
-	// if FaceFound { return smartPan }
-	// else { checkStrict; } -> Falls through to SmartCrop below (if checkStrict passes).
+		// Priority: Face Crop (Hard)
+		if c.config.GetFaceCropEnabled() {
+			cropRect := c.cropAroundFace(img.Bounds(), faceBox, systemWidth, systemHeight)
+			type SubImager interface {
+				SubImage(r image.Rectangle) image.Image
+			}
+			img = img.(SubImager).SubImage(cropRect)
+			resizedImg := r.resizeWithContext(ctx, img, uint(systemWidth), uint(systemHeight)) //nolint:gosec
+			if resizedImg == nil {
+				return nil, ctx.Err()
+			}
+			return resizedImg, nil
+		}
 
-	// CENTER LOGIC:
-	// if FaceFound { return smartPan }
-	// else { return smartPan(Center) } -> RETURNS. DOES NOT fall through.
+		// Priority: Face Boost / Smart Pan
+		return c.smartPanAndResize(ctx, img, center, systemWidth, systemHeight)
+	}
 
-	// Implementation below reflects this "return" logic.
+	// 4. Fallback to SmartCrop (Entropy)
+	// If we are here:
+	// - Quality Mode: Diff was <= 0.9 (Safe-ish) OR Rescued (but FaceCrop disabled? Unlikely logic path if Face found but FaceCrop off... wait.
+	//   If Quality Mode + Rescue (FaceFound) + FaceCrop OFF -> We fall here?
+	//   CHECK ABOVE: "If Face Found... use it".
+	//   So if we were rescued, FaceFound is true, so we used `smartPanAndResize` with face center. Correct.
+
+	// - Flexibility Mode: Diff was <= 0.4 (Very Safe).
+	log.Debugf("SmartFit: Using Entropy Crop.")
 	analyzer := smartcrop.NewAnalyzer(r)
 
-	// Use a goroutine and channel to make FindBestCrop context-aware.
 	type cropResult struct {
 		crop image.Rectangle
 		err  error
@@ -341,28 +315,18 @@ func (c *SmartImageProcessor) cropImage(ctx context.Context, img image.Image) (i
 	resultChan := make(chan cropResult)
 
 	go func() {
-		// Use imgForAnalysis if set, otherwise original img
-		targetImg := img
-		if imgForAnalysis != nil {
-			targetImg = imgForAnalysis
-		}
-		topCrop, err := analyzer.FindBestCrop(targetImg, systemWidth, systemHeight)
+		topCrop, err := analyzer.FindBestCrop(img, systemWidth, systemHeight)
 		resultChan <- cropResult{crop: topCrop, err: err}
 	}()
 
 	select {
 	case <-ctx.Done():
-		return nil, ctx.Err() // Context was canceled.
+		return nil, ctx.Err()
 	case result := <-resultChan:
 		if result.err != nil {
 			return nil, fmt.Errorf("finding best crop: %w", result.err)
 		}
-
-		// "Smart Pan" Logic:
-		// 1. Calculate the center of the smart crop
 		smartCenter := result.crop.Min.Add(result.crop.Size().Div(2))
-
-		// 2. Delegate to common helper
 		return c.smartPanAndResize(ctx, img, smartCenter, systemWidth, systemHeight)
 	}
 }

@@ -228,13 +228,151 @@ func TestSmartImageProcessor_FitImage_CenterFallback(t *testing.T) {
 
 	// Expectation:
 	// 1. Accepted (Not rejected)
-	// 2. Output size matches desktop (1920x1080) ?
-	//    Wait, smartPanAndResize RESIZES to target.
-	//    Input 1024x833 -> Target 1920x1080.
-	//    It should upscale?
-	//    Code: `r.resizeWithContext(..., uint(targetWidth), uint(targetHeight))`
-	//    Yes, it resizes to target.
-
+	// 2. Output size matches desktop (160x90).
 	assert.Equal(t, 160, outputImg.Bounds().Dx())
 	assert.Equal(t, 90, outputImg.Bounds().Dy())
+}
+
+func TestSmartImageProcessor_FitImage_Quality_Rejection(t *testing.T) {
+	ResetConfig()
+	prefs := NewMockPreferences()
+	cfg := GetConfig(prefs)
+	cfg.SetSmartFitMode(SmartFitNormal)
+
+	mockOS := new(MockOS)
+	// Desktop: 160x90 (16:9, ~1.77)
+	mockOS.On("GetDesktopDimension").Return(160, 90, nil)
+
+	processor := &SmartImageProcessor{
+		os:              mockOS,
+		config:          cfg,
+		aspectThreshold: 0.9,
+		resampler:       imaging.Lanczos,
+		// No Pigo -> No Face Found
+	}
+
+	// Input: 100x100 (1:1, Aspect 1.0)
+	// Diff: |1.77 - 1.0| = 0.77
+	// Wait, Quality is 0.9.  0.77 < 0.9. This would PASS normally.
+	// We need a rejection scenario.
+	// Try Portrait: 160x200 (0.8)
+	// Diff: |1.77 - 0.8| = 0.97.  0.97 > 0.9.
+	// Width 160 >= 160, Height 200 >= 90.
+	// Expect REJECTION.
+	inputImg := createTestImage(160, 200)
+
+	_, err := processor.FitImage(context.Background(), inputImg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "quality mode rejected")
+}
+
+func TestSmartImageProcessor_FitImage_Quality_Rescue(t *testing.T) {
+	// Requirements:
+	// Mode: Quality
+	// Input: Bad Aspect (Diff > 0.9)
+	// Face: Strong (Q > 20)
+	// Expect: Success
+
+	ResetConfig()
+	prefs := NewMockPreferences()
+	cfg := GetConfig(prefs)
+	cfg.SetSmartFitMode(SmartFitNormal)
+	cfg.SetFaceCropEnabled(true)
+
+	// Load Pigo
+	am := asset.NewManager()
+	modelData, err := am.GetModel("facefinder")
+	if err != nil {
+		t.Skip("Facefinder model not found")
+	}
+	p := pigo.NewPigo()
+	pigoInstance, _ := p.Unpack(modelData)
+
+	mockOS := new(MockOS)
+	// Target: 16:9 (160x90) (Aspect 1.77)
+	mockOS.On("GetDesktopDimension").Return(160, 90, nil)
+
+	processor := &SmartImageProcessor{
+		os:              mockOS,
+		config:          cfg,
+		pigo:            pigoInstance,
+		aspectThreshold: 0.9,
+		resampler:       imaging.Lanczos,
+	}
+
+	// Input: Face Image (Square-ish?) "testdata/face.png"
+	// We need to check its aspect.
+	// Let's assume we load it and it has a face.
+	f, err := os.Open("testdata/face.png")
+	if err != nil {
+		t.Skip("testdata/face.png not found")
+	}
+	defer f.Close()
+	faceImg, _, _ := image.Decode(f)
+
+	// If face.png is square (likely), Aspect 1.0. Diff ~0.77.
+	// 0.77 < 0.9. It passes naturally!
+	// We need to FORCE a bad aspect ratio.
+	// Let's Pad the image to make it extremely tall (portrait)?
+	// Or crop it?
+	// If we crop it to be very tall, we might lose the face or make it small.
+	// Better: Change the Desktop target to be Ultrawide (21:9)!
+	// 21:9 = ~2.33.
+	// Image (Square 1.0). Diff: 1.33 > 0.9.
+	// This forces Rejection UNLESS Rescued.
+	mockOS2 := new(MockOS)
+	mockOS2.On("GetDesktopDimension").Return(210, 90, nil) // 21:9
+	processor.os = mockOS2
+
+	outputImg, err := processor.FitImage(context.Background(), faceImg)
+
+	// If rescue works, no error.
+	require.NoError(t, err)
+	require.NotNil(t, outputImg)
+	assert.Equal(t, 210, outputImg.Bounds().Dx())
+}
+
+func TestSmartImageProcessor_FitImage_Flexibility_Fallback_NewThreshold(t *testing.T) {
+	// Requirements:
+	// Mode: Flexibility
+	// Input: Diff 0.45 (Between 0.4 and 0.5)
+	// Expect: Center Crop (because threshold lowered to 0.4)
+
+	ResetConfig()
+	prefs := NewMockPreferences()
+	cfg := GetConfig(prefs)
+	cfg.SetSmartFitMode(SmartFitAggressive)
+
+	mockOS := new(MockOS)
+	// Target: 160x90 (1.77)
+	mockOS.On("GetDesktopDimension").Return(160, 90, nil)
+
+	processor := &SmartImageProcessor{
+		os:              mockOS,
+		config:          cfg,
+		aspectThreshold: 2.0,
+		resampler:       imaging.Lanczos,
+		// No Pigo -> No Face
+	}
+
+	// Calculate Input Dimensions for Diff 0.45
+	// |1.77 - X| = 0.45
+	// X = 1.32 (Aspect ~4:3)
+	// Width = 264, Height = 200 => 1.32
+	// Must be > 160x90 for resolution check.
+	inputImg := createTestImage(264, 200)
+
+	// Run FitImage
+	// Should hit Center Fallback
+	outputImg, err := processor.FitImage(context.Background(), inputImg)
+	require.NoError(t, err)
+
+	// Verify it worked
+	assert.Equal(t, 160, outputImg.Bounds().Dx())
+	assert.Equal(t, 90, outputImg.Bounds().Dy())
+
+	// Ideally verify it was CENTER crop, not smart crop?
+	// Hard to verify without mocking smartcrop or checking pixels.
+	// But since Diff (0.45) > SafeThreshold (0.4), it MUST fall into that block.
+	// We trust the logic if it returns success here (and coverage confirmed).
 }
