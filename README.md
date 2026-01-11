@@ -39,7 +39,10 @@ Spice is a minimalist wallpaper manager that brings a continuous stream of delig
 
 * **🏛️ Wikimedia Commons:** Access the wealth of human history and nature with support for **Featured Pictures** and Category composition on Wikimedia Commons.
 
-* **📏 Smart Fit with Face Detection:** Never worry about bad crops again. **Smart Fit Mode** lets you choose between **Standard (Strict)** aspect ratio matching or **Relaxed (Aggressive)** usage of high-res images. Plus, our advanced **Face Boost** technology ensures people are perfectly framed—no more chopped-off heads!
+* **📏 Smart Fit with Face Detection:** Never worry about bad crops again.
+  * **Quality Mode (Strict):** Rejects images that don't match your aspect ratio, unless a high-confidence face is detected ("Face Rescue"), ensuring you only get perfect compositions.
+  * **Flexibility Mode:** Accepts a wider range of images. Includes a "Safety Fallback" that automatically centers 4:3 images on widescreen displays to avoid awkward crops of feet or ground textures.
+  * **Face Boost:** Ensures people are always perfectly framed—no more chopped-off heads!
 
 * **⚡ Ultra-Responsive:** Built with advanced concurrency patterns and "Debounced Persistence" to ensure the UI stays buttery smooth, even when managing large collections or downloading in the background.
 
