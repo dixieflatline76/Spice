@@ -32,29 +32,27 @@ const (
 	SPIFSendWinIniChange = 0x02
 )
 
-// setWallpaper sets the wallpaper to the given image file path.
-func (w *windowsOS) setWallpaper(imagePath string) error {
-	// Convert the image path to UTF-16
+// SetWallpaper sets the desktop wallpaper
+func (w *windowsOS) SetWallpaper(imagePath string) error {
 	imagePathUTF16, err := syscall.UTF16PtrFromString(imagePath)
 	if err != nil {
 		return err
 	}
 
-	ret, _, err := systemParametersInfo.Call(
+	ret, _, _ := systemParametersInfo.Call(
 		uintptr(SPISetDeskWallpaper),
 		uintptr(0),
 		uintptr(unsafe.Pointer(imagePathUTF16)),
 		uintptr(SPIFUpdateIniFile|SPIFSendWinIniChange),
 	)
 	if ret == 0 {
-		return err
+		return syscall.GetLastError()
 	}
-
 	return nil
 }
 
-// getDesktopDimension returns the desktop dimension (width and height) in pixels.
-func (w *windowsOS) getDesktopDimension() (int, int, error) {
+// GetDesktopDimension returns the resolution of the primary monitor
+func (w *windowsOS) GetDesktopDimension() (int, int, error) {
 	return sysinfo.GetScreenDimensions()
 }
 

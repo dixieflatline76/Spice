@@ -58,13 +58,13 @@ func TestApplyWallpaper_RollbackOnFailure(t *testing.T) {
 	wp.store.Add(img1)
 	wp.store.Add(img2)
 
-	mockOS.On("setWallpaper", img2Path).Return(assert.AnError)
+	mockOS.On("SetWallpaper", img2Path).Return(assert.AnError)
 
 	// Action: Apply Wallpaper img2
 	wp.applyWallpaper(img2)
 
 	// Assert: OS was called
-	mockOS.AssertCalled(t, "setWallpaper", img2Path)
+	mockOS.AssertCalled(t, "SetWallpaper", img2Path)
 
 	// Assert: UI rolled back to img1
 	// Since runOnUI is synchronous, the final state of the menu items should match img1

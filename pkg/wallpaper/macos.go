@@ -13,8 +13,8 @@ import (
 // macOSOS implements the OS interface for macOS.
 type macOSOS struct{}
 
-// setWallpaper sets the desktop wallpaper on macOS.
-func (m *macOSOS) setWallpaper(imagePath string) error {
+// SetWallpaper sets the desktop wallpaper on macOS.
+func (m *macOSOS) SetWallpaper(imagePath string) error {
 	// Use AppleScript to set the wallpaper
 	script := fmt.Sprintf(`
                 tell application "Finder"
@@ -30,8 +30,8 @@ func (m *macOSOS) setWallpaper(imagePath string) error {
 	return nil
 }
 
-// getDesktopDimension returns the primary desktop dimensions on macOS.
-func (m *macOSOS) getDesktopDimension() (int, int, error) {
+// GetDesktopDimension returns the primary desktop dimensions on macOS.
+func (m *macOSOS) GetDesktopDimension() (int, int, error) {
 	return sysinfo.GetScreenDimensions()
 }
 

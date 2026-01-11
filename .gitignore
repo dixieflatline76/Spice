@@ -43,6 +43,7 @@ current_coverage_report.txt
 
 # build artifacts
 build/
+report_output/
 *.obj
 
 # Unignore implementation of the mac extension

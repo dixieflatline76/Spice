@@ -25,7 +25,7 @@ func TestTrayFlow_PreviousWallpaper(t *testing.T) {
 	cfg := GetConfig(prefs)
 
 	mockOS := new(MockOS)
-	mockOS.On("setWallpaper", mock.Anything).Return(nil)
+	mockOS.On("SetWallpaper", mock.Anything).Return(nil)
 
 	// Mock Manager
 	mockPM := new(MockPluginManager)
@@ -138,7 +138,7 @@ func TestTrayFlow_Shuffle(t *testing.T) {
 	cfg := GetConfig(prefs)
 
 	mockOS := new(MockOS)
-	mockOS.On("setWallpaper", mock.Anything).Return(nil)
+	mockOS.On("SetWallpaper", mock.Anything).Return(nil)
 
 	// Mock Manager for Shuffle Test too
 	mockPM := new(MockPluginManager)

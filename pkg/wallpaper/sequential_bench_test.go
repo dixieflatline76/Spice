@@ -79,13 +79,13 @@ type BenchMockOS struct {
 	mock.Mock
 }
 
-func (m *BenchMockOS) setWallpaper(path string) error {
+func (m *BenchMockOS) SetWallpaper(path string) error {
 	// Simulate OS syscall overhead (small)
 	time.Sleep(10 * time.Millisecond)
 	return nil
 }
 
-func (m *BenchMockOS) getDesktopDimension() (int, int, error) {
+func (m *BenchMockOS) GetDesktopDimension() (int, int, error) {
 	return 1920, 1080, nil
 }
 

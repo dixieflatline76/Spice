@@ -409,7 +409,15 @@ func (s *ImageStore) Sync(limit int, targetFlags map[string]bool, activeQueryIDs
 	copy(candidates, s.images)
 	s.mu.RUnlock()
 
-	badIDs := make(map[string]bool)
+	// SyncAction defines the cleanup action required for an image.
+	type SyncAction int
+	const (
+		ActionKeep       SyncAction = iota
+		ActionDelete                // Prune: Delete everything (Master + Derivatives)
+		ActionInvalidate            // Refresh: Delete only derivatives (Keep Master)
+	)
+
+	badIDs := make(map[string]SyncAction)
 
 	for _, img := range candidates {
 		// Strict Sync: If activeQueryIDs is provided (Strict Mode),
@@ -426,24 +434,24 @@ func (s *ImageStore) Sync(limit int, targetFlags map[string]bool, activeQueryIDs
 
 		if activeQueryIDs != nil {
 			if isOrphan || !isActive {
-				badIDs[img.ID] = true
+				badIDs[img.ID] = ActionDelete
 				continue
 			}
 		}
 
 		masterPath, err := s.fm.GetMasterPath(img.ID, ".jpg")
 		if err != nil {
-			badIDs[img.ID] = true
+			badIDs[img.ID] = ActionDelete
 			continue
 		}
 		if _, err := os.Stat(masterPath); os.IsNotExist(err) {
 			masterPath, err = s.fm.GetMasterPath(img.ID, ".png")
 			if err != nil {
-				badIDs[img.ID] = true
+				badIDs[img.ID] = ActionDelete
 				continue
 			}
 			if _, err := os.Stat(masterPath); os.IsNotExist(err) {
-				badIDs[img.ID] = true
+				badIDs[img.ID] = ActionDelete
 				continue
 			}
 		}
@@ -462,7 +470,9 @@ func (s *ImageStore) Sync(limit int, targetFlags map[string]bool, activeQueryIDs
 				}
 			}
 			if !match {
-				badIDs[img.ID] = true
+				// Mismatch means the derivative is stale, but the image itself (Master) is valid.
+				// We should only delete the derivatives so the downloader can re-process the Master.
+				badIDs[img.ID] = ActionInvalidate
 			}
 		}
 	}
@@ -470,10 +480,17 @@ func (s *ImageStore) Sync(limit int, targetFlags map[string]bool, activeQueryIDs
 	s.mu.Lock()
 	var finalImages []provider.Image
 	var idsToDelete []string
+	var idsToInvalidate []string
+
 	for _, img := range s.images {
-		if shouldDelete, exists := badIDs[img.ID]; exists && shouldDelete {
+		if action, exists := badIDs[img.ID]; exists && action != ActionKeep {
 			if !img.IsFavorited {
-				idsToDelete = append(idsToDelete, img.ID)
+				switch action {
+				case ActionDelete:
+					idsToDelete = append(idsToDelete, img.ID)
+				case ActionInvalidate:
+					idsToInvalidate = append(idsToInvalidate, img.ID)
+				}
 			}
 			delete(s.idSet, img.ID)
 		} else {
@@ -487,7 +504,7 @@ func (s *ImageStore) Sync(limit int, targetFlags map[string]bool, activeQueryIDs
 		finalImages = finalImages[excess:]
 		for _, img := range toPrune {
 			if !img.IsFavorited {
-				idsToDelete = append(idsToDelete, img.ID)
+				idsToDelete = append(idsToDelete, img.ID) // Pruning = Delete
 			}
 			delete(s.idSet, img.ID)
 		}
@@ -510,12 +527,20 @@ func (s *ImageStore) Sync(limit int, targetFlags map[string]bool, activeQueryIDs
 	s.scheduleSaveLocked()
 	s.mu.Unlock()
 
+	// Async Cleanup
 	if len(idsToDelete) > 0 {
 		go func(ids []string) {
 			for _, id := range ids {
 				_ = s.fm.DeepDelete(id)
 			}
 		}(idsToDelete)
+	}
+	if len(idsToInvalidate) > 0 {
+		go func(ids []string) {
+			for _, id := range ids {
+				_ = s.fm.DeleteDerivatives(id)
+			}
+		}(idsToInvalidate)
 	}
 }
 
