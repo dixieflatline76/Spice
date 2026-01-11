@@ -21,46 +21,31 @@ Spice is a minimalist wallpaper manager that brings a continuous stream of delig
 
 ## ✨ Key Features
 
-* **🔗 Browser Companion:** Use our [**Chrome Extension**](https://chromewebstore.google.com/detail/ekodikedjmhnganfcfleabcfohdjkoeb) or [**Firefox Add-on**](https://addons.mozilla.org/en-US/firefox/addon/spice-wallpaper-manager/) to instantly add wallpapers from the web to your desktop.
-  > **Pin the extension to your toolbar.** It will flash when it detects a supported image collection (like Wallhaven or Unsplash). Simply click the Spice icon to send the current view to your desktop! Supports Chrome, Firefox, and Safari with LiveSync technology.
+### 🌎 Infinite Sources
+*   **🔗 Browser Companion:** Use our [**Chrome Extension**](https://chromewebstore.google.com/detail/ekodikedjmhnganfcfleabcfohdjkoeb) or [**Firefox Add-on**](https://addons.mozilla.org/en-US/firefox/addon/spice-wallpaper-manager/) to seamlessly send any image from the web to your desktop.
+*   **🏛️ The Museum Experience:** Turn your desk into a gallery with 4K+ Open Access masterpieces from **The Met** and **Art Institute of Chicago**.
+*   **📸 Native Integrations:** One-click access to **Wallhaven**, **Pexels**, and **Wikimedia Commons**.
+*   **☁️ Google Photos:** Securely browse and cycle your personal cloud albums.
+*   **❤️ Local Favorites:** Build your own curated collection that works offline.
 
-* **� Automated Inspiration:** Spice handles the heavy lifting—fetching, caching, and cycling wallpapers based on your preferences so you always have something new to look at.
+### 🧠 Smart Technology
+*   **📏 Smart Fit 2.0:**
+    *   **Quality Mode (Strict):** Ensures perfect composition by rejecting images that don't fit your screen, unless a clear face is detected.
+    *   **Flexibility Mode:** Accepts high-res images with a "Safe Fallback" for ultrawide monitors.
+    *   **Face Boost:** Ensures people are perfectly framed.
+*   **⚡ Ultra-Responsive:** Engineered for zero-lag performance, ensuring the UI stays buttery smooth even while downloading heavy 4K content.
+*   **⚙️ Tabbed Preferences:** Manage dozens of sources easily with our new organized settings tabs (**Online**, **Local**, **Museum**, **AI**).
 
-* **� Wallhaven Integration:** Our original and primary source! Access the vast library of **Wallhaven.cc** with full support for API keys, NSFW filters, and your private collections (Favorites).
-
-* **📸 Native Pexels Integration:** Browse **Pexels** to access millions of professional, high-quality photos.
-
-* **🖼️ Google Photos:** Connect your personal cloud! Securely browse and select your favorite albums or photos from your **Google Photos** library using the native Google Photos Picker.
-  > [!NOTE]
-  > **Google Photos is currently in "Test Mode".** To use this feature, you must be added as a beta tester. Please [**Open a GitHub Issue**](https://github.com/dixieflatline76/Spice/issues) or [**Start a Discussion**](https://github.com/dixieflatline76/Spice/discussions) with your request to be added!
- 
-* **❤️ Local Favorites:** Love a wallpaper? Mark it as a favorite to save a permanent local copy. You can then switch to your "Favorite Images" collection to cycle exclusively through your best picks.
-  > **Tip:** Selected "Favorite Images" as your source? Click the **"Source: Favorites"** text in the menu to instantly open your local favorites folder in Finder/Explorer.
-
-* **🏛️ The Museum Experience:** Turn your desktop into a gallery. Deep integration with **The Metropolitan Museum of Art** and **Art Institute of Chicago** offers typically 4K+ Open Access masterpieces. Features a specialized "Museum UI" with location context and license details.
-
-*   **📏 Smart Fit with Face Detection:** Never worry about bad crops again.
-  *   **Quality Mode (Strict):** Rejects images that don't match your aspect ratio, unless a high-confidence face is detected ("Face Rescue"), ensuring you only get perfect compositions.
-  *   **Flexibility Mode:** Accepts a wider range of images. Includes a "Safety Fallback" that automatically centers 4:3 images on widescreen displays to avoid awkward crops of feet or ground textures.
-  *   **Face Boost:** Ensures people are always perfectly framed—no more chopped-off heads!
-
-*   **⚙️ Tabbed Preferences:** A completely redesigned settings panel organizes your providers into **Online**, **Local**, **Museum**, and **AI** tabs, making it easy to manage your growing collection of sources.
-
-*   **⚡ Ultra-Responsive:** Built with advanced concurrency patterns and "Debounced Persistence" to ensure the UI stays buttery smooth, even when managing large collections or downloading in the background.
-
-* **⏯️ Pause & Resume:** Found a wallpaper you absolutely love? Simply **Pause** the rotation to keep it for as long as you want, then **Resume** when you're ready for something new.
-
-
-* **⌨️ Global Hotkeys:** Control Spice instantly from anywhere:
-  * **Next / Previous:** `Ctrl + Alt + Right/Left` (Windows) / `Cmd + Opt + Right/Left` (macOS)
-  * **Favorite:** `Ctrl + Alt + Up` / `Cmd + Opt + Up` (Strict Add)
-  * **Trash/Block:** `Ctrl + Alt + Down` / `Cmd + Opt + Down`
-  * **Pause/Resume:** `Ctrl + Alt + P` / `Cmd + Opt + P`
-  * **Preferences:** `Ctrl + Alt + O` / `Cmd + Opt + O`
-
-* **🏷️ Enhanced Attribution:** Know the artist! Spice displays the real uploader or photographer name directly in the tray menu, updating *instantly* with every wallpaper change.
-
-* **⛔ Blocklist:** Don't like a wallpaper? Trash it with a hotkey or click, and Spice will block it forever.
+### 🎮 Control & Experience
+*   **⌨️ Global Hotkeys:** Control Spice instantly from anywhere:
+    *   **Next / Previous:** `Ctrl + Alt + Right/Left` (Windows) / `Cmd + Opt + Right/Left` (macOS)
+    *   **Favorite:** `Ctrl + Alt + Up` / `Cmd + Opt + Up` (Strict Add)
+    *   **Trash/Block:** `Ctrl + Alt + Down` / `Cmd + Opt + Down`
+    *   **Pause/Resume:** `Ctrl + Alt + P` / `Cmd + Opt + P`
+    *   **Preferences:** `Ctrl + Alt + O` / `Cmd + Opt + O`
+*   **🏷️ Instant Attribution:** See the artist/photographer name via the tray menu in real-time.
+*   **⏯️ Pause & Resume:** Hold onto a wallpaper you love, then resume the rotation when ready.
+*   **⛔ Blocklist:** Trash a wallpaper once, and it's gone forever.
 
 ## Developers
 
@@ -108,7 +93,7 @@ We have big plans for Spice!
 
 * **Multi-Monitor Support:** Bringing Spice to all your screens, not just the main one.
 * **Linux & Intel Mac Support:** While we currently focus on Apple Silicon (arm64), we plan to expand our official builds to Intel Macs and Linux.
-* **More Providers:** Adding support for other awesome sources like **NASA Astronomy Picture of the Day** and **Bing Daily**.
+* **More Providers:** Adding support for other wallpaper sources like **Pixabay** and **The Met Open Access**.
 * **Local Collections:** Point Spice to any folder on your computer to use your existing wallpaper library.
 
 ## ⚠️ Known Limitations
