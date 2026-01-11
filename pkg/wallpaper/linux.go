@@ -27,8 +27,8 @@ func getOS() OS {
 	return &linuxOS{}
 }
 
-// setWallpaper sets the desktop wallpaper on Linux, supporting X11 and some Wayland compositors.
-func (l *linuxOS) setWallpaper(imagePath string) error {
+// SetWallpaper sets the desktop wallpaper on Linux, supporting X11 and some Wayland compositors.
+func (l *linuxOS) SetWallpaper(imagePath string) error {
 	desktopEnv := os.Getenv("XDG_CURRENT_DESKTOP")
 	if desktopEnv == "" {
 		desktopEnv = os.Getenv("DESKTOP_SESSION")
@@ -59,8 +59,8 @@ func (l *linuxOS) setWallpaper(imagePath string) error {
 	}
 }
 
-// getDesktopDimension returns the desktop dimensions on Linux.
-func (l *linuxOS) getDesktopDimension() (int, int, error) {
+// GetDesktopDimension returns the desktop dimensions on Linux.
+func (l *linuxOS) GetDesktopDimension() (int, int, error) {
 	return sysinfo.GetScreenDimensions()
 }
 

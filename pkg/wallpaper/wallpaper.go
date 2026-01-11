@@ -20,7 +20,6 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/theme"
-	"github.com/disintegration/imaging"
 	"github.com/dixieflatline76/Spice/asset"
 	"github.com/dixieflatline76/Spice/config"
 	"github.com/dixieflatline76/Spice/pkg/provider"
@@ -31,9 +30,10 @@ import (
 )
 
 // OS interface defines the operating system specific operations.
+// OS interface defines the operating system specific operations.
 type OS interface {
-	getDesktopDimension() (int, int, error)
-	setWallpaper(path string) error
+	GetDesktopDimension() (int, int, error)
+	SetWallpaper(path string) error
 }
 
 // ImageProcessor interface defines the image processing operations.
@@ -141,16 +141,16 @@ func getPlugin() *Plugin {
 		store := NewImageStore()
 
 		// Initialize the wallpaper service
+		// Note: cfgInstance is not available at this stage in the current code structure.
+		// The cfg field and imgProcessor's config will be set in the Init method.
 		wpInstance = &Plugin{
 			os: currentOS, // Initialize with right OS
-			imgProcessor: &smartImageProcessor{
-				os:              currentOS,
-				aspectThreshold: 0.9,
-				resampler:       imaging.Lanczos,
-				pigo:            pigoInstance,
-				config:          nil, // Will be set in Init
-			},
-			cfg:        nil,
+			imgProcessor: NewSmartImageProcessor(
+				currentOS,
+				nil, // cfgInstance is not available here, will be set in Init
+				pigoInstance,
+			),
+			cfg:        nil, // cfgInstance is not available here, will be set in Init
 			httpClient: robustClient,
 
 			downloadMutex:       sync.RWMutex{},
@@ -220,7 +220,7 @@ func (wp *Plugin) Init(manager ui.PluginManager) {
 	wp.store.SetDebounceDuration(1 * time.Second)
 
 	// Inject config into smartImageProcessor
-	if sip, ok := wp.imgProcessor.(*smartImageProcessor); ok {
+	if sip, ok := wp.imgProcessor.(*SmartImageProcessor); ok {
 		sip.config = wp.cfg
 	}
 
@@ -430,7 +430,7 @@ func (wp *Plugin) getWallhavenURL(apiURL string) *url.URL {
 
 	q := url.Query()
 	if !q.Has("resolutions") && !q.Has("atleast") {
-		if width, height, err := wp.os.getDesktopDimension(); err == nil {
+		if width, height, err := wp.os.GetDesktopDimension(); err == nil {
 			q.Set("atleast", fmt.Sprintf("%dx%d", width, height))
 		}
 	}
@@ -516,7 +516,7 @@ func (wp *Plugin) applyWallpaper(img provider.Image) {
 	// log.Debugf("Applying Wallpaper: ID=%s, Provider=%s, Path=%s", img.ID, img.Provider, img.FilePath)
 
 	osStart := time.Now()
-	if err := wp.os.setWallpaper(img.FilePath); err != nil {
+	if err := wp.os.SetWallpaper(img.FilePath); err != nil {
 		log.Printf("failed to set wallpaper: %v", err)
 		// Rollback UI and state to previous image
 		wp.currentImage = prevImage
@@ -1104,7 +1104,7 @@ func (wp *Plugin) produceJobsForURL(ctx context.Context, query ImageQuery, page 
 
 	// Resolution check
 	if rap, ok := downloadProvider.(provider.ResolutionAwareProvider); ok {
-		width, height, err := wp.os.getDesktopDimension()
+		width, height, err := wp.os.GetDesktopDimension()
 		if err == nil {
 			apiURL = rap.WithResolution(apiURL, width, height)
 		}
@@ -1154,9 +1154,13 @@ func (wp *Plugin) RefreshImagesAndPulse() {
 	go func() {
 		// Strict Sync: Prune inactive/deleted queries before fetching new ones.
 		// This ensures that "Apply" button or Manual Refresh immediately cleans up the cache.
+		mode := wp.cfg.GetSmartFitMode()
 		targetFlags := map[string]bool{
-			"SmartFit": wp.cfg.GetSmartFit(),
-			"FaceCrop": wp.cfg.GetFaceCropEnabled(),
+			"SmartFit":       wp.cfg.GetSmartFit(),
+			"FitFlexibility": mode == SmartFitAggressive,
+			"FitQuality":     mode == SmartFitNormal,
+			"FaceCrop":       wp.cfg.GetFaceCropEnabled(),
+			"FaceBoost":      wp.cfg.GetFaceBoostEnabled(),
 		}
 		wp.store.Sync(int(wp.cfg.GetCacheSize().Size()), targetFlags, wp.cfg.GetActiveQueryIDs())
 

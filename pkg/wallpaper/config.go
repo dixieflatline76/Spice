@@ -840,6 +840,62 @@ func (c *Config) GetFaceCropEnabled() bool {
 	return c.BoolWithFallback(FaceCropPrefKey, false)
 }
 
+// SetFaceBoostStrength sets the face boost strength preference (0-2).
+func (c *Config) SetFaceBoostStrength(strength int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.SetInt(FaceBoostStrengthPrefKey, strength)
+}
+
+// GetFaceBoostStrength returns the face boost strength preference.
+func (c *Config) GetFaceBoostStrength() int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.IntWithFallback(FaceBoostStrengthPrefKey, 0)
+}
+
+// SetFaceDetectMinSizePct sets the face detection minimum size percentage (1-100).
+func (c *Config) SetFaceDetectMinSizePct(pct int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.SetInt(FaceDetectMinSizePctPrefKey, pct)
+}
+
+// GetFaceDetectMinSizePct returns the face detection minimum size percentage.
+func (c *Config) GetFaceDetectMinSizePct() int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.IntWithFallback(FaceDetectMinSizePctPrefKey, 1) // Default 1% (Deep Tuned 2026-01-11)
+}
+
+// SetFaceDetectConfidence sets the face detection confidence threshold.
+func (c *Config) SetFaceDetectConfidence(conf float64) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.SetFloat(FaceDetectConfPrefKey, conf)
+}
+
+// GetFaceDetectConfidence returns the face detection confidence threshold.
+func (c *Config) GetFaceDetectConfidence() float64 {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.FloatWithFallback(FaceDetectConfPrefKey, 10.0) // Default 10.0 (High Precision 2026-01-11)
+}
+
+// SetFaceDetectShiftFactor sets the face detection shift factor (stride).
+func (c *Config) SetFaceDetectShiftFactor(shift float64) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.SetFloat(FaceDetectShiftPrefKey, shift)
+}
+
+// GetFaceDetectShiftFactor returns the face detection shift factor.
+func (c *Config) GetFaceDetectShiftFactor() float64 {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.FloatWithFallback(FaceDetectShiftPrefKey, 0.1) // Default 0.1 (Standard Pigo)
+}
+
 // GetAssetManager returns the asset manager
 func (c *Config) GetAssetManager() *asset.Manager {
 	return c.assetMgr
@@ -852,11 +908,13 @@ func (c *Config) SetUnlockAspectRatio(enabled bool) {
 	c.SetBool("UnlockAspectRatio", enabled)
 }
 
+// Preference keys for mode (internal to config.go for now or move to const.go)
+
 // SetSmartFitMode sets the smart fit mode.
 func (c *Config) SetSmartFitMode(mode SmartFitMode) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.SetInt("SmartFitMode", int(mode))
+	c.SetInt(SmartFitModePrefKey, int(mode))
 	// Sync legacy flags for backward compatibility if needed? No, let's just stick to the new pref.
 }
 
@@ -867,13 +925,13 @@ func (c *Config) GetSmartFitMode() SmartFitMode {
 
 	// Check if the new preference is set (check if key exists? Fyne prefs don't easily allow "exists" check without fallback)
 	// We use -1 as a sentinel for "not set"
-	val := c.IntWithFallback("SmartFitMode", -1)
+	val := c.IntWithFallback(SmartFitModePrefKey, -1)
 	if val != -1 {
 		return SmartFitMode(val)
 	}
 
-	// Migration Logic
-	smartFit := c.BoolWithFallback("SmartFit", true) // Default was true in code? Or false? Checked UI: InitialValue: wp.cfg.GetSmartFit(). Default in BoolWithFallback usually determines.
+	// Migration Logic: Use the central SmartFitPrefKey constant
+	smartFit := c.BoolWithFallback(SmartFitPrefKey, true)
 	// Let's assume default "On" as per user experience.
 
 	if !smartFit {

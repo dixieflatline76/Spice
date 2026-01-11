@@ -305,7 +305,7 @@ func TestDownloadAllImages(t *testing.T) {
 
 	// Expectations
 	mockPM.On("NotifyUser", mock.Anything, mock.Anything).Return()
-	mockOS.On("getDesktopDimension").Return(1920, 1080, nil)
+	mockOS.On("GetDesktopDimension").Return(1920, 1080, nil)
 
 	// Run
 	wp.downloadAllImages(nil)
@@ -425,7 +425,7 @@ func TestDownloadAllImages_EnrichmentFailure(t *testing.T) {
 	wp.providers["MockProvider"] = mockProvider
 
 	mockPM.On("NotifyUser", mock.Anything, mock.Anything).Return()
-	mockOS.On("getDesktopDimension").Return(1920, 1080, nil)
+	mockOS.On("GetDesktopDimension").Return(1920, 1080, nil)
 
 	// Run
 	wp.downloadAllImages(nil)
@@ -510,7 +510,7 @@ func TestNavigation(t *testing.T) {
 	// Store.Add appends.
 
 	// Mock OS setWallpaper
-	mockOS.On("setWallpaper", mock.Anything).Return(nil)
+	mockOS.On("SetWallpaper", mock.Anything).Return(nil)
 
 	// Expect NotifyUser when setting shuffle
 	// mockPM.On("NotifyUser", "Wallpaper Shuffling", "Disabled").Return()
@@ -538,7 +538,7 @@ func TestNavigation(t *testing.T) {
 	// Check current image ID.
 	// Store defaults to -1 index. First Next() -> 0.
 	assert.Equal(t, "img1", wp.currentImage.ID)
-	mockOS.AssertCalled(t, "setWallpaper", mock.MatchedBy(func(path string) bool {
+	mockOS.AssertCalled(t, "SetWallpaper", mock.MatchedBy(func(path string) bool {
 		return strings.HasSuffix(path, "img1.jpg")
 	}))
 
@@ -687,7 +687,7 @@ func TestDeleteCurrentImage_PersistsBlock(t *testing.T) {
 	wp.currentIndex = 0
 
 	// Mock OS for setWallpaper (since Delete calls SetNextWallpaper)
-	mockOS.On("setWallpaper", mock.Anything).Return(nil)
+	mockOS.On("SetWallpaper", mock.Anything).Return(nil)
 
 	// Execute Delete
 	wp.DeleteCurrentImage()
