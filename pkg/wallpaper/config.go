@@ -37,8 +37,9 @@ type Config struct {
 	userid          string
 	mu              sync.RWMutex // Mutex for thread-safe access
 	// Advanced
-	LogLevel                string `json:"logLevel"`
-	MaxConcurrentProcessors int    `json:"maxConcurrentProcessors"`
+	LogLevel                string       `json:"logLevel"`
+	MaxConcurrentProcessors int          `json:"maxConcurrentProcessors"`
+	Tuning                  TuningConfig `json:"tuning"`
 
 	// Callbacks
 	QueryRemovedCallback func(queryID string) `json:"-"`
@@ -119,6 +120,7 @@ func GetConfig(p fyne.Preferences) *Config {
 			assetMgr:        asset.NewManager(),
 			AvoidSet:        make(map[string]bool),
 			userid:          u.Uid,
+			Tuning:          DefaultTuningConfig(),
 		}
 		// Load config from file
 		if err := cfgInstance.loadFromPrefs(); err != nil {
@@ -838,62 +840,6 @@ func (c *Config) GetFaceCropEnabled() bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.BoolWithFallback(FaceCropPrefKey, false)
-}
-
-// SetFaceBoostStrength sets the face boost strength preference (0-2).
-func (c *Config) SetFaceBoostStrength(strength int) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.SetInt(FaceBoostStrengthPrefKey, strength)
-}
-
-// GetFaceBoostStrength returns the face boost strength preference.
-func (c *Config) GetFaceBoostStrength() int {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.IntWithFallback(FaceBoostStrengthPrefKey, 0)
-}
-
-// SetFaceDetectMinSizePct sets the face detection minimum size percentage (1-100).
-func (c *Config) SetFaceDetectMinSizePct(pct int) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.SetInt(FaceDetectMinSizePctPrefKey, pct)
-}
-
-// GetFaceDetectMinSizePct returns the face detection minimum size percentage.
-func (c *Config) GetFaceDetectMinSizePct() int {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.IntWithFallback(FaceDetectMinSizePctPrefKey, 1) // Default 1% (Deep Tuned 2026-01-11)
-}
-
-// SetFaceDetectConfidence sets the face detection confidence threshold.
-func (c *Config) SetFaceDetectConfidence(conf float64) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.SetFloat(FaceDetectConfPrefKey, conf)
-}
-
-// GetFaceDetectConfidence returns the face detection confidence threshold.
-func (c *Config) GetFaceDetectConfidence() float64 {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.FloatWithFallback(FaceDetectConfPrefKey, 10.0) // Default 10.0 (High Precision 2026-01-11)
-}
-
-// SetFaceDetectShiftFactor sets the face detection shift factor (stride).
-func (c *Config) SetFaceDetectShiftFactor(shift float64) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.SetFloat(FaceDetectShiftPrefKey, shift)
-}
-
-// GetFaceDetectShiftFactor returns the face detection shift factor.
-func (c *Config) GetFaceDetectShiftFactor() float64 {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.FloatWithFallback(FaceDetectShiftPrefKey, 0.1) // Default 0.1 (Standard Pigo)
 }
 
 // GetAssetManager returns the asset manager

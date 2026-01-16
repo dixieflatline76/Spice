@@ -2,12 +2,8 @@
 VERSION := $(shell sh -c "cat version.txt" 2> /dev/null || cmd /c "type version.txt")
 
 # --- Build flags ---
-# --- Build flags ---
-LDFLAGS_COMMON := -X main.version=$(VERSION) \
-	-X github.com/dixieflatline76/Spice/pkg/wallpaper/providers/unsplash.UnsplashClientID=$(UNSPLASH_CLIENT_ID) \
-	-X github.com/dixieflatline76/Spice/pkg/wallpaper/providers/unsplash.UnsplashClientSecret=$(UNSPLASH_CLIENT_SECRET) \
-	-X github.com/dixieflatline76/Spice/pkg/wallpaper/providers/googlephotos.GoogleClientID=$(GOOGLE_PHOTOS_CLIENT_ID) \
-	-X github.com/dixieflatline76/Spice/pkg/wallpaper/providers/googlephotos.GoogleClientSecret=$(GOOGLE_PHOTOS_CLIENT_SECRET)
+LDFLAGS_SECRETS := $(shell go run cmd/util/load_secrets/main.go)
+LDFLAGS_COMMON := -X main.version=$(VERSION) $(LDFLAGS_SECRETS)
 
 # --- Extension Utils ---
 sync-extension:

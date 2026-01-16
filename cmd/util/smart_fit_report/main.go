@@ -218,13 +218,17 @@ func main() {
 			Mode      wallpaper.SmartFitMode
 			FaceCrop  bool
 			FaceBoost bool
-			BoostStr  int
+			MinSize   int
+			Shift     float64
 		}{
-			{"Standard (Quality)", true, wallpaper.SmartFitNormal, false, false, 0},
-			{"Standard (Flexibility)", true, wallpaper.SmartFitAggressive, false, false, 0},
-			{"Face Crop (Flex)", true, wallpaper.SmartFitAggressive, true, false, 0},
-			{"Face Boost (S0) (Flex)", true, wallpaper.SmartFitAggressive, false, true, 0},
+			{"Standard (Quality)", true, wallpaper.SmartFitNormal, false, false, 1, 0.1},
+			{"Standard (Flexibility)", true, wallpaper.SmartFitAggressive, false, false, 1, 0.1},
+			{"Face Crop (Flex)", true, wallpaper.SmartFitAggressive, true, false, 1, 0.1},
+			{"Face Boost (S0) (Flex)", true, wallpaper.SmartFitAggressive, false, true, 1, 0.1},
 		}
+
+		// Get config instance to modify tuning params directly
+		cfg := wallpaper.GetConfig(mockPrefs)
 
 		for _, m := range modes {
 			// Configure Mock Preferences
@@ -232,13 +236,10 @@ func main() {
 			mockPrefs.SetInt(wallpaper.SmartFitModePrefKey, int(m.Mode))
 			mockPrefs.SetBool(wallpaper.FaceCropPrefKey, m.FaceCrop)
 			mockPrefs.SetBool(wallpaper.FaceBoostPrefKey, m.FaceBoost)
-			mockPrefs.SetInt(wallpaper.FaceBoostStrengthPrefKey, m.BoostStr)
 
-			// Note: Using application defaults (1% MinSize, 5.0 Conf, 0.1 Shift)
-			// Explicitly remove any overrides to ensure we test defaults
-			mockPrefs.RemoveValue(wallpaper.FaceDetectMinSizePctPrefKey)
-			mockPrefs.RemoveValue(wallpaper.FaceDetectConfPrefKey)
-			mockPrefs.RemoveValue(wallpaper.FaceDetectShiftPrefKey)
+			// Set Specific Test Params directly on TuningConfig
+			cfg.Tuning.FaceDetectMinSizePct = m.MinSize
+			cfg.Tuning.FaceDetectShift = m.Shift
 
 			// Process
 			resImg, err := processor.FitImage(ctx, srcImg)

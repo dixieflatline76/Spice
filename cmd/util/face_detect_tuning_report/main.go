@@ -158,7 +158,7 @@ func main() {
 	ctx := context.Background()
 
 	// 3. Scan test_assets/tuning_images for test images
-	sourceDir := filepath.Join("test_assets", "tuning_images")
+	sourceDir := filepath.Join("pkg", "wallpaper", "testdata", "regressions")
 	tmpFiles, err := os.ReadDir(sourceDir)
 	if err != nil {
 		log.Fatalf("Failed to read source directory %s: %v", sourceDir, err)
@@ -218,18 +218,19 @@ func main() {
 			Mode      wallpaper.SmartFitMode
 			FaceCrop  bool
 			FaceBoost bool
-			BoostStr  int
 			MinSize   int
-			Conf      float64
 			Shift     float64
 		}{
-			{"Standard (Quality)", true, wallpaper.SmartFitNormal, false, false, 0, 3, 5.0, 0.1},
-			{"Standard (Flexibility)", true, wallpaper.SmartFitAggressive, false, false, 0, 3, 5.0, 0.1},
-			{"Face Boost (S0) (Cur Sens 3pct-5.0-0.1)", true, wallpaper.SmartFitAggressive, false, true, 0, 3, 5.0, 0.1},
-			{"Face Boost (S0) (High Density 3pct-5.0-0.05)", true, wallpaper.SmartFitAggressive, false, true, 0, 3, 5.0, 0.05},
-			{"Face Boost (S0) (Small Face 1pct-3.0-0.1)", true, wallpaper.SmartFitAggressive, false, true, 0, 1, 3.0, 0.1},
-			{"Face Boost (S0) (Kitchen Sink 1pct-1.0-0.05)", true, wallpaper.SmartFitAggressive, false, true, 0, 1, 1.0, 0.05},
+			{"Standard (Quality)", true, wallpaper.SmartFitNormal, false, false, 3, 0.1},
+			{"Standard (Flexibility)", true, wallpaper.SmartFitAggressive, false, false, 3, 0.1},
+			{"Face Boost (S0) (Cur Sens 3pct-5.0-0.1)", true, wallpaper.SmartFitAggressive, false, true, 3, 0.1},
+			{"Face Boost (S0) (High Density 3pct-5.0-0.05)", true, wallpaper.SmartFitAggressive, false, true, 3, 0.05},
+			{"Face Boost (S0) (Small Face 1pct-3.0-0.1)", true, wallpaper.SmartFitAggressive, false, true, 1, 0.1},
+			{"Face Boost (S0) (Kitchen Sink 1pct-1.0-0.05)", true, wallpaper.SmartFitAggressive, false, true, 1, 0.05},
 		}
+
+		// Get config instance
+		cfg := wallpaper.GetConfig(mockPrefs)
 
 		for _, m := range modes {
 			// Configure Mock Preferences
@@ -237,12 +238,10 @@ func main() {
 			mockPrefs.SetInt(wallpaper.SmartFitModePrefKey, int(m.Mode))
 			mockPrefs.SetBool(wallpaper.FaceCropPrefKey, m.FaceCrop)
 			mockPrefs.SetBool(wallpaper.FaceBoostPrefKey, m.FaceBoost)
-			mockPrefs.SetInt(wallpaper.FaceBoostStrengthPrefKey, m.BoostStr)
 
-			// Set Specific Test Params
-			mockPrefs.SetInt(wallpaper.FaceDetectMinSizePctPrefKey, m.MinSize)
-			mockPrefs.SetFloat(wallpaper.FaceDetectConfPrefKey, m.Conf)
-			mockPrefs.SetFloat(wallpaper.FaceDetectShiftPrefKey, m.Shift)
+			// Set Specific Test Params directly
+			cfg.Tuning.FaceDetectMinSizePct = m.MinSize
+			cfg.Tuning.FaceDetectShift = m.Shift
 
 			// Process
 			resImg, err := processor.FitImage(ctx, srcImg)

@@ -11,20 +11,16 @@ const pluginName = "wallpaper"
 
 // Preference keys for wallpaper
 const (
-	pluginPrefix                = pluginName + "_"
-	SmartFitPrefKey             = pluginPrefix + "smart_fit_key"            // SmartFitPrefKey is used to set and retrieve the boolean flag for wallpaper smart fit
-	SmartFitModePrefKey         = pluginPrefix + "smart_fit_mode_key"       // SmartFitModePrefKey is used to set and retrieve the int smart fit mode
-	CacheSizePrefKey            = pluginPrefix + "cache_size_key"           // WallpaperCacheSizePrefKey is used to set and retrieve the int wallpaper cache size
-	WallpaperChgFreqPrefKey     = pluginPrefix + "wallpaper_chg_freq_key"   // WallpaperChgFreqPrefKey is used to set and retrieve the int change frequency for wallpapers
-	ImgShufflePrefKey           = pluginPrefix + "img_shuffle_key"          // ImgShufflePrefKey is used to set and retrieve the boolean flag for wallpaper image shuffle
-	ChgImgOnStartPrefKey        = pluginPrefix + "chg_img_on_start_key"     // ChgImgOnStartPrefKey is used to set and retrieve the boolean flag for changing wallpaper on startup
-	NightlyRefreshPrefKey       = pluginPrefix + "nightly_refresh_key"      // NightlyRefreshPrefKey is used to set and retrieve the boolean flag for nightly refresh
-	FaceBoostPrefKey            = pluginPrefix + "face_boost_key"           // FaceBoostPrefKey is used to set and retrieve the boolean flag for face boost
-	FaceCropPrefKey             = pluginPrefix + "face_crop_key"            // FaceCropPrefKey is used to set and retrieve the boolean flag for face crop
-	FaceBoostStrengthPrefKey    = pluginPrefix + "face_boost_strength_key"  // FaceBoostStrengthPrefKey is used to set the strength of the face boost (0-2)
-	FaceDetectMinSizePctPrefKey = pluginPrefix + "face_detect_min_size_key" // FaceDetectMinSizePctPrefKey is used to set the minimum face size as a percentage of the image dimension
-	FaceDetectConfPrefKey       = pluginPrefix + "face_detect_conf_key"     // FaceDetectConfPrefKey is used to set the face detection confidence threshold
-	FaceDetectShiftPrefKey      = pluginPrefix + "face_detect_shift_key"    // FaceDetectShiftPrefKey is used to set the face detection shift factor
+	pluginPrefix            = pluginName + "_"
+	SmartFitPrefKey         = pluginPrefix + "smart_fit_key"          // SmartFitPrefKey is used to set and retrieve the boolean flag for wallpaper smart fit
+	SmartFitModePrefKey     = pluginPrefix + "smart_fit_mode_key"     // SmartFitModePrefKey is used to set and retrieve the int smart fit mode
+	CacheSizePrefKey        = pluginPrefix + "cache_size_key"         // WallpaperCacheSizePrefKey is used to set and retrieve the int wallpaper cache size
+	WallpaperChgFreqPrefKey = pluginPrefix + "wallpaper_chg_freq_key" // WallpaperChgFreqPrefKey is used to set and retrieve the int change frequency for wallpapers
+	ImgShufflePrefKey       = pluginPrefix + "img_shuffle_key"        // ImgShufflePrefKey is used to set and retrieve the boolean flag for wallpaper image shuffle
+	ChgImgOnStartPrefKey    = pluginPrefix + "chg_img_on_start_key"   // ChgImgOnStartPrefKey is used to set and retrieve the boolean flag for changing wallpaper on startup
+	NightlyRefreshPrefKey   = pluginPrefix + "nightly_refresh_key"    // NightlyRefreshPrefKey is used to set and retrieve the boolean flag for nightly refresh
+	FaceBoostPrefKey        = pluginPrefix + "face_boost_key"         // FaceBoostPrefKey is used to set and retrieve the boolean flag for face boost
+	FaceCropPrefKey         = pluginPrefix + "face_crop_key"          // FaceCropPrefKey is used to set and retrieve the boolean flag for face crop
 
 	// Provider keys (Shared)
 	UnsplashTokenPrefKey            = "unsplash_access_token"
