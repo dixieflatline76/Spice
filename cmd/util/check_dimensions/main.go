@@ -11,6 +11,9 @@ import (
 
 func main() {
 	path := "C:/Users/karlk/.gemini/antigravity/brain/e7da35b5-e9bf-4aa4-b763-20f61de16918/uploaded_image_0_1768124775172.jpg"
+	if len(os.Args) > 1 {
+		path = os.Args[1]
+	}
 	f, err := os.Open(path)
 	if err != nil {
 		fmt.Printf("Error opening file: %v\n", err)

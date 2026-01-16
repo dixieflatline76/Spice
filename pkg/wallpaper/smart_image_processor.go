@@ -18,11 +18,10 @@ import (
 
 // SmartImageProcessor is an image processor that uses smart cropping.
 type SmartImageProcessor struct {
-	os              OS
-	aspectThreshold float64                // Image size comparison threshold
-	resampler       imaging.ResampleFilter //moved to struct level
-	pigo            *pigo.Pigo
-	config          *Config
+	os        OS
+	resampler imaging.ResampleFilter //moved to struct level
+	pigo      *pigo.Pigo
+	config    *Config
 	// Diagnostics
 	lastStats FaceDetectionStats
 }
@@ -44,11 +43,10 @@ func (c *SmartImageProcessor) GetLastStats() FaceDetectionStats {
 // NewSmartImageProcessor creates a new processor instance.
 func NewSmartImageProcessor(os OS, config *Config, pigo *pigo.Pigo) *SmartImageProcessor {
 	return &SmartImageProcessor{
-		os:              os,
-		config:          config,
-		pigo:            pigo,
-		aspectThreshold: 0.9,
-		resampler:       imaging.Lanczos,
+		os:        os,
+		config:    config,
+		pigo:      pigo,
+		resampler: imaging.Lanczos,
 	}
 }
 
@@ -95,7 +93,7 @@ func (c *SmartImageProcessor) EncodeImage(ctx context.Context, img image.Image, 
 	case "image/png":
 		err = png.Encode(&buf, img)
 	case "image/jpeg":
-		err = jpeg.Encode(&buf, img, &jpeg.Options{Quality: 95})
+		err = jpeg.Encode(&buf, img, &jpeg.Options{Quality: c.config.Tuning.EncodingQuality})
 	default:
 		return nil, fmt.Errorf("unsupported format: %s", contentType)
 	}
@@ -155,7 +153,7 @@ func (c *SmartImageProcessor) CheckCompatibility(width, height int) error {
 		surplus := math.Min(scaleX, scaleY)
 
 		// Dynamic Formula: Base * Surplus * AggressiveMultiplier (1.9)
-		effectiveThreshold := c.aspectThreshold * surplus * 1.9
+		effectiveThreshold := c.config.Tuning.AspectThreshold * surplus * c.config.Tuning.AggressiveMultiplier
 		log.Debugf("SmartFit [Flexibility]: Check (Surplus: %.2f, DynamicThreshold: %.2f, Diff: %.2f)", surplus, effectiveThreshold, aspectDiff)
 
 		if aspectDiff > effectiveThreshold {
@@ -244,32 +242,34 @@ func (c *SmartImageProcessor) FitImage(ctx context.Context, img image.Image) (im
 	// MODE: QUALITY (SmartFitNormal)
 	if c.config.GetSmartFitMode() == SmartFitNormal {
 		// Strict Aspect Check (0.9)
-		if aspectDiff > c.aspectThreshold {
+		if aspectDiff > c.config.Tuning.AspectThreshold {
 			// RETRY: Check for "Rescue" (Strong Face)
-			if faceFound && faceQ > 20.0 {
-				log.Debugf("SmartFit [Quality]: EXCEPTION! Image preserved despite Aspect Diff %.2f (> %.2f) due to Strong Face (Q=%.1f)", aspectDiff, c.aspectThreshold, faceQ)
+			if faceFound && faceQ > c.config.Tuning.FaceRescueQThreshold {
+				log.Debugf("SmartFit [Quality]: EXCEPTION! Image preserved despite Aspect Diff %.2f (> %.2f) due to Strong Face (Q=%.1f)", aspectDiff, c.config.Tuning.AspectThreshold, faceQ)
 				// Proceed to use the face!
 			} else {
 				// REJECT
-				return nil, fmt.Errorf("quality mode rejected: aspect diff %.2f > %.2f and no strong face (Q>20) to rescue", aspectDiff, c.aspectThreshold)
+				return nil, fmt.Errorf("quality mode rejected: aspect diff %.2f > %.2f and no strong face (Q>%.1f) to rescue", aspectDiff, c.config.Tuning.AspectThreshold, c.config.Tuning.FaceRescueQThreshold)
 			}
 		} else {
-			log.Debugf("SmartFit [Quality]: Accepted (Diff %.2f <= %.2f)", aspectDiff, c.aspectThreshold)
+			log.Debugf("SmartFit [Quality]: Accepted (Diff %.2f <= %.2f)", aspectDiff, c.config.Tuning.AspectThreshold)
 		}
 	}
+
+	// 1.5. Calculate Image Energy (required for both Fallback and Holistic Safety)
+	energy, energyErr := c.calculateImageEnergy(ctx, img)
 
 	// MODE: FLEXIBILITY (SmartFitAggressive)
 	if c.config.GetSmartFitMode() == SmartFitAggressive {
 		// Validation was already done in CheckCompatibility (Dynamic Threshold).
-		// Here we just handle the "Feet Crop" Safety Fallback.
-		// If No Face is found, and image is "Unsafe" (Diff > 0.4), use Center.
-		if !faceFound {
-			safeThreshold := 0.4 // Tuned down from 0.5
-			if aspectDiff > safeThreshold {
-				log.Debugf("SmartFit [Flexibility]: Fallback to Center. Diff %.2f > %.2f (Unsafe for Entropy)", aspectDiff, safeThreshold)
+		// Here we handle the "Dual Safety" Fallback.
+		if !faceFound && energyErr == nil {
+			if energy < c.config.Tuning.MinEnergyThreshold {
+				log.Debugf("SmartFit [Flexibility]: Energy %.4f too low (Flat Image). Fallback to Center.", energy)
 				center := image.Point{X: img.Bounds().Dx() / 2, Y: img.Bounds().Dy() / 2}
 				return c.smartPanAndResize(ctx, img, center, systemWidth, systemHeight)
 			}
+			log.Debugf("SmartFit [Flexibility]: Energy %.4f (Pass). Proceeding to SmartCrop.", energy)
 		}
 	}
 
@@ -282,6 +282,7 @@ func (c *SmartImageProcessor) FitImage(ctx context.Context, img image.Image) (im
 		// Priority: Face Crop (Hard)
 		if c.config.GetFaceCropEnabled() {
 			cropRect := c.cropAroundFace(img.Bounds(), faceBox, systemWidth, systemHeight)
+			log.Debugf("Face Logic: Hard Crop Clean (Rect: %v)", cropRect)
 			type SubImager interface {
 				SubImage(r image.Rectangle) image.Image
 			}
@@ -326,6 +327,40 @@ func (c *SmartImageProcessor) FitImage(ctx context.Context, img image.Image) (im
 		if result.err != nil {
 			return nil, fmt.Errorf("finding best crop: %w", result.err)
 		}
+
+		// 2. Feet Guard (The "Shoe" Fix for Flexibility Mode)
+		if c.config.GetSmartFitMode() == SmartFitAggressive && !faceFound {
+			crop := result.crop
+			imgHeight := img.Bounds().Dy()
+
+			// Legacy Guard: If top edge of crop is below half-way
+			if float64(crop.Min.Y) > (float64(imgHeight) * c.config.Tuning.FeetGuardRatio) {
+				log.Debugf("SmartFit [Flexibility]: Feet Guard Triggered (Legacy Ratio). Fallback to Center.")
+				center := image.Point{X: img.Bounds().Dx() / 2, Y: img.Bounds().Dy() / 2}
+				return c.smartPanAndResize(ctx, img, center, systemWidth, systemHeight)
+			}
+
+			// Slack Guard (v1.6.2.2): Holistic Energy-Aware Check.
+			// We relax the threshold for high-energy images (artistic subjects)
+			// and stay strict for medium/low energy images (likely boring ground).
+			slackY := imgHeight - crop.Dy()
+			if slackY > 0 {
+				topMargin := crop.Min.Y
+
+				threshold := c.config.Tuning.FeetGuardSlackThreshold // 0.8
+				if energy > c.config.Tuning.FeetGuardHighEnergyThreshold {
+					threshold = c.config.Tuning.FeetGuardSlackRelaxed // 0.95
+					log.Debugf("SmartFit [Flexibility]: Relaxing Slack Guard for High Energy (%.4f)", energy)
+				}
+
+				if float64(topMargin) > (float64(slackY) * threshold) {
+					log.Debugf("SmartFit [Flexibility]: Feet Guard Triggered (Slack-Aware). Fallback to Center.")
+					center := image.Point{X: img.Bounds().Dx() / 2, Y: img.Bounds().Dy() / 2}
+					return c.smartPanAndResize(ctx, img, center, systemWidth, systemHeight)
+				}
+			}
+		}
+
 		smartCenter := result.crop.Min.Add(result.crop.Size().Div(2))
 		return c.smartPanAndResize(ctx, img, smartCenter, systemWidth, systemHeight)
 	}
@@ -440,9 +475,9 @@ func (c *SmartImageProcessor) findBestFace(img image.Image) (image.Rectangle, er
 	}
 
 	params := pigo.CascadeParams{
-		MinSize:     int(float64(minDimension) * (float64(c.config.GetFaceDetectMinSizePct()) / 100.0)), // Configurable min size
-		MaxSize:     minDimension,                                                                       // Allow faces up to the full image size
-		ShiftFactor: c.config.GetFaceDetectShiftFactor(),
+		MinSize:     int(float64(minDimension) * (float64(c.config.Tuning.FaceDetectMinSizePct) / 100.0)), // Configurable min size
+		MaxSize:     minDimension,                                                                         // Allow faces up to the full image size
+		ShiftFactor: c.config.Tuning.FaceDetectShift,
 		ScaleFactor: 1.1,
 		ImageParams: pigo.ImageParams{
 			Pixels: pixels,
@@ -455,15 +490,15 @@ func (c *SmartImageProcessor) findBestFace(img image.Image) (image.Rectangle, er
 	dets := c.pigo.RunCascade(params, 0.0)
 
 	// Now, cluster the results
-	dets = c.pigo.ClusterDetections(dets, 0.2) // 0.2 is the IoU threshold
+	dets = c.pigo.ClusterDetections(dets, c.config.Tuning.FaceIoUThreshold) // Centralized threshold
 
 	var bestDet pigo.Detection
 	var maxScore float32 = -1.0
 	found := false
 
-	bottomEdgeThreshold := int(float64(height) * 0.9)
+	bottomEdgeThreshold := int(float64(height) * c.config.Tuning.FaceBottomEdgeThreshold)
 
-	confThreshold := float32(c.config.GetFaceDetectConfidence())
+	confThreshold := float32(c.config.Tuning.FaceDetectConfidence)
 
 	for _, det := range dets {
 		// 1. Confidence Floor: Filter out clear noise (phantom faces/shadows)
@@ -471,9 +506,10 @@ func (c *SmartImageProcessor) findBestFace(img image.Image) (image.Rectangle, er
 			continue
 		}
 
-		// 2. Edge Safety: Discard low-confidence detections in the bottom 10% of the frame.
+		// 2. Edge Safety: Discard low-confidence detections in the bottom section of the frame.
 		// Real subject faces are rarely at the literal bottom edge of a high-quality wallpaper.
-		if det.Row > bottomEdgeThreshold && det.Q < 20.0 {
+		// Holistic (v1.6.2.2): We expand this "danger zone" to the bottom 30% for low-confidence hits.
+		if det.Row > bottomEdgeThreshold && det.Q < c.config.Tuning.FaceBottomEdgeMinQ {
 			log.Debugf("Face Logic: Discarded bottom-edge detection with low confidence (Q: %.2f)", det.Q)
 			continue
 		}
@@ -492,16 +528,9 @@ func (c *SmartImageProcessor) findBestFace(img image.Image) (image.Rectangle, er
 		return image.Rectangle{}, fmt.Errorf("no face found")
 	}
 
-	// Determine boost parameters based on strength (0, 1, 2)
-	// Default is 0 (Standard)
-	strength := c.config.GetFaceBoostStrength()
-
-	scaleFactor := 1.5 // Default (Strength 0)
-	if strength == 1 {
-		scaleFactor = 2.0
-	} else if strength >= 2 {
-		scaleFactor = 2.5
-	}
+	// Determine boost parameters
+	// Strength 0 (Standard) -> 1.5
+	scaleFactor := 1.5
 
 	// Expand the box by ensuring we cover the whole face (forehead, chin, etc.)
 	// pigo often detects just the "core" (eyes/nose/mouth)
@@ -591,4 +620,43 @@ func (c *SmartImageProcessor) smartPanAndResize(ctx context.Context, img image.I
 	}
 
 	return resizedImg, nil
+}
+
+// calculateImageEnergy calculates the standard deviation of luminance (entropy proxy).
+func (c *SmartImageProcessor) calculateImageEnergy(ctx context.Context, img image.Image) (float64, error) {
+	if err := checkContext(ctx); err != nil {
+		return 0, err
+	}
+
+	// Resize to a small thumbnail for performance
+	thumb := imaging.Resize(img, c.config.Tuning.EnergyThumbSize, 0, imaging.Box)
+
+	bounds := thumb.Bounds()
+	width, height := bounds.Dx(), bounds.Dy()
+	var sum, sumSq float64
+	var count float64
+
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			p := thumb.At(x, y)
+			r, g, b, _ := p.RGBA()
+			// Luminance formula (0-1 range)
+			lum := (0.299*float64(r) + 0.587*float64(g) + 0.114*float64(b)) / 65535.0
+
+			sum += lum
+			sumSq += lum * lum
+			count++
+		}
+	}
+
+	if count == 0 {
+		return 0, nil
+	}
+
+	mean := sum / count
+	variance := (sumSq / count) - (mean * mean)
+	if variance < 0 {
+		variance = 0
+	}
+	return math.Sqrt(variance), nil
 }

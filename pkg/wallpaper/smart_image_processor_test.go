@@ -31,10 +31,10 @@ func TestSmartImageProcessor_FitImage(t *testing.T) {
 
 	t.Run("FitImage_Resize", func(t *testing.T) {
 		mockOS := new(MockOS)
+		cfg.Tuning.AspectThreshold = 2.0
 		processor := &SmartImageProcessor{
-			os:              mockOS,
-			config:          cfg,
-			aspectThreshold: 2.0,
+			os:     mockOS,
+			config: cfg,
 		}
 
 		// Desktop: 1920x1080
@@ -54,10 +54,10 @@ func TestSmartImageProcessor_FitImage(t *testing.T) {
 
 	t.Run("FitImage_Crop", func(t *testing.T) {
 		mockOS := new(MockOS)
+		cfg.Tuning.AspectThreshold = 2.0
 		processor := &SmartImageProcessor{
-			os:              mockOS,
-			config:          cfg,
-			aspectThreshold: 2.0,
+			os:     mockOS,
+			config: cfg,
 		}
 
 		// Desktop: 1920x1080 (16:9)
@@ -82,10 +82,10 @@ func TestSmartImageProcessor_FitImage(t *testing.T) {
 	t.Run("FitImage_SmartFitDisabled", func(t *testing.T) {
 		cfg.SetSmartFitMode(SmartFitOff)
 		mockOS := new(MockOS)
+		cfg.Tuning.AspectThreshold = 2.0
 		processor := &SmartImageProcessor{
-			os:              mockOS,
-			config:          cfg,
-			aspectThreshold: 2.0,
+			os:     mockOS,
+			config: cfg,
 		}
 
 		// Input: 100x100
@@ -169,68 +169,99 @@ func TestFaceDetection(t *testing.T) {
 	}
 }
 
-func TestSmartImageProcessor_FitImage_CenterFallback(t *testing.T) {
+func TestSmartImageProcessor_FitImage_Flexibility_DualSafety(t *testing.T) {
 	ResetConfig()
 	prefs := NewMockPreferences()
 	cfg := GetConfig(prefs)
-	// Enable SmartFit Flexible + FaceCrop
 	cfg.SetSmartFitMode(SmartFitAggressive)
-	cfg.SetFaceCropEnabled(true)
 
 	mockOS := new(MockOS)
-	// Hybrid Fallback Test:
-	// Input: 1024x833 (Aspect 1.23)
-	// Target: 160x90 (Aspect 1.77)
-	// Diff: |1.77 - 1.23| = 0.54
-	// Limit: 0.5
-	// Result: 0.54 > 0.5 -> UNSAFE -> Should use Center Crop (160x90).
 	mockOS.On("GetDesktopDimension").Return(160, 90, nil)
 
+	cfg.Tuning.AspectThreshold = 2.0
 	processor := &SmartImageProcessor{
-		os:              mockOS,
-		config:          cfg,
-		aspectThreshold: 2.0,
-		resampler:       imaging.Lanczos,
-		// No pigo model loaded -> Simulates "No Face Found" OR "Model Missing"
-		// If pigo is nil, logic might skip straight to fallback.
-		// To simulate "No Face Found" with pigo loaded, we need a valid pigo instance but an image with no face.
-		// However, if pigo is nil, it logs "Face Logic: Enabled but pigo model not loaded" and falls through to SmartAnalyzer?
-		// Wait, let's check code.
-		// Line 312: } else if ... && c.pigo == nil { log... }
-		// Fallback to smartcrop analyzer := ...
-
-		// THE CENTER FALLBACK IS INSIDE THE `if c.pigo != nil` BLOCK.
-		// So we MUST HAVE Pigo loaded to test the fallback!
+		os:        mockOS,
+		config:    cfg,
+		resampler: imaging.Lanczos,
 	}
 
-	// Load dummy pigo (or use the one from TestFaceDetection if available, otherwise skip)
-	// For unit test without asset file, we can't easily load pigo.
-	// But we can trick it? No, `processor.pigo` is `*pigo.Pigo`.
-	// We need to load it.
+	t.Run("EnergyCheck_LowEnergy_CenterFallback", func(t *testing.T) {
+		// Create a very flat image (solid grey)
+		img := image.NewRGBA(image.Rect(0, 0, 1000, 1000))
+		draw.Draw(img, img.Bounds(), &image.Uniform{color.RGBA{128, 128, 128, 255}}, image.Point{}, draw.Src)
 
-	am := asset.NewManager()
-	modelData, err := am.GetModel("facefinder")
-	if err != nil {
-		t.Skip("Facefinder model not found, skipping center fallback test")
-	}
-	p := pigo.NewPigo()
-	pigoInstance, _ := p.Unpack(modelData)
-	processor.pigo = pigoInstance
+		outputImg, err := processor.FitImage(context.Background(), img)
+		assert.NoError(t, err)
+		require.NotNil(t, outputImg)
+		assert.Equal(t, 160, outputImg.Bounds().Dx())
+		assert.Equal(t, 90, outputImg.Bounds().Dy())
+	})
 
-	// Input: 1024x833 (Subject image from user report)
-	// Create a red image
-	inputImg := createTestImage(1024, 833)
+	t.Run("FeetGuard_BottomHugging_CenterFallback", func(t *testing.T) {
+		// Create an image with high entropy ONLY at the bottom
+		img := image.NewRGBA(image.Rect(0, 0, 1000, 2000))
+		// Top part: Flat white
+		draw.Draw(img, image.Rect(0, 0, 1000, 1500), &image.Uniform{color.White}, image.Point{}, draw.Src)
+		// Bottom part: High entropy (noise) to attract SmartCrop
+		for y := 1500; y < 2000; y++ {
+			for x := 0; x < 1000; x++ {
+				img.Set(x, y, color.RGBA{uint8(x % 255), uint8(y % 255), uint8((x + y) % 255), 255})
+			}
+		}
 
-	// Run FitImage
-	outputImg, err := processor.FitImage(context.Background(), inputImg)
-	require.NoError(t, err)
-	require.NotNil(t, outputImg)
+		outputImg, err := processor.FitImage(context.Background(), img)
+		assert.NoError(t, err)
+		require.NotNil(t, outputImg)
+		// Because it's tagged as a "Feet Crop" (Bottom half), it should fallback to Center.
+		assert.Equal(t, 160, outputImg.Bounds().Dx())
+		assert.Equal(t, 90, outputImg.Bounds().Dy())
+	})
 
-	// Expectation:
-	// 1. Accepted (Not rejected)
-	// 2. Output size matches desktop (160x90).
-	assert.Equal(t, 160, outputImg.Bounds().Dx())
-	assert.Equal(t, 90, outputImg.Bounds().Dy())
+	t.Run("Pass_HighEnergy_CentralSubject", func(t *testing.T) {
+		// Create an image with high energy in the center (Boat simulation)
+		img := image.NewRGBA(image.Rect(0, 0, 1000, 1000))
+		draw.Draw(img, img.Bounds(), &image.Uniform{color.White}, image.Point{}, draw.Src)
+		// Subject in center
+		for y := 400; y < 600; y++ {
+			for x := 400; x < 600; x++ {
+				img.Set(x, y, color.Black)
+			}
+		}
+
+		outputImg, err := processor.FitImage(context.Background(), img)
+		assert.NoError(t, err)
+		require.NotNil(t, outputImg)
+		assert.Equal(t, 160, outputImg.Bounds().Dx())
+		assert.Equal(t, 90, outputImg.Bounds().Dy())
+	})
+
+	t.Run("FeetGuard_BoxyImage_SlackAware_CenterFallback", func(t *testing.T) {
+		// Image: 1000x800 (Boxy, Aspect 1.25)
+		// Target: 160x90 (Aspect 1.77)
+		// Crop height will be: 1000 / (160/90) = 562.
+		// SlackY = 800 - 562 = 238.
+		// Slack Threshold (0.8) * 238 = 190.
+
+		img := image.NewRGBA(image.Rect(0, 0, 1000, 800))
+		draw.Draw(img, image.Rect(0, 0, 1000, 500), &image.Uniform{color.White}, image.Point{}, draw.Src)
+		// Bottom part: High entropy (noise)
+		for y := 500; y < 800; y++ {
+			for x := 0; x < 1000; x++ {
+				img.Set(x, y, color.RGBA{uint8(x % 255), uint8(y % 255), uint8((x + y) % 255), 255})
+			}
+		}
+
+		// SmartCrop will pick the bottom (Min.Y = 238).
+		// Since 238 > 190, it should trigger Slack Guard and fallback to Center (Min.Y = 119).
+		outputImg, err := processor.FitImage(context.Background(), img)
+		assert.NoError(t, err)
+		require.NotNil(t, outputImg)
+
+		// If we use imaging.Resize, it's hard to verify the crop directly.
+		// But we know it's 160x90.
+		assert.Equal(t, 160, outputImg.Bounds().Dx())
+		assert.Equal(t, 90, outputImg.Bounds().Dy())
+	})
 }
 
 func TestSmartImageProcessor_FitImage_Quality_Rejection(t *testing.T) {
@@ -243,11 +274,11 @@ func TestSmartImageProcessor_FitImage_Quality_Rejection(t *testing.T) {
 	// Desktop: 160x90 (16:9, ~1.77)
 	mockOS.On("GetDesktopDimension").Return(160, 90, nil)
 
+	cfg.Tuning.AspectThreshold = 0.9
 	processor := &SmartImageProcessor{
-		os:              mockOS,
-		config:          cfg,
-		aspectThreshold: 0.9,
-		resampler:       imaging.Lanczos,
+		os:        mockOS,
+		config:    cfg,
+		resampler: imaging.Lanczos,
 		// No Pigo -> No Face Found
 	}
 
@@ -292,12 +323,12 @@ func TestSmartImageProcessor_FitImage_Quality_Rescue(t *testing.T) {
 	// Target: 16:9 (160x90) (Aspect 1.77)
 	mockOS.On("GetDesktopDimension").Return(160, 90, nil)
 
+	cfg.Tuning.AspectThreshold = 0.9
 	processor := &SmartImageProcessor{
-		os:              mockOS,
-		config:          cfg,
-		pigo:            pigoInstance,
-		aspectThreshold: 0.9,
-		resampler:       imaging.Lanczos,
+		os:        mockOS,
+		config:    cfg,
+		pigo:      pigoInstance,
+		resampler: imaging.Lanczos,
 	}
 
 	// Input: Face Image (Square-ish?) "testdata/face.png"
@@ -332,47 +363,4 @@ func TestSmartImageProcessor_FitImage_Quality_Rescue(t *testing.T) {
 	assert.Equal(t, 210, outputImg.Bounds().Dx())
 }
 
-func TestSmartImageProcessor_FitImage_Flexibility_Fallback_NewThreshold(t *testing.T) {
-	// Requirements:
-	// Mode: Flexibility
-	// Input: Diff 0.45 (Between 0.4 and 0.5)
-	// Expect: Center Crop (because threshold lowered to 0.4)
-
-	ResetConfig()
-	prefs := NewMockPreferences()
-	cfg := GetConfig(prefs)
-	cfg.SetSmartFitMode(SmartFitAggressive)
-
-	mockOS := new(MockOS)
-	// Target: 160x90 (1.77)
-	mockOS.On("GetDesktopDimension").Return(160, 90, nil)
-
-	processor := &SmartImageProcessor{
-		os:              mockOS,
-		config:          cfg,
-		aspectThreshold: 2.0,
-		resampler:       imaging.Lanczos,
-		// No Pigo -> No Face
-	}
-
-	// Calculate Input Dimensions for Diff 0.45
-	// |1.77 - X| = 0.45
-	// X = 1.32 (Aspect ~4:3)
-	// Width = 264, Height = 200 => 1.32
-	// Must be > 160x90 for resolution check.
-	inputImg := createTestImage(264, 200)
-
-	// Run FitImage
-	// Should hit Center Fallback
-	outputImg, err := processor.FitImage(context.Background(), inputImg)
-	require.NoError(t, err)
-
-	// Verify it worked
-	assert.Equal(t, 160, outputImg.Bounds().Dx())
-	assert.Equal(t, 90, outputImg.Bounds().Dy())
-
-	// Ideally verify it was CENTER crop, not smart crop?
-	// Hard to verify without mocking smartcrop or checking pixels.
-	// But since Diff (0.45) > SafeThreshold (0.4), it MUST fall into that block.
-	// We trust the logic if it returns success here (and coverage confirmed).
-}
+// Removed outdated fallback test - replaced by DualSafety test
