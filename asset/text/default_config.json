@@ -6,12 +6,6 @@
   "face_boost_enabled": false,
   "queries": [
     {
-      "description": "Wikimedia Featured Pictures",
-      "url": "https://commons.wikimedia.org/wiki/Category:Featured_pictures_on_Wikimedia_Commons",
-      "active": true,
-      "provider": "Wikimedia"
-    },
-    {
       "desc": "Wikimedia Featured",
       "url": "category:Featured_pictures_on_Wikimedia_Commons",
       "active": true,

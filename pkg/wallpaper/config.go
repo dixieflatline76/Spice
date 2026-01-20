@@ -155,6 +155,30 @@ func (c *Config) loadFromPrefs() error {
 		return err
 	}
 
+	// Migration: Ensure Favorites query exists (for existing users upgrading)
+	hasFavorites := false
+	for _, q := range c.Queries {
+		if q.ID == FavoritesQueryID {
+			hasFavorites = true
+			break
+		}
+	}
+	if !hasFavorites {
+		log.Println("Migration: Adding missing Favorites query to configuration.")
+		favQuery := ImageQuery{
+			ID:          FavoritesQueryID,
+			Description: "Favorite Images",
+			URL:         FavoritesQueryID,
+			Active:      true,
+			Provider:    "Favorites",
+		}
+		c.Queries = append(c.Queries, favQuery)
+		// We don't save immediately here to avoid writing to disk on boot unless necessary,
+		// but since this is an in-memory fix for the session, it works.
+		// Use c.save() if we want it persisted immediately.
+		c.save()
+	}
+
 	// Populate sync.Map from loaded AvoidSet
 	if c.AvoidSet != nil {
 		for k, v := range c.AvoidSet {
@@ -237,11 +261,9 @@ func (c *Config) loadFromPrefs() error {
 	// Data migration: Prune stale Favorites queries
 	// During development we changed from "favorites://default" to "favorites://favorite_images"
 	var finalQueries []ImageQuery
-	foundFavorites := false
+
 	for _, q := range c.Queries {
-		if q.Provider == "Favorites" && q.ID == FavoritesQueryID {
-			foundFavorites = true
-		}
+
 		if q.Provider == "Favorites" && q.ID != FavoritesQueryID {
 			log.Printf("Migration: Pruning stale Favorites query: %s", q.ID)
 			queriesChanged = true
@@ -251,52 +273,11 @@ func (c *Config) loadFromPrefs() error {
 	}
 
 	// Data migration: Auto-Enable Favorites
-	if !foundFavorites {
-		log.Println("Migration: Auto-enabling Favorites...")
-		favQuery := ImageQuery{
-			ID:          FavoritesQueryID,
-			Description: "Favorite Images",
-			URL:         FavoritesQueryID,
-			Active:      true,
-			Provider:    "Favorites",
-		}
-		// Insert at top or just append?
-		// We append to ensure we don't disrupt custom ordering too much, but ideally favorites is prominent.
-		// Let's prepend it.
-		finalQueries = append([]ImageQuery{favQuery}, finalQueries...)
-		queriesChanged = true
-	}
 
 	// Data migration: Auto-Enable Wikimedia Featured
-	foundWikiFeatured := false
-	wikiFeaturedURL := "category:Featured_pictures_on_Wikimedia_Commons"
-	for _, q := range finalQueries {
-		if q.URL == wikiFeaturedURL && q.Provider == "Wikimedia" {
-			foundWikiFeatured = true
-			break
-		}
-	}
-
-	if !foundWikiFeatured {
-		log.Println("Migration: Auto-enabling Wikimedia Featured...")
-		wikiID := GenerateQueryID(wikiFeaturedURL)
-		wikiQuery := ImageQuery{
-			ID:          wikiID,
-			Description: "Wikimedia Featured",
-			URL:         wikiFeaturedURL,
-			Active:      true,
-			Provider:    "Wikimedia",
-		}
-		// Insert after Favorites (index 1) or at top if Favorites missing (unlikely)
-		if len(finalQueries) > 0 && finalQueries[0].Provider == "Favorites" {
-			// Insert at index 1
-			finalQueries = append(finalQueries[:1], append([]ImageQuery{wikiQuery}, finalQueries[1:]...)...)
-		} else {
-			// Prepend
-			finalQueries = append([]ImageQuery{wikiQuery}, finalQueries...)
-		}
-		queriesChanged = true
-	}
+	// User requested removal of this logic.
+	// New installs get it via default_config.json.
+	// Existing users who deleted it stay deleted.
 
 	// Data migration: Update query IDs to prevent collisions (Provider:URL)
 	for i := range finalQueries {
@@ -839,7 +820,7 @@ func (c *Config) SetFaceCropEnabled(enable bool) {
 func (c *Config) GetFaceCropEnabled() bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return c.BoolWithFallback(FaceCropPrefKey, false)
+	return c.BoolWithFallback(FaceCropPrefKey, true) // Default: true
 }
 
 // GetAssetManager returns the asset manager
@@ -854,17 +835,13 @@ func (c *Config) SetUnlockAspectRatio(enabled bool) {
 	c.SetBool("UnlockAspectRatio", enabled)
 }
 
-// Preference keys for mode (internal to config.go for now or move to const.go)
-
 // SetSmartFitMode sets the smart fit mode.
 func (c *Config) SetSmartFitMode(mode SmartFitMode) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.SetInt(SmartFitModePrefKey, int(mode))
-	// Sync legacy flags for backward compatibility if needed? No, let's just stick to the new pref.
 }
 
-// GetSmartFitMode returns the smart fit mode, migrating legacy settings if needed.
 func (c *Config) GetSmartFitMode() SmartFitMode {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -884,7 +861,8 @@ func (c *Config) GetSmartFitMode() SmartFitMode {
 		return SmartFitOff
 	}
 
-	unlock := c.BoolWithFallback("UnlockAspectRatio", false)
+	// Default to Flexibility (Aggressive) if not explicitly set to unlock=false
+	unlock := c.BoolWithFallback("UnlockAspectRatio", true) // Default: true for Flexibility
 	if unlock {
 		return SmartFitAggressive
 	}
