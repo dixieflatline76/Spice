@@ -20,7 +20,8 @@ func TestGetConfig_Defaults(t *testing.T) {
 	// Check default values
 	assert.True(t, cfg.GetSmartFit())
 	assert.False(t, cfg.GetFaceBoostEnabled())
-	assert.False(t, cfg.GetFaceCropEnabled())
+	assert.True(t, cfg.GetFaceCropEnabled())                   // Changed to True by default
+	assert.Equal(t, SmartFitAggressive, cfg.GetSmartFitMode()) // Changed to Aggressive by default
 	assert.Equal(t, FrequencyHourly, cfg.GetWallpaperChangeFrequency())
 }
 
