@@ -55,7 +55,7 @@ build-darwin-amd64: build-extension
 	GOOS=darwin GOARCH=amd64 go build -tags release -o bin/Spice-darwin-amd64 -ldflags "$(LDFLAGS_COMMON)" ./cmd/spice
 
 	@echo "Packaging Spice.app..."
-	fyne package -os darwin --executable ./bin/Spice-darwin-amd64 -icon asset/icons/tray.png -name Spice
+	fyne package -os darwin --executable ./bin/Spice-darwin-amd64 -icon asset/icons/tray.png -name Spice -app-id com.dixieflatline76.spice
 
 	@echo "Modifying Info.plist to set LSUIElement=true..."
 	plutil -insert LSUIElement -bool true Spice.app/Contents/Info.plist
@@ -68,7 +68,7 @@ build-darwin-arm64: build-extension
 	GOOS=darwin GOARCH=arm64 go build -tags release -o bin/Spice-darwin-arm64 -ldflags "$(LDFLAGS_COMMON)" ./cmd/spice
 
 	@echo "Packaging Spice.app..."
-	fyne package -os darwin --executable ./bin/Spice-darwin-arm64 -icon asset/icons/tray.png -name Spice
+	fyne package -os darwin --executable ./bin/Spice-darwin-arm64 -icon asset/icons/tray.png -name Spice -app-id com.dixieflatline76.spice
 
 	@echo "Modifying Info.plist to set LSUIElement=true..."
 	plutil -insert LSUIElement -bool true Spice.app/Contents/Info.plist
@@ -130,7 +130,7 @@ build-darwin-amd64-dev:
 	GOOS=darwin GOARCH=amd64 go build -o bin/Spice-darwin-amd64 -ldflags "$(LDFLAGS_COMMON)" ./cmd/spice
 
 	@echo "Packaging Spice.app..."
-	fyne package -os darwin --executable ./bin/Spice-darwin-amd64 -icon asset/icons/tray.png -name Spice
+	fyne package -os darwin --executable ./bin/Spice-darwin-amd64 -icon asset/icons/tray.png -name Spice -app-id com.dixieflatline76.spice
 
 	@echo "Modifying Info.plist to set LSUIElement=true..."
 	plutil -insert LSUIElement -bool true Spice.app/Contents/Info.plist
@@ -143,7 +143,7 @@ build-darwin-arm64-dev:
 	GOOS=darwin GOARCH=arm64 go build -o bin/Spice-darwin-arm64 -ldflags "$(LDFLAGS_COMMON)" ./cmd/spice
 
 	@echo "Packaging Spice.app..."
-	fyne package -os darwin --executable ./bin/Spice-darwin-arm64 -icon asset/icons/tray.png -name Spice
+	fyne package -os darwin --executable ./bin/Spice-darwin-arm64 -icon asset/icons/tray.png -name Spice -app-id com.dixieflatline76.spice
 
 	@echo "Modifying Info.plist to set LSUIElement=true..."
 	plutil -insert LSUIElement -bool true Spice.app/Contents/Info.plist
