@@ -117,7 +117,7 @@ Key logic patterns for the major providers in `pkg/wallpaper/providers/`.
         })
     }
     ```
-4.  **Import**: Add `_ "github.com/.../providers/myprovider"` to `cmd/spice/main.go`.
+4.  **Import**: You don't need to manually import it. Run `go generate ./...` (or `make gen`). The `gen_providers` tool will automatically discover your package and add it to `cmd/spice/zz_generated_providers.go`. To disable a provider, simply add a `.disabled` file to its directory.
 
 ### 4.2 UI Standardization
 Use the helpers in `pkg/wallpaper/ui_add_query.go` for consistency:
@@ -167,3 +167,34 @@ Providers like MetMuseum (`pkg/wallpaper/providers/metmuseum`) use a **4-Layer F
 
 ### 7.2 Usage
 This allows curators to update the "Director's Cut" collections (IDs, Descriptions) by simply committing to the GitHub repo. Spice clients enforce the new catalog on their next restart.
+
+## 8. Development Environment & Secrets
+
+When developing locally, especially when running the app directly via `go run` instead of `make`, you must manually inject API secrets into your environment.
+
+### 8.1 The `.spice_secrets` File
+Create a file named `.spice_secrets` in the project root. This file is git-ignored.
+Format: `KEY=VALUE`
+
+```bash
+UNSPLASH_CLIENT_ID=abc...
+GOOGLE_PHOTOS_CLIENT_ID=xyz...
+```
+
+### 8.2 The `load_secrets` Helper
+The project includes helper scripts (`load_secrets.ps1` for PowerShell, `load_secrets.sh` for Bash) to read this file and export variables to your current shell session.
+
+**Usage (PowerShell):**
+```powershell
+. .\load_secrets.ps1  # Note the dot-source syntax!
+go run cmd/spice/main.go
+```
+
+**Usage (Bash):**
+```bash
+source ./load_secrets.sh
+go run cmd/spice/main.go
+```
+
+**Note**: The `Makefile` automatically handles this injection via `cmd/util/load_secrets/main.go`, so you only need to manually source this script when bypassing the Makefile.
+

@@ -224,24 +224,28 @@ func (p *Provider) resolveIDs(query string) ([]int, error) {
 }
 ```
 
-## 6. Registration (The Hook)
+## 6. Registration (Automated)
+ 
+ Spice uses a code generation tool (`cmd/util/gen_providers`) to automatically register all providers found in `pkg/wallpaper/providers/`.
+ 
+ ### 6.1 The Logic
+ 
+ 1.  **Auto-Discovery**: The tool scans the `providers/` directory for subdirectories.
+ 2.  **Generation**: It creates `cmd/spice/zz_generated_providers.go`, which contains the necessary `_` imports to trigger the `init()` functions of your providers.
+ 3.  **Build Integration**: The generation runs automatically via `go generate` (called by `make build` or `make run`).
+ 
+ ### 6.2 Disabling a Provider
+ 
+ To temporarily disable a provider without deleting the code:
+ 
+ 1.  Create an empty file named `.disabled` inside the provider's directory (e.g., `pkg/wallpaper/providers/myprovider/.disabled`).
+ 2.  Run `go generate ./...` (or `make gen`).
+ 3.  The tool will skip this directory when generating `zz_generated_providers.go`, effectively compiling it out of the final binary.
+ 
+ ### 6.3 Manual imports (Legacy/Debug)
+ 
+ You do **not** need to manually edit `cmd/spice/main.go` anymore. The `//go:generate` directive at the top of `main.go` handles this.
 
-In `myprovider.go`, add:
-
-```go
-func init() {
-    // Key "Bing" must match Name() return value
-    provider.RegisterProvider("Bing", func(cfg *wallpaper.Config, client *http.Client) provider.ImageProvider {
-        return NewBingProvider(cfg, client)
-    })
-}
-```
-
-In `cmd/spice/main.go`:
-
-```go
-import _ "github.com/dixieflatline76/Spice/pkg/wallpaper/providers/bing"
-```
 
 ## 6. Testing
 
