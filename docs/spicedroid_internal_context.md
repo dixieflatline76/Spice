@@ -118,9 +118,29 @@ func MobileProfile() TuningConfig {
 }
 ```
 
-## 5. Implementation Checklist
+## 5. Distribution & Compliance
+
+To ship this via the Google Play Store, we use the "**Eject Strategy**" rather than a simple `fyne package`.
+
+### 5.1 Project Structure (Standard Android Studio)
+We create a standard Gradle/Kotlin project that imports our Go code as a library.
+*   **The App**: A standard Activity that launches the Fyne window (via Fyne's helper).
+*   **The Widget**: A standard `AppWidgetProvider` (Kotlin) that calls our `WidgetHelper`.
+
+### 5.2 The "Double Runtime" Safety Net
+To prevent threading crashes between Fyne (OpenGL) and the Widget (Headless):
+*   **Configuration**: We configure the Widget to run in a separate process in `AndroidManifest.xml`: `android:process=":widget"`.
+*   **Result**: The OS isolates the Widget's memory and Go runtime from the Main App. If the widget crashes, the app survives (and vice-versa).
+
+### 5.3 Play Store Compliance
+*   **Foreground Service**: The "Persistent Notification" control panel uses a valid Android Foreground Service type (`specialUse` or `mediaPlayback`), explicitly allowed for this use case.
+*   **Permissions**: We request standard `INTERNET` and `READ_EXTERNAL_STORAGE` (scoped), which creates no policy issues.
+
+## 6. Implementation Checklist
 
 1.  [ ] **Refactor `pkg/provider`**: Split interfaces into `CoreProvider` and `GUIProvider`.
 2.  [ ] **Split Files**: Rename/Move UI code in providers to `_gui.go` files with `//go:build !android`.
 3.  [ ] **Abstract Config**: Create `Preferences` interface and `JSONPreferences` implementation.
 4.  [ ] **Go Mobile**: Run `gomobile bind ./pkg/mobile` to generate the AAR.
+5.  [ ] **Android Studio**: Create strict "Two Process" project structure.
+
