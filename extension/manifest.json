@@ -14,8 +14,7 @@
     "ws://localhost:49452/*",
     "https://wallhaven.cc/*",
     "https://*.wikimedia.org/*",
-    "https://www.pexels.com/*",
-    "https://*.unsplash.com/*"
+    "https://www.pexels.com/*"
   ],
   "background": {
     "service_worker": "background.js"
