@@ -5,7 +5,7 @@ title: Architecture
 
 # Spice Architecture Documentation (Wallpaper Plugin)
 
-> **Status**: Current as of v1.1.1
+> **Status**: Current as of v1.6.5
 > **Focus**: Concurrency Model, Image Pipeline, and UI Synchronization
 
 ## 1. Executive Summary
@@ -254,6 +254,18 @@ To maintain responsiveness under load, the following optimizations are employed:
 
 1. **O(1) Image Store**: The store uses a secondary `idSet map[string]bool` to perform existence checks in constant time (45ns) rather than linear scans (470ns+), ensuring that the Writer Loop never lags even with thousands of images.
 2. **Synchronous Race Prevention**: The Controller synchronously anticipates background work (setting `isDownloading = true` under lock) *before* spawning goroutines. This prevents "job storms" and CPU saturation during rapid UI interactions.
+
+## 3.8 Smart Fit Algorithm
+Spice uses a "Holistic Imaging" approach that combines Face Detection (Pigo), Entropy Analysis (SmartCrop), and Composition Rules.
+
+*   **Face Rescue**: High-quality images with incorrect aspect ratios are "Rescued" only if a dominant face is detected, ensuring we never crop heads.
+*   **Feet Guard**: A heuristic that prevents the cropper from selecting the bottom 20% of an image (usually shoes/legs) unless the image has "High Energy" (complex texture).
+*   **Tuning**: All heuristic parameters are externalized in `pkg/wallpaper/tuning.go` to separate logic from magic numbers.
+
+## 3.9 The "Git-Driven" Content System
+For verified providers (Museums), Spice treats `raw.githubusercontent.com` as a Content Delivery Network (CDN).
+*   **Architecture**: `Remote > Cache > Embed > Hardcoded`.
+*   **Benefit**: Allows instant curation updates (adding new artworks to "Director's Cut") without requiring users to download a binary update.
 
 <!-- Mermaid JS Handling -->
 <script>
