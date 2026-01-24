@@ -2,16 +2,18 @@
 
 > **Purpose**: This file contains the architecture and implementation details for **Spice Droid** (Android Port). It defines the strategy for decoupling the Fyne UI from the Core Logic to enable Android Widget support.
 
-## 1. The Strategy: "Interface Split" (No Rewrite)
+## 1. The Strategy: "Hybrid Architecture" (Interface Split)
 
-We will **NOT** rewrite the existing Fyne UI. Instead, we will use Go's build system (`//go:build`) to segregate UI code from Core code.
+We will use a **Hybrid Approach**:
+1.  **Main App**: Uses **Fyne** (Go) to render the full Settings UI. This is a standard Android Activity.
+2.  **Widget & Controls**: Uses **Native Android** (Kotlin + Go Core) for the Home Screen Widget and Persistent Notification controls.
 
-### 1.1 The Problem
-Android Widgets cannot run Fyne (OpenGL). However, our Desktop App *requires* Fyne.
-The current `pkg/provider` package mixes Core Logic (HTTP) with UI Logic (Fyne Widgets), causing Android builds to fail.
+### 1.1 The Challenge
+The Android Widget and Background Service (Notification) cannot load the Fyne (OpenGL) runtime. They must be lightweight.
+However, our `pkg/provider` code currently mixes Core Logic with Fyne UI code, making it impossible to compile for the lightweight context.
 
-### 1.2 The Solution: File-Level Segregation
-We will split monolithic provider files into two:
+### 1.2 The Solution: Interface Split
+We use Go build tags to keep the UI code but compile it *only* for the Main App, not the Widget/Service library.
 
 1.  **`myprovider.go`** (Shared):
     *   Builds for **ALL** platforms.
@@ -50,6 +52,13 @@ Since the Android Widget runs in a separate process/context from the Main App, t
 *   **Config Abstraction**: The `Config` struct currently embeds `fyne.Preferences`. We will abstract this behind a `Preferences` interface.
     *   **Desktop**: Wraps `fyne.Preferences` (Status Quo).
     *   **Android**: Implements `JSONPreferences` (Reads/Writes `config.json`).
+
+### 2.1 The Control Plane (Tray vs. Notification)
+*   **Desktop**: Uses `systray` (Fyne Tray Menu) for controls.
+*   **Android**: Replaces the Tray Menu with a **Persistent Notification**.
+    *   **Buttons**: "Next Image", "Previous Image", "Open Settings".
+    *   **Implementation**: Native Kotlin `NotificationService` calling into Go Core via JNI to trigger fetches.
+
 *   **Workflow**:
     1.  User updates settings in the Fyne App.
     2.  App writes to `config.json`.
