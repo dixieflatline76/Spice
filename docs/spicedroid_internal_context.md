@@ -12,10 +12,36 @@ We will use a **Hybrid Approach**:
 The Android Widget and Background Service (Notification) cannot load the Fyne (OpenGL) runtime. They must be lightweight.
 However, our `pkg/provider` code currently mixes Core Logic with Fyne UI code, making it impossible to compile for the lightweight context.
 
-### 1.2 The Solution: Interface Split
+### 1.2 The Solution: Interface Split & Build Tags (The "How")
 We use Go build tags to keep the UI code but compile it *only* for the Main App, not the Widget/Service library.
 
-## 2. User Experience (UX) Definition
+#### A. File Refactoring Pattern
+For each provider (e.g., `pkg/wallpaper/providers/wallhaven`), we split the code:
+1.  **`wallhaven.go`** (Shared):
+    *   **Content**: `FetchImages`, `ParseURL`, `EnrichImage`, `Name`, `Title`.
+    *   **Build**: All platforms.
+2.  **`wallhaven_gui.go`** (Desktop Only):
+    *   **Content**: `CreateSettingsPanel`, `CreateQueryPanel`, `GetProviderIcon`.
+    *   **Build**: `//go:build !android` (Ignored by Mobile).
+
+#### B. The Interface Split
+We segregate the monolithic `ImageProvider` into two tiers:
+```go
+// CoreProvider is safe for Android (Logic Only)
+type CoreProvider interface {
+    Name() string
+    FetchImages(...)
+}
+
+// GUIProvider extends Core for Desktop (Logic + Fyne UI)
+type GUIProvider interface {
+    CoreProvider
+    GetProviderIcon() fyne.Resource
+    CreateSettingsPanel(...)
+}
+```
+*   **Desktop App**: Uses `GUIProvider`.
+*   **Android Widget**: Uses `CoreProvider`.
 
 ### 2.1 The "App" (Settings & Setup)
 *   **Icon Click**: Opens the standard Fyne UI (just like Desktop).
@@ -127,7 +153,34 @@ To prevent threading crashes between Fyne (OpenGL) and the Widget (Headless):
 *   **Foreground Service**: The "Persistent Notification" control panel uses a valid Android Foreground Service type (`specialUse` or `mediaPlayback`), explicitly allowed for this use case.
 *   **Permissions**: We request standard `INTERNET` and `READ_EXTERNAL_STORAGE` (scoped), which creates no policy issues.
 
-## 6. Implementation Checklist
+## 7. Project Timeline (Two Weeks / ~10 Days)
+
+**Target**: A production-ready Android release.
+
+### Phase 1: The Foundation (Days 1-4)
+*Goal: Decouple Fyne from Core Logic without breaking the Desktop App.*
+*   **Day 1**: Refactor `pkg/provider` interfaces (`CoreProvider` vs `GUIProvider`) and abstract `pkg/config`.
+*   **Day 2**: Pilot the "Split File" strategy on complex providers (`Unsplash`, `GooglePhotos`) and simple ones (`Wallhaven`).
+*   **Day 3**: Complete the split for all 8 providers. Verify Desktop build passes.
+*   **Day 4**: Update `Store` and `Pipeline` to use the new `CoreProvider` interface.
+
+### Phase 2: The Android Bridge (Days 5-7)
+*Goal: Get Go code running inside an Android Studio project.*
+*   **Day 5**: Create `pkg/mobile` API (`WidgetHelper`). Run `gomobile bind` to generate the `.aar`.
+*   **Day 6**: Initialize Android Studio project. Configure "Double Runtime" (separate process for widget).
+*   **Day 7**: Implement the "Persistent Notification" (Kotlin) that calls Go to fetch images.
+
+### Phase 3: The Widget & Polish (Days 8-10)
+*Goal: A shipping-quality Android experience.*
+*   **Day 8**: Implement the Home Screen Widget (Kotlin) and its bitmap rendering loop.
+*   **Day 9**: Tune `Smart Fit` for mobile aspect ratios (testing on emulator/device).
+*   **Day 10**: Testing, Permissions cleanup, and Release build.
+
+### 7.1 Key Risks
+1.  **JNI Overhead**: Passing large bitmaps from Go to Kotlin can be slow (need efficient buffer handling).
+2.  **Process Lifecycle**: Preventing Android form killing the "Persistent Notification" service.
+
+## 8. Implementation Checklist
 
 1.  [ ] **Refactor `pkg/provider`**: Split interfaces into `CoreProvider` and `GUIProvider`.
 2.  [ ] **Split Files**: Rename/Move UI code in providers to `_gui.go` files with `//go:build !android`.
