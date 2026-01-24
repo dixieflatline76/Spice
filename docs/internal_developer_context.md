@@ -117,7 +117,7 @@ Key logic patterns for the major providers in `pkg/wallpaper/providers/`.
         })
     }
     ```
-4.  **Import**: Add `_ "github.com/.../providers/myprovider"` to `cmd/spice/main.go`.
+4.  **Import**: You don't need to manually import it. Run `go generate ./...` (or `make gen`). The `gen_providers` tool will automatically discover your package and add it to `cmd/spice/zz_generated_providers.go`. To disable a provider, simply add a `.disabled` file to its directory.
 
 ### 4.2 UI Standardization
 Use the helpers in `pkg/wallpaper/ui_add_query.go` for consistency:
