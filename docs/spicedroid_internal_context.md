@@ -15,38 +15,29 @@ However, our `pkg/provider` code currently mixes Core Logic with Fyne UI code, m
 ### 1.2 The Solution: Interface Split
 We use Go build tags to keep the UI code but compile it *only* for the Main App, not the Widget/Service library.
 
-1.  **`myprovider.go`** (Shared):
-    *   Builds for **ALL** platforms.
-    *   Contains: `FetchImages()`, `ParseURL()`, `Name()`.
-    *   **NO** `import "fyne.io/..."`.
-2.  **`myprovider_gui.go`** (Desktop Only):
-    *   Builds for **!android**.
-    *   Contains: `CreateSettingsPanel()`, `GetProviderIcon()`.
-    *   **Can** `import "fyne.io/..."`.
+## 2. User Experience (UX) Definition
 
-### 1.3 The Mobile Interface Pattern
-We define a "Core" interface that works everywhere, and a "GUI" interface that extends it for Desktop.
+### 2.1 The "App" (Settings & Setup)
+*   **Icon Click**: Opens the standard Fyne UI (just like Desktop).
+*   **Function**: Users configure providers (API keys), manage image collections, and tweak tuning settings here.
+*   **State**: Saves to `config.json`.
 
-```go
-// pkg/provider/interfaces.go
+### 2.2 The "Daily Driver" (Widget & Notification)
+Once configured, the user rarely opens the App. They interact via:
 
-// CoreProvider is safe for Android
-type CoreProvider interface {
-    Name() string
-    FetchImages(...)
-    // ... logic methods only
-}
+1.  **Home Screen Widget**:
+    *   **Visual**: Displays the current wallpaper (or a specific "Frame").
+    *   **Actions**: Tapping it usually opens the App or triggers a "Next Image" (configurable).
+2.  **Persistent Notification** (The Control Center):
+    *   **Context**: Always available in the notification shade.
+    *   **Content**: Thumbnail of current image + Source Attribution (e.g. "Photo by @userid on Unsplash").
+    *   **Controls**:
+        *   `[Prev]` `[Next]`: Cycles images immediately.
+        *   `[Fav]`: Adds to local favorites.
+        *   `[Block/Skip]`: Bans the image/tag and skips.
+    *   **Effect**: Updates **both** the System Wallpaper and the Widget immediately.
 
-// GUIProvider extends Core for Desktop
-type GUIProvider interface {
-    CoreProvider
-    GetProviderIcon() fyne.Resource
-    CreateSettingsPanel(...)
-}
-```
-
-## 2. Shared Configuration (The "Brain")
-
+## 3. Shared Configuration (The "Brain")
 Since the Android Widget runs in a separate process/context from the Main App, they cannot share memory. They must communicate via **Shared Storage**.
 
 *   **Config Abstraction**: The `Config` struct currently embeds `fyne.Preferences`. We will abstract this behind a `Preferences` interface.
