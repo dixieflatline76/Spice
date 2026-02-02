@@ -199,11 +199,11 @@ func TestSmartImageProcessor_FitImage_Flexibility_DualSafety(t *testing.T) {
 
 	t.Run("FeetGuard_BottomHugging_CenterFallback", func(t *testing.T) {
 		// Create an image with high entropy ONLY at the bottom
-		img := image.NewRGBA(image.Rect(0, 0, 1000, 2000))
+		img := image.NewRGBA(image.Rect(0, 0, 1000, 1000))
 		// Top part: Flat white
-		draw.Draw(img, image.Rect(0, 0, 1000, 1500), &image.Uniform{color.White}, image.Point{}, draw.Src)
+		draw.Draw(img, image.Rect(0, 0, 1000, 750), &image.Uniform{color.White}, image.Point{}, draw.Src)
 		// Bottom part: High entropy (noise) to attract SmartCrop
-		for y := 1500; y < 2000; y++ {
+		for y := 750; y < 1000; y++ {
 			for x := 0; x < 1000; x++ {
 				img.Set(x, y, color.RGBA{uint8(x % 255), uint8(y % 255), uint8((x + y) % 255), 255})
 			}
@@ -294,7 +294,7 @@ func TestSmartImageProcessor_FitImage_Quality_Rejection(t *testing.T) {
 
 	_, err := processor.FitImage(context.Background(), inputImg, 160, 90)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "quality mode rejected")
+	assert.Contains(t, err.Error(), "Quality mode")
 }
 
 func TestSmartImageProcessor_FitImage_Quality_Rescue(t *testing.T) {

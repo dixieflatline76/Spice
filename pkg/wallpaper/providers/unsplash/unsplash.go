@@ -235,6 +235,8 @@ func (p *UnsplashProvider) mapUnsplashImage(ui UnsplashImage) provider.Image {
 		Attribution:      ui.User.Name,
 		Provider:         p.Name(),
 		FileType:         "image/jpeg", // Unsplash usually serves JPEGs
+		Width:            ui.Width,
+		Height:           ui.Height,
 		DownloadLocation: ui.Links.DownloadLocation,
 	}
 }
@@ -248,10 +250,12 @@ type UnsplashSearchResponse struct {
 }
 
 type UnsplashImage struct {
-	ID    string `json:"id"`
-	URLs  URLs   `json:"urls"`
-	Links Links  `json:"links"`
-	User  User   `json:"user"`
+	ID     string `json:"id"`
+	Width  int    `json:"width"`
+	Height int    `json:"height"`
+	URLs   URLs   `json:"urls"`
+	Links  Links  `json:"links"`
+	User   User   `json:"user"`
 }
 
 type URLs struct {

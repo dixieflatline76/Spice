@@ -30,18 +30,23 @@ type ImageStore struct {
 	// Testing hook
 	saveFunc func()
 
+	// Update Notification
+	updateCh chan struct{}
+
 	debounceDuration time.Duration
 }
 
 func NewImageStore() *ImageStore {
-	return &ImageStore{
+	store := &ImageStore{
 		images:           make([]provider.Image, 0),
 		idSet:            make(map[string]bool),
 		pathSet:          make(map[string]int),
 		avoidSet:         make(map[string]bool),
 		asyncSave:        true,
 		debounceDuration: 2 * time.Second,
+		updateCh:         make(chan struct{}),
 	}
+	return store
 }
 
 func (s *ImageStore) SetDebounceDuration(d time.Duration) {
@@ -119,6 +124,7 @@ func (s *ImageStore) Add(img provider.Image) bool {
 		s.seenCount++
 	}
 	s.scheduleSaveLocked()
+	s.notifyUpdateLocked()
 	return true
 }
 
@@ -359,6 +365,13 @@ func (s *ImageStore) SaveCache() {
 			}
 			snapshot[i].ProcessingFlags = flags
 		}
+		if img.DerivativePaths != nil {
+			paths := make(map[string]string)
+			for k, v := range img.DerivativePaths {
+				paths[k] = v
+			}
+			snapshot[i].DerivativePaths = paths
+		}
 	}
 	s.mu.RUnlock()
 
@@ -437,6 +450,11 @@ func (s *ImageStore) Sync(limit int, targetFlags map[string]bool, activeQueryIDs
 				badIDs[img.ID] = ActionDelete
 				continue
 			}
+		}
+
+		if s.avoidSet[img.ID] {
+			badIDs[img.ID] = ActionDelete
+			continue
 		}
 
 		masterPath, err := s.fm.GetMasterPath(img.ID, ".jpg")

@@ -179,6 +179,12 @@ func (sa *SpiceApp) NotifyUser(title, message string) {
 
 // CreateTrayMenu creates the tray menu for the application
 func (sa *SpiceApp) CreateTrayMenu() {
+	defer func() {
+		if r := recover(); r != nil {
+			utilLog.Printf("ERROR: PANIC in CreateTrayMenu: %v", r)
+		}
+	}()
+	utilLog.Debug("CreateTrayMenu: Starting...")
 	desk, ok := sa.App.(desktop.App)
 	if !ok {
 		return
@@ -186,9 +192,9 @@ func (sa *SpiceApp) CreateTrayMenu() {
 
 	items := []*fyne.MenuItem{}
 	for i, plugin := range sa.plugins {
+		utilLog.Debugf("CreateTrayMenu: Processing plugin %s...", plugin.Name())
 		if i == 0 {
 			items = append(items, plugin.CreateTrayMenuItems()...)
-			items = append(items, fyne.NewMenuItemSeparator())
 		} else {
 			pluginSubmenu := fyne.NewMenuItem(plugin.Name(), nil)
 			pluginSubmenu.ChildMenu = fyne.NewMenu(plugin.Name(), plugin.CreateTrayMenuItems()...)
@@ -196,13 +202,16 @@ func (sa *SpiceApp) CreateTrayMenu() {
 		}
 	}
 
+	items = append(items, fyne.NewMenuItemSeparator())
 	items = append(items, sa.CreateMenuItem("Preferences", func() {
 		sa.CreatePreferencesWindow("")
 	}, "prefs.png"))
+
 	items = append(items, fyne.NewMenuItemSeparator())
 	items = append(items, sa.CreateMenuItem("About Spice", func() {
 		sa.CreateAboutSplash()
 	}, "tray.png"))
+
 	items = append(items, fyne.NewMenuItemSeparator())
 	items = append(items, sa.CreateMenuItem("Quit", func() {
 		sa.os.TransformToForeground()     // Ensure the app is in the foreground before quitting
@@ -214,10 +223,25 @@ func (sa *SpiceApp) CreateTrayMenu() {
 	}, "quit.png"))
 
 	sa.trayMenu = fyne.NewMenu("", items...)
-	trayIcon, _ := sa.assetMgr.GetIcon("tray.png")
+	trayIcon, err := sa.assetMgr.GetIcon("tray.png")
+	if err != nil {
+		utilLog.Printf("ERROR: Failed to load tray icon: %v", err)
+	}
+
 	sa.SetIcon(trayIcon)
+
+	utilLog.Debug("Calling desk.SetSystemTrayMenu...")
 	desk.SetSystemTrayMenu(sa.trayMenu)
-	desk.SetSystemTrayIcon(trayIcon)
+	utilLog.Debug("desk.SetSystemTrayMenu finished.")
+
+	if trayIcon != nil {
+		utilLog.Debug("Calling desk.SetSystemTrayIcon...")
+		desk.SetSystemTrayIcon(trayIcon)
+		utilLog.Debug("desk.SetSystemTrayIcon finished.")
+	} else {
+		utilLog.Debug("Skipping desk.SetSystemTrayIcon (icon is nil)")
+	}
+	utilLog.Debug("System Tray Menu and Icon setup process completed.")
 }
 
 // DeactivateAllPlugins deactivates all plugins in the application
@@ -728,13 +752,11 @@ func (sa *SpiceApp) updateTrayMenu(info *util.CheckForUpdatesResult) {
 	})
 }
 
-// RefreshTrayMenu refreshes the tray menu
+// RefreshTrayMenu refreshes the tray menu labels and icons without rebuilding structure.
 func (sa *SpiceApp) RefreshTrayMenu() {
-	// Use fyne.Do to ensure UI updates happen on the main thread
 	fyne.Do(func() {
-		sa.trayMenu.Refresh()
-		if desk, ok := sa.App.(desktop.App); ok {
-			desk.SetSystemTrayMenu(sa.trayMenu)
+		if sa.trayMenu != nil {
+			sa.trayMenu.Refresh()
 		}
 	})
 }

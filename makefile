@@ -1,5 +1,9 @@
 # --- Extract version needed for EULA hash ---
-VERSION := $(shell sh -c "cat version.txt" 2> /dev/null || cmd /c "type version.txt")
+ifeq ($(OS),Windows_NT)
+	VERSION := $(shell cmd /c "type version.txt")
+else
+	VERSION := $(shell cat version.txt)
+endif
 
 # --- Build flags ---
 LDFLAGS_SECRETS := $(shell go run cmd/util/load_secrets/main.go)

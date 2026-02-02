@@ -2,6 +2,9 @@ package wallpaper
 
 import (
 	"fmt"
+	"image"
+	_ "image/jpeg"
+	_ "image/png"
 	"os"
 	"path/filepath"
 	"strings"
@@ -114,12 +117,16 @@ func (fm *FileManager) DeepDelete(id string) error {
 	// 1. Master (Root)
 	if f := findFile(fm.rootDir); f != "" {
 		filesToDelete = append(filesToDelete, f)
+		log.Debugf("DeepDelete: Found Master file %s", f)
 	}
 
 	// 2. Derivatives (Recursive in FittedRoot)
 	fittedRoot := filepath.Join(fm.rootDir, FittedRootDir)
+	log.Debugf("DeepDelete: Scanning fitted root %s for ID %s", fittedRoot, id)
+
 	err := filepath.Walk(fittedRoot, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
+			log.Printf("DeepDelete: Error accessing path %s: %v", path, err)
 			return nil // Skip access errors
 		}
 		if !info.IsDir() {
@@ -128,6 +135,7 @@ func (fm *FileManager) DeepDelete(id string) error {
 			fileID := strings.TrimSuffix(name, ext)
 			if fileID == id {
 				filesToDelete = append(filesToDelete, path)
+				log.Debugf("DeepDelete: Found Derivative file %s", path)
 			}
 		}
 		return nil
@@ -135,6 +143,8 @@ func (fm *FileManager) DeepDelete(id string) error {
 	if err != nil {
 		log.Printf("DeepDelete: Error walking fitted dir: %v", err)
 	}
+
+	log.Debugf("DeepDelete: Total files to delete for %s: %d", id, len(filesToDelete))
 
 	for _, f := range filesToDelete {
 		if err := os.Remove(f); err != nil {
@@ -144,6 +154,8 @@ func (fm *FileManager) DeepDelete(id string) error {
 			} else {
 				log.Printf("DeepDelete: Failed to delete %s: %v", f, err)
 			}
+		} else {
+			log.Debugf("DeepDelete: Successfully deleted %s", f)
 		}
 	}
 
@@ -242,4 +254,19 @@ func (fm *FileManager) DeleteDerivatives(id string) error {
 	}
 
 	return nil
+}
+
+// GetDimensions returns the width and height of an image file on disk.
+func (fm *FileManager) GetDimensions(path string) (int, int, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return 0, 0, err
+	}
+	defer file.Close()
+
+	img, _, err := image.DecodeConfig(file)
+	if err != nil {
+		return 0, 0, err
+	}
+	return img.Width, img.Height, nil
 }

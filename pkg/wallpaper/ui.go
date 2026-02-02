@@ -15,61 +15,107 @@ import (
 
 // CreateTrayMenuItems creates the menu items for the tray menu
 func (wp *Plugin) CreateTrayMenuItems() []*fyne.MenuItem {
-	items := []*fyne.MenuItem{}
-	items = append(items, wp.manager.CreateMenuItem("Next Wallpaper", func() {
-		go wp.SetNextWallpaper()
-	}, "next.png"))
-	items = append(items, wp.manager.CreateMenuItem("Prev Wallpaper", func() {
-		go wp.SetPreviousWallpaper()
-	}, "prev.png"))
+	wp.monMu.RLock()
+	monitorIDs := make([]int, 0, len(wp.Monitors))
+	for id := range wp.Monitors {
+		monitorIDs = append(monitorIDs, id)
+	}
+	wp.monMu.RUnlock()
+	sort.Ints(monitorIDs)
 
-	// Pause/Resume Item (Using ToggleMenuItem to leverage built-in refresh)
-	updatePauseVisuals := func() {
-		if wp.IsPaused() {
-			wp.pauseMenuItem.Label = "Resume Wallpaper"
-			wp.pauseMenuItem.Icon, _ = wp.manager.GetAssetManager().GetIcon("play.png")
-		} else {
-			wp.pauseMenuItem.Label = "Pause Wallpaper"
-			wp.pauseMenuItem.Icon, _ = wp.manager.GetAssetManager().GetIcon("pause.png")
+	wp.monMu.Lock()
+	wp.monitorMenu = make(map[int]*MonitorMenuItems)
+	wp.monMu.Unlock()
+
+	items := []*fyne.MenuItem{}
+
+	// --- HELPER: Create Monitor Section Items ---
+	createMonitorItems := func(mID int) []*fyne.MenuItem {
+		// Actions
+		nextItem := wp.manager.CreateMenuItem("Next Wallpaper", func() { go wp.SetNextWallpaper(mID) }, "next.png")
+		prevItem := wp.manager.CreateMenuItem("Prev Wallpaper", func() { go wp.SetPreviousWallpaper(mID) }, "prev.png")
+
+		// Global (but requested in root and submenus?)
+		// User instruction said: "sub menu with items starting from Next Wallpaper to Delete And Block"
+		// which includes Pause and Shuffle in his root list.
+		pauseItem := wp.manager.CreateToggleMenuItem("Pause Wallpaper", func(b bool) {
+			wp.TogglePause()
+			// This is a bit tricky since we have multiple menu items now.
+			// wp.RefreshTrayMenu() will handle it via updateTrayMenuUI if we trigger it.
+		}, "pause.png", wp.IsPaused())
+
+		shuffleItem := wp.manager.CreateToggleMenuItem("Shuffle Wallpapers", wp.SetShuffleImage, "shuffle.png", wp.cfg.GetImgShuffle())
+
+		// Info Items (Store in monitorMenu for updates)
+		mItems := &MonitorMenuItems{
+			ProviderMenuItem: wp.manager.CreateMenuItem("Source: Initializing...", nil, ""),
+			ArtistMenuItem: wp.manager.CreateMenuItem("By: Unknown", func() {
+				go wp.ViewCurrentImageOnWeb(mID)
+			}, "view.png"),
+		}
+		if q, exists := wp.cfg.GetQuery(FavoritesQueryID); exists && q.Active {
+			mItems.FavoriteMenuItem = wp.manager.CreateMenuItem("Add to Favorites", func() {
+				go wp.TriggerFavorite(mID)
+			}, "favorite.png")
+		}
+
+		deleteItem := wp.manager.CreateMenuItem("Delete And Block", func() {
+			go wp.DeleteCurrentImage(mID)
+		}, "delete.png")
+
+		wp.monMu.Lock()
+		wp.monitorMenu[mID] = mItems
+		wp.monMu.Unlock()
+
+		// Store root pause/shuffle for global updates if it's the primary
+		if mID == 0 {
+			wp.pauseMenuItem = pauseItem
+			// We don't have a shuffleMenuItem field but we could add it if needed.
+		}
+
+		res := []*fyne.MenuItem{
+			nextItem,
+			prevItem,
+			pauseItem,
+			shuffleItem,
+			fyne.NewMenuItemSeparator(),
+			mItems.ProviderMenuItem,
+			mItems.ArtistMenuItem,
+		}
+		if mItems.FavoriteMenuItem != nil {
+			res = append(res, mItems.FavoriteMenuItem)
+		}
+		res = append(res, deleteItem)
+
+		return res
+	}
+
+	// --- 1. Primary Monitor (Monitor 0) ---
+	items = append(items, createMonitorItems(0)...)
+
+	// --- 2. Other Monitors (Submenus) ---
+	if len(monitorIDs) > 1 {
+		items = append(items, fyne.NewMenuItemSeparator())
+		for _, mID := range monitorIDs {
+			if mID == 0 {
+				continue // Skip primary
+			}
+
+			displayName := fmt.Sprintf("Display %d", mID+1)
+			wp.monMu.RLock()
+			if m, ok := wp.Monitors[mID]; ok && m.Monitor.Name != "" {
+				// User screenshot showed "Display 2 (Monitor 1)"
+				displayName = fmt.Sprintf("Display %d (%s)", mID+1, m.Monitor.Name)
+			}
+			wp.monMu.RUnlock()
+
+			subMenu := fyne.NewMenuItem(displayName, nil)
+			subMenu.ChildMenu = fyne.NewMenu(displayName, createMonitorItems(mID)...)
+			items = append(items, subMenu)
 		}
 	}
 
-	wp.pauseMenuItem = wp.manager.CreateToggleMenuItem("Pause Wallpaper", func(b bool) {
-		wp.TogglePause()
-		updatePauseVisuals()
-	}, "pause.png", wp.IsPaused())
-
-	// Initial visual update (to override default checkmark if needed, though CreateToggleMenuItem sets label first)
-	updatePauseVisuals()
-
-	items = append(items, wp.pauseMenuItem)
-
-	items = append(items, wp.manager.CreateToggleMenuItem("Shuffle Wallpapers", wp.SetShuffleImage, "shuffle.png", wp.cfg.GetImgShuffle()))
-	// Relax Smart Fit removed from tray (Use Preferences)
-	items = append(items, fyne.NewMenuItemSeparator())
-	// Provider Info (Static)
-	wp.providerMenuItem = wp.manager.CreateMenuItem("Initializing...", nil, "")
-	items = append(items, wp.providerMenuItem)
-
-	// Artist/Source Link (Clickable)
-	wp.artistMenuItem = wp.manager.CreateMenuItem("Unknown", func() {
-		go wp.ViewCurrentImageOnWeb()
-	}, "view.png")
-	items = append(items, wp.artistMenuItem)
-	// Favorites Item
-	q, exists := wp.cfg.GetQuery(FavoritesQueryID)
-	if exists && q.Active {
-		wp.favoriteMenuItem = wp.manager.CreateMenuItem("Add to Favorites", func() {
-			go wp.ToggleFavorite()
-		}, "favorite.png")
-		items = append(items, wp.favoriteMenuItem)
-		wp.updateFavoriteMenuItem(false) // Initialize label/icon
-	}
-
-	items = append(items, wp.manager.CreateMenuItem("Delete and Block Image", func() {
-		go wp.DeleteCurrentImage()
-	}, "delete.png"))
-
+	utilLog.Debugf("Finished Generating Tray Menu Items for %d monitors.", len(monitorIDs))
 	return items
 }
 

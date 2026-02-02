@@ -33,7 +33,7 @@ type TuningConfig struct {
 func DefaultTuningConfig() TuningConfig {
 	return TuningConfig{
 		AspectThreshold:              0.9,
-		AggressiveMultiplier:         1.9,
+		AggressiveMultiplier:         2.5,
 		MinEnergyThreshold:           0.05,
 		FeetGuardRatio:               0.5,
 		FeetGuardSlackThreshold:      0.8,

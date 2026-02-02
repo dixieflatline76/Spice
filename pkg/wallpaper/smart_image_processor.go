@@ -130,8 +130,23 @@ func (c *SmartImageProcessor) CheckCompatibility(imgWidth, imgHeight, systemWidt
 	// "Quality" Mode (SmartFitNormal)
 	if mode == SmartFitNormal {
 		// Gate limit (1.5) in pre-check to allow potential "Face Rescue" for non-native fits.
-		// This matches the absolute cap of Flexibility mode, but FitImage will enforce
-		// strictness (0.9) unless a strong face is found.
+		// However, for Quality mode, we want to avoid drastic orientation swaps (e.g. Landscape to Portrait)
+		// unless the image is reasonably square.
+
+		isSquare := imgWidth == imgHeight
+		if !isSquare {
+			srcLand := imgWidth > imgHeight
+			tgtLand := systemWidth > systemHeight
+			if srcLand != tgtLand {
+				// Orientation Mismatch (e.g. Wide Image on Tall Monitor)
+				// 0.5 Diff Threshold prevents 3:2 Landscape (1.5) on 10:16 Portrait (0.625) -> Diff 0.875
+				// But allows Square (1.0) on Portrait (0.625) -> Diff 0.375
+				if aspectDiff > 0.5 {
+					return fmt.Errorf("incompatible orientation for Quality mode (Diff %.2f > 0.5)", aspectDiff)
+				}
+			}
+		}
+
 		if aspectDiff > 1.5 {
 			return fmt.Errorf("aspect ratio diff too large for Quality mode (%.2f > 1.5)", aspectDiff)
 		}
@@ -153,7 +168,23 @@ func (c *SmartImageProcessor) CheckCompatibility(imgWidth, imgHeight, systemWidt
 			effectiveThreshold = 1.5
 		}
 
-		log.Debugf("SmartFit [Flexibility]: Check (Surplus: %.2f, DynamicThreshold: %.2f, Diff: %.2f)", surplus, effectiveThreshold, aspectDiff)
+		// Orientation Safety: Block drastic mismatches (e.g. Landscape on Portrait)
+		// Square images (imgWidth == imgHeight) are exempted to allow safe cropping.
+		isSquare := imgWidth == imgHeight
+		if !isSquare {
+			srcLand := imgWidth > imgHeight
+			tgtLand := systemWidth > systemHeight
+			if srcLand != tgtLand {
+				// Orientation Mismatch: Cap threshold to block bad crops (e.g. 16:9 on 9:16)
+				// Limit of 0.8 allows 4:3 on Portrait (Diff ~0.7) but blocks 16:9 on Portrait (Diff ~1.15)
+				if effectiveThreshold > 0.8 {
+					effectiveThreshold = 0.8
+				}
+			}
+		}
+
+		log.Debugf("SmartFit [Flexibility]: Check (Src: %dx%d, Tgt: %dx%d, Surplus: %.2f, DynamicThreshold: %.2f, Diff: %.2f)",
+			imgWidth, imgHeight, systemWidth, systemHeight, surplus, effectiveThreshold, aspectDiff)
 
 		if aspectDiff > effectiveThreshold {
 			return fmt.Errorf("image aspect ratio not compatible (Diff: %.2f > Limit: %.2f)", aspectDiff, effectiveThreshold)

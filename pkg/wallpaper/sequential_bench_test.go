@@ -106,9 +106,6 @@ func BenchmarkSequentialSwitch(b *testing.B) {
 	store.SetFileManager(fm, filepath.Join(tmpDir, "cache.json"))
 
 	// Create Plugin (Minimal)
-	// We need dummy menu items to avoid panic in updateTrayMenuUI
-	dummyMenuItem := &fyne.MenuItem{}
-
 	wp := &Plugin{
 		manager:          &BenchMockPluginManager{},
 		store:            store,
@@ -116,8 +113,6 @@ func BenchmarkSequentialSwitch(b *testing.B) {
 		downloadMutex:    sync.RWMutex{},
 		shuffleImageFlag: util.NewSafeBoolWithValue(false),
 		fitImageFlag:     util.NewSafeBoolWithValue(false),
-		providerMenuItem: dummyMenuItem,
-		artistMenuItem:   dummyMenuItem,
 		// We need to mock "runOnUI" since we are in a test
 		runOnUI: func(f func()) { f() },
 
@@ -153,6 +148,6 @@ func BenchmarkSequentialSwitch(b *testing.B) {
 		// SetNextWallpaper is private `func (wp *Plugin) SetNextWallpaper()`
 		// We are in `wallpaper` package, so we CAN call it.
 
-		wp.SetNextWallpaper()
+		wp.SetNextWallpaper(-1)
 	}
 }

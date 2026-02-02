@@ -11,19 +11,20 @@ import (
 // Image represents a generic wallpaper image.
 type Image struct {
 	ID               string
-	Path             string          // URL to download the image
-	ViewURL          string          // URL to view the image in browser
-	FilePath         string          // Local path after download (optional/computed)
-	Attribution      string          // Photographer or Uploader name
-	Provider         string          // Source provider name
-	FileType         string          // Content type (e.g., "image/jpeg")
-	DownloadLocation string          // URL to trigger download event (Unsplash requirement)
-	ProcessingFlags  map[string]bool // Flags indicating how the image was processed (e.g. "SmartFit", "FaceCrop")
-	SourceQueryID    string          // ID of the query that produced this image (for smart cache clearing)
-	Width            int             // Image Width (if available from source)
-	Height           int             // Image Height (if available from source)
-	IsFavorited      bool            // Flag to protect image from cache pruning
-	Seen             bool            // Flag for pagination/history logic
+	Path             string            // URL to download the image
+	ViewURL          string            // URL to view the image in browser
+	FilePath         string            // Local path after download (optional/computed)
+	Attribution      string            // Photographer or Uploader name
+	Provider         string            // Source provider name
+	FileType         string            // Content type (e.g., "image/jpeg")
+	DownloadLocation string            // URL to trigger download event (Unsplash requirement)
+	ProcessingFlags  map[string]bool   // Flags indicating how the image was processed (e.g. "SmartFit", "FaceCrop")
+	DerivativePaths  map[string]string // Local file paths for different resolutions (e.g. "3440x1440" -> "/path/to/image.jpg")
+	SourceQueryID    string            // ID of the query that produced this image (for smart cache clearing)
+	Width            int               // Image Width (if available from source)
+	Height           int               // Image Height (if available from source)
+	IsFavorited      bool              // Flag to protect image from cache pruning
+	Seen             bool              // Flag for pagination/history logic
 }
 
 // Favoriter defines the interface for providers that support favoriting images.

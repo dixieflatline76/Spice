@@ -103,7 +103,7 @@ func (p *PexelsProvider) ParseURL(webURL string) (string, error) {
 			return "", fmt.Errorf("failed to decode query from URL: %w", err)
 		}
 
-		apiURL, _ := url.Parse(PexelsAPISearchURL)
+		apiURL, _ := url.Parse(wallpaper.PexelsAPISearchURL)
 		q := apiURL.Query()
 		q.Set("query", query)
 
@@ -129,7 +129,7 @@ func (p *PexelsProvider) ParseURL(webURL string) (string, error) {
 			return "", fmt.Errorf("could not extract collection ID from URL")
 		}
 		collectionID := matches[1]
-		return fmt.Sprintf(PexelsAPICollectionURL, collectionID), nil
+		return fmt.Sprintf(wallpaper.PexelsAPICollectionURL, collectionID), nil
 	}
 
 	return "", fmt.Errorf("unsupported Pexels URL format")
@@ -137,6 +137,17 @@ func (p *PexelsProvider) ParseURL(webURL string) (string, error) {
 
 // FetchImages fetches images from the Pexels API.
 func (p *PexelsProvider) FetchImages(ctx context.Context, apiURL string, page int) ([]provider.Image, error) {
+	// Robustness: Check if we have a web URL and convert it on the fly
+	if strings.Contains(apiURL, "www.pexels.com") || strings.Contains(apiURL, "pexels.com/search") || strings.Contains(apiURL, "pexels.com/collections") {
+		converted, err := p.ParseURL(apiURL)
+		if err == nil {
+			log.Printf("Pexels: Converted legacy Web URL to API URL: %s", converted)
+			apiURL = converted
+		} else {
+			log.Printf("Pexels: Warning - Failed to convert URL %s: %v", apiURL, err)
+		}
+	}
+
 	u, err := url.Parse(apiURL)
 	if err != nil {
 		return nil, fmt.Errorf("invalid API URL: %w", err)
@@ -171,7 +182,12 @@ func (p *PexelsProvider) FetchImages(ctx context.Context, apiURL string, page in
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		log.Printf("Pexels API Error: %s", string(body))
+		// Don't log full body if it's huge (like HTML), just snippet
+		if len(body) > 500 {
+			log.Printf("Pexels API Error (%d): %s...", resp.StatusCode, string(body[:500]))
+		} else {
+			log.Printf("Pexels API Error (%d): %s", resp.StatusCode, string(body))
+		}
 		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
 	}
 
@@ -193,11 +209,6 @@ func (p *PexelsProvider) FetchImages(ctx context.Context, apiURL string, page in
 		}
 		for _, photo := range collectionResp.Media {
 			if photo.Type == "Photo" { // Ensure we only get photos, though 'media' suggests mixed
-				// Wait, Pexels 'media' field in collections might have videos too?
-				// The API docs say "media": [ ... ]. Checking documentation or assumption.
-				// For safety, let's assume it matches PexelsPhoto structure if type is Photo.
-				// Actually, PexelsCollectionResponse usually returns 'media' array.
-				// Let's implement robustly.
 				images = append(images, p.mapPexelsImage(photo))
 			}
 		}
@@ -290,7 +301,7 @@ func (p *PexelsProvider) CreateSettingsPanel(sm setting.SettingsManager) fyne.Ca
 		PlaceHolder:   "Enter your Pexels API Key",
 		Label:         sm.CreateSettingTitleLabel("Pexels API Key:"),
 		HelpContent:   widget.NewHyperlink("Get a free API key from Pexels.", pexURL),
-		Validator:     validation.NewRegexp(PexelsAPIKeyRegexp, "Invalid API Key format (56 characters)"),
+		Validator:     validation.NewRegexp(wallpaper.PexelsAPIKeyRegexp, "Invalid API Key format (56 characters)"),
 		NeedsRefresh:  true,
 		DisplayStatus: true,
 	}
@@ -327,10 +338,10 @@ func (p *PexelsProvider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl
 	addQueryCfg := wallpaper.AddQueryConfig{
 		Title:           "New Pexels Query",
 		URLPlaceholder:  "Pexels Search URL (e.g. https://www.pexels.com/search/nature/)",
-		URLValidator:    PexelsURLRegexp,
+		URLValidator:    wallpaper.PexelsURLRegexp,
 		URLErrorMsg:     "Invalid Pexels URL (search or collection)",
 		DescPlaceholder: "Add a description",
-		DescValidator:   PexelsDescRegexp,
+		DescValidator:   wallpaper.PexelsDescRegexp,
 		DescErrorMsg:    fmt.Sprintf("Description must be between 5 and %d alpha numeric characters long", wallpaper.MaxDescLength),
 		ValidateFunc: func(url, desc string) error {
 			// Validate string using Pexels specific logic
@@ -344,7 +355,12 @@ func (p *PexelsProvider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl
 			return nil
 		},
 		AddHandler: func(desc, url string, active bool) (string, error) {
-			return p.cfg.AddPexelsQuery(desc, url, active)
+			// Convert Web URL to API URL before saving
+			apiURL, err := p.ParseURL(url)
+			if err != nil {
+				return "", fmt.Errorf("failed to convert URL: %w", err)
+			}
+			return p.cfg.AddPexelsQuery(desc, apiURL, active)
 		},
 	}
 
