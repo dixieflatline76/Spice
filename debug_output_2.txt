@@ -32,6 +32,10 @@ Image: Full Portrait        (full_portrait.jpeg)
   -> Primary:   REJECTED (Orientation Mismatch: Img=0.67, Mon=2.39)
   -> Secondary: ACCEPTED
 ----------------------------------------------------------------
+Image: Mystery Landscape    (mystery_landscape.jpg)
+  -> Primary:   ACCEPTED
+  -> Secondary: REJECTED (Orientation Mismatch: Img=1.49, Mon=0.62)
+----------------------------------------------------------------
 --- PASS: TestDebugRouting_RealImages (0.00s)
 PASS
-ok  	github.com/dixieflatline76/Spice/pkg/wallpaper	(cached)
+ok  	github.com/dixieflatline76/Spice/pkg/wallpaper	0.117s

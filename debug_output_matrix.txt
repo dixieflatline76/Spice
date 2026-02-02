@@ -1,0 +1,2 @@
+FAIL	github.com/dixieflatline76/Spice/pkg/wallpaper [build failed]
+FAIL

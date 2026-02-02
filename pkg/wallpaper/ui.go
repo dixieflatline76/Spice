@@ -115,6 +115,7 @@ func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 	// Declare check widgets early for usage in closures
 	var faceCropCheck *widget.Check
 	var faceBoostCheck *widget.Check
+	var staggerCheck *widget.Check
 
 	// Smart Fit Mode
 	// 0: Disabled
@@ -236,6 +237,49 @@ func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 	if wp.cfg.GetSmartFitMode() == SmartFitOff {
 		faceCropCheck.Disable()
 		faceBoostCheck.Disable()
+	}
+
+	// Multi-Monitor Settings
+	var syncConfig setting.BoolConfig
+	var staggerConfig setting.BoolConfig
+
+	syncConfig = setting.BoolConfig{
+		Name:         "syncMonitors",
+		InitialValue: wp.cfg.GetSyncMonitors(),
+		Label:        sm.CreateSettingTitleLabel("Sync all screens:"),
+		HelpContent:  sm.CreateSettingDescriptionLabel("When ON, all monitors display the same image. When OFF, each monitor displays a unique image."),
+		ApplyFunc: func(b bool) {
+			wp.cfg.SetSyncMonitors(b)
+			syncConfig.InitialValue = b
+		},
+		OnChanged: func(b bool) {
+			if b {
+				staggerCheck.Disable()
+			} else {
+				staggerCheck.Enable()
+			}
+		},
+		NeedsRefresh: true,
+	}
+
+	staggerConfig = setting.BoolConfig{
+		Name:         "staggerChanges",
+		InitialValue: wp.cfg.GetStaggerMonitorChanges(),
+		Label:        sm.CreateSettingTitleLabel("Stagger monitor changes:"),
+		HelpContent:  sm.CreateSettingDescriptionLabel("Introduces a random delay when changing wallpapers across multiple screens to prevent a jarring simultaneous flash."),
+		ApplyFunc: func(b bool) {
+			wp.cfg.SetStaggerMonitorChanges(b)
+			staggerConfig.InitialValue = b
+		},
+		NeedsRefresh: false,
+	}
+
+	sm.CreateBoolSetting(&syncConfig, generalContainer)
+	staggerCheck = sm.CreateBoolSetting(&staggerConfig, generalContainer)
+
+	// Initial state for staggerCheck
+	if wp.cfg.GetSyncMonitors() {
+		staggerCheck.Disable()
 	}
 
 	// Change Wallpaper on Start

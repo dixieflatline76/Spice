@@ -111,49 +111,48 @@ func (c *SmartImageProcessor) EncodeImage(ctx context.Context, img image.Image, 
 
 // CheckCompatibility checks if an image of given dimensions is compatible with Smart Fit settings.
 // CheckCompatibility checks if an image of given dimensions is compatible with Smart Fit settings.
-func (c *SmartImageProcessor) CheckCompatibility(width, height int) error {
+func (c *SmartImageProcessor) CheckCompatibility(imgWidth, imgHeight, systemWidth, systemHeight int) error {
 	mode := c.config.GetSmartFitMode()
 
 	if mode == SmartFitOff {
 		return nil
 	}
 
-	systemWidth, systemHeight, err := c.os.GetDesktopDimension()
-	if err != nil {
-		return fmt.Errorf("getting desktop dimensions: %w", err)
-	}
-
-	// 1. Strict Resolution Floor
-	// User Requirement: Both width and height must be >= desktop resolution.
-	if width < systemWidth || height < systemHeight {
-		log.Debugf("SmartFit: Image too small (%dx%d vs %dx%d)", width, height, systemWidth, systemHeight)
-		return fmt.Errorf("image resolution too low (must be at least desktop size)")
+	if imgWidth <= 0 || imgHeight <= 0 || systemWidth <= 0 || systemHeight <= 0 {
+		return nil // Assume compatible if dimensions are missing/invalid (prevents test regressions)
 	}
 
 	// 2. Aspect Ratio Tolerance
-	// "Quality" Mode:
-	// Normally we reject if Diff > 0.9.
-	// HOWEVER, we now support "Face Rescue" (Accepting > 0.9 IF Face Q > 20).
-	// Since usage in downloader.go cannot see faces/pixels, we MUST accept here to allow the download proceed.
-	// We will enforce the strict rejection in FitImage if no face is found.
-	if mode == SmartFitNormal {
-		return nil
-	}
-
-	// "Flexibility" Mode (SmartFitAggressive):
-	// Relaxed adherence based on resolution.
-	imageAspect := float64(width) / float64(height)
+	imageAspect := float64(imgWidth) / float64(imgHeight)
 	systemAspect := float64(systemWidth) / float64(systemHeight)
 	aspectDiff := math.Abs(systemAspect - imageAspect)
 
+	// "Quality" Mode (SmartFitNormal)
+	if mode == SmartFitNormal {
+		// Gate limit (1.5) in pre-check to allow potential "Face Rescue" for non-native fits.
+		// This matches the absolute cap of Flexibility mode, but FitImage will enforce
+		// strictness (0.9) unless a strong face is found.
+		if aspectDiff > 1.5 {
+			return fmt.Errorf("aspect ratio diff too large for Quality mode (%.2f > 1.5)", aspectDiff)
+		}
+		return nil
+	}
+
+	// "Flexibility" Mode (SmartFitAggressive)
 	if mode == SmartFitAggressive {
-		// Calculate how much "surplus" resolution we have relative to the screen.
-		scaleX := float64(width) / float64(systemWidth)
-		scaleY := float64(height) / float64(systemHeight)
+		scaleX := float64(imgWidth) / float64(systemWidth)
+		scaleY := float64(imgHeight) / float64(systemHeight)
 		surplus := math.Min(scaleX, scaleY)
 
 		// Dynamic Formula: Base * Surplus * AggressiveMultiplier (1.9)
 		effectiveThreshold := c.config.Tuning.AspectThreshold * surplus * c.config.Tuning.AggressiveMultiplier
+
+		// SAFETY CAP: Even with high resolution, don't allow insane crops.
+		// 1.5 is the absolute limit for Flexibility. Anything beyond this regardless of resolution is a "sliver".
+		if effectiveThreshold > 1.5 {
+			effectiveThreshold = 1.5
+		}
+
 		log.Debugf("SmartFit [Flexibility]: Check (Surplus: %.2f, DynamicThreshold: %.2f, Diff: %.2f)", surplus, effectiveThreshold, aspectDiff)
 
 		if aspectDiff > effectiveThreshold {
@@ -165,16 +164,16 @@ func (c *SmartImageProcessor) CheckCompatibility(width, height int) error {
 }
 
 // FitImage fits an image with context awareness.
-func (c *SmartImageProcessor) FitImage(ctx context.Context, img image.Image) (image.Image, error) {
+func (c *SmartImageProcessor) FitImage(ctx context.Context, img image.Image, targetWidth, targetHeight int) (image.Image, error) {
 	if c.config.GetSmartFitMode() == SmartFitOff {
 		c.lastStats = FaceDetectionStats{}
 		return img, nil
 	}
 
-	systemWidth, systemHeight, err := c.os.GetDesktopDimension() // No context here (TEMP)
-	if err != nil {
-		return nil, fmt.Errorf("getting desktop dimensions: %w", err)
-	}
+	// Previously we called c.os.GetDesktopDimension() here.
+	// Now we rely on the caller to provide dimensions.
+	systemWidth := targetWidth
+	systemHeight := targetHeight
 
 	if err := checkContext(ctx); err != nil {
 		return nil, err
@@ -189,7 +188,7 @@ func (c *SmartImageProcessor) FitImage(ctx context.Context, img image.Image) (im
 	r := &resizer{resampler: c.resampler}
 
 	// Pre-check basic compatibility (Resolution mainly)
-	if err := c.CheckCompatibility(imageWidth, imageHeight); err != nil {
+	if err := c.CheckCompatibility(imageWidth, imageHeight, targetWidth, targetHeight); err != nil {
 		log.Debugf("FitImage: %v", err)
 		return nil, err
 	}

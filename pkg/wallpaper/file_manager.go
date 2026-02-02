@@ -86,6 +86,17 @@ func (fm *FileManager) GetDerivativePath(id string, ext string, derivativeType s
 	return filepath.Join(fm.rootDir, derivativeType, id+ext), nil
 }
 
+// DerivativeExists checks if a specific derivative exists on disk.
+// derivativeDir should be the resolution folder name (e.g. "1920x1080")
+func (fm *FileManager) DerivativeExists(id string, ext string, derivativeDir string) bool {
+	path, err := fm.GetDerivativePath(id, ext, derivativeDir)
+	if err != nil {
+		return false
+	}
+	_, err = os.Stat(path)
+	return err == nil
+}
+
 // DeepDelete removes the Master image and ALL its derivatives.
 // It searches for files with the given ID in all known directories.
 func (fm *FileManager) DeepDelete(id string) error {

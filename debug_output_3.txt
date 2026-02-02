@@ -32,6 +32,11 @@ Image: Full Portrait        (full_portrait.jpeg)
   -> Primary:   REJECTED (Orientation Mismatch: Img=0.67, Mon=2.39)
   -> Secondary: ACCEPTED
 ----------------------------------------------------------------
---- PASS: TestDebugRouting_RealImages (0.00s)
+Image: Mystery Landscape    (mystery_landscape.jpg)
+  -> Primary:   ACCEPTED
+  -> Secondary: REJECTED (Orientation Mismatch: Img=1.49, Mon=0.62)
+----------------------------------------------------------------
+    routing_debug_test.go:128: SKIPPING Zero Metadata: File not found at testdata\real_images\zero_metadata.jpg
+--- PASS: TestDebugRouting_RealImages (0.01s)
 PASS
-ok  	github.com/dixieflatline76/Spice/pkg/wallpaper	(cached)
+ok  	github.com/dixieflatline76/Spice/pkg/wallpaper	0.145s

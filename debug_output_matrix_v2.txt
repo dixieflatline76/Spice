@@ -1,0 +1,168 @@
+=== RUN   TestDebugRouting_RealImages
+
+=== CONFIG: Quality (Normal) ===
+Primary Monitor: 3440x1440 (Aspect 2.39)
+Secondary Monitor: 1600x2560 (Aspect 0.62)
+----------------------------------------------------------------
+Image: Ultrawide            (ultrawide.jpg)
+  -> Primary (Mon 0):   ACCEPTED
+  -> Secondary (Mon 1): REJECTED (Orientation Mismatch: Img=1.96, Mon=0.62)
+----------------------------------------------------------------
+Image: Wide                 (wide.jpg)
+  -> Primary (Mon 0):   ACCEPTED
+  -> Secondary (Mon 1): REJECTED (Orientation Mismatch: Img=1.67, Mon=0.62)
+----------------------------------------------------------------
+Image: Old Laptop           (old_laptop.jpg)
+  -> Primary (Mon 0):   ACCEPTED
+  -> Secondary (Mon 1): REJECTED (Orientation Mismatch: Img=1.25, Mon=0.62)
+----------------------------------------------------------------
+Image: Kinda Square         (kinda_square.jpg)
+  -> Primary (Mon 0):   ACCEPTED
+  -> Secondary (Mon 1): REJECTED (Orientation Mismatch: Img=1.26, Mon=0.62)
+----------------------------------------------------------------
+Image: Perfect Square       (perfect_square.jpeg)
+  -> Primary (Mon 0):   REJECTED (Orientation Mismatch: Img=0.96, Mon=2.39)
+  -> Secondary (Mon 1): ACCEPTED
+----------------------------------------------------------------
+Image: Portrait Like Square (portrait_like_square.jpeg)
+  -> Primary (Mon 0):   REJECTED (Orientation Mismatch: Img=0.89, Mon=2.39)
+  -> Secondary (Mon 1): ACCEPTED
+----------------------------------------------------------------
+Image: Full Portrait        (full_portrait.jpeg)
+  -> Primary (Mon 0):   REJECTED (Orientation Mismatch: Img=0.67, Mon=2.39)
+  -> Secondary (Mon 1): ACCEPTED
+----------------------------------------------------------------
+Image: Mystery Landscape    (mystery_landscape.jpg)
+  -> Primary (Mon 0):   ACCEPTED
+  -> Secondary (Mon 1): REJECTED (Orientation Mismatch: Img=1.49, Mon=0.62)
+----------------------------------------------------------------
+Image: Zero Metadata        (zero_metadata.jpg)
+  -> Primary (Mon 0):   ACCEPTED (Default: missing metadata checks)
+  -> Secondary (Mon 1): ACCEPTED (Default: missing metadata checks)
+----------------------------------------------------------------
+
+=== CONFIG: Flexibility (Aggressive) ===
+Primary Monitor: 3440x1440 (Aspect 2.39)
+Secondary Monitor: 1600x2560 (Aspect 0.62)
+----------------------------------------------------------------
+Image: Ultrawide            (ultrawide.jpg)
+  -> Primary (Mon 0):   ACCEPTED
+  -> Secondary (Mon 1): REJECTED (Orientation Mismatch: Img=1.96, Mon=0.62)
+----------------------------------------------------------------
+Image: Wide                 (wide.jpg)
+  -> Primary (Mon 0):   ACCEPTED
+  -> Secondary (Mon 1): REJECTED (Orientation Mismatch: Img=1.67, Mon=0.62)
+----------------------------------------------------------------
+Image: Old Laptop           (old_laptop.jpg)
+  -> Primary (Mon 0):   ACCEPTED
+  -> Secondary (Mon 1): REJECTED (Orientation Mismatch: Img=1.25, Mon=0.62)
+----------------------------------------------------------------
+Image: Kinda Square         (kinda_square.jpg)
+  -> Primary (Mon 0):   ACCEPTED
+  -> Secondary (Mon 1): REJECTED (Orientation Mismatch: Img=1.26, Mon=0.62)
+----------------------------------------------------------------
+Image: Perfect Square       (perfect_square.jpeg)
+  -> Primary (Mon 0):   REJECTED (Orientation Mismatch: Img=0.96, Mon=2.39)
+  -> Secondary (Mon 1): ACCEPTED
+----------------------------------------------------------------
+Image: Portrait Like Square (portrait_like_square.jpeg)
+  -> Primary (Mon 0):   REJECTED (Orientation Mismatch: Img=0.89, Mon=2.39)
+  -> Secondary (Mon 1): ACCEPTED
+----------------------------------------------------------------
+Image: Full Portrait        (full_portrait.jpeg)
+  -> Primary (Mon 0):   REJECTED (Orientation Mismatch: Img=0.67, Mon=2.39)
+  -> Secondary (Mon 1): ACCEPTED
+----------------------------------------------------------------
+Image: Mystery Landscape    (mystery_landscape.jpg)
+  -> Primary (Mon 0):   ACCEPTED
+  -> Secondary (Mon 1): REJECTED (Orientation Mismatch: Img=1.49, Mon=0.62)
+----------------------------------------------------------------
+Image: Zero Metadata        (zero_metadata.jpg)
+  -> Primary (Mon 0):   ACCEPTED (Default: missing metadata checks)
+  -> Secondary (Mon 1): ACCEPTED (Default: missing metadata checks)
+----------------------------------------------------------------
+
+=== CONFIG: Quality + FaceCrop ===
+Primary Monitor: 3440x1440 (Aspect 2.39)
+Secondary Monitor: 1600x2560 (Aspect 0.62)
+----------------------------------------------------------------
+Image: Ultrawide            (ultrawide.jpg)
+  -> Primary (Mon 0):   ACCEPTED
+  -> Secondary (Mon 1): REJECTED (Orientation Mismatch: Img=1.96, Mon=0.62)
+----------------------------------------------------------------
+Image: Wide                 (wide.jpg)
+  -> Primary (Mon 0):   ACCEPTED
+  -> Secondary (Mon 1): REJECTED (Orientation Mismatch: Img=1.67, Mon=0.62)
+----------------------------------------------------------------
+Image: Old Laptop           (old_laptop.jpg)
+  -> Primary (Mon 0):   ACCEPTED
+  -> Secondary (Mon 1): REJECTED (Orientation Mismatch: Img=1.25, Mon=0.62)
+----------------------------------------------------------------
+Image: Kinda Square         (kinda_square.jpg)
+  -> Primary (Mon 0):   ACCEPTED
+  -> Secondary (Mon 1): REJECTED (Orientation Mismatch: Img=1.26, Mon=0.62)
+----------------------------------------------------------------
+Image: Perfect Square       (perfect_square.jpeg)
+  -> Primary (Mon 0):   REJECTED (Orientation Mismatch: Img=0.96, Mon=2.39)
+  -> Secondary (Mon 1): ACCEPTED
+----------------------------------------------------------------
+Image: Portrait Like Square (portrait_like_square.jpeg)
+  -> Primary (Mon 0):   REJECTED (Orientation Mismatch: Img=0.89, Mon=2.39)
+  -> Secondary (Mon 1): ACCEPTED
+----------------------------------------------------------------
+Image: Full Portrait        (full_portrait.jpeg)
+  -> Primary (Mon 0):   REJECTED (Orientation Mismatch: Img=0.67, Mon=2.39)
+  -> Secondary (Mon 1): ACCEPTED
+----------------------------------------------------------------
+Image: Mystery Landscape    (mystery_landscape.jpg)
+  -> Primary (Mon 0):   ACCEPTED
+  -> Secondary (Mon 1): REJECTED (Orientation Mismatch: Img=1.49, Mon=0.62)
+----------------------------------------------------------------
+Image: Zero Metadata        (zero_metadata.jpg)
+  -> Primary (Mon 0):   ACCEPTED (Default: missing metadata checks)
+  -> Secondary (Mon 1): ACCEPTED (Default: missing metadata checks)
+----------------------------------------------------------------
+
+=== CONFIG: Flexibility + FaceBoost ===
+Primary Monitor: 3440x1440 (Aspect 2.39)
+Secondary Monitor: 1600x2560 (Aspect 0.62)
+----------------------------------------------------------------
+Image: Ultrawide            (ultrawide.jpg)
+  -> Primary (Mon 0):   ACCEPTED
+  -> Secondary (Mon 1): REJECTED (Orientation Mismatch: Img=1.96, Mon=0.62)
+----------------------------------------------------------------
+Image: Wide                 (wide.jpg)
+  -> Primary (Mon 0):   ACCEPTED
+  -> Secondary (Mon 1): REJECTED (Orientation Mismatch: Img=1.67, Mon=0.62)
+----------------------------------------------------------------
+Image: Old Laptop           (old_laptop.jpg)
+  -> Primary (Mon 0):   ACCEPTED
+  -> Secondary (Mon 1): REJECTED (Orientation Mismatch: Img=1.25, Mon=0.62)
+----------------------------------------------------------------
+Image: Kinda Square         (kinda_square.jpg)
+  -> Primary (Mon 0):   ACCEPTED
+  -> Secondary (Mon 1): REJECTED (Orientation Mismatch: Img=1.26, Mon=0.62)
+----------------------------------------------------------------
+Image: Perfect Square       (perfect_square.jpeg)
+  -> Primary (Mon 0):   REJECTED (Orientation Mismatch: Img=0.96, Mon=2.39)
+  -> Secondary (Mon 1): ACCEPTED
+----------------------------------------------------------------
+Image: Portrait Like Square (portrait_like_square.jpeg)
+  -> Primary (Mon 0):   REJECTED (Orientation Mismatch: Img=0.89, Mon=2.39)
+  -> Secondary (Mon 1): ACCEPTED
+----------------------------------------------------------------
+Image: Full Portrait        (full_portrait.jpeg)
+  -> Primary (Mon 0):   REJECTED (Orientation Mismatch: Img=0.67, Mon=2.39)
+  -> Secondary (Mon 1): ACCEPTED
+----------------------------------------------------------------
+Image: Mystery Landscape    (mystery_landscape.jpg)
+  -> Primary (Mon 0):   ACCEPTED
+  -> Secondary (Mon 1): REJECTED (Orientation Mismatch: Img=1.49, Mon=0.62)
+----------------------------------------------------------------
+Image: Zero Metadata        (zero_metadata.jpg)
+  -> Primary (Mon 0):   ACCEPTED (Default: missing metadata checks)
+  -> Secondary (Mon 1): ACCEPTED (Default: missing metadata checks)
+----------------------------------------------------------------
+--- PASS: TestDebugRouting_RealImages (0.02s)
+PASS
+ok  	github.com/dixieflatline76/Spice/pkg/wallpaper	0.167s

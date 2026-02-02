@@ -56,7 +56,7 @@ func TestBrowserBridgeLatency(t *testing.T) {
 		start := time.Now()
 
 		// A. Trigger Action (Driver Side)
-		err := chromeDriver.SetWallpaper(testPath)
+		err := chromeDriver.SetWallpaper(testPath, 0)
 		assert.NoError(t, err)
 
 		// B. Receive Message (Extension Side)

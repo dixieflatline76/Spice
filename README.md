@@ -35,6 +35,8 @@ Spice is a minimalist wallpaper manager that brings a continuous stream of delig
     *   **Face Boost:** Ensures people are perfectly framed.
 *   **⚡ Ultra-Responsive:** Engineered for zero-lag performance, ensuring the UI stays buttery smooth even while downloading heavy 4K content.
 *   **⚙️ Tabbed Preferences:** Manage dozens of sources easily with our new organized settings tabs (**Online**, **Local**, **Museum**, **AI**).
+*   **🖥️ Multi-Monitor Support:** Automatically detects all connected displays and applies high-quality wallpapers natively to each screen. Supports *Synced Mode* (all screens match) and *Independent Mode* (each screen unique).
+    *   *Note:* In the current MVP, tray actions and hotkeys (View on Web, Block, Favorite) target the **primary** display only.
 
 ### 🎮 Control & Experience
 *   **⌨️ Global Hotkeys:** Control Spice instantly from anywhere:
@@ -91,7 +93,6 @@ Head to the [**Releases Page**](https://github.com/dixieflatline76/Spice/release
 
 We have big plans for Spice!
 
-* **Multi-Monitor Support:** Bringing Spice to all your screens, not just the main one.
 * **Linux & Intel Mac Support:** While we currently focus on Apple Silicon (arm64), we plan to expand our official builds to Intel Macs and Linux.
 * **More Providers:** Adding support for other wallpaper sources like **Pixabay** and **The Met Open Access**.
 * **Local Collections:** Point Spice to any folder on your computer to use your existing wallpaper library.

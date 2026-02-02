@@ -2,6 +2,7 @@ package wallpaper
 
 import (
 	"context"
+	"image"
 	"os"
 	"path/filepath"
 	"testing"
@@ -263,7 +264,8 @@ func TestLifecycle_HappyPath(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Mock Expectation - Permissive
-	wp.os.(*MockOS).On("SetWallpaper", mock.Anything).Return(nil)
+	wp.os.(*MockOS).On("GetMonitors").Return([]Monitor{{ID: 0, Name: "Primary", Rect: image.Rect(0, 0, 1920, 1080)}}, nil)
+	wp.os.(*MockOS).On("SetWallpaper", mock.Anything, 0).Return(nil)
 
 	// 2. Add Image directly to Store
 	added := wp.store.Add(provider.Image{
@@ -370,6 +372,7 @@ func setupTestPlugin(t *testing.T, prefs fyne.Preferences) *Plugin {
 
 	mockOS := new(MockOS)
 	mockOS.On("GetDesktopDimension").Return(1920, 1080)
+	mockOS.On("GetMonitors").Return([]Monitor{{ID: 0, Name: "Primary", Rect: image.Rect(0, 0, 1920, 1080)}}, nil)
 
 	mockPM := new(MockPluginManager)
 	mockPM.On("NotifyUser", mock.Anything, mock.Anything).Return()
@@ -397,8 +400,6 @@ func setupTestPlugin(t *testing.T, prefs fyne.Preferences) *Plugin {
 		store:               imageStore,
 		fm:                  fm,
 		runOnUI:             func(f func()) { f() },
-		currentIndex:        -1,
-		history:             []int{},
 		actionChan:          make(chan func(), 10),
 		interrupt:           util.NewSafeBool(),
 		currentDownloadPage: util.NewSafeIntWithValue(1),

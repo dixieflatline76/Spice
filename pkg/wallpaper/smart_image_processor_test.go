@@ -43,7 +43,7 @@ func TestSmartImageProcessor_FitImage(t *testing.T) {
 		// Input: 3840x2160 (16:9, same aspect ratio)
 		inputImg := createTestImage(3840, 2160)
 
-		outputImg, err := processor.FitImage(context.Background(), inputImg)
+		outputImg, err := processor.FitImage(context.Background(), inputImg, 1920, 1080)
 		assert.NoError(t, err)
 		assert.NotNil(t, outputImg)
 
@@ -66,7 +66,7 @@ func TestSmartImageProcessor_FitImage(t *testing.T) {
 		// Input: 2000x2000 (1:1)
 		inputImg := createTestImage(2000, 2000)
 
-		outputImg, err := processor.FitImage(context.Background(), inputImg)
+		outputImg, err := processor.FitImage(context.Background(), inputImg, 1920, 1080)
 		assert.NoError(t, err)
 		assert.NotNil(t, outputImg)
 
@@ -92,7 +92,7 @@ func TestSmartImageProcessor_FitImage(t *testing.T) {
 		inputImg := createTestImage(100, 100)
 
 		// Should return original image without calling getDesktopDimension
-		outputImg, err := processor.FitImage(context.Background(), inputImg)
+		outputImg, err := processor.FitImage(context.Background(), inputImg, 1920, 1080)
 		assert.NoError(t, err)
 		assert.Equal(t, inputImg, outputImg)
 
@@ -190,7 +190,7 @@ func TestSmartImageProcessor_FitImage_Flexibility_DualSafety(t *testing.T) {
 		img := image.NewRGBA(image.Rect(0, 0, 1000, 1000))
 		draw.Draw(img, img.Bounds(), &image.Uniform{color.RGBA{128, 128, 128, 255}}, image.Point{}, draw.Src)
 
-		outputImg, err := processor.FitImage(context.Background(), img)
+		outputImg, err := processor.FitImage(context.Background(), img, 160, 90)
 		assert.NoError(t, err)
 		require.NotNil(t, outputImg)
 		assert.Equal(t, 160, outputImg.Bounds().Dx())
@@ -209,7 +209,7 @@ func TestSmartImageProcessor_FitImage_Flexibility_DualSafety(t *testing.T) {
 			}
 		}
 
-		outputImg, err := processor.FitImage(context.Background(), img)
+		outputImg, err := processor.FitImage(context.Background(), img, 160, 90)
 		assert.NoError(t, err)
 		require.NotNil(t, outputImg)
 		// Because it's tagged as a "Feet Crop" (Bottom half), it should fallback to Center.
@@ -228,7 +228,7 @@ func TestSmartImageProcessor_FitImage_Flexibility_DualSafety(t *testing.T) {
 			}
 		}
 
-		outputImg, err := processor.FitImage(context.Background(), img)
+		outputImg, err := processor.FitImage(context.Background(), img, 160, 90)
 		assert.NoError(t, err)
 		require.NotNil(t, outputImg)
 		assert.Equal(t, 160, outputImg.Bounds().Dx())
@@ -253,7 +253,7 @@ func TestSmartImageProcessor_FitImage_Flexibility_DualSafety(t *testing.T) {
 
 		// SmartCrop will pick the bottom (Min.Y = 238).
 		// Since 238 > 190, it should trigger Slack Guard and fallback to Center (Min.Y = 119).
-		outputImg, err := processor.FitImage(context.Background(), img)
+		outputImg, err := processor.FitImage(context.Background(), img, 160, 90)
 		assert.NoError(t, err)
 		require.NotNil(t, outputImg)
 
@@ -292,7 +292,7 @@ func TestSmartImageProcessor_FitImage_Quality_Rejection(t *testing.T) {
 	// Expect REJECTION.
 	inputImg := createTestImage(160, 200)
 
-	_, err := processor.FitImage(context.Background(), inputImg)
+	_, err := processor.FitImage(context.Background(), inputImg, 160, 90)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "quality mode rejected")
 }
@@ -355,7 +355,7 @@ func TestSmartImageProcessor_FitImage_Quality_Rescue(t *testing.T) {
 	mockOS2.On("GetDesktopDimension").Return(210, 90, nil) // 21:9
 	processor.os = mockOS2
 
-	outputImg, err := processor.FitImage(context.Background(), faceImg)
+	outputImg, err := processor.FitImage(context.Background(), faceImg, 210, 90)
 
 	// If rescue works, no error.
 	require.NoError(t, err)
@@ -364,3 +364,36 @@ func TestSmartImageProcessor_FitImage_Quality_Rescue(t *testing.T) {
 }
 
 // Removed outdated fallback test - replaced by DualSafety test
+
+func TestSmartImageProcessor_FitImage_RespectsTargetRatio(t *testing.T) {
+	ResetConfig()
+	prefs := NewMockPreferences()
+	cfg := GetConfig(prefs)
+	cfg.SetSmartFitMode(SmartFitNormal)
+
+	mockOS := new(MockOS)
+	// mockOS.GetDesktopDimension should NOT be called now as we pass explicit targets.
+
+	processor := &SmartImageProcessor{
+		os:        mockOS,
+		config:    cfg,
+		resampler: imaging.Lanczos,
+	}
+
+	// Create a 4000x4000 square image (large enough for 1080p and 4K)
+	img := createTestImage(4000, 4000)
+
+	// Case 1: Landscape Target (1920x1080)
+	// We pass targetW=1920, targetH=1080
+	out1, err := processor.FitImage(context.Background(), img, 1920, 1080)
+	require.NoError(t, err)
+	assert.Equal(t, 1920, out1.Bounds().Dx())
+	assert.Equal(t, 1080, out1.Bounds().Dy())
+
+	// Case 2: Portrait Target (1080x1920)
+	// We pass targetW=1080, targetH=1920
+	out2, err := processor.FitImage(context.Background(), img, 1080, 1920)
+	require.NoError(t, err)
+	assert.Equal(t, 1080, out2.Bounds().Dx())
+	assert.Equal(t, 1920, out2.Bounds().Dy())
+}

@@ -1,0 +1,20 @@
+# github.com/dixieflatline76/Spice/pkg/wallpaper [github.com/dixieflatline76/Spice/pkg/wallpaper.test]
+pkg\wallpaper\wallpaper.go:173:1: missing return
+pkg\wallpaper\integration_test.go:313:47: wp.currentImage undefined (type *Plugin has no field or method currentImage)
+pkg\wallpaper\integration_test.go:314:49: wp.currentImage undefined (type *Plugin has no field or method currentImage)
+pkg\wallpaper\integration_test.go:316:8: wp.currentImage undefined (type *Plugin has no field or method currentImage)
+pkg\wallpaper\integration_test.go:317:71: wp.currentImage undefined (type *Plugin has no field or method currentImage)
+pkg\wallpaper\integration_test.go:319:8: wp.currentImage undefined (type *Plugin has no field or method currentImage)
+pkg\wallpaper\integration_test.go:320:80: wp.currentImage undefined (type *Plugin has no field or method currentImage)
+pkg\wallpaper\monitor_control_test.go:42:32: not enough arguments in call to NewMonitorController
+	have (number, nil)
+	want (int, Monitor, *ImageStore, *FileManager, OS, *Config)
+pkg\wallpaper\monitor_control_test.go:61:32: not enough arguments in call to NewMonitorController
+	have (number, *MockImageStore)
+	want (int, Monitor, *ImageStore, *FileManager, OS, *Config)
+pkg\wallpaper\monitor_control_test.go:87:32: not enough arguments in call to NewMonitorController
+	have (number, *MockImageStore)
+	want (int, Monitor, *ImageStore, *FileManager, OS, *Config)
+pkg\wallpaper\monitor_control_test.go:87:32: too many errors
+FAIL	github.com/dixieflatline76/Spice/pkg/wallpaper [build failed]
+FAIL

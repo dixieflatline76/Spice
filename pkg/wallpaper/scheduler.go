@@ -9,8 +9,8 @@ import (
 	"github.com/dixieflatline76/Spice/util/log"
 )
 
-// startNightlyRefresher runs a goroutine that periodically checks if a nightly refresh is due.
-func (wp *Plugin) startNightlyRefresher() {
+// StartNightlyRefresh runs a goroutine that periodically checks if a nightly refresh is due.
+func (wp *Plugin) StartNightlyRefresh() {
 	log.Print("Starting nightly refresh checker...")
 
 	ticker := time.NewTicker(5 * time.Minute)
@@ -108,7 +108,7 @@ func (wp *Plugin) checkAndRunRefresh(now time.Time, lastRefreshDay int, isInitia
 
 		log.Print("Running nightly refresh action...") // Clarify log message
 		wp.currentDownloadPage.Set(1)
-		wp.downloadAllImages(nil) // This calls stopAllWorkers internally
+		wp.FetchNewImages()
 
 		log.Print("Nightly refresh action finished.")
 		return updatedLastRefreshDay // Return the new day
