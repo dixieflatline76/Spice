@@ -21,7 +21,6 @@ const (
 	NightlyRefreshPrefKey        = pluginPrefix + "nightly_refresh_key"    // NightlyRefreshPrefKey is used to set and retrieve the boolean flag for nightly refresh
 	FaceBoostPrefKey             = pluginPrefix + "face_boost_key"         // FaceBoostPrefKey is used to set and retrieve the boolean flag for face boost
 	FaceCropPrefKey              = pluginPrefix + "face_crop_key"          // FaceCropPrefKey is used to set and retrieve the boolean flag for face crop
-	SyncMonitorsPrefKey          = pluginPrefix + "sync_monitors_key"      // SyncMonitorsPrefKey is used to set and retrieve the boolean flag for syncing wallpapers across monitors
 	StaggerMonitorChangesPrefKey = pluginPrefix + "stagger_changes_key"    // StaggerMonitorChangesPrefKey is used to set and retrieve the boolean flag for staggering wallpaper changes
 
 	// Provider keys (Shared)
@@ -73,20 +72,21 @@ const (
 	FlexibilityDir = "flexibility"
 
 	// Type Segments
-	StandardDir              = "standard"
-	FaceBoostDir             = "faceboost"
-	FaceCropDir              = "facecrop"
-	PrcntSeenTillDownload    = 0.8
-	MinSeenImagesForDownload = 5
-	MinLocalImageBeforePulse = 1
-	MaxImageWaitRetry        = 10
-	ImageWaitRetryDelay      = 1 * time.Second
-	MaxDescLength            = 50
-	MaxURLLength             = 255
-	MaxFavoritesLimit        = 200
-	FavoritesNamespace       = "favorites" // API Namespace
-	FavoritesCollection      = "favorite_images"
-	FavoritesQueryID         = "favorites://" + FavoritesCollection
+	StandardDir               = "standard"
+	FaceBoostDir              = "faceboost"
+	FaceCropDir               = "facecrop"
+	PrcntSeenTillDownload     = 0.8
+	MinSeenImagesForDownload  = 5
+	MinLocalImageBeforePulse  = 1
+	BucketStarvationThreshold = 5 // Trigger fetch if bucket size falls below this
+	MaxImageWaitRetry         = 10
+	ImageWaitRetryDelay       = 1 * time.Second
+	MaxDescLength             = 50
+	MaxURLLength              = 255
+	MaxFavoritesLimit         = 200
+	FavoritesNamespace        = "favorites" // API Namespace
+	FavoritesCollection       = "favorite_images"
+	FavoritesQueryID          = "favorites://" + FavoritesCollection
 )
 
 // Frequency represents the frequency of a service

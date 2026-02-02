@@ -135,6 +135,29 @@ func (m *MockImageStore) SeenCount() int {
 	return args.Int(0)
 }
 
+func (m *MockImageStore) GetIDsForResolution(resolution string) []string {
+	args := m.Called(resolution)
+	return args.Get(0).([]string)
+}
+
+func (m *MockImageStore) GetBucketSize(resolution string) int {
+	args := m.Called(resolution)
+	return args.Int(0)
+}
+
+func (m *MockImageStore) GetByID(id string) (provider.Image, bool) {
+	args := m.Called(id)
+	return args.Get(0).(provider.Image), args.Bool(1)
+}
+
+func (m *MockImageStore) GetUpdateChannel() <-chan struct{} {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return nil
+	}
+	return args.Get(0).(<-chan struct{})
+}
+
 // MockImageProcessor is a mock implementation of the ImageProcessor interface.
 type MockImageProcessor struct {
 	mock.Mock

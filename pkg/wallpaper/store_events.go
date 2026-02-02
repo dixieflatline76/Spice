@@ -38,3 +38,10 @@ func (s *ImageStore) WaitForImages(ctx context.Context) error {
 		}
 	}
 }
+
+// GetUpdateChannel returns a channel that signals when the store content changes.
+func (s *ImageStore) GetUpdateChannel() <-chan struct{} {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.updateCh
+}

@@ -404,3 +404,48 @@ func TestStore_LoadAvoidSet_And_Clear(t *testing.T) {
 	addedPostWipe := store.Add(provider.Image{ID: blockedID})
 	assert.True(t, addedPostWipe, "Should accept blocked ID after Wipe (reset)")
 }
+
+func TestStore_ResolutionBuckets(t *testing.T) {
+	store := NewImageStore()
+	store.SetAsyncSave(false)
+
+	img1 := provider.Image{
+		ID: "img1",
+		DerivativePaths: map[string]string{
+			"1920x1080": "path1_hd.jpg",
+			"3840x2160": "path1_4k.jpg",
+		},
+	}
+	img2 := provider.Image{
+		ID: "img2",
+		DerivativePaths: map[string]string{
+			"1920x1080": "path2_hd.jpg",
+		},
+	}
+
+	// 1. Test Add
+	store.Add(img1)
+	store.Add(img2)
+
+	assert.Equal(t, 2, store.GetBucketSize("1920x1080"))
+	assert.Equal(t, 1, store.GetBucketSize("3840x2160"))
+
+	ids := store.GetIDsForResolution("1920x1080")
+	assert.Contains(t, ids, "img1")
+	assert.Contains(t, ids, "img2")
+
+	// 2. Test Remove
+	store.Remove("img1")
+	assert.Equal(t, 1, store.GetBucketSize("1920x1080"))
+	assert.Equal(t, 0, store.GetBucketSize("3840x2160"))
+
+	// 3. Test Sync
+	store.Clear()
+	store.Add(img1)
+	store.Add(img2)
+	// Sync with limit 1 should prune img1 (oldest)
+	store.Sync(1, nil, nil)
+	assert.Equal(t, 1, store.GetBucketSize("1920x1080"))
+	ids = store.GetIDsForResolution("1920x1080")
+	assert.Equal(t, "img2", ids[0])
+}

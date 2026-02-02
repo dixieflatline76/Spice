@@ -133,7 +133,7 @@ func (w *windowsOS) GetMonitors() ([]Monitor, error) {
 			if rect.Dx() > 0 && rect.Dy() > 0 {
 				monitors = append(monitors, Monitor{
 					ID:   int(i),
-					Name: fmt.Sprintf("Monitor %d", i),
+					Name: "", // Let the UI handle the "Display N" labeling
 					Rect: rect,
 				})
 			}

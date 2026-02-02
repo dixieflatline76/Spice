@@ -24,18 +24,23 @@ const (
 type StoreInterface interface {
 	Count() int
 	Get(index int) (provider.Image, bool)
+	GetByID(id string) (provider.Image, bool)
 	Remove(id string) (provider.Image, bool)
 	MarkSeen(filePath string)
 	SeenCount() int
+	GetIDsForResolution(resolution string) []string
+	GetBucketSize(resolution string) int
+	GetUpdateChannel() <-chan struct{}
 }
 
 // MonitorState holds the persistence/cursor state for a single monitor.
 type MonitorState struct {
-	CurrentIndex int
-	History      []int
-	RandomPos    int
-	ShuffleOrder []int // Each monitor technically tracks its own position in the global list
-	CurrentImage provider.Image
+	CurrentID        string
+	History          []string
+	RandomPos        int
+	ShuffleIDs       []string // Each monitor tracks its own IDs for its resolution
+	CurrentImage     provider.Image
+	WaitingForImages bool
 }
 
 // MonitorController is an Actor that manages one specific monitor.
@@ -57,7 +62,7 @@ type MonitorController struct {
 	OnFetchRequest     func()
 }
 
-// NewMonitorController creates a new actor.
+// NewMonitorController creates a new actor for managing a specific monitor's state.
 func NewMonitorController(id int, m Monitor, store StoreInterface, fm *FileManager, os OS, cfg *Config, processor ImageProcessor) *MonitorController {
 	return &MonitorController{
 		ID:        id,
@@ -69,10 +74,10 @@ func NewMonitorController(id int, m Monitor, store StoreInterface, fm *FileManag
 		cfg:       cfg,
 		processor: processor,
 		State: &MonitorState{
-			CurrentIndex: -1,
-			History:      make([]int, 0),
-			RandomPos:    0,
-			ShuffleOrder: make([]int, 0),
+			CurrentID:  "",
+			History:    make([]string, 0),
+			RandomPos:  0,
+			ShuffleIDs: make([]string, 0),
 		},
 	}
 }
@@ -88,7 +93,7 @@ func (mc *MonitorController) Start() {
 	go mc.Run(ctx)
 }
 
-// Stop terminates the actor loop.
+// Stop sends a signal to terminate the actor loop.
 func (mc *MonitorController) Stop() {
 	if mc.cancel != nil {
 		mc.cancel()
@@ -97,15 +102,25 @@ func (mc *MonitorController) Stop() {
 	mc.isRunning = false
 }
 
-// Run is the main loop. It should be run in a goroutine.
+// Run starts the monitor controller's actor loop.
 func (mc *MonitorController) Run(ctx context.Context) {
 	log.Debugf("[Monitor %d] Controller started", mc.ID)
+
+	// Initial update channel
+	updateCh := mc.Store.GetUpdateChannel()
 
 	for {
 		select {
 		case <-ctx.Done():
 			log.Debugf("[Monitor %d] Stopping controller", mc.ID)
 			return
+		case <-updateCh:
+			// Refresh channel immediately for next event (broadcast pattern)
+			updateCh = mc.Store.GetUpdateChannel()
+			if mc.State.WaitingForImages {
+				log.Debugf("[Monitor %d] Store updated while starving. Retrying next()...", mc.ID)
+				mc.next()
+			}
 		case cmd := <-mc.Commands:
 			mc.handleCommand(cmd)
 		}
@@ -127,85 +142,75 @@ func (mc *MonitorController) handleCommand(cmd Command) {
 }
 
 func (mc *MonitorController) next() {
-	count := mc.Store.Count()
-	if count == 0 {
-		log.Printf("[WARN] [Monitor %d] No images in store to advance to.", mc.ID)
+	width, height := mc.Monitor.Rect.Dx(), mc.Monitor.Rect.Dy()
+	resKey := fmt.Sprintf("%dx%d", width, height)
+
+	// 1. Get/Refresh Bucket
+	bucketIDs := mc.Store.GetIDsForResolution(resKey)
+
+	// 2. Starvation/Cold Start Check
+	// If bucket is zero OR below threshold, trigger fetch.
+	// RequestFetch() handles debouncing and already-in-progress fetches.
+	shouldFetch := false
+	if len(bucketIDs) < BucketStarvationThreshold {
+		shouldFetch = true
+	} else if len(mc.State.ShuffleIDs) > 0 {
+		// Cycle Progress: Trigger if we've cycled through 80% of our current shuffled list.
+		if float64(mc.State.RandomPos) > float64(len(mc.State.ShuffleIDs))*PrcntSeenTillDownload {
+			shouldFetch = true
+		}
+	}
+
+	if shouldFetch {
+		if mc.OnFetchRequest != nil {
+			mc.OnFetchRequest()
+		}
+	}
+
+	if len(bucketIDs) == 0 {
+		log.Printf("[Monitor %d] No images found for resolution %s. Waiting for fetch...", mc.ID, resKey)
+		mc.State.WaitingForImages = true
 		return
 	}
+	mc.State.WaitingForImages = false
 
-	// Lazy Init Shuffle Order if empty or mismatched
-	if len(mc.State.ShuffleOrder) != count {
-		mc.rebuildShuffle(count)
+	// 3. Rebuild Shuffle if needed
+	if len(mc.State.ShuffleIDs) != len(bucketIDs) {
+		log.Printf("[Monitor %d] Bucket size changed (%d -> %d). Rebuilding shuffle.", mc.ID, len(mc.State.ShuffleIDs), len(bucketIDs))
+		mc.rebuildShuffle(bucketIDs)
 	}
 
-	// Try up to 50 times to find a compatible image for this monitor
-	// to avoid "fallback" (incorrect aspect ratio) behavior.
-	const maxAttempts = 50
-	resKey := fmt.Sprintf("%dx%d", mc.Monitor.Rect.Dx(), mc.Monitor.Rect.Dy())
-
-	for attempt := 0; attempt < maxAttempts; attempt++ {
-		// Advance Cursor
-		// Check bounds just in case
-		if mc.State.RandomPos >= len(mc.State.ShuffleOrder) {
-			mc.State.RandomPos = 0
-			mc.rebuildShuffle(count) // reshuffle when exhausted
-		}
-
-		nextIdx := mc.State.ShuffleOrder[mc.State.RandomPos]
-		mc.State.RandomPos = (mc.State.RandomPos + 1) % len(mc.State.ShuffleOrder)
-
-		// 2. Fetch Image
-		if img, ok := mc.Store.Get(nextIdx); ok {
-			// CHECK FOR COMPATIBILITY
-			// If this image has derivatives logic (SmartFit on), verify we haveOUR resolution.
-			// If DerivativePaths is empty, it might be a legacy image or SmartFit off, so we accept it.
-			if len(img.DerivativePaths) > 0 {
-				if _, hasRes := img.DerivativePaths[resKey]; !hasRes {
-					// Skip this image, it wasn't generated for us (likely incompatible aspect)
-					// Unless it's the LAST attempt, then we might accept it as fallback?
-					// No, better to keep searching.
-					// If we fail 50 times, we'll fall through and likely display the last one or exit.
-					continue
-				}
-			}
-
-			// Valid Match Found
-			mc.State.CurrentIndex = nextIdx
-			mc.State.History = append(mc.State.History, nextIdx) // Add to history
-			mc.applyImage(img)
-			return
-		}
+	// 4. Pick Next
+	if mc.State.RandomPos >= len(mc.State.ShuffleIDs) {
+		mc.State.RandomPos = 0
+		mc.rebuildShuffle(bucketIDs) // reshuffle when exhausted
 	}
 
-	log.Printf("[WARN] [Monitor %d] Failed to find compatible image after %d attempts. Using fallback.", mc.ID, maxAttempts)
-	// Fallback: Just use the current cursor pos (even if incompatible) to show SOMETHING
-	// We rewind RandomPos by 1 to reuse the last picked index
-	if mc.State.RandomPos > 0 {
-		mc.State.RandomPos--
-	}
-	idx := mc.State.ShuffleOrder[mc.State.RandomPos]
-	// Advance for next time
-	mc.State.RandomPos = (mc.State.RandomPos + 1) % len(mc.State.ShuffleOrder)
+	nextID := mc.State.ShuffleIDs[mc.State.RandomPos]
+	mc.State.RandomPos = (mc.State.RandomPos + 1) % len(mc.State.ShuffleIDs)
 
-	if img, ok := mc.Store.Get(idx); ok {
-		mc.State.CurrentIndex = idx
-		mc.State.History = append(mc.State.History, idx)
+	if img, ok := mc.Store.GetByID(nextID); ok {
+		mc.State.CurrentID = nextID
+		mc.State.History = append(mc.State.History, nextID)
 		mc.applyImage(img)
 	}
+}
 
-	// Usage-Based Fetch Trigger (Restored)
-	// Check if we have seen enough images to warrant a background fetch.
-	// We use 0.8 (80%) as the legacy threshold.
-	total := mc.Store.Count()
-	if total > 0 {
-		seen := mc.Store.SeenCount()
-		threshold := int(float64(total) * 0.8) // Match legacy PrcntSeenTillDownload
-		if seen >= threshold {
-			if mc.OnFetchRequest != nil {
-				mc.OnFetchRequest()
-			}
-		}
+func (mc *MonitorController) rebuildShuffle(ids []string) {
+	shuffled := make([]string, len(ids))
+	copy(shuffled, ids)
+
+	if mc.cfg != nil && !mc.cfg.GetImgShuffle() {
+		// Sequential - no shuffle needed, already copied in order
+	} else {
+		// Random
+		rand.Shuffle(len(shuffled), func(i, j int) {
+			shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
+		})
 	}
+
+	mc.State.ShuffleIDs = shuffled
+	mc.State.RandomPos = 0
 }
 
 func (mc *MonitorController) prev() {
@@ -215,10 +220,10 @@ func (mc *MonitorController) prev() {
 	// Pop current
 	mc.State.History = mc.State.History[:len(mc.State.History)-1]
 	// Current is now last element
-	prevIdx := mc.State.History[len(mc.State.History)-1]
-	mc.State.CurrentIndex = prevIdx
+	prevID := mc.State.History[len(mc.State.History)-1]
+	mc.State.CurrentID = prevID
 
-	if img, ok := mc.Store.Get(prevIdx); ok {
+	if img, ok := mc.Store.GetByID(prevID); ok {
 		mc.applyImage(img)
 	}
 }
@@ -281,18 +286,5 @@ func (mc *MonitorController) applyImage(img provider.Image) {
 
 	if mc.OnWallpaperChanged != nil {
 		mc.OnWallpaperChanged(img, mc.ID)
-	}
-}
-
-func (mc *MonitorController) rebuildShuffle(count int) {
-	if mc.cfg != nil && !mc.cfg.GetImgShuffle() {
-		// Sequential
-		mc.State.ShuffleOrder = make([]int, count)
-		for i := 0; i < count; i++ {
-			mc.State.ShuffleOrder[i] = i
-		}
-	} else {
-		// Random
-		mc.State.ShuffleOrder = rand.Perm(count)
 	}
 }

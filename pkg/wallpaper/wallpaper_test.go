@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -101,14 +102,14 @@ func TestDownloadAllImages(t *testing.T) {
 		httpClient:   ts.Client(),
 		manager:      mockPM,
 		// Initialize other fields
-		downloadedDir:       t.TempDir(),
-		interrupt:           util.NewSafeBool(),
-		currentDownloadPage: util.NewSafeIntWithValue(1),
-		fitImageFlag:        util.NewSafeBool(),
-		shuffleImageFlag:    util.NewSafeBool(),
-		fetchingInProgress:  util.NewSafeBool(),
-		providers:           make(map[string]provider.ImageProvider),
-		store:               NewImageStore(),
+		downloadedDir:      t.TempDir(),
+		interrupt:          util.NewSafeBool(),
+		queryPages:         make(map[string]*util.SafeCounter),
+		fitImageFlag:       util.NewSafeBool(),
+		shuffleImageFlag:   util.NewSafeBool(),
+		fetchingInProgress: util.NewSafeBool(),
+		providers:          make(map[string]provider.ImageProvider),
+		store:              NewImageStore(),
 	}
 	wp.store.SetAsyncSave(false)
 	// Setup FileManager
@@ -214,20 +215,20 @@ func TestDownloadAllImages_EnrichmentFailure(t *testing.T) {
 	mockProvider.On("EnrichImage", mock.Anything, mock.Anything).Return(provider.Image{}, assert.AnError)
 
 	wp = &Plugin{
-		os:                  mockOS,
-		imgProcessor:        mockIP,
-		cfg:                 cfg,
-		httpClient:          ts.Client(),
-		manager:             mockPM,
-		downloadedDir:       t.TempDir(),
-		interrupt:           util.NewSafeBool(),
-		currentDownloadPage: util.NewSafeIntWithValue(1),
-		fitImageFlag:        util.NewSafeBool(),
-		shuffleImageFlag:    util.NewSafeBool(),
-		fetchingInProgress:  util.NewSafeBool(),
-		providers:           make(map[string]provider.ImageProvider),
-		store:               NewImageStore(),
-		runOnUI:             func(f func()) { f() }, // Run synchronously in tests
+		os:                 mockOS,
+		imgProcessor:       mockIP,
+		cfg:                cfg,
+		httpClient:         ts.Client(),
+		manager:            mockPM,
+		downloadedDir:      t.TempDir(),
+		interrupt:          util.NewSafeBool(),
+		queryPages:         make(map[string]*util.SafeCounter),
+		fitImageFlag:       util.NewSafeBool(),
+		shuffleImageFlag:   util.NewSafeBool(),
+		fetchingInProgress: util.NewSafeBool(),
+		providers:          make(map[string]provider.ImageProvider),
+		store:              NewImageStore(),
+		runOnUI:            func(f func()) { f() }, // Run synchronously in tests
 	}
 	wp.store.SetAsyncSave(false)
 	// Setup FileManager
@@ -284,8 +285,20 @@ func TestNavigation(t *testing.T) {
 	assert.NoError(t, os.WriteFile(img1Path, []byte("dummy"), 0644))
 	assert.NoError(t, os.WriteFile(img2Path, []byte("dummy"), 0644))
 
-	img1 := provider.Image{ID: "img1", Path: "http://example.com/img1.jpg", FilePath: img1Path, Attribution: "user1"}
-	img2 := provider.Image{ID: "img2", Path: "http://example.com/img2.jpg", FilePath: img2Path, Attribution: "user2"}
+	img1 := provider.Image{
+		ID:              "img1",
+		Path:            "http://example.com/img1.jpg",
+		FilePath:        img1Path,
+		Attribution:     "user1",
+		DerivativePaths: map[string]string{"1920x1080": "img1.jpg"},
+	}
+	img2 := provider.Image{
+		ID:              "img2",
+		Path:            "http://example.com/img2.jpg",
+		FilePath:        img2Path,
+		Attribution:     "user2",
+		DerivativePaths: map[string]string{"1920x1080": "img2.jpg"},
+	}
 
 	wp.store.Add(img1)
 	wp.store.Add(img2)
@@ -308,7 +321,7 @@ func TestNavigation(t *testing.T) {
 
 	// Create Monitor Controller
 	mockIP := new(MockImageProcessor)
-	mc := NewMonitorController(0, Monitor{ID: 0}, wp.store, wp.fm, mockOS, cfg, mockIP)
+	mc := NewMonitorController(0, Monitor{ID: 0, Rect: image.Rect(0, 0, 1920, 1080)}, wp.store, wp.fm, mockOS, cfg, mockIP)
 	wp.Monitors[0] = mc
 
 	// Helper to pump
@@ -622,4 +635,143 @@ func TestGetProviderTitle(t *testing.T) {
 
 	// 2. Unregistered Provider -> Return ID
 	assert.Equal(t, "UnknownProvider", wp.GetProviderTitle("UnknownProvider"))
+}
+func TestAddQuery_InitializesPage(t *testing.T) {
+	// Setup
+	ResetConfig()
+	prefs := NewMockPreferences()
+	cfg := GetConfig(prefs)
+	mockPM := new(MockPluginManager)
+	mockOS := new(MockOS)
+
+	wp := &Plugin{
+		os:                 mockOS,
+		cfg:                cfg,
+		manager:            mockPM,
+		downloadedDir:      t.TempDir(),
+		store:              NewImageStore(),
+		queryPages:         make(map[string]*util.SafeCounter),
+		fetchingInProgress: util.NewSafeBool(),
+		providers:          make(map[string]provider.ImageProvider),
+		pipeline:           NewPipeline(cfg, NewImageStore(), func(ctx context.Context, job DownloadJob) (provider.Image, error) { return job.Image, nil }),
+		httpClient:         &http.Client{},
+	}
+	wp.fm = NewFileManager(wp.downloadedDir)
+
+	// Add a provider
+	mockProvider := &MockImageProvider{}
+	mockProvider.On("Name").Return("Mock")
+	mockProvider.On("FetchImages", mock.Anything, mock.Anything, 1).Return([]provider.Image{}, nil)
+	wp.providers["Mock"] = mockProvider
+
+	// Act: Add a query directly to config (simulating AddProviderQuery)
+	cfg.Queries = []ImageQuery{{
+		ID:       "new_query",
+		Provider: "Mock",
+		Active:   true,
+		URL:      "http://mock",
+	}}
+
+	// Trigger Fetch
+	wp.FetchNewImages()
+
+	// Wait for fetch to complete
+	assert.Eventually(t, func() bool {
+		wp.downloadMutex.RLock()
+		defer wp.downloadMutex.RUnlock()
+		_, ok := wp.queryPages["new_query"]
+		return ok
+	}, 2*time.Second, 100*time.Millisecond)
+
+	// Assert: Page counter should be initialized to 1
+	wp.downloadMutex.Lock()
+	pg, ok := wp.queryPages["new_query"]
+	wp.downloadMutex.Unlock()
+
+	assert.True(t, ok, "Page counter should exist for new query")
+	if ok {
+		assert.Equal(t, 1, pg.Value(), "Page counter should start at 1")
+	}
+}
+
+func TestSetNextWallpaper_Stagger(t *testing.T) {
+	// Setup
+	ResetConfig()
+	prefs := NewMockPreferences()
+	cfg := GetConfig(prefs)
+
+	wp := &Plugin{
+		cfg:                cfg,
+		Monitors:           make(map[int]*MonitorController),
+		downloadMutex:      sync.RWMutex{},
+		fitImageFlag:       util.NewSafeBool(),
+		fetchingInProgress: util.NewSafeBool(),
+	}
+
+	// Setup 2 Monitors with Channels
+	mon0 := &MonitorController{
+		ID:       0,
+		Commands: make(chan Command, 10),
+	}
+	mon1 := &MonitorController{
+		ID:       1,
+		Commands: make(chan Command, 10),
+	}
+	wp.Monitors[0] = mon0
+	wp.Monitors[1] = mon1
+
+	// Initialize monMu
+	wp.monMu = sync.RWMutex{}
+
+	// Enable Stagger
+	cfg.SetStaggerMonitorChanges(true)
+
+	// Set Frequency to Hourly (long duration)
+	cfg.SetWallpaperChangeFrequency(FrequencyHourly)
+
+	// Case 1: Stagger ON
+	wp.SetNextWallpaper(-1)
+
+	// Check Mon 0 (Immediate)
+	select {
+	case cmd := <-mon0.Commands:
+		assert.Equal(t, CmdNext, cmd, "Monitor 0 should receive CmdNext immediately")
+	default:
+		t.Error("Monitor 0 did not receive command immediately")
+	}
+
+	// Check Mon 1 (Delayed)
+	select {
+	case <-mon1.Commands:
+		t.Error("Monitor 1 received command immediately but should have been staggered")
+	default:
+		// Success: Channel empty
+	}
+
+	// Case 2: Stagger OFF
+	cfg.SetStaggerMonitorChanges(false)
+
+	// Drain Mon 0 just in case
+	select {
+	case <-mon0.Commands:
+	default:
+	}
+
+	wp.SetNextWallpaper(-1)
+
+	// Check Mon 0
+	select {
+	case cmd := <-mon0.Commands:
+		assert.Equal(t, CmdNext, cmd)
+	default:
+		t.Error("Monitor 0 missing command")
+	}
+
+	// Check Mon 1 (Immediate now)
+	select {
+	case cmd := <-mon1.Commands:
+		assert.Equal(t, CmdNext, cmd, "Monitor 1 should receive CmdNext immediately when Stagger is OFF")
+	default:
+		t.Error("Monitor 1 missing command when Stagger is OFF")
+	}
 }

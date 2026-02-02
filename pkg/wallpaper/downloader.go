@@ -30,11 +30,9 @@ func (wp *Plugin) ProcessImageJob(ctx context.Context, job DownloadJob) (provide
 	// Check if we can reject the image based on dimensions BEFORE paying the 'Enrichment Tax'.
 	if img.Width > 0 && img.Height > 0 {
 		var resolutions []Resolution
-		if wp.cfg.GetSyncMonitors() {
-			monitors, err := wp.os.GetMonitors()
-			if err == nil && len(monitors) > 0 {
-				resolutions = GetUniqueResolutions(monitors)
-			}
+		monitors, err := wp.os.GetMonitors()
+		if err == nil && len(monitors) > 0 {
+			resolutions = GetUniqueResolutions(monitors)
 		}
 
 		// Fallback to primary if Sync is OFF or GetMonitors failed
@@ -52,13 +50,10 @@ func (wp *Plugin) ProcessImageJob(ctx context.Context, job DownloadJob) (provide
 		for _, res := range resolutions {
 			if err := wp.imgProcessor.CheckCompatibility(img.Width, img.Height, res.Width, res.Height); err != nil {
 				incompatibleCount++
-				if wp.cfg.GetSyncMonitors() {
-					return provider.Image{}, fmt.Errorf("incompatible image skipped for resolution %dx%d: %w", res.Width, res.Height, err)
-				}
 			}
 		}
 
-		if !wp.cfg.GetSyncMonitors() && incompatibleCount == len(resolutions) {
+		if incompatibleCount == len(resolutions) {
 			return provider.Image{}, fmt.Errorf("incompatible image skipped (fits zero monitors)")
 		}
 	}

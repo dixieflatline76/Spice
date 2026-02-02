@@ -270,16 +270,17 @@ func TestLifecycle_HappyPath(t *testing.T) {
 
 	// 2. Add Image directly to Store
 	added := wp.store.Add(provider.Image{
-		ID:       "happy_img",
-		FilePath: realPath,
-		Provider: "stub",
+		ID:              "happy_img",
+		FilePath:        realPath,
+		Provider:        "stub",
+		DerivativePaths: map[string]string{"1920x1080": realPath},
 	})
 	assert.True(t, added)
 
 	// Ensure Monitor 0 exists
 	wp.monMu.Lock()
 	if _, ok := wp.Monitors[0]; !ok {
-		mc := NewMonitorController(0, Monitor{ID: 0}, wp.store, wp.fm, wp.os, wp.cfg, wp.imgProcessor)
+		mc := NewMonitorController(0, Monitor{ID: 0, Rect: image.Rect(0, 0, 1920, 1080)}, wp.store, wp.fm, wp.os, wp.cfg, wp.imgProcessor)
 		wp.Monitors[0] = mc
 	}
 	mc := wp.Monitors[0]
@@ -365,21 +366,21 @@ func setupTestPlugin(t *testing.T, prefs fyne.Preferences) *Plugin {
 	pipeline := NewPipeline(cfg, imageStore, dummyProcessor)
 
 	wp := &Plugin{
-		os:                  mockOS,
-		cfg:                 cfg,
-		manager:             mockPM,
-		store:               imageStore,
-		fm:                  fm,
-		runOnUI:             func(f func()) { f() },
-		interrupt:           util.NewSafeBool(),
-		currentDownloadPage: util.NewSafeIntWithValue(1),
-		fitImageFlag:        util.NewSafeBool(),
-		shuffleImageFlag:    util.NewSafeBool(),
-		fetchingInProgress:  util.NewSafeBool(),
-		providers:           make(map[string]provider.ImageProvider),
-		pipeline:            pipeline,
-		Monitors:            make(map[int]*MonitorController),
-		httpClient:          &http.Client{Timeout: 1 * time.Second},
+		os:                 mockOS,
+		cfg:                cfg,
+		manager:            mockPM,
+		store:              imageStore,
+		fm:                 fm,
+		runOnUI:            func(f func()) { f() },
+		interrupt:          util.NewSafeBool(),
+		queryPages:         make(map[string]*util.SafeCounter),
+		fitImageFlag:       util.NewSafeBool(),
+		shuffleImageFlag:   util.NewSafeBool(),
+		fetchingInProgress: util.NewSafeBool(),
+		providers:          make(map[string]provider.ImageProvider),
+		pipeline:           pipeline,
+		Monitors:           make(map[int]*MonitorController),
+		httpClient:         &http.Client{Timeout: 1 * time.Second},
 	}
 
 	// Register Stub Provider to bypass AssetManager logic

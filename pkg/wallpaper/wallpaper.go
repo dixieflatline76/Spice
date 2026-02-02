@@ -6,6 +6,7 @@ import (
 	"image"
 	_ "image/jpeg"
 	_ "image/png"
+	"math/rand"
 	"net"
 	"net/http"
 	"net/url"
@@ -56,7 +57,7 @@ type Plugin struct {
 	httpClient          *http.Client
 	manager             ui.PluginManager
 	downloadMutex       sync.RWMutex
-	currentDownloadPage *util.SafeCounter
+	queryPages          map[string]*util.SafeCounter
 	downloadedDir       string
 	isDownloading       bool
 	interrupt           *util.SafeFlag
@@ -157,10 +158,10 @@ func getPlugin() *Plugin {
 			cfg:        nil,
 			httpClient: robustClient,
 
-			downloadMutex:       sync.RWMutex{},
-			currentDownloadPage: util.NewSafeIntWithValue(1),
-			downloadedDir:       "",
-			interrupt:           util.NewSafeBoolWithValue(false),
+			downloadMutex: sync.RWMutex{},
+			queryPages:    make(map[string]*util.SafeCounter),
+			downloadedDir: "",
+			interrupt:     util.NewSafeBoolWithValue(false),
 
 			imgPulseOp:         nil,
 			fitImageFlag:       util.NewSafeBoolWithValue(false),
@@ -357,11 +358,7 @@ func (wp *Plugin) Activate() {
 	}
 	wp.monMu.Unlock()
 
-	targetFlags := map[string]bool{
-		"SmartFit": wp.cfg.GetSmartFit(),
-		"FaceCrop": wp.cfg.GetFaceCropEnabled(),
-	}
-	wp.store.Sync(int(wp.cfg.GetCacheSize().Size()), targetFlags, wp.cfg.GetActiveQueryIDs())
+	wp.syncStoreWithConfig()
 	wp.store.LoadAvoidSet(wp.cfg.GetAvoidSet())
 
 	workers := runtime.NumCPU()
@@ -381,7 +378,12 @@ func (wp *Plugin) Activate() {
 	if wp.cfg.GetChgImgOnStart() {
 		wp.RefreshImagesAndPulse()
 	} else {
-		wp.currentDownloadPage.Set(1)
+		// Reset all pages to 1 on clean activation if not pulsing
+		wp.downloadMutex.Lock()
+		for _, q := range wp.cfg.Queries {
+			wp.queryPages[q.ID] = util.NewSafeIntWithValue(1)
+		}
+		wp.downloadMutex.Unlock()
 		wp.FetchNewImages()
 	}
 	wp.ChangeWallpaperFrequency(wp.cfg.GetWallpaperChangeFrequency())
@@ -435,7 +437,48 @@ func (wp *Plugin) Deactivate() {
 // SetNextWallpaper advances the wallpaper.
 func (wp *Plugin) SetNextWallpaper(monitorID int) {
 	log.Printf("[DEBUG] SetNextWallpaper called for monitor %d", monitorID)
-	wp.dispatch(monitorID, CmdNext) // -1 = All Monitors
+
+	if monitorID != -1 {
+		wp.dispatch(monitorID, CmdNext)
+		return
+	}
+
+	// Global Ticker Trigger (-1)
+	// Iterate and stagger
+	wp.monMu.RLock()
+	var ids []int
+	for id := range wp.Monitors {
+		ids = append(ids, id)
+	}
+	wp.monMu.RUnlock()
+
+	stagger := wp.cfg.GetStaggerMonitorChanges()
+	freq := wp.cfg.GetWallpaperChangeFrequency()
+	duration := freq.Duration()
+
+	for _, id := range ids {
+		if id == 0 {
+			// Primary always immediate
+			wp.dispatch(id, CmdNext)
+			continue
+		}
+
+		if stagger && duration > 0 {
+			// Random delay 10-30% of interval
+			pct := 0.1 + (rand.Float64() * 0.2) //nolint:gosec // Weak RNG acceptable for UI stagger delay
+			delay := time.Duration(float64(duration) * pct)
+
+			log.Printf("[Stagger] Scheduling monitor %d update in %v (Interval: %v)", id, delay, duration)
+
+			// Capture ID for closure
+			mID := id
+			time.AfterFunc(delay, func() {
+				wp.dispatch(mID, CmdNext)
+			})
+		} else {
+			wp.dispatch(id, CmdNext)
+		}
+	}
 }
 
 // SetPreviousWallpaper goes back.
@@ -587,10 +630,6 @@ func (wp *Plugin) SetSmartFit(enabled bool) {
 	wp.fitImageFlag.Set(enabled)
 }
 
-func (wp *Plugin) SetSyncMonitors(enable bool) {
-	wp.cfg.SetSyncMonitors(enable)
-}
-
 func (wp *Plugin) SetStaggerMonitorChanges(enable bool) {
 	wp.cfg.SetStaggerMonitorChanges(enable)
 }
@@ -658,6 +697,10 @@ func (wp *Plugin) updateTrayMenuUI(img provider.Image, monitorID int) {
 			attribution = attribution[:17] + "..."
 		}
 		mItems.ProviderMenuItem.Label = "Source: " + wp.GetProviderTitle(img.Provider)
+		mItems.ProviderMenuItem.Action = func() {
+			wp.focusProviderName = img.Provider
+			wp.manager.OpenPreferences("Wallpaper")
+		}
 
 		// Restore Icons using the provider abstraction
 		if p, exists := wp.providers[img.Provider]; exists {
@@ -689,11 +732,32 @@ func (wp *Plugin) updateTrayMenuUI(img provider.Image, monitorID int) {
 func (wp *Plugin) onQueryRemoved(queryID string) {
 	log.Printf("Plugin: Query %s removed. Clearing...", queryID)
 	wp.store.RemoveByQueryID(queryID)
+	wp.downloadMutex.Lock()
+	delete(wp.queryPages, queryID)
+	wp.downloadMutex.Unlock()
 }
 
 func (wp *Plugin) onQueryDisabled(queryID string) {
 	log.Printf("Plugin: Query %s disabled. Clearing from cache/rotation...", queryID)
 	wp.store.RemoveByQueryID(queryID)
+	wp.downloadMutex.Lock()
+	delete(wp.queryPages, queryID)
+	wp.downloadMutex.Unlock()
+}
+
+// syncStoreWithConfig reconciles the image store with the current configuration.
+// It handles query activation, cache sizing, and derivative invalidation for processing modes.
+func (wp *Plugin) syncStoreWithConfig() {
+	mode := wp.cfg.GetSmartFitMode()
+	targetFlags := map[string]bool{
+		"SmartFit":       wp.cfg.GetSmartFit(),
+		"FitFlexibility": mode == SmartFitAggressive,
+		"FitQuality":     mode == SmartFitNormal,
+		"FaceCrop":       wp.cfg.GetFaceCropEnabled(),
+		"FaceBoost":      wp.cfg.GetFaceBoostEnabled(),
+	}
+
+	wp.store.Sync(int(wp.cfg.GetCacheSize().Size()), targetFlags, wp.cfg.GetActiveQueryIDs())
 }
 
 func (wp *Plugin) GetProviderTitle(providerID string) string {

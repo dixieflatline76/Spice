@@ -148,6 +148,10 @@ func (fm *FileManager) DeepDelete(id string) error {
 
 	for _, f := range filesToDelete {
 		if err := os.Remove(f); err != nil {
+			// Suppress benign errors
+			if os.IsNotExist(err) {
+				continue
+			}
 			// Suppress "used by another process" errors (benign race with active download/usage)
 			if strings.Contains(err.Error(), "used by another process") || strings.Contains(err.Error(), "access is denied") {
 				log.Debugf("DeepDelete: Skipped locked file %s: %v", f, err)

@@ -107,7 +107,11 @@ func (wp *Plugin) checkAndRunRefresh(now time.Time, lastRefreshDay int, isInitia
 		log.Print("Nightly Maintenance: Finished.")
 
 		log.Print("Running nightly refresh action...") // Clarify log message
-		wp.currentDownloadPage.Set(1)
+		wp.downloadMutex.Lock()
+		for id := range wp.queryPages {
+			wp.queryPages[id].Set(1)
+		}
+		wp.downloadMutex.Unlock()
 		wp.FetchNewImages()
 
 		log.Print("Nightly refresh action finished.")

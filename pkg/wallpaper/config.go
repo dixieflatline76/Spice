@@ -815,20 +815,6 @@ func (c *Config) SetFaceBoostEnabled(enable bool) {
 	c.SetBool(FaceBoostPrefKey, enable)
 }
 
-// GetSyncMonitors returns the sync monitors preference.
-func (c *Config) GetSyncMonitors() bool {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.BoolWithFallback(SyncMonitorsPrefKey, true) // Default to true
-}
-
-// SetSyncMonitors sets the sync monitors preference.
-func (c *Config) SetSyncMonitors(enable bool) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.SetBool(SyncMonitorsPrefKey, enable)
-}
-
 // GetStaggerMonitorChanges returns the stagger monitor changes preference.
 func (c *Config) GetStaggerMonitorChanges() bool {
 	c.mu.RLock()

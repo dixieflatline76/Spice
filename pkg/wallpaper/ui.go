@@ -3,6 +3,7 @@ package wallpaper
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -104,12 +105,14 @@ func (wp *Plugin) CreateTrayMenuItems() []*fyne.MenuItem {
 			displayName := fmt.Sprintf("Display %d", mID+1)
 			wp.monMu.RLock()
 			if m, ok := wp.Monitors[mID]; ok && m.Monitor.Name != "" {
-				// User screenshot showed "Display 2 (Monitor 1)"
-				displayName = fmt.Sprintf("Display %d (%s)", mID+1, m.Monitor.Name)
+				// Only append the name if it's a real device name (not a generic "Monitor N" index)
+				if m.Monitor.Name != "Primary" && !strings.HasPrefix(m.Monitor.Name, "Monitor ") {
+					displayName = fmt.Sprintf("Display %d (%s)", mID+1, m.Monitor.Name)
+				}
 			}
 			wp.monMu.RUnlock()
 
-			subMenu := fyne.NewMenuItem(displayName, nil)
+			subMenu := wp.manager.CreateMenuItem(displayName, nil, "display.png")
 			subMenu.ChildMenu = fyne.NewMenu(displayName, createMonitorItems(mID)...)
 			items = append(items, subMenu)
 		}
@@ -161,7 +164,6 @@ func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 	// Declare check widgets early for usage in closures
 	var faceCropCheck *widget.Check
 	var faceBoostCheck *widget.Check
-	var staggerCheck *widget.Check
 
 	// Smart Fit Mode
 	// 0: Disabled
@@ -285,28 +287,7 @@ func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 		faceBoostCheck.Disable()
 	}
 
-	// Multi-Monitor Settings
-	var syncConfig setting.BoolConfig
 	var staggerConfig setting.BoolConfig
-
-	syncConfig = setting.BoolConfig{
-		Name:         "syncMonitors",
-		InitialValue: wp.cfg.GetSyncMonitors(),
-		Label:        sm.CreateSettingTitleLabel("Sync all screens:"),
-		HelpContent:  sm.CreateSettingDescriptionLabel("When ON, all monitors display the same image. When OFF, each monitor displays a unique image."),
-		ApplyFunc: func(b bool) {
-			wp.cfg.SetSyncMonitors(b)
-			syncConfig.InitialValue = b
-		},
-		OnChanged: func(b bool) {
-			if b {
-				staggerCheck.Disable()
-			} else {
-				staggerCheck.Enable()
-			}
-		},
-		NeedsRefresh: true,
-	}
 
 	staggerConfig = setting.BoolConfig{
 		Name:         "staggerChanges",
@@ -319,14 +300,7 @@ func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 		},
 		NeedsRefresh: false,
 	}
-
-	sm.CreateBoolSetting(&syncConfig, generalContainer)
-	staggerCheck = sm.CreateBoolSetting(&staggerConfig, generalContainer)
-
-	// Initial state for staggerCheck
-	if wp.cfg.GetSyncMonitors() {
-		staggerCheck.Disable()
-	}
+	sm.CreateBoolSetting(&staggerConfig, generalContainer)
 
 	// Change Wallpaper on Start
 	chgImgOnStartConfig := setting.BoolConfig{
@@ -416,17 +390,6 @@ func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 			if _, err := p.ParseURL(wp.pendingAddUrl); err == nil {
 				providerPendingUrl = wp.pendingAddUrl
 				isPendingProvider = true
-
-				// Determine target tab index
-				switch p.Type() {
-				case provider.TypeLocal:
-					targetTabIndex = 2 // Local
-				case provider.TypeAI:
-					targetTabIndex = 3 // AI
-				default:
-					targetTabIndex = 1 // Online
-				}
-
 				// Consume pending URL
 				wp.pendingAddUrl = ""
 			}
@@ -436,6 +399,18 @@ func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 		if wp.focusProviderName == name {
 			isPendingProvider = true
 			wp.focusProviderName = "" // Consume focus request
+		}
+
+		if isPendingProvider {
+			// Determine target sub-tab index (Online, Local, etc.)
+			switch p.Type() {
+			case provider.TypeLocal:
+				targetTabIndex = 2 // Local
+			case provider.TypeAI:
+				targetTabIndex = 3 // AI
+			default:
+				targetTabIndex = 1 // Online
+			}
 		}
 
 		settingsPanel := p.CreateSettingsPanel(sm)

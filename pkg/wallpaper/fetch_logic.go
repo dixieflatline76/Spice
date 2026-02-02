@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dixieflatline76/Spice/util"
 	"github.com/dixieflatline76/Spice/util/log"
 )
 
@@ -16,17 +17,10 @@ func (wp *Plugin) FetchNewImages() {
 			defer wp.fetchingInProgress.Set(false)
 			log.Println("Starting image fetch from active queries...")
 
-			// Iterate over configured queries in a thread-safe way?
-			// cfg.Queries is slice. We should probably lock or copy?
-			// But iterating slice value (copy) is safe if accessible.
-			// wp.cfg is *Config. Config structs usually exported but fields might need mutex?
-			// Config.Queries is exported. We should use RLocker if intended, but direct access is common if careful.
-			// Actually Config has a mutex `mu`. But queries slice is exposed.
-			// Ideally we use a getter or simple loop.
-			// For now, simple loop access.
-
+			wp.downloadMutex.RLock()
 			queries := wp.cfg.Queries
-			page := wp.currentDownloadPage.Value()
+			wp.downloadMutex.RUnlock()
+
 			totalQueued := 0
 			activeSources := make(map[string]bool)
 
@@ -41,8 +35,17 @@ func (wp *Plugin) FetchNewImages() {
 					continue
 				}
 
-				log.Printf("Fetching from provider: %s (Query: %s)", q.Provider, q.Description)
-				// Fetch API URL. q.URL is API URL usually.
+				// Get or create per-query page counter
+				wp.downloadMutex.Lock()
+				pg, ok := wp.queryPages[q.ID]
+				if !ok {
+					pg = util.NewSafeIntWithValue(1)
+					wp.queryPages[q.ID] = pg
+				}
+				wp.downloadMutex.Unlock()
+
+				page := pg.Value()
+				log.Printf("Fetching from provider: %s (Query: %s, Page: %d)", q.Provider, q.Description, page)
 				images, err := p.FetchImages(context.Background(), q.URL, page)
 				if err != nil {
 					log.Printf("Provider %s fetch failed: %v", q.Provider, err)
@@ -57,6 +60,7 @@ func (wp *Plugin) FetchNewImages() {
 
 				// Track source
 				activeSources[p.Name()] = true
+				queuedForThisQuery := 0
 
 				for _, img := range images {
 					if wp.cfg.InAvoidSet(img.ID) {
@@ -70,9 +74,15 @@ func (wp *Plugin) FetchNewImages() {
 					// Submit non-blocking
 					if wp.pipeline.Submit(job) {
 						totalQueued++
+						queuedForThisQuery++
 					} else {
 						log.Printf("WARN: Pipeline full or stopped. Dropping job.")
 					}
+				}
+
+				if queuedForThisQuery > 0 {
+					pg.Increment()
+					log.Printf("Query %s: Successfully queued %d images. Incrementing to page %d", q.ID, queuedForThisQuery, pg.Value())
 				}
 			}
 
@@ -86,11 +96,6 @@ func (wp *Plugin) FetchNewImages() {
 					sourceStr = " from " + strings.Join(sources, ", ")
 				}
 				wp.manager.NotifyUser("Wallpaper Fetch", fmt.Sprintf("Downloading %d new images%s...", totalQueued, sourceStr))
-
-				// Increment Page for next time
-				wp.currentDownloadPage.Increment()
-				log.Printf("Fetch successful. Incrementing page to %d", wp.currentDownloadPage.Value())
-
 			} else {
 				log.Println("Fetch returned 0 new images from all active queries.")
 			}
@@ -105,6 +110,17 @@ func (wp *Plugin) FetchNewImages() {
 // RefreshImagesAndPulse triggers a fetch and then updates the wallpaper.
 func (wp *Plugin) RefreshImagesAndPulse() {
 	go func() {
+		// Master Reset: Reset all query pages to 1
+		wp.downloadMutex.Lock()
+		for id := range wp.queryPages {
+			wp.queryPages[id].Set(1)
+		}
+		wp.downloadMutex.Unlock()
+
+		// Robust Sync: Reconcile store and invalidate stale derivatives
+		wp.syncStoreWithConfig()
+
+		// Trigger immediate fetch
 		wp.FetchNewImages()
 
 		// Wait for images using event driven notification (up to 15s)
@@ -114,10 +130,11 @@ func (wp *Plugin) RefreshImagesAndPulse() {
 		log.Println("[Init] Waiting for images before initial pulse...")
 		if err := wp.store.WaitForImages(ctx); err == nil {
 			log.Println("[Init] Images available. Triggering initial pulse.")
-			wp.SetNextWallpaper(-1)
+			// Use dispatch directly to bypass Stagger logic (Force Immediate)
+			wp.dispatch(-1, CmdNext)
 		} else {
 			log.Println("[Init] Initial pulse timeout. Triggering anyway.")
-			wp.SetNextWallpaper(-1)
+			wp.dispatch(-1, CmdNext)
 		}
 	}()
 }

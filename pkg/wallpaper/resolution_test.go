@@ -35,17 +35,18 @@ func TestGetUniqueResolutions(t *testing.T) {
 
 	for _, res := range resolutions {
 		key := fmt.Sprintf("%dx%d", res.Width, res.Height)
-		if key == "1920x1080" {
+		switch key {
+		case "1920x1080":
 			found1080p = true
 			if len(res.Monitors) != 2 { // ID 0 and 1
 				t.Errorf("expected 2 monitors for 1920x1080, got %d", len(res.Monitors))
 			}
-		} else if key == "3840x2160" {
+		case "3840x2160":
 			found4K = true
 			if len(res.Monitors) != 1 { // ID 2
 				t.Errorf("expected 1 monitor for 3840x2160, got %d", len(res.Monitors))
 			}
-		} else {
+		default:
 			t.Errorf("unexpected resolution: %s", key)
 		}
 	}
