@@ -2,6 +2,8 @@ package wallpaper
 
 import (
 	"context"
+	"image"
+	"net/http"
 	"os"
 	"path/filepath"
 	"testing"
@@ -251,9 +253,13 @@ func TestLifecycle_BlockPersistence(t *testing.T) {
 // 2. Trigger "Next Wallpaper"
 // 3. Verify OS.SetWallpaper is called with correct path
 func TestLifecycle_HappyPath(t *testing.T) {
-	// t.Skip("Skipping HappyPath...") REMOVED
 	prefs := NewMemoryPreferences()
 	wp := setupTestPlugin(t, prefs)
+
+	// Mock Expectation for this specific test
+	mockOS := wp.os.(*MockOS)
+	mockOS.On("SetWallpaper", mock.Anything, 0).Return(nil)
+
 	wp.Activate()
 
 	// 1. Setup - Create a real file because applyWallpaper checks for existence
@@ -262,70 +268,37 @@ func TestLifecycle_HappyPath(t *testing.T) {
 	err := os.WriteFile(realPath, []byte("dummy content"), 0644)
 	assert.NoError(t, err)
 
-	// Mock Expectation - Permissive
-	wp.os.(*MockOS).On("SetWallpaper", mock.Anything).Return(nil)
-
 	// 2. Add Image directly to Store
 	added := wp.store.Add(provider.Image{
-		ID:       "happy_img",
-		FilePath: realPath,
-		Provider: "stub", // Use stub to avoid AssetManager crash
+		ID:              "happy_img",
+		FilePath:        realPath,
+		Provider:        "stub",
+		DerivativePaths: map[string]string{"1920x1080": realPath},
 	})
-	if !added {
-		t.Fatal("Failed to add image to store (duplicate or blocked?)")
+	assert.True(t, added)
+
+	// Ensure Monitor 0 exists
+	wp.monMu.Lock()
+	if _, ok := wp.Monitors[0]; !ok {
+		mc := NewMonitorController(0, Monitor{ID: 0, Rect: image.Rect(0, 0, 1920, 1080)}, wp.store, wp.fm, wp.os, wp.cfg, wp.imgProcessor)
+		wp.Monitors[0] = mc
 	}
-	t.Logf("Store Count after Add: %d", wp.store.Count())
-
-	// Verify file exists
-	if _, err := os.Stat(realPath); err != nil {
-		t.Fatalf("Test file inaccessible: %v", err)
-	}
-	t.Logf("File exists at: %s", realPath)
-
-	// Verify Store Content
-	img, ok := wp.store.Get(0)
-	assert.True(t, ok, "Store should have image at index 0")
-	t.Logf("Stored Image Path: %s", img.FilePath)
-	assert.Equal(t, realPath, img.FilePath)
-
-	// Direct Mock Test (Verification of Mock Setup)
-	// wp.os.setWallpaper(realPath) // This would consume the expectation!
-	// We can't do this if we expect SetNextWallpaper to call it.
-	// But since SetNextWallpaper fails to call it, maybe we can test if Mock *can* be called.
-	// Let's stick to verifying Store content first.
+	mc := wp.Monitors[0]
+	wp.monMu.Unlock()
 
 	// 3. Trigger "Next Wallpaper"
-	wp.SetNextWallpaper()
+	wp.SetNextWallpaper(-1)
 
-	// Manually execute the action (deterministic)
-	select {
-	case action := <-wp.actionChan:
-		action()
-	case <-time.After(1 * time.Second):
-		t.Fatal("Timed out waiting for SetNextWallpaper action")
-	}
+	// Wait for the background actor to process (deterministic enough for mock)
+	assert.Eventually(t, func() bool {
+		return mc.State.CurrentImage.ID == "happy_img"
+	}, 2*time.Second, 100*time.Millisecond)
 
-	// 4. Verify State Update logic (Store -> Selection -> Apply)
-	time.Sleep(100 * time.Millisecond) // buffer
+	// 4. Verify
+	assert.Equal(t, realPath, mc.State.CurrentImage.FilePath)
 
-	t.Logf("Checking Current Image ID: '%s'", wp.currentImage.ID)
-	t.Logf("Checking Current Image Path: '%s'", wp.currentImage.FilePath)
-
-	if wp.currentImage.ID != "happy_img" {
-		t.Errorf("Expected currentImage.ID to be 'happy_img', got '%s'", wp.currentImage.ID)
-	}
-	if wp.currentImage.FilePath != realPath {
-		t.Errorf("Expected currentImage.FilePath to be '%s', got '%s'", realPath, wp.currentImage.FilePath)
-	}
-
-	// Verify OS call if possible (Best Effort)
-	// We matched Mock expectation loosely.
-	// Make sure at least one call happened
-	if len(wp.os.(*MockOS).Calls) == 0 {
-		t.Error("MockOS.setWallpaper was NOT called!")
-	} else {
-		t.Logf("MockOS calls recorded: %d", len(wp.os.(*MockOS).Calls))
-	}
+	// Verify OS call
+	mockOS.AssertExpectations(t)
 
 	wp.Deactivate()
 }
@@ -369,7 +342,8 @@ func setupTestPlugin(t *testing.T, prefs fyne.Preferences) *Plugin {
 	cfg.MaxConcurrentProcessors = 1
 
 	mockOS := new(MockOS)
-	mockOS.On("GetDesktopDimension").Return(1920, 1080)
+	mockOS.On("GetDesktopDimension").Return(1920, 1080, nil).Maybe()
+	mockOS.On("GetMonitors").Return([]Monitor{{ID: 0, Name: "Primary", Rect: image.Rect(0, 0, 1920, 1080)}}, nil).Maybe()
 
 	mockPM := new(MockPluginManager)
 	mockPM.On("NotifyUser", mock.Anything, mock.Anything).Return()
@@ -379,6 +353,7 @@ func setupTestPlugin(t *testing.T, prefs fyne.Preferences) *Plugin {
 	// Return a non-nil Manager to prevent panics in UI updates
 	mockPM.On("GetAssetManager").Return(&asset.Manager{})
 	mockPM.On("RefreshTrayMenu").Return() // Essential for UI updates
+	mockPM.On("RebuildTrayMenu").Return()
 
 	tmpDir := t.TempDir()
 	fm := NewFileManager(tmpDir)
@@ -391,25 +366,21 @@ func setupTestPlugin(t *testing.T, prefs fyne.Preferences) *Plugin {
 	pipeline := NewPipeline(cfg, imageStore, dummyProcessor)
 
 	wp := &Plugin{
-		os:                  mockOS,
-		cfg:                 cfg,
-		manager:             mockPM,
-		store:               imageStore,
-		fm:                  fm,
-		runOnUI:             func(f func()) { f() },
-		currentIndex:        -1,
-		history:             []int{},
-		actionChan:          make(chan func(), 10),
-		interrupt:           util.NewSafeBool(),
-		currentDownloadPage: util.NewSafeIntWithValue(1),
-		fitImageFlag:        util.NewSafeBool(),
-		shuffleImageFlag:    util.NewSafeBool(),
-		fetchingInProgress:  util.NewSafeBool(),
-		providers:           make(map[string]provider.ImageProvider),
-		pipeline:            pipeline,
-		// UI Items must be initialized
-		providerMenuItem: &fyne.MenuItem{},
-		artistMenuItem:   &fyne.MenuItem{},
+		os:                 mockOS,
+		cfg:                cfg,
+		manager:            mockPM,
+		store:              imageStore,
+		fm:                 fm,
+		runOnUI:            func(f func()) { f() },
+		interrupt:          util.NewSafeBool(),
+		queryPages:         make(map[string]*util.SafeCounter),
+		fitImageFlag:       util.NewSafeBool(),
+		shuffleImageFlag:   util.NewSafeBool(),
+		fetchingInProgress: util.NewSafeBool(),
+		providers:          make(map[string]provider.ImageProvider),
+		pipeline:           pipeline,
+		Monitors:           make(map[int]*MonitorController),
+		httpClient:         &http.Client{Timeout: 1 * time.Second},
 	}
 
 	// Register Stub Provider to bypass AssetManager logic

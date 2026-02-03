@@ -3,6 +3,7 @@ package wallpaper
 import (
 	"context"
 	"fmt"
+	"image"
 	"io"
 	"net/http"
 	"os"
@@ -28,8 +29,32 @@ func (wp *Plugin) ProcessImageJob(ctx context.Context, job DownloadJob) (provide
 	// 0. Early Filtering (Optimization)
 	// Check if we can reject the image based on dimensions BEFORE paying the 'Enrichment Tax'.
 	if img.Width > 0 && img.Height > 0 {
-		if err := wp.imgProcessor.CheckCompatibility(img.Width, img.Height); err != nil {
-			return provider.Image{}, fmt.Errorf("incompatible image skipped (pre-enrichment): %w", err)
+		var resolutions []Resolution
+		monitors, err := wp.os.GetMonitors()
+		if err == nil && len(monitors) > 0 {
+			resolutions = GetUniqueResolutions(monitors)
+		}
+
+		// Fallback to primary if Sync is OFF or GetMonitors failed
+		if len(resolutions) == 0 {
+			w, h, err := wp.os.GetDesktopDimension()
+			if err == nil {
+				resolutions = append(resolutions, Resolution{Width: w, Height: h})
+			}
+		}
+
+		// Check all candidate resolutions.
+		// Synced Mode: Fail if ANY are incompatible.
+		// Independent Mode: Fail only if ALL are incompatible.
+		incompatibleCount := 0
+		for _, res := range resolutions {
+			if err := wp.imgProcessor.CheckCompatibility(img.Width, img.Height, res.Width, res.Height); err != nil {
+				incompatibleCount++
+			}
+		}
+
+		if incompatibleCount == len(resolutions) {
+			return provider.Image{}, fmt.Errorf("incompatible image skipped (fits zero monitors)")
 		}
 	}
 
@@ -71,30 +96,36 @@ func (wp *Plugin) ProcessImageJob(ctx context.Context, job DownloadJob) (provide
 		"FaceBoost":      wp.cfg.GetFaceBoostEnabled(),
 	}
 
-	derivativePath, err := wp.ensureDerivative(ctx, img, masterPath)
+	derivativePaths, err := wp.ensureDerivative(ctx, img, masterPath)
 	if err != nil {
 		return provider.Image{}, fmt.Errorf("failed to ensure derivative: %w", err)
 	}
 
 	// Return updated image pointing to the derivative (for display)
 	// but flagged with how it was processed.
-	img.FilePath = derivativePath
+	img.DerivativePaths = derivativePaths
 	img.ProcessingFlags = processingFlags
 
-	// We also might want to store the MasterPath in the struct?
-	// provider.Image doesn't have it, but we can resolve it via ID/FM later if needed.
-	// The important part is FilePath points to what we show.
+	// Set a default FilePath for legacy compatibility (Monitor 0)
+	if path, ok := derivativePaths["primary"]; ok {
+		img.FilePath = path
+	} else {
+		// Fallback to first available
+		for _, path := range derivativePaths {
+			img.FilePath = path
+			break
+		}
+	}
 
 	if wp.favoriter != nil && wp.favoriter.IsFavorited(img) {
 		img.IsFavorited = true
 	}
 
-	// log.Debugf("ProcessImageJob Finished: ID=%s, FilePath=%s, IsFav=%v", img.ID, derivativePath, img.IsFavorited)
 	return img, nil
 }
 
 // ensureMaster ensures the raw image is on disk.
-// Returns partial path or absolute path? Absolute.
+// Returns absolute path.
 func (wp *Plugin) ensureMaster(ctx context.Context, img provider.Image, imgProvider provider.ImageProvider) (string, error) {
 	// Determine extension. We prefer what's in URL or Content-Type.
 	ext := filepath.Ext(extractFilenameFromURL(img.Path))
@@ -118,7 +149,6 @@ func (wp *Plugin) ensureMaster(ctx context.Context, img provider.Image, imgProvi
 	}
 
 	// Download Remote URL
-	// log.Debugf("Downloading master for %s...", img.ID)
 	client := wp.httpClient
 	if cp, ok := imgProvider.(provider.CustomClientProvider); ok {
 		client = cp.GetClient()
@@ -136,14 +166,16 @@ func (wp *Plugin) ensureMaster(ctx context.Context, img provider.Image, imgProvi
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqUrl, nil)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to create request: %w", err)
 	}
 
-	if imgProvider != nil {
-		if hp, ok := imgProvider.(provider.HeaderProvider); ok {
-			for k, v := range hp.GetDownloadHeaders() {
-				req.Header.Set(k, v)
-			}
+	// Standard User-Agent to prevent 403 Forbidden from providers like Pexels
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+
+	if hp, ok := imgProvider.(provider.HeaderProvider); ok {
+		headers := hp.GetDownloadHeaders()
+		for k, v := range headers {
+			req.Header.Set(k, v)
 		}
 	}
 
@@ -154,7 +186,6 @@ func (wp *Plugin) ensureMaster(ctx context.Context, img provider.Image, imgProvi
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		// Improved error message to include provider name
 		providerName := "Unknown"
 		if imgProvider != nil {
 			providerName = imgProvider.Name()
@@ -175,84 +206,146 @@ func (wp *Plugin) ensureMaster(ctx context.Context, img provider.Image, imgProvi
 	return masterPath, nil
 }
 
-// ensureDerivative ensures the processed image exists.
-// If missing, generates it from masterPath.
-func (wp *Plugin) ensureDerivative(ctx context.Context, img provider.Image, masterPath string) (string, error) {
-	// Determine Derivative Type based on Config
-	// New Nested Architecture:
-	// fitted / [quality|flexibility] / [standard|faceboost|facecrop]
-	var derivativeDir string
+// getBaseDerivativeDir returns the relative path segment for derivatives based on current settings.
+// Format: fitted / [quality|flexibility] / [standard|faceboost|facecrop]
+func (wp *Plugin) getBaseDerivativeDir() string {
 	mode := wp.cfg.GetSmartFitMode()
+	if mode == SmartFitOff {
+		return ""
+	}
 
-	if mode != SmartFitOff {
-		// 1. Determine Mode Segment
-		var modeDir string
-		if mode == SmartFitAggressive {
-			modeDir = FlexibilityDir
-		} else {
-			modeDir = QualityDir
-		}
-
-		// 2. Determine Type Segment
-		var typeDir string
-		if wp.cfg.GetFaceCropEnabled() {
-			typeDir = FaceCropDir
-		} else if wp.cfg.GetFaceBoostEnabled() {
-			typeDir = FaceBoostDir
-		} else {
-			typeDir = StandardDir
-		}
-
-		// 3. Construct Relative Path
-		derivativeDir = filepath.Join(FittedRootDir, modeDir, typeDir)
+	// 1. Determine Mode Segment
+	var modeDir string
+	if mode == SmartFitAggressive {
+		modeDir = FlexibilityDir
 	} else {
-		// Raw/None logic.
-		return masterPath, nil
+		modeDir = QualityDir
+	}
+
+	// 2. Determine Type Segment
+	var typeDir string
+	if wp.cfg.GetFaceCropEnabled() {
+		typeDir = FaceCropDir
+	} else if wp.cfg.GetFaceBoostEnabled() {
+		typeDir = FaceBoostDir
+	} else {
+		typeDir = StandardDir
+	}
+
+	return filepath.Join(FittedRootDir, modeDir, typeDir)
+}
+
+// ensureDerivative ensures the processed image exists for all detected monitor resolutions.
+// Returns a map of resolution "WxH" -> absolute path.
+func (wp *Plugin) ensureDerivative(ctx context.Context, img provider.Image, masterPath string) (map[string]string, error) {
+	derivativeDir := wp.getBaseDerivativeDir()
+	if derivativeDir == "" {
+		return map[string]string{"primary": masterPath}, nil
 	}
 
 	ext := filepath.Ext(masterPath)
-	targetPath, err := wp.fm.GetDerivativePath(img.ID, ext, derivativeDir)
-	if err != nil {
-		return "", fmt.Errorf("security check failed for derivative path: %w", err)
+	paths := make(map[string]string)
+
+	// Fetch Monitors to determine which resolutions we need
+	monitors, err := wp.os.GetMonitors()
+	if err != nil || len(monitors) == 0 {
+		log.Printf("Warning: No monitors found (or error: %v). Using Safe Fallback (1920x1080).", err)
+		monitors = []Monitor{{ID: 0, Name: "Fallback", Rect: image.Rect(0, 0, 1920, 1080)}}
 	}
 
-	// Check existence
-	if _, err := os.Stat(targetPath); !os.IsNotExist(err) {
-		return targetPath, nil
+	resolutions := GetUniqueResolutions(monitors)
+
+	// Check if we already have all derivatives on disk (Performance Optimization)
+	allExist := true
+	for _, res := range resolutions {
+		resDir := fmt.Sprintf("%dx%d", res.Width, res.Height)
+		fullDir := filepath.Join(derivativeDir, resDir)
+		targetPath, _ := wp.fm.GetDerivativePath(img.ID, ext, fullDir)
+		if _, err := os.Stat(targetPath); os.IsNotExist(err) {
+			allExist = false
+			break
+		}
+		paths[resDir] = targetPath
+		// Mark primary
+		for _, mid := range res.Monitors {
+			if mid == 0 {
+				paths["primary"] = targetPath
+			}
+		}
 	}
 
-	// Generate
-	// log.Debugf("Generating derivative for %s (Dir: %s)...", img.ID, derivativeDir)
+	if allExist && len(paths) > 0 {
+		if _, ok := paths["primary"]; !ok {
+			// Ensure primary is always set
+			for _, p := range paths {
+				paths["primary"] = p
+				break
+			}
+		}
+		return paths, nil
+	}
 
-	// Open Master
-	// Using generic "Open" might be slow if we need just decode.
-	// imaging.Open handles format detection.
+	// Generate Missing Derivatives
 	srcImg, err := imaging.Open(masterPath)
 	if err != nil {
-		return "", fmt.Errorf("failed to open master %s: %w", masterPath, err)
+		return nil, fmt.Errorf("failed to open master %s: %w", masterPath, err)
 	}
 
-	// Process
-	// We reuse existing imgProcessor logic but we need to pass the IMAGE object, not bytes.
-	// Wait, existing `imgProcessor.DecodeImage` takes bytes.
-	// `FitImage` takes `image.Image`.
-	// So `srcImg` is `image.Image`. Perfect.
+	for _, res := range resolutions {
+		resDir := fmt.Sprintf("%dx%d", res.Width, res.Height)
+		fullDir := filepath.Join(derivativeDir, resDir)
 
-	processedImg, err := wp.imgProcessor.FitImage(ctx, srcImg)
-	if err != nil {
-		return "", fmt.Errorf("failed to fit image: %w", err)
+		targetPath, err := wp.fm.GetDerivativePath(img.ID, ext, fullDir)
+		if err != nil {
+			log.Printf("Error getting derivative path for %s: %v", resDir, err)
+			continue
+		}
+
+		// Check existence (don't re-process if it exists)
+		if _, err := os.Stat(targetPath); os.IsNotExist(err) {
+			// Compatibility check: We skip this specific resolution if it doesn't fit settings.
+			if err := wp.imgProcessor.CheckCompatibility(srcImg.Bounds().Dx(), srcImg.Bounds().Dy(), res.Width, res.Height); err != nil {
+				log.Debugf("Skipping derivative for %s: incompatible: %v", resDir, err)
+				continue
+			}
+
+			// Generate
+			processedImg, err := wp.imgProcessor.FitImage(ctx, srcImg, res.Width, res.Height)
+			if err != nil {
+				log.Printf("Error fitting image for %s: %v", resDir, err)
+				continue
+			}
+
+			if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+				log.Printf("Error creating directory for %s: %v", targetPath, err)
+				continue
+			}
+
+			if err := imaging.Save(processedImg, targetPath); err != nil {
+				log.Printf("Error saving derivative %s: %v", targetPath, err)
+				continue
+			}
+		}
+
+		paths[resDir] = targetPath
+		// Mark primary
+		for _, mid := range res.Monitors {
+			if mid == 0 {
+				paths["primary"] = targetPath
+			}
+		}
 	}
 
-	// Save
-	// `imgProcessor.EncodeImage` returns bytes.
-	// We can use `imaging.Save` directly?
-	// `imaging` supports Save.
-	// But `EncodeImage` handles format specific encoding logic?
-	// Let's check `EncodeImage`.
-	// Assuming `imaging.Save` is fine.
-	if err := imaging.Save(processedImg, targetPath); err != nil {
-		return "", fmt.Errorf("failed to save derivative %s: %w", targetPath, err)
+	if len(paths) == 0 {
+		return nil, fmt.Errorf("failed to generate any derivatives")
 	}
 
-	return targetPath, nil
+	if _, ok := paths["primary"]; !ok {
+		for _, p := range paths {
+			paths["primary"] = p
+			break
+		}
+	}
+
+	return paths, nil
 }

@@ -11,16 +11,17 @@ const pluginName = "wallpaper"
 
 // Preference keys for wallpaper
 const (
-	pluginPrefix            = pluginName + "_"
-	SmartFitPrefKey         = pluginPrefix + "smart_fit_key"          // SmartFitPrefKey is used to set and retrieve the boolean flag for wallpaper smart fit
-	SmartFitModePrefKey     = pluginPrefix + "smart_fit_mode_key"     // SmartFitModePrefKey is used to set and retrieve the int smart fit mode
-	CacheSizePrefKey        = pluginPrefix + "cache_size_key"         // WallpaperCacheSizePrefKey is used to set and retrieve the int wallpaper cache size
-	WallpaperChgFreqPrefKey = pluginPrefix + "wallpaper_chg_freq_key" // WallpaperChgFreqPrefKey is used to set and retrieve the int change frequency for wallpapers
-	ImgShufflePrefKey       = pluginPrefix + "img_shuffle_key"        // ImgShufflePrefKey is used to set and retrieve the boolean flag for wallpaper image shuffle
-	ChgImgOnStartPrefKey    = pluginPrefix + "chg_img_on_start_key"   // ChgImgOnStartPrefKey is used to set and retrieve the boolean flag for changing wallpaper on startup
-	NightlyRefreshPrefKey   = pluginPrefix + "nightly_refresh_key"    // NightlyRefreshPrefKey is used to set and retrieve the boolean flag for nightly refresh
-	FaceBoostPrefKey        = pluginPrefix + "face_boost_key"         // FaceBoostPrefKey is used to set and retrieve the boolean flag for face boost
-	FaceCropPrefKey         = pluginPrefix + "face_crop_key"          // FaceCropPrefKey is used to set and retrieve the boolean flag for face crop
+	pluginPrefix                 = pluginName + "_"
+	SmartFitPrefKey              = pluginPrefix + "smart_fit_key"          // SmartFitPrefKey is used to set and retrieve the boolean flag for wallpaper smart fit
+	SmartFitModePrefKey          = pluginPrefix + "smart_fit_mode_key"     // SmartFitModePrefKey is used to set and retrieve the int smart fit mode
+	CacheSizePrefKey             = pluginPrefix + "cache_size_key"         // WallpaperCacheSizePrefKey is used to set and retrieve the int wallpaper cache size
+	WallpaperChgFreqPrefKey      = pluginPrefix + "wallpaper_chg_freq_key" // WallpaperChgFreqPrefKey is used to set and retrieve the int change frequency for wallpapers
+	ImgShufflePrefKey            = pluginPrefix + "img_shuffle_key"        // ImgShufflePrefKey is used to set and retrieve the boolean flag for wallpaper image shuffle
+	ChgImgOnStartPrefKey         = pluginPrefix + "chg_img_on_start_key"   // ChgImgOnStartPrefKey is used to set and retrieve the boolean flag for changing wallpaper on startup
+	NightlyRefreshPrefKey        = pluginPrefix + "nightly_refresh_key"    // NightlyRefreshPrefKey is used to set and retrieve the boolean flag for nightly refresh
+	FaceBoostPrefKey             = pluginPrefix + "face_boost_key"         // FaceBoostPrefKey is used to set and retrieve the boolean flag for face boost
+	FaceCropPrefKey              = pluginPrefix + "face_crop_key"          // FaceCropPrefKey is used to set and retrieve the boolean flag for face crop
+	StaggerMonitorChangesPrefKey = pluginPrefix + "stagger_changes_key"    // StaggerMonitorChangesPrefKey is used to set and retrieve the boolean flag for staggering wallpaper changes
 
 	// Provider keys (Shared)
 	UnsplashTokenPrefKey            = "unsplash_access_token"
@@ -29,7 +30,12 @@ const (
 	GooglePhotosTokenExpiryPrefKey  = "google_photos_token_expiry"
 	WallhavenAPIKeyPrefKey          = "wallhaven_api_key" //nolint:gosec // Preference key, not a secret
 	wallhavenConfigPrefKey          = "wallhaven_image_queries"
-	PexelsAPIKeyPrefKey             = "pexels_api_key" //nolint:gosec // Preference key, not a secret
+	PexelsAPIKeyPrefKey             = "pexels_api_key"    //nolint:gosec // Preference key, not a secret
+	PexelsAPIKeyRegexp              = `^[a-zA-Z0-9]{56}$` //nolint:gosec // Valid regex, not a secret
+	PexelsURLRegexp                 = `^https?://(?:www\.|api\.)?pexels\.com/(search/|collections/|v1/|).+$`
+	PexelsDescRegexp                = `^[a-zA-Z0-9\s]{5,50}$`
+	PexelsAPISearchURL              = "https://api.pexels.com/v1/search"
+	PexelsAPICollectionURL          = "https://api.pexels.com/v1/collections/%s"
 )
 
 // URLType indicates the type of image source (Search or Collection).
@@ -66,20 +72,21 @@ const (
 	FlexibilityDir = "flexibility"
 
 	// Type Segments
-	StandardDir              = "standard"
-	FaceBoostDir             = "faceboost"
-	FaceCropDir              = "facecrop"
-	PrcntSeenTillDownload    = 0.8
-	MinSeenImagesForDownload = 5
-	MinLocalImageBeforePulse = 1
-	MaxImageWaitRetry        = 10
-	ImageWaitRetryDelay      = 1 * time.Second
-	MaxDescLength            = 50
-	MaxURLLength             = 255
-	MaxFavoritesLimit        = 200
-	FavoritesNamespace       = "favorites" // API Namespace
-	FavoritesCollection      = "favorite_images"
-	FavoritesQueryID         = "favorites://" + FavoritesCollection
+	StandardDir               = "standard"
+	FaceBoostDir              = "faceboost"
+	FaceCropDir               = "facecrop"
+	PrcntSeenTillDownload     = 0.8
+	MinSeenImagesForDownload  = 5
+	MinLocalImageBeforePulse  = 1
+	BucketStarvationThreshold = 5 // Trigger fetch if bucket size falls below this
+	MaxImageWaitRetry         = 10
+	ImageWaitRetryDelay       = 1 * time.Second
+	MaxDescLength             = 50
+	MaxURLLength              = 255
+	MaxFavoritesLimit         = 200
+	FavoritesNamespace        = "favorites" // API Namespace
+	FavoritesCollection       = "favorite_images"
+	FavoritesQueryID          = "favorites://" + FavoritesCollection
 )
 
 // Frequency represents the frequency of a service

@@ -2,6 +2,9 @@ package wallpaper
 
 import (
 	"fmt"
+	"image"
+	_ "image/jpeg"
+	_ "image/png"
 	"os"
 	"path/filepath"
 	"strings"
@@ -86,6 +89,17 @@ func (fm *FileManager) GetDerivativePath(id string, ext string, derivativeType s
 	return filepath.Join(fm.rootDir, derivativeType, id+ext), nil
 }
 
+// DerivativeExists checks if a specific derivative exists on disk.
+// derivativeDir should be the resolution folder name (e.g. "1920x1080")
+func (fm *FileManager) DerivativeExists(id string, ext string, derivativeDir string) bool {
+	path, err := fm.GetDerivativePath(id, ext, derivativeDir)
+	if err != nil {
+		return false
+	}
+	_, err = os.Stat(path)
+	return err == nil
+}
+
 // DeepDelete removes the Master image and ALL its derivatives.
 // It searches for files with the given ID in all known directories.
 func (fm *FileManager) DeepDelete(id string) error {
@@ -103,12 +117,16 @@ func (fm *FileManager) DeepDelete(id string) error {
 	// 1. Master (Root)
 	if f := findFile(fm.rootDir); f != "" {
 		filesToDelete = append(filesToDelete, f)
+		log.Debugf("DeepDelete: Found Master file %s", f)
 	}
 
 	// 2. Derivatives (Recursive in FittedRoot)
 	fittedRoot := filepath.Join(fm.rootDir, FittedRootDir)
+	log.Debugf("DeepDelete: Scanning fitted root %s for ID %s", fittedRoot, id)
+
 	err := filepath.Walk(fittedRoot, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
+			log.Printf("DeepDelete: Error accessing path %s: %v", path, err)
 			return nil // Skip access errors
 		}
 		if !info.IsDir() {
@@ -117,6 +135,7 @@ func (fm *FileManager) DeepDelete(id string) error {
 			fileID := strings.TrimSuffix(name, ext)
 			if fileID == id {
 				filesToDelete = append(filesToDelete, path)
+				log.Debugf("DeepDelete: Found Derivative file %s", path)
 			}
 		}
 		return nil
@@ -125,14 +144,22 @@ func (fm *FileManager) DeepDelete(id string) error {
 		log.Printf("DeepDelete: Error walking fitted dir: %v", err)
 	}
 
+	log.Debugf("DeepDelete: Total files to delete for %s: %d", id, len(filesToDelete))
+
 	for _, f := range filesToDelete {
 		if err := os.Remove(f); err != nil {
+			// Suppress benign errors
+			if os.IsNotExist(err) {
+				continue
+			}
 			// Suppress "used by another process" errors (benign race with active download/usage)
 			if strings.Contains(err.Error(), "used by another process") || strings.Contains(err.Error(), "access is denied") {
 				log.Debugf("DeepDelete: Skipped locked file %s: %v", f, err)
 			} else {
 				log.Printf("DeepDelete: Failed to delete %s: %v", f, err)
 			}
+		} else {
+			log.Debugf("DeepDelete: Successfully deleted %s", f)
 		}
 	}
 
@@ -231,4 +258,19 @@ func (fm *FileManager) DeleteDerivatives(id string) error {
 	}
 
 	return nil
+}
+
+// GetDimensions returns the width and height of an image file on disk.
+func (fm *FileManager) GetDimensions(path string) (int, int, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return 0, 0, err
+	}
+	defer file.Close()
+
+	img, _, err := image.DecodeConfig(file)
+	if err != nil {
+		return 0, 0, err
+	}
+	return img.Width, img.Height, nil
 }

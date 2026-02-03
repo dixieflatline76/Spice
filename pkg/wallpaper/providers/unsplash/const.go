@@ -29,5 +29,5 @@ const (
 	// UnsplashURLRegexp validates Unsplash URLs (search, collections).
 	// Matches: https://unsplash.com/collections/..., https://unsplash.com/s/photos/...
 	// Explicitly does NOT match https://unsplash.com/photos/... (single photos)
-	UnsplashURLRegexp = `^https:\/\/(?:www\.)?unsplash\.com\/(?:collections\/|s\/photos\/).*$`
+	UnsplashURLRegexp = `^https://(?:www\.|api\.)?unsplash\.com/(?:collections/|s/photos/|search/photos).*$`
 )

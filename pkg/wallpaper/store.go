@@ -30,18 +30,28 @@ type ImageStore struct {
 	// Testing hook
 	saveFunc func()
 
+	// Update Notification
+	updateCh chan struct{}
+
+	// Resolution Buckets (Performance optimization)
+	// Map "WidthxHeight" -> List of Image IDs compatible with that resolution
+	resolutionBuckets map[string][]string
+
 	debounceDuration time.Duration
 }
 
 func NewImageStore() *ImageStore {
-	return &ImageStore{
-		images:           make([]provider.Image, 0),
-		idSet:            make(map[string]bool),
-		pathSet:          make(map[string]int),
-		avoidSet:         make(map[string]bool),
-		asyncSave:        true,
-		debounceDuration: 2 * time.Second,
+	store := &ImageStore{
+		images:            make([]provider.Image, 0),
+		idSet:             make(map[string]bool),
+		pathSet:           make(map[string]int),
+		avoidSet:          make(map[string]bool),
+		asyncSave:         true,
+		debounceDuration:  2 * time.Second,
+		updateCh:          make(chan struct{}),
+		resolutionBuckets: make(map[string][]string),
 	}
+	return store
 }
 
 func (s *ImageStore) SetDebounceDuration(d time.Duration) {
@@ -70,11 +80,23 @@ func (s *ImageStore) Update(img provider.Image) bool {
 	for i, existing := range s.images {
 		if existing.ID == img.ID {
 			s.images[i] = img
+			s.rebuildBucketsLocked() // Rebuild because DerivativePaths might have changed
 			s.scheduleSaveLocked()
 			return true
 		}
 	}
 	return false
+}
+
+// rebuildBucketsLocked re-scans all images and builds resolution buckets.
+// CALLER MUST HOLD s.mu.Lock() or s.mu.RLock() - no, wait, it modifies buckets so must be WRITE LOCK.
+func (s *ImageStore) rebuildBucketsLocked() {
+	s.resolutionBuckets = make(map[string][]string)
+	for _, img := range s.images {
+		for res := range img.DerivativePaths {
+			s.resolutionBuckets[res] = append(s.resolutionBuckets[res], img.ID)
+		}
+	}
 }
 
 // scheduleSaveLocked handles persistence.
@@ -99,6 +121,7 @@ func (s *ImageStore) scheduleSaveLocked() {
 	})
 }
 
+// Add adds a new image to the store. Returns true if added, false if it was already present or blocked.
 func (s *ImageStore) Add(img provider.Image) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -118,10 +141,18 @@ func (s *ImageStore) Add(img provider.Image) bool {
 	if img.Seen {
 		s.seenCount++
 	}
+
+	// Add to buckets
+	for res := range img.DerivativePaths {
+		s.resolutionBuckets[res] = append(s.resolutionBuckets[res], img.ID)
+	}
+
 	s.scheduleSaveLocked()
+	s.notifyUpdateLocked()
 	return true
 }
 
+// Get returns the image at the given index from the global list. Returns false if index is out of bounds.
 func (s *ImageStore) Get(index int) (provider.Image, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -132,6 +163,7 @@ func (s *ImageStore) Get(index int) (provider.Image, bool) {
 	return provider.Image{}, false
 }
 
+// GetByID returns the image with the given ID. Returns false if not found.
 func (s *ImageStore) GetByID(id string) (provider.Image, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -150,6 +182,7 @@ func (s *ImageStore) Contains(id string) bool {
 	return s.idSet[id]
 }
 
+// Count returns the total number of images in the store.
 func (s *ImageStore) Count() int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -184,6 +217,7 @@ func (s *ImageStore) MarkSeen(filePath string) {
 	}
 }
 
+// Remove deletes an image from the store by its ID. It also deletes physical files asynchronously.
 func (s *ImageStore) Remove(id string) (provider.Image, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -217,6 +251,7 @@ func (s *ImageStore) Remove(id string) (provider.Image, bool) {
 		}
 	}
 
+	s.rebuildBucketsLocked() // Ensure buckets are updated after removal
 	s.avoidSet[id] = true
 	s.scheduleSaveLocked()
 
@@ -227,18 +262,21 @@ func (s *ImageStore) Remove(id string) (provider.Image, bool) {
 	return img, true
 }
 
+// SeenCount returns the number of images that have been marked as seen.
 func (s *ImageStore) SeenCount() int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.seenCount
 }
 
+// Clear resets the store to an empty state, but preserves the avoid set (blocklist).
 func (s *ImageStore) Clear() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.images = make([]provider.Image, 0)
 	s.idSet = make(map[string]bool)
 	s.pathSet = make(map[string]int)
+	s.resolutionBuckets = make(map[string][]string)
 	s.seenCount = 0
 	s.scheduleSaveLocked()
 }
@@ -253,6 +291,7 @@ func (s *ImageStore) Wipe() {
 	}
 }
 
+// RemoveByQueryID removes all images associated with a specific provider query ID.
 func (s *ImageStore) RemoveByQueryID(queryID string) {
 	s.mu.Lock()
 	var remaining []provider.Image
@@ -282,6 +321,7 @@ func (s *ImageStore) RemoveByQueryID(queryID string) {
 			s.pathSet[img.FilePath] = i
 		}
 	}
+	s.rebuildBucketsLocked() // Ensure buckets are updated after batch removal
 
 	s.scheduleSaveLocked()
 	s.mu.Unlock()
@@ -333,6 +373,7 @@ func (s *ImageStore) LoadCache() error {
 
 	s.idSet = make(map[string]bool)
 	s.pathSet = make(map[string]int)
+	s.resolutionBuckets = make(map[string][]string)
 	s.seenCount = 0
 	for i, img := range s.images {
 		s.idSet[img.ID] = true
@@ -341,6 +382,10 @@ func (s *ImageStore) LoadCache() error {
 		}
 		if img.Seen {
 			s.seenCount++
+		}
+		// Populate buckets from cache
+		for res := range img.DerivativePaths {
+			s.resolutionBuckets[res] = append(s.resolutionBuckets[res], img.ID)
 		}
 	}
 	return nil
@@ -358,6 +403,13 @@ func (s *ImageStore) SaveCache() {
 				flags[k] = v
 			}
 			snapshot[i].ProcessingFlags = flags
+		}
+		if img.DerivativePaths != nil {
+			paths := make(map[string]string)
+			for k, v := range img.DerivativePaths {
+				paths[k] = v
+			}
+			snapshot[i].DerivativePaths = paths
 		}
 	}
 	s.mu.RUnlock()
@@ -393,6 +445,28 @@ func (s *ImageStore) saveCacheInternal(images []provider.Image) {
 	if err := os.Rename(tmp, s.cachePath); err != nil {
 		log.Printf("Store: Failed to rename cache: %v", err)
 	}
+}
+
+// GetIDsForResolution returns a list of IDs compatible with the given resolution.
+func (s *ImageStore) GetIDsForResolution(resolution string) []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	ids, exists := s.resolutionBuckets[resolution]
+	if !exists {
+		return nil
+	}
+
+	res := make([]string, len(ids))
+	copy(res, ids)
+	return res
+}
+
+// GetBucketSize returns the number of images available for a specific resolution.
+func (s *ImageStore) GetBucketSize(resolution string) int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return len(s.resolutionBuckets[resolution])
 }
 
 func (s *ImageStore) Sync(limit int, targetFlags map[string]bool, activeQueryIDs map[string]bool) {
@@ -437,6 +511,11 @@ func (s *ImageStore) Sync(limit int, targetFlags map[string]bool, activeQueryIDs
 				badIDs[img.ID] = ActionDelete
 				continue
 			}
+		}
+
+		if s.avoidSet[img.ID] {
+			badIDs[img.ID] = ActionDelete
+			continue
 		}
 
 		masterPath, err := s.fm.GetMasterPath(img.ID, ".jpg")
@@ -513,6 +592,7 @@ func (s *ImageStore) Sync(limit int, targetFlags map[string]bool, activeQueryIDs
 	s.images = finalImages
 	s.idSet = make(map[string]bool)
 	s.pathSet = make(map[string]int)
+	s.resolutionBuckets = make(map[string][]string)
 	s.seenCount = 0
 	for i, img := range s.images {
 		s.idSet[img.ID] = true
@@ -521,6 +601,10 @@ func (s *ImageStore) Sync(limit int, targetFlags map[string]bool, activeQueryIDs
 		}
 		if img.Seen {
 			s.seenCount++
+		}
+		// Rebuild buckets during sync
+		for res := range img.DerivativePaths {
+			s.resolutionBuckets[res] = append(s.resolutionBuckets[res], img.ID)
 		}
 	}
 
@@ -531,6 +615,12 @@ func (s *ImageStore) Sync(limit int, targetFlags map[string]bool, activeQueryIDs
 	if len(idsToDelete) > 0 {
 		go func(ids []string) {
 			for _, id := range ids {
+				// Race Condition Fix: Check if the ID has been resurrected (re-added) to the store
+				// since the sync operation started. If so, DO NOT delete the files.
+				if _, exists := s.GetByID(id); exists {
+					log.Printf("[Store] Skipping deletion of resurrected ID: %s", id)
+					continue
+				}
 				_ = s.fm.DeepDelete(id)
 			}
 		}(idsToDelete)
@@ -544,6 +634,7 @@ func (s *ImageStore) Sync(limit int, targetFlags map[string]bool, activeQueryIDs
 	}
 }
 
+// GetKnownIDs returns a map of all image IDs currently in the store.
 func (s *ImageStore) GetKnownIDs() map[string]bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

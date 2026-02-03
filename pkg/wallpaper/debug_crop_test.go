@@ -65,10 +65,10 @@ func TestRegressionSuite(t *testing.T) {
 				fmt.Printf("No Face Found: %v\n", err)
 			}
 
-			// 3. Run FitImage (Decision path)
-			outputImg, err := processor.FitImage(context.Background(), img)
+			// 3. Run	// FitImage should invoke cropping
+			processed, err := processor.FitImage(context.Background(), img, 1920, 1080)
 			require.NoError(t, err)
-			fmt.Printf("Result Bounds: %v\n", outputImg.Bounds())
+			fmt.Printf("Result Bounds: %v\n", processed.Bounds())
 		})
 	}
 }

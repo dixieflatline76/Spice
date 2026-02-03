@@ -42,7 +42,8 @@ type Config struct {
 	Tuning                  TuningConfig `json:"tuning"`
 
 	// Callbacks
-	QueryRemovedCallback func(queryID string) `json:"-"`
+	QueryRemovedCallback  func(queryID string) `json:"-"`
+	QueryDisabledCallback func(queryID string) `json:"-"`
 }
 
 // ImageQuery struct to hold the URL of an image and whether it is active
@@ -423,6 +424,13 @@ func (c *Config) SetQueryRemovedCallback(callback func(queryID string)) {
 	c.QueryRemovedCallback = callback
 }
 
+// SetQueryDisabledCallback sets the callback for when a query is disabled.
+func (c *Config) SetQueryDisabledCallback(callback func(queryID string)) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.QueryDisabledCallback = callback
+}
+
 // RemoveUnsplashQuery removes an Unsplash query from the unified list.
 func (c *Config) RemoveUnsplashQuery(id string) error {
 	return c.RemoveImageQuery(id) // Reuse generic remove
@@ -470,6 +478,11 @@ func (c *Config) DisableImageQuery(id string) error {
 
 	c.Queries[index].Active = false
 	c.save()
+
+	// Trigger callback
+	if c.QueryDisabledCallback != nil {
+		go c.QueryDisabledCallback(id)
+	}
 	return nil
 }
 
@@ -800,6 +813,20 @@ func (c *Config) SetFaceBoostEnabled(enable bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.SetBool(FaceBoostPrefKey, enable)
+}
+
+// GetStaggerMonitorChanges returns the stagger monitor changes preference.
+func (c *Config) GetStaggerMonitorChanges() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.BoolWithFallback(StaggerMonitorChangesPrefKey, false) // Default to false
+}
+
+// SetStaggerMonitorChanges sets the stagger monitor changes preference.
+func (c *Config) SetStaggerMonitorChanges(enable bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.SetBool(StaggerMonitorChangesPrefKey, enable)
 }
 
 // GetFaceBoostEnabled returns the face boost preference.

@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestDeepDelete(t *testing.T) {
@@ -152,5 +154,51 @@ func TestCleanupOrphans(t *testing.T) {
 	}
 	if _, err := os.Stat(orphanDeriv); !os.IsNotExist(err) {
 		t.Error("Orphan derivative NOT deleted")
+	}
+}
+
+func TestCleanupOrphans_DeepResolutionStructure(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "spice-cleanup-test-*")
+	assert.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	fm := NewFileManager(tempDir)
+	err = fm.EnsureDirs()
+	assert.NoError(t, err)
+
+	// 1. Create a deep resolution folder that mimicks the new structure
+	// Structure: fitted/quality/standard/3440x1440/
+
+	deepRelPath := filepath.Join(FittedRootDir, QualityDir, StandardDir, "3440x1440")
+	fullDeepPath := filepath.Join(tempDir, deepRelPath)
+	err = os.MkdirAll(fullDeepPath, 0755)
+	assert.NoError(t, err)
+
+	// 2. Put an orphan file there
+	orphanID := "orphan_image"
+	orphanPath := filepath.Join(fullDeepPath, orphanID+".jpg")
+	err = os.WriteFile(orphanPath, []byte("fake image data"), 0644)
+	assert.NoError(t, err)
+
+	// 3. Put a valid file there
+	validID := "valid_image"
+	validPath := filepath.Join(fullDeepPath, validID+".jpg")
+	err = os.WriteFile(validPath, []byte("fake valid data"), 0644)
+	assert.NoError(t, err)
+
+	// 4. Run Cleanup
+	known := map[string]bool{
+		validID: true,
+	}
+	fm.CleanupOrphans(known)
+
+	// 5. Verify Orphan is gone
+	if _, err := os.Stat(orphanPath); !os.IsNotExist(err) {
+		t.Errorf("Orphan file should have been deleted: %s", orphanPath)
+	}
+
+	// 6. Verify Valid file is kept
+	if _, err := os.Stat(validPath); os.IsNotExist(err) {
+		t.Errorf("Valid file should have been kept: %s", validPath)
 	}
 }

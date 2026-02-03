@@ -2,6 +2,7 @@ package wallpaper
 
 import (
 	"fmt"
+	"image"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -79,7 +80,7 @@ type BenchMockOS struct {
 	mock.Mock
 }
 
-func (m *BenchMockOS) SetWallpaper(path string) error {
+func (m *BenchMockOS) SetWallpaper(path string, monitorID int) error {
 	// Simulate OS syscall overhead (small)
 	time.Sleep(10 * time.Millisecond)
 	return nil
@@ -87,6 +88,10 @@ func (m *BenchMockOS) SetWallpaper(path string) error {
 
 func (m *BenchMockOS) GetDesktopDimension() (int, int, error) {
 	return 1920, 1080, nil
+}
+
+func (m *BenchMockOS) GetMonitors() ([]Monitor, error) {
+	return []Monitor{{ID: 0, Name: "Primary", Rect: image.Rect(0, 0, 1920, 1080)}}, nil
 }
 
 // BenchmarkSequentialSwitch measures the time to switch wallpapers sequentially.
@@ -101,9 +106,6 @@ func BenchmarkSequentialSwitch(b *testing.B) {
 	store.SetFileManager(fm, filepath.Join(tmpDir, "cache.json"))
 
 	// Create Plugin (Minimal)
-	// We need dummy menu items to avoid panic in updateTrayMenuUI
-	dummyMenuItem := &fyne.MenuItem{}
-
 	wp := &Plugin{
 		manager:          &BenchMockPluginManager{},
 		store:            store,
@@ -111,8 +113,6 @@ func BenchmarkSequentialSwitch(b *testing.B) {
 		downloadMutex:    sync.RWMutex{},
 		shuffleImageFlag: util.NewSafeBoolWithValue(false),
 		fitImageFlag:     util.NewSafeBoolWithValue(false),
-		providerMenuItem: dummyMenuItem,
-		artistMenuItem:   dummyMenuItem,
 		// We need to mock "runOnUI" since we are in a test
 		runOnUI: func(f func()) { f() },
 
@@ -140,14 +140,14 @@ func BenchmarkSequentialSwitch(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		// We simulate "Next" action
-		// In real app: wp.setNextWallpaper()
+		// In real app: wp.SetNextWallpaper()
 		// We need to make sure wp.currentIndex rotates
 
-		// Logic from setNextWallpaper (simplified to avoid private method access issues if needed,
+		// Logic from SetNextWallpaper (simplified to avoid private method access issues if needed,
 		// but since we are in package wallpaper, we can call it if we export it or use test hook)
-		// setNextWallpaper is private `func (wp *Plugin) setNextWallpaper()`
+		// SetNextWallpaper is private `func (wp *Plugin) SetNextWallpaper()`
 		// We are in `wallpaper` package, so we CAN call it.
 
-		wp.setNextWallpaper()
+		wp.SetNextWallpaper(-1)
 	}
 }

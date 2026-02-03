@@ -16,7 +16,7 @@ const (
 
 	// PexelsURLRegexp validates Pexels URLs (search, collections).
 	// Matches: https://www.pexels.com/search/..., https://www.pexels.com/collections/...
-	PexelsURLRegexp = `^https:\/\/(?:www\.)?pexels\.com\/(?:search\/|collections\/).*$`
+	PexelsURLRegexp = `^https://(?:www\.|api\.)?pexels\.com/(?:search/|collections/|v1/).*$`
 
 	// PexelsAPIKeyRegexp validates Pexels API keys (typically 56 params).
 	PexelsAPIKeyRegexp = `^[a-zA-Z0-9-]{56}$` //nolint:gosec // Regex, not a secret

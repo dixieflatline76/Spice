@@ -82,7 +82,7 @@ func main() {
 	// Start the listener in a separate goroutine
 	go func() {
 		time.Sleep(500 * time.Millisecond)
-		hotkey.StartListeners()
+		hotkey.StartListeners(ui.GetPluginManager())
 	}()
 
 	spiceApp.Start() // Run the application

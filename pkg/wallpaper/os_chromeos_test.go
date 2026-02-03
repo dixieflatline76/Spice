@@ -9,7 +9,7 @@ import (
 
 func TestChromeOS_SetWallpaper_NoBridge(t *testing.T) {
 	os := &ChromeOS{}
-	err := os.SetWallpaper("test.jpg")
+	err := os.SetWallpaper("test.jpg", 0)
 	// If no bridge, it should probably error or handle gracefully.
 	// Current stub returns nil. TDD: We should define behavior.
 	// Let's expect an error "bridge not connected" in implementation.
@@ -34,7 +34,7 @@ func TestChromeOS_SetWallpaper_WithBridge(t *testing.T) {
 		return nil
 	})
 
-	err := os.SetWallpaper("/tmp/image.jpg")
+	err := os.SetWallpaper("/tmp/image.jpg", 0)
 	assert.NoError(t, err)
 	assert.True(t, called)
 	assert.Equal(t, "/tmp/image.jpg", capturedPath)
@@ -47,7 +47,7 @@ func TestChromeOS_SetWallpaper_BridgeError(t *testing.T) {
 		return errors.New("connection failed")
 	})
 
-	err := os.SetWallpaper("test.jpg")
+	err := os.SetWallpaper("test.jpg", 0)
 	assert.Error(t, err)
 	assert.Equal(t, "connection failed", err.Error())
 }

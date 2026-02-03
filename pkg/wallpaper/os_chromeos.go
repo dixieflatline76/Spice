@@ -2,6 +2,7 @@ package wallpaper
 
 import (
 	"errors"
+	"image"
 	"sync"
 )
 
@@ -12,7 +13,7 @@ type ChromeOS struct {
 }
 
 // SetWallpaper delegates to the bridge callback.
-func (c *ChromeOS) SetWallpaper(path string) error {
+func (c *ChromeOS) SetWallpaper(path string, monitorID int) error {
 	c.mu.Lock()
 	cb := c.bridgeCallback
 	c.mu.Unlock()
@@ -21,6 +22,14 @@ func (c *ChromeOS) SetWallpaper(path string) error {
 		return errors.New("chrome extension bridge not connected")
 	}
 	return cb(path)
+}
+
+func (c *ChromeOS) GetMonitors() ([]Monitor, error) {
+	width, height, err := c.GetDesktopDimension()
+	if err != nil {
+		return nil, err
+	}
+	return []Monitor{{ID: 0, Name: "Primary", Rect: image.Rect(0, 0, width, height)}}, nil
 }
 
 // GetDesktopDimension returns the desktop dimensions.

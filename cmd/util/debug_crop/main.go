@@ -20,13 +20,21 @@ func (m *MockOS) GetDesktopDimension() (int, int, error) {
 	return args.Int(0), args.Int(1), args.Error(2)
 }
 
-func (m *MockOS) SetWallpaper(path string) error {
-	args := m.Called(path)
+func (m *MockOS) SetWallpaper(path string, monitorID int) error {
+	args := m.Called(path, monitorID)
 	return args.Error(0)
 }
 
 func (m *MockOS) GetCacheDir() (string, error) {
 	return "test_cache", nil
+}
+
+func (m *MockOS) GetMonitors() ([]wallpaper.Monitor, error) {
+	width, height, err := m.GetDesktopDimension()
+	if err != nil {
+		return nil, err
+	}
+	return []wallpaper.Monitor{{ID: 0, Name: "Primary", Rect: image.Rect(0, 0, width, height)}}, nil
 }
 
 // MockPreferences simulates config
@@ -53,8 +61,16 @@ func (m *ExplicitMockOS) GetDesktopDimension() (int, int, error) {
 	// Standard 16:9
 	return 1920, 1080, nil
 }
-func (m *ExplicitMockOS) SetWallpaper(path string) error { return nil }
-func (m *ExplicitMockOS) GetCacheDir() (string, error)   { return "test_cache", nil }
+func (m *ExplicitMockOS) SetWallpaper(path string, monitorID int) error { return nil }
+func (m *ExplicitMockOS) GetCacheDir() (string, error)                  { return "test_cache", nil }
+
+func (m *ExplicitMockOS) GetMonitors() ([]wallpaper.Monitor, error) {
+	width, height, err := m.GetDesktopDimension()
+	if err != nil {
+		return nil, err
+	}
+	return []wallpaper.Monitor{{ID: 0, Name: "Primary", Rect: image.Rect(0, 0, width, height)}}, nil
+}
 
 type ExplicitMockPrefs struct{}
 
@@ -119,7 +135,7 @@ func main() {
 	fmt.Printf("Input: %dx%d\n", img.Bounds().Dx(), img.Bounds().Dy())
 
 	// Run
-	res, err := proc.FitImage(context.Background(), img)
+	res, err := proc.FitImage(context.Background(), img, 1920, 1080)
 	if err != nil {
 		fmt.Printf("FIT ERROR: %v\n", err)
 	} else {

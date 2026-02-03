@@ -28,8 +28,13 @@ type DummyOS struct{}
 func (d *DummyOS) GetDesktopDimension() (int, int, error) {
 	return 3440, 1440, nil
 }
-func (d *DummyOS) SetWallpaper(path string) error {
+func (d *DummyOS) SetWallpaper(path string, monitorID int) error {
 	return nil
+}
+
+func (d *DummyOS) GetMonitors() ([]wallpaper.Monitor, error) {
+	width, height, _ := d.GetDesktopDimension()
+	return []wallpaper.Monitor{{ID: 0, Name: "Primary", Rect: image.Rect(0, 0, width, height)}}, nil
 }
 
 // MockPreferences satisfies fyne.Preferences
@@ -244,7 +249,7 @@ func main() {
 			cfg.Tuning.FaceDetectShift = m.Shift
 
 			// Process
-			resImg, err := processor.FitImage(ctx, srcImg)
+			resImg, err := processor.FitImage(ctx, srcImg, 3440, 1440)
 			stats := processor.GetLastStats()
 
 			filename := fmt.Sprintf("%s_%s.jpg", ti.Name, sanitize(m.Name))

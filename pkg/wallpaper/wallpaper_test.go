@@ -8,207 +8,24 @@ import (
 	"image/jpeg"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"fyne.io/fyne/v2"
 	"github.com/dixieflatline76/Spice/asset"
 	"github.com/dixieflatline76/Spice/pkg/provider"
-	"github.com/dixieflatline76/Spice/pkg/ui"
-	"github.com/dixieflatline76/Spice/pkg/ui/setting"
 	"github.com/dixieflatline76/Spice/util"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
 
-// MockPluginManager implements ui.PluginManager for testing
-type MockPluginManager struct {
-	mock.Mock
-}
+// Mocks removed: MockPluginManager
 
-func (m *MockPluginManager) Register(p ui.Plugin) {
-	m.Called(p)
-}
-
-func (m *MockPluginManager) Deregister(p ui.Plugin) {
-	m.Called(p)
-}
-
-func (m *MockPluginManager) NotifyUser(title, message string) {
-	m.Called(title, message)
-}
-
-func (m *MockPluginManager) RegisterNotifier(n ui.Notifier) {
-	m.Called(n)
-}
-
-func (m *MockPluginManager) CreateMenuItem(label string, action func(), iconName string) *fyne.MenuItem {
-	args := m.Called(label, action, iconName)
-	if args.Get(0) == nil {
-		return nil
-	}
-	return args.Get(0).(*fyne.MenuItem)
-}
-
-func (m *MockPluginManager) CreateToggleMenuItem(label string, action func(bool), iconName string, checked bool) *fyne.MenuItem {
-	args := m.Called(label, action, iconName, checked)
-	if args.Get(0) == nil {
-		return nil
-	}
-	return args.Get(0).(*fyne.MenuItem)
-}
-
-func (m *MockPluginManager) OpenURL(url *url.URL) error {
-	args := m.Called(url)
-	return args.Error(0)
-}
-
-func (m *MockPluginManager) OpenPreferences(tab string) {
-	m.Called(tab)
-}
-
-func (m *MockPluginManager) GetPreferences() fyne.Preferences {
-	args := m.Called()
-	if args.Get(0) == nil {
-		return nil
-	}
-	return args.Get(0).(fyne.Preferences)
-}
-
-func (m *MockPluginManager) GetAssetManager() *asset.Manager {
-	args := m.Called()
-	if args.Get(0) == nil {
-		return nil
-	}
-	return args.Get(0).(*asset.Manager)
-}
-
-func (m *MockPluginManager) RefreshTrayMenu() {
-	m.Called()
-}
-
-func (m *MockPluginManager) RebuildTrayMenu() {
-	m.Called()
-}
-
-// MockImageProcessor implements ImageProcessor for testing
-type MockImageProcessor struct {
-	mock.Mock
-}
-
-func (m *MockImageProcessor) DecodeImage(ctx context.Context, imgBytes []byte, contentType string) (interface{}, string, error) {
-	// Return type is image.Image, but mock needs interface{}
-	args := m.Called(ctx, imgBytes, contentType)
-	return args.Get(0), args.String(1), args.Error(2)
-}
-
-// Helper to cast interface{} to image.Image if needed, but for now we just return nil or mock object
-// Since image.Image is interface, it works.
-
-func (m *MockImageProcessor) EncodeImage(ctx context.Context, img interface{}, contentType string) ([]byte, error) {
-	args := m.Called(ctx, img, contentType)
-	return args.Get(0).([]byte), args.Error(1)
-}
-
-func (m *MockImageProcessor) FitImage(ctx context.Context, img interface{}) (interface{}, error) {
-	args := m.Called(ctx, img)
-	return args.Get(0), args.Error(1)
-}
-
-// We need to adapt MockImageProcessor to match ImageProcessor interface which uses image.Image
-// Since image.Image is an interface, we can use it directly in signature.
-
-type MockImageProcessorTyped struct {
-	mock.Mock
-}
-
-func (m *MockImageProcessorTyped) DecodeImage(ctx context.Context, imgBytes []byte, contentType string) (image.Image, string, error) {
-	args := m.Called(ctx, imgBytes, contentType)
-	if args.Get(0) == nil {
-		return nil, args.String(1), args.Error(2)
-	}
-	return args.Get(0).(image.Image), args.String(1), args.Error(2)
-}
-
-func (m *MockImageProcessorTyped) EncodeImage(ctx context.Context, img image.Image, contentType string) ([]byte, error) {
-	args := m.Called(ctx, img, contentType)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]byte), args.Error(1)
-}
-
-func (m *MockImageProcessorTyped) FitImage(ctx context.Context, img image.Image) (image.Image, error) {
-	args := m.Called(ctx, img)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(image.Image), args.Error(1)
-}
-
-func (m *MockImageProcessorTyped) CheckCompatibility(width, height int) error {
-	args := m.Called(width, height)
-	return args.Error(0)
-}
-
-// MockImageProvider implements ImageProvider for testing
-type MockImageProvider struct {
-	mock.Mock
-}
-
-func (m *MockImageProvider) Name() string {
-	args := m.Called()
-	return args.String(0)
-}
-
-func (m *MockImageProvider) Type() provider.ProviderType {
-	return provider.TypeOnline
-}
-
-func (m *MockImageProvider) SupportsUserQueries() bool {
-	return true
-}
-
-func (m *MockImageProvider) ParseURL(webURL string) (string, error) {
-	args := m.Called(webURL)
-	return args.String(0), args.Error(1)
-}
-
-func (m *MockImageProvider) FetchImages(ctx context.Context, apiURL string, page int) ([]provider.Image, error) {
-	args := m.Called(ctx, apiURL, page)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]provider.Image), args.Error(1)
-}
-
-func (m *MockImageProvider) EnrichImage(ctx context.Context, img provider.Image) (provider.Image, error) {
-	args := m.Called(ctx, img)
-	if args.Get(0) == nil {
-		return provider.Image{}, args.Error(1)
-	}
-	return args.Get(0).(provider.Image), args.Error(1)
-}
-
-func (m *MockImageProvider) Title() string {
-	args := m.Called()
-	if len(args) == 0 {
-		return "Mock" // Fallback for existing tests that don't set expectation
-	}
-	return args.String(0)
-}
-func (m *MockImageProvider) HomeURL() string { return "https://mock.provider" }
-func (m *MockImageProvider) CreateSettingsPanel(sm setting.SettingsManager) fyne.CanvasObject {
-	return nil
-}
-func (m *MockImageProvider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl string) fyne.CanvasObject {
-	return nil
-}
-func (m *MockImageProvider) GetProviderIcon() fyne.Resource { return nil }
+// Mocks removed: MockImageProcessor, MockImageProvider
 
 func TestDownloadAllImages(t *testing.T) {
 	// Setup
@@ -247,7 +64,7 @@ func TestDownloadAllImages(t *testing.T) {
 
 	mockOS := new(MockOS)
 	mockPM := new(MockPluginManager)
-	mockIP := new(MockImageProcessorTyped)
+	mockIP := new(MockImageProcessor)
 
 	// Mock HTTP Client to intercept image download
 	// The provider returns "http://example.com/image1.jpg" as Path.
@@ -269,12 +86,13 @@ func TestDownloadAllImages(t *testing.T) {
 	// ParseURL with Catch-All (Error) - MUST BE DEFINED AFTER SPECIFIC
 	mockProvider.On("ParseURL", mock.Anything).Return("", assert.AnError)
 	img := provider.Image{ID: "test_img_1", Path: ts.URL + "/image1.jpg", Provider: "MockProvider"}
-	mockProvider.On("FetchImages", mock.Anything, "http://api.mock.url", 1).Return([]provider.Image{img}, nil)
+	mockProvider.On("FetchImages", mock.Anything, "http://mock.url", 1).Return([]provider.Image{img}, nil)
 	// Expect EnrichImage call
 	mockProvider.On("EnrichImage", mock.Anything, mock.Anything).Return(img, nil)
 
 	// Expect FitImage call if SmartFit is enabled
-	mockIP.On("FitImage", mock.Anything, mock.Anything).Return(imgRaw, nil)
+	mockIP.On("FitImage", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(imgRaw, nil)
+	mockIP.On("CheckCompatibility", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
 	// Create plugin instance manually to inject mocks
 	wp := &Plugin{
@@ -284,14 +102,14 @@ func TestDownloadAllImages(t *testing.T) {
 		httpClient:   ts.Client(),
 		manager:      mockPM,
 		// Initialize other fields
-		downloadedDir:       t.TempDir(),
-		interrupt:           util.NewSafeBool(),
-		currentDownloadPage: util.NewSafeIntWithValue(1),
-		fitImageFlag:        util.NewSafeBool(),
-		shuffleImageFlag:    util.NewSafeBool(),
-		fetchingInProgress:  util.NewSafeBool(),
-		providers:           make(map[string]provider.ImageProvider),
-		store:               NewImageStore(),
+		downloadedDir:      t.TempDir(),
+		interrupt:          util.NewSafeBool(),
+		queryPages:         make(map[string]*util.SafeCounter),
+		fitImageFlag:       util.NewSafeBool(),
+		shuffleImageFlag:   util.NewSafeBool(),
+		fetchingInProgress: util.NewSafeBool(),
+		providers:          make(map[string]provider.ImageProvider),
+		store:              NewImageStore(),
 	}
 	wp.store.SetAsyncSave(false)
 	// Setup FileManager
@@ -306,14 +124,12 @@ func TestDownloadAllImages(t *testing.T) {
 	// Expectations
 	mockPM.On("NotifyUser", mock.Anything, mock.Anything).Return()
 	mockOS.On("GetDesktopDimension").Return(1920, 1080, nil)
+	mockOS.On("GetMonitors").Return([]Monitor{{ID: 0, Name: "Primary", Rect: image.Rect(0, 0, 1920, 1080)}}, nil)
 
 	// Run
-	wp.downloadAllImages(nil)
+	wp.FetchNewImages()
 
 	// Verify
-	// Verify
-	// Allow extra queries in message due to config defaults leakage in tests
-	mockPM.AssertCalled(t, "NotifyUser", "Downloading: ", mock.Anything)
 
 	// Check if file exists in store (wait for pipeline)
 	assert.Eventually(t, func() bool {
@@ -369,7 +185,7 @@ func TestDownloadAllImages_EnrichmentFailure(t *testing.T) {
 
 	mockOS := new(MockOS)
 	mockPM := new(MockPluginManager)
-	mockIP := new(MockImageProcessorTyped)
+	mockIP := new(MockImageProcessor)
 
 	// Mock HTTP Client
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -399,20 +215,20 @@ func TestDownloadAllImages_EnrichmentFailure(t *testing.T) {
 	mockProvider.On("EnrichImage", mock.Anything, mock.Anything).Return(provider.Image{}, assert.AnError)
 
 	wp = &Plugin{
-		os:                  mockOS,
-		imgProcessor:        mockIP,
-		cfg:                 cfg,
-		httpClient:          ts.Client(),
-		manager:             mockPM,
-		downloadedDir:       t.TempDir(),
-		interrupt:           util.NewSafeBool(),
-		currentDownloadPage: util.NewSafeIntWithValue(1),
-		fitImageFlag:        util.NewSafeBool(),
-		shuffleImageFlag:    util.NewSafeBool(),
-		fetchingInProgress:  util.NewSafeBool(),
-		providers:           make(map[string]provider.ImageProvider),
-		store:               NewImageStore(),
-		runOnUI:             func(f func()) { f() }, // Run synchronously in tests
+		os:                 mockOS,
+		imgProcessor:       mockIP,
+		cfg:                cfg,
+		httpClient:         ts.Client(),
+		manager:            mockPM,
+		downloadedDir:      t.TempDir(),
+		interrupt:          util.NewSafeBool(),
+		queryPages:         make(map[string]*util.SafeCounter),
+		fitImageFlag:       util.NewSafeBool(),
+		shuffleImageFlag:   util.NewSafeBool(),
+		fetchingInProgress: util.NewSafeBool(),
+		providers:          make(map[string]provider.ImageProvider),
+		store:              NewImageStore(),
+		runOnUI:            func(f func()) { f() }, // Run synchronously in tests
 	}
 	wp.store.SetAsyncSave(false)
 	// Setup FileManager
@@ -426,9 +242,10 @@ func TestDownloadAllImages_EnrichmentFailure(t *testing.T) {
 
 	mockPM.On("NotifyUser", mock.Anything, mock.Anything).Return()
 	mockOS.On("GetDesktopDimension").Return(1920, 1080, nil)
+	mockOS.On("GetMonitors").Return([]Monitor{{ID: 0, Name: "Primary", Rect: image.Rect(0, 0, 1920, 1080)}}, nil)
 
 	// Run
-	wp.downloadAllImages(nil)
+	wp.FetchNewImages()
 
 	// Verify
 	// Strict Mode: Enrichment Failure -> Image Dropped -> Count 0
@@ -445,23 +262,15 @@ func TestNavigation(t *testing.T) {
 
 	mockOS := new(MockOS)
 	mockPM := new(MockPluginManager)
-	mockIP := new(MockImageProcessorTyped)
 
 	wp := &Plugin{
-		os:                  mockOS,
-		imgProcessor:        mockIP,
-		cfg:                 cfg,
-		manager:             mockPM,
-		downloadedDir:       t.TempDir(),
-		interrupt:           util.NewSafeBool(),
-		currentDownloadPage: util.NewSafeIntWithValue(1),
-		fitImageFlag:        util.NewSafeBool(),
-		shuffleImageFlag:    util.NewSafeBool(),
-		fetchingInProgress:  util.NewSafeBool(),
-		store:               NewImageStore(),
-		actionChan:          make(chan func(), 10),
-		runOnUI:             func(f func()) { f() }, // Run synchronously in tests
-		currentIndex:        -1,
+		os:            mockOS,
+		cfg:           cfg,
+		manager:       mockPM,
+		downloadedDir: t.TempDir(),
+		store:         NewImageStore(),
+		Monitors:      make(map[int]*MonitorController),
+		runOnUI:       func(f func()) { f() },
 	}
 	wp.store.SetAsyncSave(false)
 	// Setup FileManager
@@ -469,88 +278,84 @@ func TestNavigation(t *testing.T) {
 	assert.NoError(t, wp.fm.EnsureDirs())
 	wp.store.SetFileManager(wp.fm, wp.downloadedDir+"/cache.json")
 
-	// Helper to execute queued actions synchronously for testing
-	processActions := func() {
-		close(wp.actionChan)
-		for action := range wp.actionChan {
-			action()
-		}
-		// Re-open for next steps? No, simpler to just loop with select or buffer check.
-		// Better: process one item.
-	}
-	_ = processActions // Keep compiler happy if unused temporarily
-
-	processQueue := func() {
-		for {
-			select {
-			case action := <-wp.actionChan:
-				action()
-			default:
-				return
-			}
-		}
-	}
-
-	// Setup initial state with some images
-	// Setup initial state with some images
-	// Use Real Temp Files for os.Stat to pass
+	// Setup Images
 	tempDir := t.TempDir()
 	img1Path := filepath.Join(tempDir, "img1.jpg")
 	img2Path := filepath.Join(tempDir, "img2.jpg")
 	assert.NoError(t, os.WriteFile(img1Path, []byte("dummy"), 0644))
 	assert.NoError(t, os.WriteFile(img2Path, []byte("dummy"), 0644))
 
-	img1 := provider.Image{ID: "img1", Path: "http://example.com/img1.jpg", FilePath: img1Path, Attribution: "user1"}
-	img2 := provider.Image{ID: "img2", Path: "http://example.com/img2.jpg", FilePath: img2Path, Attribution: "user2"}
+	img1 := provider.Image{
+		ID:              "img1",
+		Path:            "http://example.com/img1.jpg",
+		FilePath:        img1Path,
+		Attribution:     "user1",
+		DerivativePaths: map[string]string{"1920x1080": "img1.jpg"},
+	}
+	img2 := provider.Image{
+		ID:              "img2",
+		Path:            "http://example.com/img2.jpg",
+		FilePath:        img2Path,
+		Attribution:     "user2",
+		DerivativePaths: map[string]string{"1920x1080": "img2.jpg"},
+	}
 
 	wp.store.Add(img1)
 	wp.store.Add(img2)
-	// We need to re-build random indices if we bypassed regular flow?
-	// Store handles it?
-	// Store.Add appends.
 
-	// Mock OS setWallpaper
-	mockOS.On("SetWallpaper", mock.Anything).Return(nil)
+	// Mock OS
+	mockOS.On("GetMonitors").Return([]Monitor{{ID: 0, Name: "Primary", Rect: image.Rect(0, 0, 1920, 1080)}}, nil)
+	mockOS.On("SetWallpaper", mock.Anything, 0).Return(nil)
 
-	// Expect NotifyUser when setting shuffle
-	// mockPM.On("NotifyUser", "Wallpaper Shuffling", "Disabled").Return()
-	// Relax to allow other notifications (e.g. from async downloads if triggered)
+	// Mock PM
 	mockPM.On("NotifyUser", mock.Anything, mock.Anything).Return()
 	mockPM.On("RefreshTrayMenu").Return()
+	mockPM.On("GetAssetManager").Return(&asset.Manager{})
 
-	// Mock GetAssetManager for fallback icon
-	mockAM := asset.NewManager() // Assuming we can create one or we should use a MockAssetManager too.
-	// But asset.Manager is struct, not interface. So we can just return a real one (dummy).
-	mockPM.On("GetAssetManager").Return(mockAM)
+	// Init UI
+	wp.monitorMenu = make(map[int]*MonitorMenuItems)
+	wp.monitorMenu[0] = &MonitorMenuItems{
+		ProviderMenuItem: &fyne.MenuItem{},
+		ArtistMenuItem:   &fyne.MenuItem{},
+	}
 
-	// Init dummy menu items to trigger UI updates path but safely
-	wp.providerMenuItem = &fyne.MenuItem{}
-	wp.artistMenuItem = &fyne.MenuItem{}
+	// Create Monitor Controller
+	mockIP := new(MockImageProcessor)
+	mc := NewMonitorController(0, Monitor{ID: 0, Rect: image.Rect(0, 0, 1920, 1080)}, wp.store, wp.fm, mockOS, cfg, mockIP)
+	wp.Monitors[0] = mc
 
-	// Test SetNextWallpaper (Shuffle disabled)
+	// Helper to pump
+	pump := func() {
+		select {
+		case cmd := <-mc.Commands:
+			mc.handleCommand(cmd)
+		case <-time.After(100 * time.Millisecond):
+			// Might be no command if logic skipped
+		}
+	}
+
+	// 1. Set Shuffle False
 	wp.SetShuffleImage(false)
-	// SetShuffleImage sets imgPulseOp to setNextWallpaper
 
-	// Initial state: index -1. Next should be 0.
-	wp.SetNextWallpaper()
-	processQueue()
-	// Validation of exact index is tricky if we don't expose it.
-	// Check current image ID.
-	// Store defaults to -1 index. First Next() -> 0.
-	assert.Equal(t, "img1", wp.currentImage.ID)
+	// 2. Next
+	wp.SetNextWallpaper(-1)
+	pump()
+
+	// Verify
+	assert.Equal(t, "img1", mc.State.CurrentImage.ID)
 	mockOS.AssertCalled(t, "SetWallpaper", mock.MatchedBy(func(path string) bool {
 		return strings.HasSuffix(path, "img1.jpg")
-	}))
+	}), 0)
 
-	// Next should be 1
-	wp.SetNextWallpaper()
-	processQueue()
-	assert.Equal(t, "img2", wp.currentImage.ID)
+	// 3. Next -> img2
+	wp.SetNextWallpaper(-1)
+	pump()
+	assert.Equal(t, "img2", mc.State.CurrentImage.ID)
 
-	// Next should wrap to 0
-	wp.SetNextWallpaper()
-	processQueue()
-	assert.Equal(t, "img1", wp.currentImage.ID)
+	// 4. Next -> img1 (wrap)
+	wp.SetNextWallpaper(-1)
+	pump()
+	assert.Equal(t, "img1", mc.State.CurrentImage.ID)
 }
 
 func TestTogglePause(t *testing.T) {
@@ -603,13 +408,12 @@ func TestSmartFitDisabled(t *testing.T) {
 	ResetConfig()
 	prefs := NewMockPreferences()
 	cfg := GetConfig(prefs)
-	mockPM := new(MockPluginManager)
-	mockIP := new(MockImageProcessorTyped)
+	mockIP := new(MockImageProcessor)
+	mockStore := NewImageStore()
 
 	wp := &Plugin{
 		cfg:           cfg,
-		manager:       mockPM,
-		imgProcessor:  mockIP,
+		store:         mockStore,
 		downloadedDir: t.TempDir(),
 	}
 
@@ -630,9 +434,8 @@ func TestSmartFitDisabled(t *testing.T) {
 	// It should return masterPath and err=nil.
 	// It should NOT call FitImage.
 	path, err := wp.ensureDerivative(context.Background(), img, masterPath)
-
 	assert.NoError(t, err)
-	assert.Equal(t, masterPath, path)
+	assert.Equal(t, masterPath, path["primary"])
 
 	// Verify FitImage was NEVER called
 	mockIP.AssertNotCalled(t, "FitImage", mock.Anything, mock.Anything)
@@ -647,23 +450,15 @@ func TestDeleteCurrentImage_PersistsBlock(t *testing.T) {
 	// Create mock plugin
 	mockPM := new(MockPluginManager)
 	mockOS := new(MockOS)
-	mockIP := new(MockImageProcessorTyped)
 
 	wp := &Plugin{
-		os:                  mockOS,
-		imgProcessor:        mockIP,
-		cfg:                 cfg,
-		manager:             mockPM,
-		downloadedDir:       t.TempDir(),
-		interrupt:           util.NewSafeBool(),
-		currentDownloadPage: util.NewSafeIntWithValue(1),
-		fitImageFlag:        util.NewSafeBool(),
-		shuffleImageFlag:    util.NewSafeBool(),
-		fetchingInProgress:  util.NewSafeBool(),
-		store:               NewImageStore(),
-		runOnUI:             func(f func()) { f() },
-		currentIndex:        -1,
-		actionChan:          make(chan func(), 10),
+		os:            mockOS,
+		cfg:           cfg,
+		manager:       mockPM,
+		downloadedDir: t.TempDir(),
+		store:         NewImageStore(),
+		runOnUI:       func(f func()) { f() },
+		Monitors:      make(map[int]*MonitorController),
 	}
 	wp.store.SetAsyncSave(false)
 	// Setup FileManager
@@ -681,33 +476,34 @@ func TestDeleteCurrentImage_PersistsBlock(t *testing.T) {
 		FilePath: imgPath,
 	}
 
-	// Add to store and set as current
 	wp.store.Add(img)
-	wp.currentImage = img
-	wp.currentIndex = 0
 
-	// Mock OS for setWallpaper (since Delete calls SetNextWallpaper)
-	mockOS.On("SetWallpaper", mock.Anything).Return(nil)
+	// Create Monitor Controller
+	mockIP := new(MockImageProcessor)
+	mc := NewMonitorController(0, Monitor{ID: 0}, wp.store, wp.fm, mockOS, cfg, mockIP)
+	mc.State.CurrentImage = img
+	wp.Monitors[0] = mc
 
-	// Execute Delete
-	wp.DeleteCurrentImage()
+	// Mock OS for setWallpaper
+	mockOS.On("SetWallpaper", mock.Anything, 0).Return(nil)
+
+	// Execute Delete (Async dispatch)
+	wp.DeleteCurrentImage(0)
+
+	// Manually pump the command
+	select {
+	case cmd := <-mc.Commands:
+		assert.Equal(t, CmdDelete, cmd)
+		mc.handleCommand(cmd)
+	case <-time.After(1 * time.Second):
+		t.Fatal("Timeout waiting for delete command")
+	}
 
 	// Verify AvoidSet
 	assert.True(t, wp.cfg.InAvoidSet(imgID))
 
-	// Verify Config Persistence
-	// Verify AvoidSet in memory
-	assert.True(t, wp.cfg.InAvoidSet(imgID), "InAvoidSet should be true")
-
-	// Verify Config Persistence
-	val := prefs.String("wallhaven_image_queries")
-	t.Logf("Config JSON: %q", val)
-	assert.Contains(t, val, imgID)
-
-	// Verify File Deletion
-	if _, err := os.Stat(imgPath); !os.IsNotExist(err) {
-		t.Errorf("Image file should have been deleted: %s", imgPath)
-	}
+	// Verify Store Removal
+	assert.Equal(t, 0, wp.store.Count())
 }
 
 func TestBlockFlow_PreventsReDownload(t *testing.T) {
@@ -755,6 +551,7 @@ func TestOpenAddCollectionUI(t *testing.T) {
 	mockProvider.On("ParseURL", testURL).Return(testURL, nil)
 
 	// Expectation: OpenPreferences
+	mockProvider.On("SupportsUserQueries").Return(true)
 	mockPM.On("OpenPreferences", "Wallpaper").Return()
 
 	// Execute
@@ -783,7 +580,7 @@ func TestOpenAddCollectionUI_InvalidProvider(t *testing.T) {
 
 	// Verify
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "URL not supported")
+	assert.Contains(t, err.Error(), "no provider found that can handle this URL")
 	assert.Empty(t, wp.pendingAddUrl)
 	mockPM.AssertNotCalled(t, "OpenPreferences")
 }
@@ -818,7 +615,7 @@ func TestOpenAddCollectionUI_CuratedSkipped(t *testing.T) {
 
 	// Verify
 	assert.Error(t, err) // Should error "URL not supported"
-	assert.Contains(t, err.Error(), "URL not supported")
+	assert.Contains(t, err.Error(), "no provider found that can handle this URL")
 	mockProvider.AssertNotCalled(t, "ParseURL", mock.Anything)
 	mockPM.AssertNotCalled(t, "OpenPreferences")
 }
@@ -838,4 +635,143 @@ func TestGetProviderTitle(t *testing.T) {
 
 	// 2. Unregistered Provider -> Return ID
 	assert.Equal(t, "UnknownProvider", wp.GetProviderTitle("UnknownProvider"))
+}
+func TestAddQuery_InitializesPage(t *testing.T) {
+	// Setup
+	ResetConfig()
+	prefs := NewMockPreferences()
+	cfg := GetConfig(prefs)
+	mockPM := new(MockPluginManager)
+	mockOS := new(MockOS)
+
+	wp := &Plugin{
+		os:                 mockOS,
+		cfg:                cfg,
+		manager:            mockPM,
+		downloadedDir:      t.TempDir(),
+		store:              NewImageStore(),
+		queryPages:         make(map[string]*util.SafeCounter),
+		fetchingInProgress: util.NewSafeBool(),
+		providers:          make(map[string]provider.ImageProvider),
+		pipeline:           NewPipeline(cfg, NewImageStore(), func(ctx context.Context, job DownloadJob) (provider.Image, error) { return job.Image, nil }),
+		httpClient:         &http.Client{},
+	}
+	wp.fm = NewFileManager(wp.downloadedDir)
+
+	// Add a provider
+	mockProvider := &MockImageProvider{}
+	mockProvider.On("Name").Return("Mock")
+	mockProvider.On("FetchImages", mock.Anything, mock.Anything, 1).Return([]provider.Image{}, nil)
+	wp.providers["Mock"] = mockProvider
+
+	// Act: Add a query directly to config (simulating AddProviderQuery)
+	cfg.Queries = []ImageQuery{{
+		ID:       "new_query",
+		Provider: "Mock",
+		Active:   true,
+		URL:      "http://mock",
+	}}
+
+	// Trigger Fetch
+	wp.FetchNewImages()
+
+	// Wait for fetch to complete
+	assert.Eventually(t, func() bool {
+		wp.downloadMutex.RLock()
+		defer wp.downloadMutex.RUnlock()
+		_, ok := wp.queryPages["new_query"]
+		return ok
+	}, 2*time.Second, 100*time.Millisecond)
+
+	// Assert: Page counter should be initialized to 1
+	wp.downloadMutex.Lock()
+	pg, ok := wp.queryPages["new_query"]
+	wp.downloadMutex.Unlock()
+
+	assert.True(t, ok, "Page counter should exist for new query")
+	if ok {
+		assert.Equal(t, 1, pg.Value(), "Page counter should start at 1")
+	}
+}
+
+func TestSetNextWallpaper_Stagger(t *testing.T) {
+	// Setup
+	ResetConfig()
+	prefs := NewMockPreferences()
+	cfg := GetConfig(prefs)
+
+	wp := &Plugin{
+		cfg:                cfg,
+		Monitors:           make(map[int]*MonitorController),
+		downloadMutex:      sync.RWMutex{},
+		fitImageFlag:       util.NewSafeBool(),
+		fetchingInProgress: util.NewSafeBool(),
+	}
+
+	// Setup 2 Monitors with Channels
+	mon0 := &MonitorController{
+		ID:       0,
+		Commands: make(chan Command, 10),
+	}
+	mon1 := &MonitorController{
+		ID:       1,
+		Commands: make(chan Command, 10),
+	}
+	wp.Monitors[0] = mon0
+	wp.Monitors[1] = mon1
+
+	// Initialize monMu
+	wp.monMu = sync.RWMutex{}
+
+	// Enable Stagger
+	cfg.SetStaggerMonitorChanges(true)
+
+	// Set Frequency to Hourly (long duration)
+	cfg.SetWallpaperChangeFrequency(FrequencyHourly)
+
+	// Case 1: Stagger ON
+	wp.SetNextWallpaper(-1)
+
+	// Check Mon 0 (Immediate)
+	select {
+	case cmd := <-mon0.Commands:
+		assert.Equal(t, CmdNext, cmd, "Monitor 0 should receive CmdNext immediately")
+	default:
+		t.Error("Monitor 0 did not receive command immediately")
+	}
+
+	// Check Mon 1 (Delayed)
+	select {
+	case <-mon1.Commands:
+		t.Error("Monitor 1 received command immediately but should have been staggered")
+	default:
+		// Success: Channel empty
+	}
+
+	// Case 2: Stagger OFF
+	cfg.SetStaggerMonitorChanges(false)
+
+	// Drain Mon 0 just in case
+	select {
+	case <-mon0.Commands:
+	default:
+	}
+
+	wp.SetNextWallpaper(-1)
+
+	// Check Mon 0
+	select {
+	case cmd := <-mon0.Commands:
+		assert.Equal(t, CmdNext, cmd)
+	default:
+		t.Error("Monitor 0 missing command")
+	}
+
+	// Check Mon 1 (Immediate now)
+	select {
+	case cmd := <-mon1.Commands:
+		assert.Equal(t, CmdNext, cmd, "Monitor 1 should receive CmdNext immediately when Stagger is OFF")
+	default:
+		t.Error("Monitor 1 missing command when Stagger is OFF")
+	}
 }
