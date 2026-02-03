@@ -11,9 +11,9 @@
   <a href="https://addons.mozilla.org/en-US/firefox/addon/spice-wallpaper-manager/"><img src="https://img.shields.io/amo/v/spice-wallpaper-manager?style=flat&color=orange&label=Firefox%20Add-ons" alt="Firefox Add-ons"></a>
 </p>
 
-Spice is a minimalist wallpaper manager that brings a continuous stream of delight to your screen while not getting in your way. It automatically downloads high-quality wallpapers from your favorite image services like Wallhaven and Unsplash, keeping your desktop fresh and fun.
+Spice is a minimalist wallpaper manager that automatically cycles high-quality wallpapers from Wallhaven, Pexels, curated museum collections, your personal Google Photos, and Wikimedia Commons. It runs quietly in the background, keeping your workspace fresh without interrupting your flow.
 
-**Note:** Spice runs quietly in your **Windows system tray** or **macOS menu bar**, doing its magic in the background while giving you full control when you need it.
+**Note:** Spice lives in your **Windows system tray** or **macOS menu bar**, giving you instant control over your desktop environment.
 
 <p align="center">
   <img src="images/screen3.png" alt="Spice Screenshot" width="1000">
@@ -24,8 +24,8 @@ Spice is a minimalist wallpaper manager that brings a continuous stream of delig
 ### 🌎 Infinite Sources
 *   **🔗 Browser Companion:** Use our [**Chrome Extension**](https://chromewebstore.google.com/detail/ekodikedjmhnganfcfleabcfohdjkoeb) or [**Firefox Add-on**](https://addons.mozilla.org/en-US/firefox/addon/spice-wallpaper-manager/) to seamlessly send any image from the web to your desktop.
 *   **🏛️ The Museum Experience:** Turn your desk into a gallery with 4K+ Open Access masterpieces from **The Met** and **Art Institute of Chicago**.
-*   **📸 Native Integrations:** One-click access to **Wallhaven**, **Pexels**, and **Wikimedia Commons**.
-*   **☁️ Google Photos:** Securely browse and cycle your personal cloud albums.
+*   **📸 Curated Sources:** Native support for **Wallhaven**, **Pexels**, and **Wikimedia Commons**.
+*   **☁️ Personal Collections:** Seamlessly cycle your own memories with **Google Photos** integration.
 *   **❤️ Local Favorites:** Build your own curated collection that works offline.
 
 ### 🧠 Smart Technology
@@ -33,9 +33,10 @@ Spice is a minimalist wallpaper manager that brings a continuous stream of delig
     *   **Quality Mode (Strict):** Ensures perfect composition by rejecting images that don't fit your screen, unless a clear face is detected.
     *   **Flexibility Mode:** Accepts high-res images with a "Safe Fallback" for ultrawide monitors.
     *   **Face Boost:** Ensures people are perfectly framed.
-*   **⚡ Ultra-Responsive:** Engineered for zero-lag performance, ensuring the UI stays buttery smooth even while downloading heavy 4K content.
-*   **⚙️ Tabbed Preferences:** Manage dozens of sources easily with our new organized settings tabs (**Online**, **Local**, **Museum**, **AI**).
-*   **🖥️ Multi-Monitor Support:** Automatically detects all connected displays and applies high-quality wallpapers natively to each screen. Supports *Synced Mode* (all screens match) and *Independent Mode* (each screen unique). You can now target specific monitors for actions using display-specific hotkeys (e.g., refreshing Display 2 only).
+*   **⚡ Ultra-Responsive:** Engineered for zero-lag performance, ensuring the UI stays snappy even while handling high-resolution 4K content.
+*   **🖥️ Independent Multi-Monitor Suite:** Spice v2.0 detects every connected display and assigns it an autonomous controller. Every monitor can be controlled individually via dedicated hotkeys.
+*   **📐 Orientation Intelligence:** Spice understands the difference between landscape and portrait monitors. It picks images that match your screen's orientation before applying **SmartCrop**, so your vertical monitors get true portrait compositions.
+*   **🍃 Organic Staggering:** Optionally stagger wallpaper updates with randomized delays to prevent a sudden "flash" across all your monitors simultaneously.
 
 ### 🎮 Control & Experience
 *   **⌨️ Global Hotkeys:** Control Spice instantly from anywhere.
@@ -47,18 +48,18 @@ Target a specific monitor (**1-9**) by holding that number key while pressing th
 | :--- | :--- | :--- |
 | **Next Wallpaper** | `Option` + `1-9` + `→` | `Alt` + `1-9` + `→` |
 | **Prev Wallpaper** | `Option` + `1-9` + `←` | `Alt` + `1-9` + `←` |
-| **Favorite** | `Option` + `1-9` + `↑` | `Alt` + `1-9` + `↑` |
-| **Trash / Block** | `Option` + `1-9` + `↓` | `Alt` + `1-9` + `↓` |
+| **Fav / Unfav** | `Option` + `1-9` + `↑` | `Alt` + `1-9` + `↑` |
+| **Del + Block** | `Option` + `1-9` + `↓` | `Alt` + `1-9` + `↓` |
 
 #### Global Actions (All Monitors)
 These actions affect all displays simultaneously.
 
 | Action | macOS Shortcut | Windows Shortcut |
 | :--- | :--- | :--- |
-| **Refresh All** | `Cmd + Opt + →` | `Ctrl + Alt + →` |
-| **Restore All** | `Cmd + Opt + ←` | `Ctrl + Alt + ←` |
+| **Next (All Displays)** | `Cmd + Opt + →` | `Ctrl + Alt + →` |
+| **Previous (All Displays)** | `Cmd + Opt + ←` | `Ctrl + Alt + ←` |
 | **Pause / Resume** | `Cmd + Opt + P` | `Ctrl + Alt + P` |
-| **Preferences** | `Cmd + Opt + O` | `Ctrl + Alt + O` |
+| **All Settings** | `Cmd + Opt + O` | `Ctrl + Alt + O` |
 
 > [!IMPORTANT]
 > **macOS Permissions:** Display-specific (chorded) hotkeys require **Accessibility** or **Input Monitoring** permissions to detect the number keys correctly. Go to *System Settings > Privacy & Security* to enable them for Spice.
