@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	_ "embed"
 
@@ -90,6 +91,11 @@ func (p *PexelsProvider) ParseURL(webURL string) (string, error) {
 		return "", fmt.Errorf("not a Pexels URL")
 	}
 
+	// Idempotency: if it's already an API URL, return as is (but clean up if needed)
+	if strings.Contains(u.Host, "api.pexels.com") {
+		return webURL, nil
+	}
+
 	// Clean up path
 	// Pexels web URLs often look like https://www.pexels.com/search/nature/
 
@@ -104,20 +110,49 @@ func (p *PexelsProvider) ParseURL(webURL string) (string, error) {
 		}
 
 		apiURL, _ := url.Parse(wallpaper.PexelsAPISearchURL)
-		q := apiURL.Query()
+		q := u.Query()
 		q.Set("query", query)
 
-		// Preserve filters from the original web URL
-		originalQuery := u.Query()
-		if val := originalQuery.Get("orientation"); val != "" {
-			q.Set("orientation", val)
+		// Map resolution info to Pexels 'size'
+		// We support both browser (min_width/height) and normalized (res/resolution) formats
+		res := q.Get("res")
+		if res == "" {
+			res = q.Get("resolution")
 		}
-		if val := originalQuery.Get("size"); val != "" {
-			q.Set("size", val)
+
+		var minWidth, minHeight int
+		if res != "" {
+			parts := strings.Split(res, "x")
+			if len(parts) == 2 {
+				minWidth, _ = strconv.Atoi(parts[0])
+				minHeight, _ = strconv.Atoi(parts[1])
+			}
+		} else {
+			minWidth, _ = strconv.Atoi(q.Get("min_width"))
+			minHeight, _ = strconv.Atoi(q.Get("min_height"))
 		}
-		if val := originalQuery.Get("color"); val != "" {
-			q.Set("color", val)
+
+		if minWidth > 0 && minHeight > 0 {
+			// size can be: large (24MP), medium (12MP), small (4MP)
+			mp := (float64(minWidth) * float64(minHeight)) / 1000000.0
+			size := "small"
+			if mp > 12 {
+				size = "large"
+			} else if mp > 4 {
+				size = "medium"
+			}
+			q.Set("size", size)
+
+			// Store normalized resolution for Spice internal use
+			q.Set("res", fmt.Sprintf("%dx%d", minWidth, minHeight))
 		}
+
+		// Remove pagination and web-only parameters
+		q.Del("page")
+		q.Del("per_page")
+		q.Del("min_width")
+		q.Del("min_height")
+		q.Del("resolution") // Use normalized 'res'
 
 		apiURL.RawQuery = q.Encode()
 		return apiURL.String(), nil
@@ -133,6 +168,57 @@ func (p *PexelsProvider) ParseURL(webURL string) (string, error) {
 	}
 
 	return "", fmt.Errorf("unsupported Pexels URL format")
+}
+
+// NormalizeURL converts a Pexels web URL to a more compact/standardized format for Spice.
+// It combines min_width and min_height into a single 'res' parameter.
+func (p *PexelsProvider) NormalizeURL(webURL string) string {
+	u, err := url.Parse(webURL)
+	if err != nil {
+		return webURL
+	}
+
+	if !strings.Contains(u.Host, "pexels.com") || strings.Contains(u.Host, "api.pexels.com") {
+		return webURL
+	}
+
+	q := u.Query()
+	minW := q.Get("min_width")
+	minH := q.Get("min_height")
+	if minW != "" && minH != "" {
+		q.Set("res", minW+"x"+minH)
+		q.Del("min_width")
+		q.Del("min_height")
+		u.RawQuery = q.Encode()
+		return u.String()
+	}
+
+	return webURL
+}
+
+// WithResolution adds resolution constraints to the Pexels API URL.
+func (p *PexelsProvider) WithResolution(apiURL string, width, height int) string {
+	u, err := url.Parse(apiURL)
+	if err != nil {
+		return apiURL
+	}
+	q := u.Query()
+
+	// Only set if not already present or if we want to override
+	q.Set("res", fmt.Sprintf("%dx%d", width, height))
+
+	// Re-map size based on new resolution
+	mp := (float64(width) * float64(height)) / 1000000.0
+	size := "small"
+	if mp > 12 {
+		size = "large"
+	} else if mp > 4 {
+		size = "medium"
+	}
+	q.Set("size", size)
+
+	u.RawQuery = q.Encode()
+	return u.String()
 }
 
 // FetchImages fetches images from the Pexels API.
@@ -375,15 +461,23 @@ func (p *PexelsProvider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl
 	header := container.NewVBox()
 	header.Add(sm.CreateSettingTitleLabel("Pexels Queries"))
 	header.Add(sm.CreateSettingDescriptionLabel("Manage your Pexels image queries here."))
-	// Auto-open if pending URL exists
-	if pendingUrl != "" {
-		// Open dialog with pre-filled URL and empty description
-		wallpaper.OpenAddQueryDialog(sm, addQueryCfg, pendingUrl, "", onAdded)
-	}
 
 	header.Add(addButton)
-	qpContainer := container.NewBorder(header, nil, nil, nil, imgQueryList)
-	return qpContainer
+
+	// Auto-open if pending URL exists
+	if pendingUrl != "" {
+		// Normalize URL before showing in modal
+		normalizedUrl := p.NormalizeURL(pendingUrl)
+
+		fyne.Do(func() {
+			// Delay slightly to ensure window is fully ready/shown
+			time.Sleep(50 * time.Millisecond)
+			// Open dialog with pre-filled URL and empty description
+			wallpaper.OpenAddQueryDialog(sm, addQueryCfg, normalizedUrl, "", onAdded)
+		})
+	}
+
+	return container.NewBorder(header, nil, nil, nil, imgQueryList)
 }
 
 func (p *PexelsProvider) createImgQueryList(sm setting.SettingsManager) *widget.List {

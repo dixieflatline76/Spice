@@ -8,6 +8,7 @@ import (
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
 	"github.com/dixieflatline76/Spice/pkg/ui/setting"
+	utilLog "github.com/dixieflatline76/Spice/util/log"
 )
 
 // AddQueryConfig defines the configuration for the standardized Add Query modal.
@@ -41,6 +42,7 @@ func CreateAddQueryButton(label string, sm setting.SettingsManager, cfg AddQuery
 // OpenAddQueryDialog opens the modal for adding image queries.
 // It allows pre-filling the URL and Description.
 func OpenAddQueryDialog(sm setting.SettingsManager, cfg AddQueryConfig, initialURL, initialDesc string, onAdded func()) {
+	utilLog.Debugf("OpenAddQueryDialog: Triggered with URL: %s", initialURL)
 	urlEntry := widget.NewEntry()
 	urlEntry.SetPlaceHolder(cfg.URLPlaceholder)
 	urlEntry.SetText(initialURL)
@@ -150,7 +152,9 @@ func OpenAddQueryDialog(sm setting.SettingsManager, cfg AddQueryConfig, initialU
 	c.Add(widget.NewSeparator())
 	c.Add(container.NewHBox(cancelButton, layout.NewSpacer(), saveButton))
 
-	d := dialog.NewCustomWithoutButtons(cfg.Title, c, sm.GetSettingsWindow())
+	win := sm.GetSettingsWindow()
+	utilLog.Debugf("OpenAddQueryDialog: Creating dialog with parent window: %v", win)
+	d := dialog.NewCustomWithoutButtons(cfg.Title, c, win)
 	d.Resize(fyne.NewSize(600, 200)) // Standard size
 
 	saveButton.OnTapped = func() {
@@ -191,5 +195,6 @@ func OpenAddQueryDialog(sm setting.SettingsManager, cfg AddQueryConfig, initialU
 		d.Hide()
 	}
 
+	utilLog.Debug("OpenAddQueryDialog: Calling d.Show()")
 	d.Show()
 }

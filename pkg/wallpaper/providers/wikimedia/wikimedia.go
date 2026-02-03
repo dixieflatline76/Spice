@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -401,7 +402,6 @@ func (p *WikimediaProvider) CreateQueryPanel(sm setting.SettingsManager, pending
 			return p.cfg.AddWikimediaQuery(desc, normalized, active)
 		},
 	}
-
 	addButton := wallpaper.CreateAddQueryButton(
 		"Add Wikimedia Query",
 		sm,
@@ -412,12 +412,16 @@ func (p *WikimediaProvider) CreateQueryPanel(sm setting.SettingsManager, pending
 	header := container.NewVBox()
 	header.Add(sm.CreateSettingTitleLabel("Wikimedia Commons Queries"))
 	header.Add(sm.CreateSettingDescriptionLabel("Add queries for Wikimedia Commons categories or search results."))
+	header.Add(addButton)
+
 	// Auto-open if pending URL exists
 	if pendingUrl != "" {
-		wallpaper.OpenAddQueryDialog(sm, addQueryCfg, pendingUrl, "", onAdded)
+		fyne.Do(func() {
+			// Delay slightly to ensure window is fully ready/shown
+			time.Sleep(50 * time.Millisecond)
+			wallpaper.OpenAddQueryDialog(sm, addQueryCfg, pendingUrl, "", onAdded)
+		})
 	}
-
-	header.Add(addButton)
 
 	return container.NewBorder(header, nil, nil, nil, imgQueryList)
 }

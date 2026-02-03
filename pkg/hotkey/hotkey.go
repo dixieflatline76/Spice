@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/dixieflatline76/Spice/pkg/ui"
 	"github.com/dixieflatline76/Spice/pkg/wallpaper"
 	"github.com/dixieflatline76/Spice/util/log"
 	"golang.design/x/hotkey"
@@ -11,28 +12,22 @@ import (
 
 // StartListeners initializes and starts the global hotkey listeners.
 // It registers shortcuts for Next, Previous, Trash, Favorites, Pause, and Options.
-func StartListeners() {
+func StartListeners(mgr ui.PluginManager) {
 	// Define shortcuts
 
-	// Navigation & Action (Arrow Cluster)
-	// Ctrl + Alt + Right Arrow (Next)
-	hkNext := hotkey.New([]hotkey.Modifier{modCtrl, modAlt}, hotkey.KeyRight)
+	// --- 1. Targeted Handlers (Opt/Alt + Arrows) ---
+	hkNext := hotkey.New([]hotkey.Modifier{modAlt}, keyRight)
+	hkPrev := hotkey.New([]hotkey.Modifier{modAlt}, keyLeft)
+	hkTrash := hotkey.New([]hotkey.Modifier{modAlt}, keyDown)
+	hkFav := hotkey.New([]hotkey.Modifier{modAlt}, keyUp)
 
-	// Ctrl + Alt + Left Arrow (Previous)
-	hkPrev := hotkey.New([]hotkey.Modifier{modCtrl, modAlt}, hotkey.KeyLeft)
+	// --- 2. Global Handlers (Cmd+Opt / Ctrl+Alt + Arrows) ---
+	hkGlobalNext := hotkey.New([]hotkey.Modifier{modCtrl, modAlt}, keyRight)
+	hkGlobalPrev := hotkey.New([]hotkey.Modifier{modCtrl, modAlt}, keyLeft)
 
-	// Ctrl + Alt + Down Arrow (Trash/Delete)
-	hkTrash := hotkey.New([]hotkey.Modifier{modCtrl, modAlt}, hotkey.KeyDown)
-
-	// Ctrl + Alt + Up Arrow (Favorite - Strict Add)
-	hkFav := hotkey.New([]hotkey.Modifier{modCtrl, modAlt}, hotkey.KeyUp)
-
-	// Management (Letter Cluster)
-	// Ctrl + Alt + P (Pause/Resume)
-	hkPause := hotkey.New([]hotkey.Modifier{modCtrl, modAlt}, hotkey.KeyP)
-
-	// Ctrl + Alt + O (Options/Preferences)
-	hkOpts := hotkey.New([]hotkey.Modifier{modCtrl, modAlt}, hotkey.KeyO)
+	// --- 3. Management (Cmd+Opt / Ctrl+Alt + Letters) ---
+	hkPause := hotkey.New([]hotkey.Modifier{modCtrl, modAlt}, keyP)
+	hkOpts := hotkey.New([]hotkey.Modifier{modCtrl, modAlt}, keyO)
 
 	// Helper to register and listen
 	registerAndListen := func(hk *hotkey.Hotkey, name string, action func()) {
@@ -46,71 +41,91 @@ func StartListeners() {
 			for range hk.Keydown() {
 				log.Debugf("Hotkey pressed: %s", name)
 				action()
-				// Simple debounce/rate limit
 				time.Sleep(200 * time.Millisecond)
 			}
 		}()
 	}
 
-	// Start listeners
-	registerAndListen(hkNext, "Global Next", func() {
-		go func() {
-			wp := wallpaper.GetInstance()
-			if wp != nil {
-				wp.SetNextWallpaper(-1)
-			}
-		}()
-	})
+	// Targeted Actions Logic
+	handleTargeted := func(actionName string, action func(mid int)) {
+		mid := GetMonitorIDFromKey()
+		title := "Wallpaper Action"
+		msg := ""
 
-	registerAndListen(hkPrev, "Global Previous", func() {
-		go func() {
-			wp := wallpaper.GetInstance()
-			if wp != nil {
-				wp.SetPreviousWallpaper(-1)
-			}
-		}()
-	})
+		if mid != -1 {
+			msg = fmt.Sprintf("Display %d: %s", mid+1, actionName)
+			action(mid)
+		} else {
+			// Default to display 1 if no number key is held
+			msg = fmt.Sprintf("Display 1: %s", actionName)
+			action(0)
+		}
 
-	registerAndListen(hkTrash, "Trash Wallpaper", func() {
-		go func() {
-			wp := wallpaper.GetInstance()
-			if wp != nil {
-				wp.DeleteCurrentImage(0) // Default to primary for hotkey for now
-			}
-		}()
-	})
-
-	registerAndListen(hkFav, "Global Favorite", func() {
-		go func() {
-			wp := wallpaper.GetInstance()
-			if wp != nil {
-				wp.TriggerFavorite(-1)
-			}
-		}()
-	})
-
-	// Per-Monitor Next (Alt + [1-9])
-	// Note: We register for up to 9 monitors.
-	keys := []hotkey.Key{
-		hotkey.Key1, hotkey.Key2, hotkey.Key3,
-		hotkey.Key4, hotkey.Key5, hotkey.Key6,
-		hotkey.Key7, hotkey.Key8, hotkey.Key9,
+		if mgr != nil {
+			mgr.NotifyUser(title, msg)
+		}
 	}
 
-	for i, k := range keys {
-		monitorID := i // Monitor 1 maps to ID 0, etc.
-		hkMon := hotkey.New([]hotkey.Modifier{modAlt}, k)
-		registerAndListen(hkMon, fmt.Sprintf("Monitor %d Next", i+1), func() {
-			go func() {
-				wp := wallpaper.GetInstance()
-				if wp != nil {
-					wp.SetNextWallpaper(monitorID)
-				}
-			}()
+	// Start Targeted listeners
+	registerAndListen(hkNext, "Targeted Next", func() {
+		handleTargeted("Next Wallpaper", func(mid int) {
+			wp := wallpaper.GetInstance()
+			if wp != nil {
+				wp.SetNextWallpaper(mid)
+			}
 		})
-	}
+	})
 
-	registerAndListen(hkPause, "Pause/Resume Wallpaper", func() {
+	registerAndListen(hkPrev, "Targeted Previous", func() {
+		handleTargeted("Previous Wallpaper", func(mid int) {
+			wp := wallpaper.GetInstance()
+			if wp != nil {
+				wp.SetPreviousWallpaper(mid)
+			}
+		})
+	})
+
+	registerAndListen(hkTrash, "Targeted Trash", func() {
+		handleTargeted("Image Blocked", func(mid int) {
+			wp := wallpaper.GetInstance()
+			if wp != nil {
+				wp.DeleteCurrentImage(mid)
+			}
+		})
+	})
+
+	registerAndListen(hkFav, "Targeted Favorite", func() {
+		handleTargeted("Added to Favorites", func(mid int) {
+			wp := wallpaper.GetInstance()
+			if wp != nil {
+				wp.TriggerFavorite(mid)
+			}
+		})
+	})
+
+	// Start Global listeners
+	registerAndListen(hkGlobalNext, "Global Next", func() {
+		wp := wallpaper.GetInstance()
+		if wp != nil {
+			wp.SetNextWallpaper(-1)
+		}
+		if mgr != nil {
+			mgr.NotifyUser("Spice Global", "Refreshed All Displays")
+		}
+	})
+
+	registerAndListen(hkGlobalPrev, "Global Previous", func() {
+		wp := wallpaper.GetInstance()
+		if wp != nil {
+			wp.SetPreviousWallpaper(-1)
+		}
+		if mgr != nil {
+			mgr.NotifyUser("Spice Global", "Restored All Displays")
+		}
+	})
+
+	// Management
+	registerAndListen(hkPause, "Pause/Resume", func() {
 		wp := wallpaper.GetInstance()
 		if wp != nil {
 			wp.TogglePauseAction()

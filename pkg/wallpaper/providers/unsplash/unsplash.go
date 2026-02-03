@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	_ "embed"
 
@@ -86,8 +87,14 @@ func (p *UnsplashProvider) ParseURL(webURL string) (string, error) {
 		return "", fmt.Errorf("invalid URL: %w", err)
 	}
 
+	// Check domain
 	if !strings.Contains(u.Host, "unsplash.com") {
 		return "", fmt.Errorf("not an Unsplash URL")
+	}
+
+	// Idempotency: if it's already an API URL, return as is
+	if strings.Contains(u.Host, "api.unsplash.com") {
+		return webURL, nil
 	}
 
 	pathParts := strings.Split(strings.Trim(u.Path, "/"), "/")
@@ -428,10 +435,14 @@ func (p *UnsplashProvider) CreateQueryPanel(sm setting.SettingsManager, pendingU
 	header.Add(addButton)
 	// Auto-open if pending URL exists
 	if pendingUrl != "" {
-		wallpaper.OpenAddQueryDialog(sm, addQueryCfg, pendingUrl, "", onAdded)
+		fyne.Do(func() {
+			// Delay slightly to ensure window is fully ready/shown
+			time.Sleep(50 * time.Millisecond)
+			wallpaper.OpenAddQueryDialog(sm, addQueryCfg, pendingUrl, "", onAdded)
+		})
 	}
-	qpContainer := container.NewBorder(header, nil, nil, nil, imgQueryList)
-	return qpContainer
+
+	return container.NewBorder(header, nil, nil, nil, imgQueryList)
 }
 
 func (p *UnsplashProvider) createImgQueryList(sm setting.SettingsManager) *widget.List {

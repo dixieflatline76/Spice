@@ -785,7 +785,7 @@ func (wp *Plugin) OpenAddCollectionUI(testURL string) error {
 		}
 		result, err := p.ParseURL(testURL)
 		if err == nil && result != "" {
-			wp.pendingAddUrl = result
+			wp.pendingAddUrl = testURL
 			wp.focusProviderName = name
 			if wp.manager != nil {
 				wp.manager.OpenPreferences("Wallpaper")

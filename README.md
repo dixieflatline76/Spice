@@ -35,16 +35,33 @@ Spice is a minimalist wallpaper manager that brings a continuous stream of delig
     *   **Face Boost:** Ensures people are perfectly framed.
 *   **⚡ Ultra-Responsive:** Engineered for zero-lag performance, ensuring the UI stays buttery smooth even while downloading heavy 4K content.
 *   **⚙️ Tabbed Preferences:** Manage dozens of sources easily with our new organized settings tabs (**Online**, **Local**, **Museum**, **AI**).
-*   **🖥️ Multi-Monitor Support:** Automatically detects all connected displays and applies high-quality wallpapers natively to each screen. Supports *Synced Mode* (all screens match) and *Independent Mode* (each screen unique).
-    *   *Note:* In the current MVP, tray actions and hotkeys (View on Web, Block, Favorite) target the **primary** display only.
+*   **🖥️ Multi-Monitor Support:** Automatically detects all connected displays and applies high-quality wallpapers natively to each screen. Supports *Synced Mode* (all screens match) and *Independent Mode* (each screen unique). You can now target specific monitors for actions using display-specific hotkeys (e.g., refreshing Display 2 only).
 
 ### 🎮 Control & Experience
-*   **⌨️ Global Hotkeys:** Control Spice instantly from anywhere:
-    *   **Next / Previous:** `Ctrl + Alt + Right/Left` (Windows) / `Cmd + Opt + Right/Left` (macOS)
-    *   **Favorite:** `Ctrl + Alt + Up` / `Cmd + Opt + Up` (Strict Add)
-    *   **Trash/Block:** `Ctrl + Alt + Down` / `Cmd + Opt + Down`
-    *   **Pause/Resume:** `Ctrl + Alt + P` / `Cmd + Opt + P`
-    *   **Preferences:** `Ctrl + Alt + O` / `Cmd + Opt + O`
+*   **⌨️ Global Hotkeys:** Control Spice instantly from anywhere.
+
+#### Targeted Actions (Single Monitor)
+Target a specific monitor (**1-9**) by holding that number key while pressing the shortcut. Defaults to **Display 1** if no number is held.
+
+| Action | macOS Shortcut | Windows Shortcut |
+| :--- | :--- | :--- |
+| **Next Wallpaper** | `Option` + `1-9` + `→` | `Alt` + `1-9` + `→` |
+| **Prev Wallpaper** | `Option` + `1-9` + `←` | `Alt` + `1-9` + `←` |
+| **Favorite** | `Option` + `1-9` + `↑` | `Alt` + `1-9` + `↑` |
+| **Trash / Block** | `Option` + `1-9` + `↓` | `Alt` + `1-9` + `↓` |
+
+#### Global Actions (All Monitors)
+These actions affect all displays simultaneously.
+
+| Action | macOS Shortcut | Windows Shortcut |
+| :--- | :--- | :--- |
+| **Refresh All** | `Cmd + Opt + →` | `Ctrl + Alt + →` |
+| **Restore All** | `Cmd + Opt + ←` | `Ctrl + Alt + ←` |
+| **Pause / Resume** | `Cmd + Opt + P` | `Ctrl + Alt + P` |
+| **Preferences** | `Cmd + Opt + O` | `Ctrl + Alt + O` |
+
+> [!IMPORTANT]
+> **macOS Permissions:** Display-specific (chorded) hotkeys require **Accessibility** or **Input Monitoring** permissions to detect the number keys correctly. Go to *System Settings > Privacy & Security* to enable them for Spice.
 *   **🏷️ Instant Attribution:** See the artist/photographer name via the tray menu in real-time.
 *   **⏯️ Pause & Resume:** Hold onto a wallpaper you love, then resume the rotation when ready.
 *   **⛔ Blocklist:** Trash a wallpaper once, and it's gone forever.

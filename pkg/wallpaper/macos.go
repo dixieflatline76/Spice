@@ -21,11 +21,15 @@ type macOSOS struct{}
 
 type spDisplay struct {
 	Name       string `json:"_name"`
-	Resolution string `json:"_spdisplays_resolution"`
+	Resolution string `json:"_spdisplays_pixels"` // Changed from _spdisplays_resolution to _spdisplays_pixels for actual resolution
+}
+
+type spGPU struct {
+	Displays []spDisplay `json:"spdisplays_ndrvs"`
 }
 
 type spDataType struct {
-	Displays []spDisplay `json:"SPDisplaysDataType"`
+	GPUs []spGPU `json:"SPDisplaysDataType"`
 }
 
 // GetMonitors returns information about all connected monitors on macOS.
@@ -45,35 +49,43 @@ func (m *macOSOS) GetMonitors() ([]Monitor, error) {
 	return m.parseSystemProfiler(string(out))
 }
 
+var (
+	// resolutionRegex matches strings like "3456 x 2234"
+	resolutionRegex = regexp.MustCompile(`(\d+)\s*x\s*(\d+)`)
+)
+
 func (m *macOSOS) parseSystemProfiler(jsonOutput string) ([]Monitor, error) {
 	var data spDataType
 	if err := json.Unmarshal([]byte(jsonOutput), &data); err != nil {
 		return nil, fmt.Errorf("parsing system_profiler: %w", err)
 	}
 
-	if len(data.Displays) == 0 {
+	var monitors []Monitor
+	monitorIdx := 0
+
+	for _, gpu := range data.GPUs {
+		for _, d := range gpu.Displays {
+			matches := resolutionRegex.FindStringSubmatch(d.Resolution)
+			if len(matches) < 3 {
+				continue
+			}
+
+			w, _ := strconv.Atoi(matches[1])
+			h, _ := strconv.Atoi(matches[2])
+
+			monitors = append(monitors, Monitor{
+				ID:   monitorIdx,
+				Name: d.Name,
+				Rect: image.Rect(0, 0, w, h),
+			})
+			monitorIdx++
+		}
+	}
+
+	if len(monitors) == 0 {
 		return nil, fmt.Errorf("no displays found in output")
 	}
 
-	var monitors []Monitor
-	// Regex to match "3456 x 2234"
-	re := regexp.MustCompile(`(\d+)\s*x\s*(\d+)`)
-
-	for i, d := range data.Displays {
-		matches := re.FindStringSubmatch(d.Resolution)
-		if len(matches) < 3 {
-			continue
-		}
-
-		w, _ := strconv.Atoi(matches[1])
-		h, _ := strconv.Atoi(matches[2])
-
-		monitors = append(monitors, Monitor{
-			ID:   i,
-			Name: d.Name,
-			Rect: image.Rect(0, 0, w, h), // Note: Offset logic omitted for simplicity unless needed
-		})
-	}
 	return monitors, nil
 }
 
