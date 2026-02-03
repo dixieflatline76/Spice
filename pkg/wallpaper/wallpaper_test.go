@@ -338,7 +338,7 @@ func TestNavigation(t *testing.T) {
 	wp.SetShuffleImage(false)
 
 	// 2. Next
-	wp.SetNextWallpaper(-1)
+	wp.SetNextWallpaper(-1, true)
 	pump()
 
 	// Verify
@@ -348,12 +348,12 @@ func TestNavigation(t *testing.T) {
 	}), 0)
 
 	// 3. Next -> img2
-	wp.SetNextWallpaper(-1)
+	wp.SetNextWallpaper(-1, true)
 	pump()
 	assert.Equal(t, "img2", mc.State.CurrentImage.ID)
 
 	// 4. Next -> img1 (wrap)
-	wp.SetNextWallpaper(-1)
+	wp.SetNextWallpaper(-1, true)
 	pump()
 	assert.Equal(t, "img1", mc.State.CurrentImage.ID)
 }
@@ -730,7 +730,7 @@ func TestSetNextWallpaper_Stagger(t *testing.T) {
 	cfg.SetWallpaperChangeFrequency(FrequencyHourly)
 
 	// Case 1: Stagger ON
-	wp.SetNextWallpaper(-1)
+	wp.SetNextWallpaper(-1, false)
 
 	// Check Mon 0 (Immediate)
 	select {
@@ -757,7 +757,7 @@ func TestSetNextWallpaper_Stagger(t *testing.T) {
 	default:
 	}
 
-	wp.SetNextWallpaper(-1)
+	wp.SetNextWallpaper(-1, false)
 
 	// Check Mon 0
 	select {

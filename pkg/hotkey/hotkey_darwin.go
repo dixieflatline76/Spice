@@ -5,6 +5,7 @@ package hotkey
 import (
 	"time"
 
+	"github.com/dixieflatline76/Spice/util/log"
 	"golang.design/x/hotkey"
 )
 
@@ -52,12 +53,13 @@ func GetMonitorIDFromKey() int {
 	// Numpad codes (1-9):
 	numpadCodes := []int{83, 84, 85, 86, 87, 88, 89, 91, 92}
 
-	// Main detection with retry loop
-	for retry := 0; retry < 3; retry++ {
+	// Main detection with retry loop (up to 100ms window)
+	for retry := 0; retry < 5; retry++ {
 		// Check top row
 		for i, code := range codes {
 			if C.isKeyPressedNative(C.kCGEventSourceStateCombinedSessionState, C.int(code)) != 0 ||
 				C.isKeyPressedNative(C.kCGEventSourceStateHIDSystemState, C.int(code)) != 0 {
+				log.Debugf("[Hotkey] macOS detected monitor key %d on retry %d", i+1, retry)
 				return i
 			}
 		}
@@ -65,10 +67,11 @@ func GetMonitorIDFromKey() int {
 		for i, code := range numpadCodes {
 			if C.isKeyPressedNative(C.kCGEventSourceStateCombinedSessionState, C.int(code)) != 0 ||
 				C.isKeyPressedNative(C.kCGEventSourceStateHIDSystemState, C.int(code)) != 0 {
+				log.Debugf("[Hotkey] macOS detected numpad monitor key %d on retry %d", i+1, retry)
 				return i
 			}
 		}
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(20 * time.Millisecond)
 	}
 
 	return -1

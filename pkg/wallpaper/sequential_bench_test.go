@@ -148,6 +148,6 @@ func BenchmarkSequentialSwitch(b *testing.B) {
 		// SetNextWallpaper is private `func (wp *Plugin) SetNextWallpaper()`
 		// We are in `wallpaper` package, so we CAN call it.
 
-		wp.SetNextWallpaper(-1)
+		wp.SetNextWallpaper(-1, true)
 	}
 }

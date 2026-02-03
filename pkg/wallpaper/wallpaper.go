@@ -177,7 +177,7 @@ func getPlugin() *Plugin {
 			focusProviderName:  "",
 		}
 
-		wpInstance.imgPulseOp = func() { wpInstance.SetNextWallpaper(-1) }
+		wpInstance.imgPulseOp = func() { wpInstance.SetNextWallpaper(-1, true) }
 	})
 	return wpInstance
 }
@@ -344,7 +344,7 @@ func (wp *Plugin) Activate() {
 		// Create actor for each monitor
 		mc := NewMonitorController(m.ID, m, wp.store, wp.fm, wp.os, wp.cfg, wp.imgProcessor)
 		mc.OnWallpaperChanged = func(img provider.Image, monitorID int) {
-			wp.updateTrayMenuUI(img, monitorID)
+			go wp.updateTrayMenuUI(img, monitorID)
 		}
 		mc.OnFavoriteRequest = func(img provider.Image) {
 			wp.ToggleFavorite(img)
@@ -435,8 +435,8 @@ func (wp *Plugin) Deactivate() {
 // -------------------------------------------------------------------------
 
 // SetNextWallpaper advances the wallpaper.
-func (wp *Plugin) SetNextWallpaper(monitorID int) {
-	log.Printf("[DEBUG] SetNextWallpaper called for monitor %d", monitorID)
+func (wp *Plugin) SetNextWallpaper(monitorID int, forceImmediate bool) {
+	log.Printf("[DEBUG] SetNextWallpaper called for monitor %d (Force immediate: %v)", monitorID, forceImmediate)
 
 	if monitorID != -1 {
 		wp.dispatch(monitorID, CmdNext)
@@ -463,27 +463,29 @@ func (wp *Plugin) SetNextWallpaper(monitorID int) {
 			continue
 		}
 
-		if stagger && duration > 0 {
+		if !forceImmediate && stagger && duration > 0 {
 			// Random delay 10-30% of interval
-			pct := 0.1 + (rand.Float64() * 0.2) //nolint:gosec // Weak RNG acceptable for UI stagger delay
+			pct := 0.1 + (rand.Float64() * 0.2)
 			delay := time.Duration(float64(duration) * pct)
 
-			log.Printf("[Stagger] Scheduling monitor %d update in %v (Interval: %v)", id, delay, duration)
+			log.Printf("[Stagger] Scheduling AUTOMATIC monitor %d update in %v", id, delay)
 
 			// Capture ID for closure
 			mID := id
 			time.AfterFunc(delay, func() {
+				log.Printf("[Stagger] Executing staggered update for monitor %d", mID)
 				wp.dispatch(mID, CmdNext)
 			})
 		} else {
+			log.Printf("[Stagger] Executing IMMEDIATE update for monitor %d (Force: %v, StaggerCfg: %v)", id, forceImmediate, stagger)
 			wp.dispatch(id, CmdNext)
 		}
 	}
 }
 
 // SetPreviousWallpaper goes back.
-func (wp *Plugin) SetPreviousWallpaper(monitorID int) {
-	log.Printf("[DEBUG] SetPreviousWallpaper called for monitor %d", monitorID)
+func (wp *Plugin) SetPreviousWallpaper(monitorID int, forceImmediate bool) {
+	log.Printf("[DEBUG] SetPreviousWallpaper called for monitor %d (Force immediate: %v)", monitorID, forceImmediate)
 	wp.dispatch(monitorID, CmdPrev)
 }
 
@@ -540,7 +542,7 @@ func (wp *Plugin) ChangeWallpaperFrequency(newFreq Frequency) {
 					if wp.ticker != currentTicker {
 						return
 					}
-					wp.SetNextWallpaper(-1)
+					wp.SetNextWallpaper(-1, false)
 				}
 			}()
 		}

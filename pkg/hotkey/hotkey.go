@@ -39,7 +39,8 @@ func StartListeners(mgr ui.PluginManager) {
 
 		go func() {
 			for range hk.Keydown() {
-				log.Debugf("Hotkey pressed: %s", name)
+				now := time.Now().Format("15:04:05.000")
+				log.Debugf("[%s] Hotkey detected: %s", now, name)
 				action()
 				time.Sleep(200 * time.Millisecond)
 			}
@@ -62,7 +63,10 @@ func StartListeners(mgr ui.PluginManager) {
 		}
 
 		if mgr != nil {
-			mgr.NotifyUser(title, msg)
+			go func() {
+				log.Debugf("[Hotkey] Dispatching async notification: %s - %s", title, msg)
+				mgr.NotifyUser(title, msg)
+			}()
 		}
 	}
 
@@ -71,7 +75,7 @@ func StartListeners(mgr ui.PluginManager) {
 		handleTargeted("Next Wallpaper", func(mid int) {
 			wp := wallpaper.GetInstance()
 			if wp != nil {
-				wp.SetNextWallpaper(mid)
+				wp.SetNextWallpaper(mid, true)
 			}
 		})
 	})
@@ -80,7 +84,7 @@ func StartListeners(mgr ui.PluginManager) {
 		handleTargeted("Previous Wallpaper", func(mid int) {
 			wp := wallpaper.GetInstance()
 			if wp != nil {
-				wp.SetPreviousWallpaper(mid)
+				wp.SetPreviousWallpaper(mid, true)
 			}
 		})
 	})
@@ -107,7 +111,7 @@ func StartListeners(mgr ui.PluginManager) {
 	registerAndListen(hkGlobalNext, "Global Next", func() {
 		wp := wallpaper.GetInstance()
 		if wp != nil {
-			wp.SetNextWallpaper(-1)
+			wp.SetNextWallpaper(-1, true)
 		}
 		if mgr != nil {
 			mgr.NotifyUser("Spice Global", "Refreshed All Displays")
@@ -117,7 +121,7 @@ func StartListeners(mgr ui.PluginManager) {
 	registerAndListen(hkGlobalPrev, "Global Previous", func() {
 		wp := wallpaper.GetInstance()
 		if wp != nil {
-			wp.SetPreviousWallpaper(-1)
+			wp.SetPreviousWallpaper(-1, true)
 		}
 		if mgr != nil {
 			mgr.NotifyUser("Spice Global", "Restored All Displays")

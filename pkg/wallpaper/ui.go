@@ -33,8 +33,8 @@ func (wp *Plugin) CreateTrayMenuItems() []*fyne.MenuItem {
 	// --- HELPER: Create Monitor Section Items ---
 	createMonitorItems := func(mID int) []*fyne.MenuItem {
 		// Actions
-		nextItem := wp.manager.CreateMenuItem("Next Wallpaper", func() { go wp.SetNextWallpaper(mID) }, "next.png")
-		prevItem := wp.manager.CreateMenuItem("Prev Wallpaper", func() { go wp.SetPreviousWallpaper(mID) }, "prev.png")
+		nextItem := wp.manager.CreateMenuItem("Next Wallpaper", func() { go wp.SetNextWallpaper(mID, true) }, "next.png")
+		prevItem := wp.manager.CreateMenuItem("Prev Wallpaper", func() { go wp.SetPreviousWallpaper(mID, true) }, "prev.png")
 
 		// Global (but requested in root and submenus?)
 		// User instruction said: "sub menu with items starting from Next Wallpaper to Delete And Block"

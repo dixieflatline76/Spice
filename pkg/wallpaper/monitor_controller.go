@@ -67,7 +67,7 @@ func NewMonitorController(id int, m Monitor, store StoreInterface, fm *FileManag
 	return &MonitorController{
 		ID:        id,
 		Monitor:   m,
-		Commands:  make(chan Command, 10), // Buffer slightly to prevent blocking
+		Commands:  make(chan Command, 20), // Buffer slightly more to prevent blocking during bursts
 		Store:     store,
 		fm:        fm,
 		os:        os,
@@ -128,7 +128,7 @@ func (mc *MonitorController) Run(ctx context.Context) {
 }
 
 func (mc *MonitorController) handleCommand(cmd Command) {
-	log.Printf("[DEBUG] [Monitor %d] Actor handling command: %v", mc.ID, cmd)
+	log.Debugf("[Monitor %d] Actor received command %v (Pending: %d)", mc.ID, cmd, len(mc.Commands))
 	switch cmd {
 	case CmdNext:
 		mc.next()
@@ -285,6 +285,7 @@ func (mc *MonitorController) applyImage(img provider.Image) {
 	mc.Store.MarkSeen(path)
 
 	if mc.OnWallpaperChanged != nil {
+		log.Debugf("[Monitor %d] Triggering async UI refresh for %s", mc.ID, path)
 		mc.OnWallpaperChanged(img, mc.ID)
 	}
 }

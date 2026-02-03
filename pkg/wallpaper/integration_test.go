@@ -287,7 +287,7 @@ func TestLifecycle_HappyPath(t *testing.T) {
 	wp.monMu.Unlock()
 
 	// 3. Trigger "Next Wallpaper"
-	wp.SetNextWallpaper(-1)
+	wp.SetNextWallpaper(-1, true)
 
 	// Wait for the background actor to process (deterministic enough for mock)
 	assert.Eventually(t, func() bool {
