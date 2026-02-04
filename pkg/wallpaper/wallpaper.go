@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -32,6 +33,7 @@ type OS interface {
 	GetDesktopDimension() (int, int, error)
 	GetMonitors() ([]Monitor, error)
 	SetWallpaper(path string, monitorID int) error
+	Stat(path string) (os.FileInfo, error)
 }
 
 // ImageProcessor interface defines the image processing operations.
@@ -66,6 +68,7 @@ type Plugin struct {
 	shuffleImageFlag    *util.SafeFlag
 	stopNightlyRefresh  chan struct{}
 	ticker              *time.Ticker
+	ctx                 context.Context
 	cancel              context.CancelFunc
 	downloadWaitGroup   *sync.WaitGroup
 	prePauseFrequency   Frequency
@@ -147,6 +150,7 @@ func getPlugin() *Plugin {
 		}
 
 		store := NewImageStore()
+		store.SetOS(currentOS)
 
 		wpInstance = &Plugin{
 			os: currentOS,
@@ -314,9 +318,7 @@ func (wp *Plugin) Activate() {
 		wp.cancel()
 	}
 	// Create a new context for this activation cycle
-	var ctx context.Context
-	ctx, wp.cancel = context.WithCancel(context.Background())
-	_ = ctx // Used for future expansion or passed to workers if needed
+	wp.ctx, wp.cancel = context.WithCancel(context.Background())
 
 	if err := wp.fm.EnsureDirs(); err != nil {
 		log.Fatalf("Error ensuring directories: %v", err)
@@ -387,6 +389,9 @@ func (wp *Plugin) Activate() {
 		wp.FetchNewImages()
 	}
 	wp.ChangeWallpaperFrequency(wp.cfg.GetWallpaperChangeFrequency())
+
+	// Start monitor watcher
+	go wp.startMonitorWatcher()
 
 	// Refresh tray menu to reflect discovered monitors
 	log.Debugf("Activate: Requesting Tray Menu Rebuild to include discovered monitors...")
@@ -681,6 +686,128 @@ func (wp *Plugin) dispatch(monitorID int, cmd Command) {
 			}
 		} else {
 			log.Printf("[WARN] Monitor %d not found for dispatch", monitorID)
+		}
+	}
+}
+
+// SyncMonitors reconciles the current OS display setup with our actor list.
+// If force is false, it only runs a full sync if the number of monitors has changed.
+func (wp *Plugin) SyncMonitors(force bool) {
+	current, err := wp.os.GetMonitors()
+	if err != nil {
+		log.Printf("[ERROR] DynamicSync: Failed to get monitors: %v", err)
+		return
+	}
+
+	wp.monMu.Lock()
+	existingCount := len(wp.Monitors)
+	wp.monMu.Unlock()
+
+	if !force && len(current) == existingCount {
+		// Quick check passed: monitor count is identical
+		// Future: could check resolution of each DevicePath here too
+		return
+	}
+
+	log.Printf("[Sync] Display setup changed or forced sync. Existing: %d, Current: %d", existingCount, len(current))
+
+	wp.monMu.Lock()
+	changed := wp.syncMonitorsLocked(current, force)
+	wp.monMu.Unlock()
+
+	if changed {
+		log.Print("[Sync] Display setup synchronized. Triggering Tray Rebuild.")
+		wp.manager.RebuildTrayMenu()
+	}
+}
+
+// syncMonitorsLocked performs the monitor reconciliation while holding the lock.
+func (wp *Plugin) syncMonitorsLocked(current []Monitor, force bool) bool {
+	existingCount := len(wp.Monitors)
+	if !force && len(current) == existingCount {
+		return false
+	}
+
+	log.Printf("[Sync] Display setup changed or forced sync. Existing: %d, Current: %d", existingCount, len(current))
+
+	// Map to track what we currently have
+	foundPaths := make(map[string]bool)
+	changed := false
+
+	// 1. Add/Update Monitors
+	for _, m := range current {
+		foundPaths[m.DevicePath] = true
+
+		if mc, exists := wp.Monitors[m.ID]; exists {
+			// Check for resolution change on the same ID
+			oldRect := mc.Monitor.Rect
+			if oldRect != m.Rect {
+				log.Printf("[Sync] Resolution change for Monitor %d: %v -> %v", m.ID, oldRect, m.Rect)
+				mc.Monitor = m
+				changed = true
+				// Trigger refresh for new resolution
+				go wp.SetNextWallpaper(m.ID, true)
+			}
+		} else {
+			// New Monitor
+			log.Printf("[Sync] New Monitor detected: %d (%s) at %v", m.ID, m.Name, m.Rect)
+			mc := NewMonitorController(m.ID, m, wp.store, wp.fm, wp.os, wp.cfg, wp.imgProcessor)
+			mc.OnWallpaperChanged = func(img provider.Image, monitorID int) {
+				go wp.updateTrayMenuUI(img, monitorID)
+			}
+			mc.OnFavoriteRequest = func(img provider.Image) {
+				wp.ToggleFavorite(img)
+			}
+			mc.OnFetchRequest = func() {
+				wp.RequestFetch()
+			}
+			mc.Start()
+			wp.Monitors[m.ID] = mc
+			changed = true
+			// Trigger pulse for NEW display
+			go wp.SetNextWallpaper(m.ID, true)
+		}
+	}
+
+	// 2. Remove Stale Monitors
+	for id, mc := range wp.Monitors {
+		stillExists := false
+		for _, m := range current {
+			if m.ID == id {
+				stillExists = true
+				break
+			}
+		}
+
+		if !stillExists {
+			log.Printf("[Sync] Monitor %d removed. Stopping actor.", id)
+			mc.Stop()
+			delete(wp.Monitors, id)
+			changed = true
+		}
+	}
+
+	// 3. Force UI Refresh for ALL active monitors
+	// This ensures that even if monitors persisted, their menu state (attribution) is restored/verified.
+	for id, mc := range wp.Monitors {
+		// Use the current image state
+		go wp.updateTrayMenuUI(mc.State.CurrentImage, id)
+	}
+
+	return changed
+}
+
+func (wp *Plugin) startMonitorWatcher() {
+	ticker := time.NewTicker(90 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-wp.ctx.Done():
+			log.Debug("[Sync] Stopping monitor watcher (Context Cancelled)")
+			return
+		case <-ticker.C:
+			wp.SyncMonitors(false)
 		}
 	}
 }

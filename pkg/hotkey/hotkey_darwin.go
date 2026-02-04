@@ -29,8 +29,9 @@ func HasAccessibility() bool {
 }
 
 const (
-	modCtrl = hotkey.ModCmd
-	modAlt  = hotkey.ModOption
+	modCtrl  = hotkey.ModCmd
+	modAlt   = hotkey.ModOption
+	modShift = hotkey.ModShift
 
 	// macOS Virtual Key Codes
 	kVK_Option      = 58
@@ -43,6 +44,7 @@ const (
 	keyDown  = hotkey.KeyDown
 	keyP     = hotkey.KeyP
 	keyO     = hotkey.KeyO
+	keyD     = hotkey.KeyD
 )
 
 // GetMonitorIDFromKey checks if any number key 1-9 is currently pressed.

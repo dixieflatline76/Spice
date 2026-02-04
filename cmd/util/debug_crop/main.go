@@ -25,6 +25,14 @@ func (m *MockOS) SetWallpaper(path string, monitorID int) error {
 	return args.Error(0)
 }
 
+func (m *MockOS) Stat(path string) (os.FileInfo, error) {
+	args := m.Called(path)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(os.FileInfo), args.Error(1)
+}
+
 func (m *MockOS) GetCacheDir() (string, error) {
 	return "test_cache", nil
 }
@@ -62,7 +70,10 @@ func (m *ExplicitMockOS) GetDesktopDimension() (int, int, error) {
 	return 1920, 1080, nil
 }
 func (m *ExplicitMockOS) SetWallpaper(path string, monitorID int) error { return nil }
-func (m *ExplicitMockOS) GetCacheDir() (string, error)                  { return "test_cache", nil }
+func (m *ExplicitMockOS) Stat(path string) (os.FileInfo, error) {
+	return os.Stat(path)
+}
+func (m *ExplicitMockOS) GetCacheDir() (string, error) { return "test_cache", nil }
 
 func (m *ExplicitMockOS) GetMonitors() ([]wallpaper.Monitor, error) {
 	width, height, err := m.GetDesktopDimension()

@@ -4,6 +4,7 @@ import (
 	"context"
 	"image"
 	"net/url"
+	"os"
 
 	"fyne.io/fyne/v2"
 	"github.com/dixieflatline76/Spice/asset"
@@ -98,6 +99,14 @@ func (m *MockOS) SetWallpaper(path string, monitorID int) error {
 	return args.Error(0)
 }
 
+func (m *MockOS) Stat(path string) (os.FileInfo, error) {
+	args := m.Called(path)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(os.FileInfo), args.Error(1)
+}
+
 func (m *MockOS) GetMonitors() ([]Monitor, error) {
 	args := m.Called()
 	if args.Get(0) == nil {
@@ -148,6 +157,11 @@ func (m *MockImageStore) GetBucketSize(resolution string) int {
 func (m *MockImageStore) GetByID(id string) (provider.Image, bool) {
 	args := m.Called(id)
 	return args.Get(0).(provider.Image), args.Bool(1)
+}
+
+func (m *MockImageStore) Update(img provider.Image) bool {
+	args := m.Called(img)
+	return args.Bool(0)
 }
 
 func (m *MockImageStore) GetUpdateChannel() <-chan struct{} {

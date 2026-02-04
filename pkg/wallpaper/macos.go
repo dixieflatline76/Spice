@@ -74,9 +74,10 @@ func (m *macOSOS) parseSystemProfiler(jsonOutput string) ([]Monitor, error) {
 			h, _ := strconv.Atoi(matches[2])
 
 			monitors = append(monitors, Monitor{
-				ID:   monitorIdx,
-				Name: d.Name,
-				Rect: image.Rect(0, 0, w, h),
+				ID:         monitorIdx,
+				Name:       d.Name,
+				DevicePath: d.Name, // macOS stable identifier fallback
+				Rect:       image.Rect(0, 0, w, h),
 			})
 			monitorIdx++
 		}
@@ -118,6 +119,11 @@ func (m *macOSOS) SetWallpaper(imagePath string, monitorID int) error {
 // GetDesktopDimension returns the primary desktop dimensions on macOS.
 func (m *macOSOS) GetDesktopDimension() (int, int, error) {
 	return sysinfo.GetScreenDimensions()
+}
+
+// Stat returns file info for the given path on macOS.
+func (m *macOSOS) Stat(path string) (os.FileInfo, error) {
+	return os.Stat(path)
 }
 
 // getOS returns a new instance of the macOSOS struct.

@@ -234,9 +234,12 @@ func TestStoreSync_CacheInvalidation(t *testing.T) {
 	targetFlags := map[string]bool{"SmartFit": false}
 	store.Sync(100, targetFlags, nil)
 
-	// Expect: Image pruned because flags don't match
-	// (Note: Master file persists, but used record is gone from store so it will be re-processed)
-	assert.Equal(t, 0, store.Count())
+	// Expect: Image refreshed (properties cleared) but record kept
+	// (Note: Master file persists, record stays but derivatives and previous flags are cleared/updated)
+	assert.Equal(t, 1, store.Count())
+	img, _ := store.Get(0)
+	assert.Empty(t, img.DerivativePaths)
+	assert.Equal(t, false, img.ProcessingFlags["SmartFit"])
 
 	// Verify Master still exists (it should!)
 	if _, err := os.Stat(master1); os.IsNotExist(err) {

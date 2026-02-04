@@ -28,6 +28,7 @@ func StartListeners(mgr ui.PluginManager) {
 	// --- 3. Management (Cmd+Opt / Ctrl+Alt + Letters) ---
 	hkPause := hotkey.New([]hotkey.Modifier{modCtrl, modAlt}, keyP)
 	hkOpts := hotkey.New([]hotkey.Modifier{modCtrl, modAlt}, keyO)
+	hkGlobalSync := hotkey.New([]hotkey.Modifier{modCtrl, modAlt}, keyD)
 
 	// Helper to register and listen
 	registerAndListen := func(hk *hotkey.Hotkey, name string, action func()) {
@@ -38,12 +39,20 @@ func StartListeners(mgr ui.PluginManager) {
 		log.Printf("Registered hotkey: %s", name)
 
 		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("[Hotkey] PANIC in listener loop for %s: %v", name, r)
+				}
+			}()
+
 			for range hk.Keydown() {
 				now := time.Now().Format("15:04:05.000")
-				log.Debugf("[%s] Hotkey detected: %s", now, name)
+				log.Debugf("[%s] Hotkey triggered: %s", now, name)
 				action()
+				// Safety throttle to prevent accidental double-triggers
 				time.Sleep(200 * time.Millisecond)
 			}
+			log.Printf("[Hotkey] Listener loop exited for %s", name)
 		}()
 	}
 
@@ -140,6 +149,16 @@ func StartListeners(mgr ui.PluginManager) {
 		wp := wallpaper.GetInstance()
 		if wp != nil {
 			wp.TriggerOpenSettings()
+		}
+	})
+
+	registerAndListen(hkGlobalSync, "Sync Displays", func() {
+		wp := wallpaper.GetInstance()
+		if wp != nil {
+			wp.SyncMonitors(true)
+		}
+		if mgr != nil {
+			mgr.NotifyUser("Spice", "Synchronizing display setup...")
 		}
 	})
 }

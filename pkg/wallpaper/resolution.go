@@ -8,9 +8,10 @@ import (
 
 // Monitor represents a connected display
 type Monitor struct {
-	ID   int             // Internal ID (0, 1, 2)
-	Name string          // OS-specific name (e.g. "DP-1")
-	Rect image.Rectangle // Dimensions (X, Y, W, H)
+	ID         int             // Internal ID (0, 1, 2)
+	Name       string          // OS-specific name (e.g. "DP-1")
+	DevicePath string          // Stable OS path/identifier
+	Rect       image.Rectangle // Dimensions (X, Y, W, H)
 }
 
 // MonitorContext is a transient object passed through the pipeline

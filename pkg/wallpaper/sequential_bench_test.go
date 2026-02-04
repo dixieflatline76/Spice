@@ -3,6 +3,7 @@ package wallpaper
 import (
 	"fmt"
 	"image"
+	"os"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -92,6 +93,10 @@ func (m *BenchMockOS) GetDesktopDimension() (int, int, error) {
 
 func (m *BenchMockOS) GetMonitors() ([]Monitor, error) {
 	return []Monitor{{ID: 0, Name: "Primary", Rect: image.Rect(0, 0, 1920, 1080)}}, nil
+}
+
+func (m *BenchMockOS) Stat(path string) (os.FileInfo, error) {
+	return nil, nil // Assume file exists for benchmark
 }
 
 // BenchmarkSequentialSwitch measures the time to switch wallpapers sequentially.

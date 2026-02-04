@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"os"
 
 	"github.com/dixieflatline76/Spice/pkg/provider"
 	"github.com/dixieflatline76/Spice/util/log"
@@ -26,6 +27,7 @@ type StoreInterface interface {
 	Get(index int) (provider.Image, bool)
 	GetByID(id string) (provider.Image, bool)
 	Remove(id string) (provider.Image, bool)
+	Update(img provider.Image) bool
 	MarkSeen(filePath string)
 	SeenCount() int
 	GetIDsForResolution(resolution string) []string
@@ -277,6 +279,19 @@ func (mc *MonitorController) applyImage(img provider.Image) {
 
 	mc.State.CurrentImage = img
 	mc.State.CurrentImage.FilePath = path // Ensure state reflects actual file used
+
+	// Check if file physically exists before calling OS to avoid generic errors
+	if _, err := mc.os.Stat(path); os.IsNotExist(err) {
+		log.Printf("[Monitor %d] ERROR: Wallpaper file missing: %s. Metadata is stale. Requesting refetch...", mc.ID, path)
+		// Clear local metadata that is proven stale so it's not chosen again
+		img.DerivativePaths = make(map[string]string)
+		img.ProcessingFlags = make(map[string]bool)
+		mc.Store.Update(img)
+		if mc.OnFetchRequest != nil {
+			mc.OnFetchRequest()
+		}
+		return
+	}
 
 	log.Printf("[Monitor %d] Setting wallpaper: %s", mc.ID, path)
 	if err := mc.os.SetWallpaper(path, mc.ID); err != nil {

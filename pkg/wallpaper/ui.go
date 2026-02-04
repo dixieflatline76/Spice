@@ -335,6 +335,19 @@ func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 	}
 	sm.CreateBoolSetting(&nightlyRefreshConfig, generalContainer) // Use the SettingsManager
 
+	// Sync Displays
+	syncDisplayButtonConfig := setting.ButtonWithConfirmationConfig{
+		Label:          sm.CreateSettingTitleLabel("Display Configuration:"),
+		HelpContent:    sm.CreateSettingDescriptionLabel("Synchronize Spice with currently connected monitors. Use this if you plugged or unplugged a monitor while Spice was running."),
+		ButtonText:     "Refresh Displays",
+		ConfirmTitle:   "",
+		ConfirmMessage: "",
+		OnPressed: func() {
+			wp.SyncMonitors(true)
+		},
+	}
+	sm.CreateButtonWithConfirmationSetting(&syncDisplayButtonConfig, generalContainer)
+
 	// Clear Cache
 	clearCacheButtonConfig := setting.ButtonWithConfirmationConfig{
 		Label:          sm.CreateSettingTitleLabel("Clear Wallpaper Cache:"),

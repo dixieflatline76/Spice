@@ -38,6 +38,7 @@ type ImageStore struct {
 	resolutionBuckets map[string][]string
 
 	debounceDuration time.Duration
+	os               OS
 }
 
 func NewImageStore() *ImageStore {
@@ -58,6 +59,20 @@ func (s *ImageStore) SetDebounceDuration(d time.Duration) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.debounceDuration = d
+}
+
+// SetOS sets the OS interface for filesystem operations.
+func (s *ImageStore) SetOS(os OS) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.os = os
+}
+
+func (s *ImageStore) getStatFunc() func(string) (os.FileInfo, error) {
+	if s.os != nil {
+		return s.os.Stat
+	}
+	return os.Stat
 }
 
 func (s *ImageStore) SetAsyncSave(enabled bool) {
@@ -523,13 +538,14 @@ func (s *ImageStore) Sync(limit int, targetFlags map[string]bool, activeQueryIDs
 			badIDs[img.ID] = ActionDelete
 			continue
 		}
-		if _, err := os.Stat(masterPath); os.IsNotExist(err) {
+		statFunc := s.getStatFunc()
+		if _, err := statFunc(masterPath); os.IsNotExist(err) {
 			masterPath, err = s.fm.GetMasterPath(img.ID, ".png")
 			if err != nil {
 				badIDs[img.ID] = ActionDelete
 				continue
 			}
-			if _, err := os.Stat(masterPath); os.IsNotExist(err) {
+			if _, err := statFunc(masterPath); os.IsNotExist(err) {
 				badIDs[img.ID] = ActionDelete
 				continue
 			}
@@ -563,15 +579,32 @@ func (s *ImageStore) Sync(limit int, targetFlags map[string]bool, activeQueryIDs
 
 	for _, img := range s.images {
 		if action, exists := badIDs[img.ID]; exists && action != ActionKeep {
-			if !img.IsFavorited {
-				switch action {
-				case ActionDelete:
+			if action == ActionInvalidate {
+				// Mismatch means the derivative is stale.
+				// Clear paths and flags so it can be re-processed with new targets.
+				img.DerivativePaths = make(map[string]string)
+				img.ProcessingFlags = make(map[string]bool)
+				for k, v := range targetFlags {
+					img.ProcessingFlags[k] = v
+				}
+				finalImages = append(finalImages, img)
+				idsToInvalidate = append(idsToInvalidate, img.ID)
+			} else {
+				// ActionDelete
+				if !img.IsFavorited {
 					idsToDelete = append(idsToDelete, img.ID)
-				case ActionInvalidate:
+				} else {
+					// Fallback for Favorites: Just invalidate if they were supposed to be deleted
+					img.DerivativePaths = make(map[string]string)
+					img.ProcessingFlags = make(map[string]bool)
+					for k, v := range targetFlags {
+						img.ProcessingFlags[k] = v
+					}
+					finalImages = append(finalImages, img)
 					idsToInvalidate = append(idsToInvalidate, img.ID)
 				}
+				delete(s.idSet, img.ID)
 			}
-			delete(s.idSet, img.ID)
 		} else {
 			finalImages = append(finalImages, img)
 		}

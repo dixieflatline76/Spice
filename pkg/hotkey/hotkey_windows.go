@@ -16,8 +16,9 @@ var (
 )
 
 const (
-	modCtrl = hotkey.ModCtrl
-	modAlt  = hotkey.ModAlt
+	modCtrl  = hotkey.ModCtrl
+	modAlt   = hotkey.ModAlt
+	modShift = hotkey.ModShift
 
 	keyRight = hotkey.KeyRight
 	keyLeft  = hotkey.KeyLeft
@@ -25,6 +26,7 @@ const (
 	keyDown  = hotkey.KeyDown
 	keyP     = hotkey.KeyP
 	keyO     = hotkey.KeyO
+	keyD     = hotkey.KeyD
 )
 
 // GetMonitorIDFromKey checks if any number key 1-9 is currently pressed.
