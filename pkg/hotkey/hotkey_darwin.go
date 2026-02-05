@@ -55,20 +55,20 @@ func GetMonitorIDFromKey() int {
 	// Numpad codes (1-9):
 	numpadCodes := []int{83, 84, 85, 86, 87, 88, 89, 91, 92}
 
-	// Main detection with retry loop (up to 100ms window)
-	for retry := 0; retry < 5; retry++ {
+	// Main detection with retry loop (up to 200ms window)
+	for retry := 0; retry < 10; retry++ {
 		// Check top row
 		for i, code := range codes {
-			if C.isKeyPressedNative(C.kCGEventSourceStateCombinedSessionState, C.int(code)) != 0 ||
-				C.isKeyPressedNative(C.kCGEventSourceStateHIDSystemState, C.int(code)) != 0 {
+			if C.isKeyPressedNative(C.kCGEventSourceStateHIDSystemState, C.int(code)) != 0 ||
+				C.isKeyPressedNative(C.kCGEventSourceStateCombinedSessionState, C.int(code)) != 0 {
 				log.Debugf("[Hotkey] macOS detected monitor key %d on retry %d", i+1, retry)
 				return i
 			}
 		}
 		// Check numpad
 		for i, code := range numpadCodes {
-			if C.isKeyPressedNative(C.kCGEventSourceStateCombinedSessionState, C.int(code)) != 0 ||
-				C.isKeyPressedNative(C.kCGEventSourceStateHIDSystemState, C.int(code)) != 0 {
+			if C.isKeyPressedNative(C.kCGEventSourceStateHIDSystemState, C.int(code)) != 0 ||
+				C.isKeyPressedNative(C.kCGEventSourceStateCombinedSessionState, C.int(code)) != 0 {
 				log.Debugf("[Hotkey] macOS detected numpad monitor key %d on retry %d", i+1, retry)
 				return i
 			}
@@ -76,5 +76,6 @@ func GetMonitorIDFromKey() int {
 		time.Sleep(20 * time.Millisecond)
 	}
 
+	log.Debugf("[Hotkey] No monitor key detected after 10 retries")
 	return -1
 }
