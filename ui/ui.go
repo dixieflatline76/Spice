@@ -31,6 +31,7 @@ import (
 	"github.com/dixieflatline76/Spice/pkg/sysinfo"
 	"github.com/dixieflatline76/Spice/pkg/ui"
 	"github.com/dixieflatline76/Spice/pkg/ui/setting"
+	"github.com/dixieflatline76/Spice/pkg/wallpaper"
 	"github.com/dixieflatline76/Spice/util"
 	utilLog "github.com/dixieflatline76/Spice/util/log"
 )
@@ -38,15 +39,17 @@ import (
 // SpiceApp represents the application
 type SpiceApp struct {
 	fyne.App
-	assetMgr    *asset.Manager
-	trayMenu    *fyne.Menu
-	splash      fyne.Window   // Splash window for initial setup
-	notifiers   []ui.Notifier // List of notifiers to activate
-	plugins     []ui.Plugin   // List of plugins to activate
-	os          OS            // Operating system interface
-	appConfig   *config.AppConfig
-	prefsWindow fyne.Window        // Singleton preferences window
-	prefsTabs   *container.AppTabs // Reference to the main tabs in preferences
+	assetMgr     *asset.Manager
+	trayMenu     *fyne.Menu
+	splash       fyne.Window   // Splash window for initial setup
+	notifiers    []ui.Notifier // List of notifiers to activate
+	plugins      []ui.Plugin   // List of plugins to activate
+	os           OS            // Operating system interface
+	appConfig    *config.AppConfig
+	prefsWindow  fyne.Window        // Singleton preferences window
+	prefsTabs    *container.AppTabs // Reference to the main tabs in preferences
+	trayMu       sync.Mutex
+	trayDebounce *time.Timer
 }
 
 // OS interface defines methods for transforming the application state
@@ -158,6 +161,16 @@ func getInstance() *SpiceApp {
 
 			// Setup OS-specific lifecycle hooks (e.g. Chrome OS Pseudo-Tray)
 			saInstance.os.SetupLifecycle(saInstance.App, saInstance)
+
+			// Common Lifecycle: Sync Monitors on return to foreground (e.g. Settings opened)
+			saInstance.Lifecycle().SetOnEnteredForeground(func() {
+				utilLog.Debug("App entered foreground - synchronizing monitors...")
+				wp := wallpaper.GetInstance()
+				if wp != nil {
+					// Low-CPU check
+					wp.SyncMonitors(false)
+				}
+			})
 		} else {
 			utilLog.Fatal("Spice not supported on this platform")
 		}
@@ -761,10 +774,19 @@ func (sa *SpiceApp) RefreshTrayMenu() {
 	})
 }
 
-// RebuildTrayMenu rebuilds the tray menu list from scratch.
+// RebuildTrayMenu rebuilds the tray menu list from scratch with debouncing.
 func (sa *SpiceApp) RebuildTrayMenu() {
-	fyne.Do(func() {
-		sa.CreateTrayMenu()
+	sa.trayMu.Lock()
+	defer sa.trayMu.Unlock()
+
+	if sa.trayDebounce != nil {
+		sa.trayDebounce.Stop()
+	}
+
+	sa.trayDebounce = time.AfterFunc(300*time.Millisecond, func() {
+		fyne.Do(func() {
+			sa.CreateTrayMenu()
+		})
 	})
 }
 

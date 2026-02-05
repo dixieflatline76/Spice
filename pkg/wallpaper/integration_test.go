@@ -258,6 +258,7 @@ func TestLifecycle_HappyPath(t *testing.T) {
 
 	// Mock Expectation for this specific test
 	mockOS := wp.os.(*MockOS)
+	mockOS.On("Stat", mock.Anything).Return(nil, nil)
 	mockOS.On("SetWallpaper", mock.Anything, 0).Return(nil)
 
 	wp.Activate()
@@ -287,7 +288,7 @@ func TestLifecycle_HappyPath(t *testing.T) {
 	wp.monMu.Unlock()
 
 	// 3. Trigger "Next Wallpaper"
-	wp.SetNextWallpaper(-1)
+	wp.SetNextWallpaper(-1, true)
 
 	// Wait for the background actor to process (deterministic enough for mock)
 	assert.Eventually(t, func() bool {
@@ -344,6 +345,8 @@ func setupTestPlugin(t *testing.T, prefs fyne.Preferences) *Plugin {
 	mockOS := new(MockOS)
 	mockOS.On("GetDesktopDimension").Return(1920, 1080, nil).Maybe()
 	mockOS.On("GetMonitors").Return([]Monitor{{ID: 0, Name: "Primary", Rect: image.Rect(0, 0, 1920, 1080)}}, nil).Maybe()
+	mockOS.On("Stat", mock.Anything).Return(nil, nil)
+	mockOS.On("SetWallpaper", mock.Anything, 0).Return(nil)
 
 	mockPM := new(MockPluginManager)
 	mockPM.On("NotifyUser", mock.Anything, mock.Anything).Return()

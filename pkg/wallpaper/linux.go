@@ -118,6 +118,11 @@ func (l *linuxOS) GetDesktopDimension() (int, int, error) {
 	return sysinfo.GetScreenDimensions()
 }
 
+// Stat returns file info for the given path on Linux.
+func (l *linuxOS) Stat(path string) (os.FileInfo, error) {
+	return os.Stat(path)
+}
+
 // setWallpaperGNOME sets the wallpaper for GNOME-based desktop environments.
 func (l *linuxOS) setWallpaperGNOME(imagePath string) error {
 	cmd := exec.Command("gsettings", "set", "org.gnome.desktop.background", "picture-uri", fmt.Sprintf("file://%s", imagePath))

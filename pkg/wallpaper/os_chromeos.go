@@ -3,6 +3,7 @@ package wallpaper
 import (
 	"errors"
 	"image"
+	"os"
 	"sync"
 )
 
@@ -37,6 +38,11 @@ func (c *ChromeOS) GetDesktopDimension() (int, int, error) {
 	// Standard full HD default, or could query chrome.system.display via bridge too!
 	// For now, static default is safe as we rely on 'smart fit' mostly.
 	return 1920, 1080, nil
+}
+
+// Stat returns file info for the given path.
+func (c *ChromeOS) Stat(path string) (os.FileInfo, error) {
+	return os.Stat(path)
 }
 
 // RegisterBridge registers the callback function.

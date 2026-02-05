@@ -28,6 +28,7 @@ func StartListeners(mgr ui.PluginManager) {
 	// --- 3. Management (Cmd+Opt / Ctrl+Alt + Letters) ---
 	hkPause := hotkey.New([]hotkey.Modifier{modCtrl, modAlt}, keyP)
 	hkOpts := hotkey.New([]hotkey.Modifier{modCtrl, modAlt}, keyO)
+	hkGlobalSync := hotkey.New([]hotkey.Modifier{modCtrl, modAlt}, keyD)
 
 	// Helper to register and listen
 	registerAndListen := func(hk *hotkey.Hotkey, name string, action func()) {
@@ -38,11 +39,20 @@ func StartListeners(mgr ui.PluginManager) {
 		log.Printf("Registered hotkey: %s", name)
 
 		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("[Hotkey] PANIC in listener loop for %s: %v", name, r)
+				}
+			}()
+
 			for range hk.Keydown() {
-				log.Debugf("Hotkey pressed: %s", name)
+				now := time.Now().Format("15:04:05.000")
+				log.Debugf("[%s] Hotkey triggered: %s", now, name)
 				action()
+				// Safety throttle to prevent accidental double-triggers
 				time.Sleep(200 * time.Millisecond)
 			}
+			log.Printf("[Hotkey] Listener loop exited for %s", name)
 		}()
 	}
 
@@ -62,7 +72,10 @@ func StartListeners(mgr ui.PluginManager) {
 		}
 
 		if mgr != nil {
-			mgr.NotifyUser(title, msg)
+			go func() {
+				log.Debugf("[Hotkey] Dispatching async notification: %s - %s", title, msg)
+				mgr.NotifyUser(title, msg)
+			}()
 		}
 	}
 
@@ -71,7 +84,7 @@ func StartListeners(mgr ui.PluginManager) {
 		handleTargeted("Next Wallpaper", func(mid int) {
 			wp := wallpaper.GetInstance()
 			if wp != nil {
-				wp.SetNextWallpaper(mid)
+				wp.SetNextWallpaper(mid, true)
 			}
 		})
 	})
@@ -80,7 +93,7 @@ func StartListeners(mgr ui.PluginManager) {
 		handleTargeted("Previous Wallpaper", func(mid int) {
 			wp := wallpaper.GetInstance()
 			if wp != nil {
-				wp.SetPreviousWallpaper(mid)
+				wp.SetPreviousWallpaper(mid, true)
 			}
 		})
 	})
@@ -107,7 +120,7 @@ func StartListeners(mgr ui.PluginManager) {
 	registerAndListen(hkGlobalNext, "Global Next", func() {
 		wp := wallpaper.GetInstance()
 		if wp != nil {
-			wp.SetNextWallpaper(-1)
+			wp.SetNextWallpaper(-1, true)
 		}
 		if mgr != nil {
 			mgr.NotifyUser("Spice Global", "Refreshed All Displays")
@@ -117,7 +130,7 @@ func StartListeners(mgr ui.PluginManager) {
 	registerAndListen(hkGlobalPrev, "Global Previous", func() {
 		wp := wallpaper.GetInstance()
 		if wp != nil {
-			wp.SetPreviousWallpaper(-1)
+			wp.SetPreviousWallpaper(-1, true)
 		}
 		if mgr != nil {
 			mgr.NotifyUser("Spice Global", "Restored All Displays")
@@ -136,6 +149,16 @@ func StartListeners(mgr ui.PluginManager) {
 		wp := wallpaper.GetInstance()
 		if wp != nil {
 			wp.TriggerOpenSettings()
+		}
+	})
+
+	registerAndListen(hkGlobalSync, "Sync Displays", func() {
+		wp := wallpaper.GetInstance()
+		if wp != nil {
+			wp.SyncMonitors(true)
+		}
+		if mgr != nil {
+			mgr.NotifyUser("Spice", "Synchronizing display setup...")
 		}
 	})
 }

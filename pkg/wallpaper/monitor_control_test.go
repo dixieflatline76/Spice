@@ -30,6 +30,7 @@ func TestMonitorController_ProcessNext(t *testing.T) {
 	mockStore.On("MarkSeen", "img0.jpg").Return()
 
 	mockOS := new(MockOS)
+	mockOS.On("Stat", "img0.jpg").Return(nil, nil)
 	mockOS.On("SetWallpaper", "img0.jpg", 1).Return(nil)
 	cfg := GetConfig(NewMockPreferences())
 	mockIP := new(MockImageProcessor)
@@ -69,6 +70,7 @@ func TestMonitorController_ResolutionAwarePath(t *testing.T) {
 	mockStore.On("MarkSeen", "hd.jpg").Return()
 
 	mockOS := new(MockOS)
+	mockOS.On("Stat", "hd.jpg").Return(nil, nil)
 	mockOS.On("SetWallpaper", "hd.jpg", 1).Return(nil)
 
 	m := Monitor{
@@ -99,6 +101,7 @@ func TestMonitorController_HistoryPrev(t *testing.T) {
 	mockStore.On("MarkSeen", "img0.jpg").Return()
 
 	mockOS := new(MockOS)
+	mockOS.On("Stat", "img0.jpg").Return(nil, nil)
 	mockOS.On("SetWallpaper", "img0.jpg", 1).Return(nil)
 
 	cfg := GetConfig(NewMockPreferences())

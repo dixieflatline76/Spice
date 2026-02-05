@@ -33,8 +33,8 @@ func (wp *Plugin) CreateTrayMenuItems() []*fyne.MenuItem {
 	// --- HELPER: Create Monitor Section Items ---
 	createMonitorItems := func(mID int) []*fyne.MenuItem {
 		// Actions
-		nextItem := wp.manager.CreateMenuItem("Next Wallpaper", func() { go wp.SetNextWallpaper(mID) }, "next.png")
-		prevItem := wp.manager.CreateMenuItem("Prev Wallpaper", func() { go wp.SetPreviousWallpaper(mID) }, "prev.png")
+		nextItem := wp.manager.CreateMenuItem("Next Wallpaper", func() { go wp.SetNextWallpaper(mID, true) }, "next.png")
+		prevItem := wp.manager.CreateMenuItem("Prev Wallpaper", func() { go wp.SetPreviousWallpaper(mID, true) }, "prev.png")
 
 		// Global (but requested in root and submenus?)
 		// User instruction said: "sub menu with items starting from Next Wallpaper to Delete And Block"
@@ -334,6 +334,19 @@ func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 		}
 	}
 	sm.CreateBoolSetting(&nightlyRefreshConfig, generalContainer) // Use the SettingsManager
+
+	// Sync Displays
+	syncDisplayButtonConfig := setting.ButtonWithConfirmationConfig{
+		Label:          sm.CreateSettingTitleLabel("Display Configuration:"),
+		HelpContent:    sm.CreateSettingDescriptionLabel("Synchronize Spice with currently connected monitors. Use this if you plugged or unplugged a monitor while Spice was running."),
+		ButtonText:     "Refresh Displays",
+		ConfirmTitle:   "",
+		ConfirmMessage: "",
+		OnPressed: func() {
+			wp.SyncMonitors(true)
+		},
+	}
+	sm.CreateButtonWithConfirmationSetting(&syncDisplayButtonConfig, generalContainer)
 
 	// Clear Cache
 	clearCacheButtonConfig := setting.ButtonWithConfirmationConfig{

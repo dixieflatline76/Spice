@@ -6,12 +6,14 @@ package wallpaper
 import (
 	"fmt"
 	"image"
+	"os"
 	"syscall"
 	"unsafe"
 
 	"math"
 
 	"github.com/dixieflatline76/Spice/pkg/sysinfo"
+	"golang.org/x/sys/windows"
 )
 
 var (
@@ -125,6 +127,13 @@ func (w *windowsOS) GetMonitors() ([]Monitor, error) {
 			uintptr(unsafe.Pointer(&winRect)),
 		)
 
+		devicePath := ""
+		if monitorIDPtr != 0 {
+			// Converting uintptr from COM call to unsafe.Pointer for string conversion.
+			// This is safe here because we just received the pointer from Windows.
+			devicePath = windows.UTF16PtrToString((*uint16)(unsafe.Pointer(monitorIDPtr))) //nolint:unsafeptr
+		}
+
 		// Free the string returned by GetMonitorDevicePathAt
 		_, _, _ = procCoTaskMemFree.Call(monitorIDPtr)
 
@@ -132,9 +141,10 @@ func (w *windowsOS) GetMonitors() ([]Monitor, error) {
 			rect = image.Rect(int(winRect.Left), int(winRect.Top), int(winRect.Right), int(winRect.Bottom))
 			if rect.Dx() > 0 && rect.Dy() > 0 {
 				monitors = append(monitors, Monitor{
-					ID:   int(i),
-					Name: "", // Let the UI handle the "Display N" labeling
-					Rect: rect,
+					ID:         int(i),
+					Name:       "",
+					DevicePath: devicePath,
+					Rect:       rect,
 				})
 			}
 		}
@@ -222,6 +232,11 @@ func (w *windowsOS) release(obj *IDesktopWallpaper) {
 // GetDesktopDimension returns the resolution of the primary monitor
 func (w *windowsOS) GetDesktopDimension() (int, int, error) {
 	return sysinfo.GetScreenDimensions()
+}
+
+// Stat returns file info for the given path.
+func (w *windowsOS) Stat(path string) (os.FileInfo, error) {
+	return os.Stat(path)
 }
 
 // getOS returns a new instance of the windowsOS struct.

@@ -5,6 +5,7 @@ package hotkey
 import (
 	"time"
 
+	"github.com/dixieflatline76/Spice/util/log"
 	"golang.design/x/hotkey"
 )
 
@@ -28,8 +29,9 @@ func HasAccessibility() bool {
 }
 
 const (
-	modCtrl = hotkey.ModCmd
-	modAlt  = hotkey.ModOption
+	modCtrl  = hotkey.ModCmd
+	modAlt   = hotkey.ModOption
+	modShift = hotkey.ModShift
 
 	// macOS Virtual Key Codes
 	kVK_Option      = 58
@@ -42,6 +44,7 @@ const (
 	keyDown  = hotkey.KeyDown
 	keyP     = hotkey.KeyP
 	keyO     = hotkey.KeyO
+	keyD     = hotkey.KeyD
 )
 
 // GetMonitorIDFromKey checks if any number key 1-9 is currently pressed.
@@ -52,24 +55,27 @@ func GetMonitorIDFromKey() int {
 	// Numpad codes (1-9):
 	numpadCodes := []int{83, 84, 85, 86, 87, 88, 89, 91, 92}
 
-	// Main detection with retry loop
-	for retry := 0; retry < 3; retry++ {
+	// Main detection with retry loop (up to 200ms window)
+	for retry := 0; retry < 10; retry++ {
 		// Check top row
 		for i, code := range codes {
-			if C.isKeyPressedNative(C.kCGEventSourceStateCombinedSessionState, C.int(code)) != 0 ||
-				C.isKeyPressedNative(C.kCGEventSourceStateHIDSystemState, C.int(code)) != 0 {
+			if C.isKeyPressedNative(C.kCGEventSourceStateHIDSystemState, C.int(code)) != 0 ||
+				C.isKeyPressedNative(C.kCGEventSourceStateCombinedSessionState, C.int(code)) != 0 {
+				log.Debugf("[Hotkey] macOS detected monitor key %d on retry %d", i+1, retry)
 				return i
 			}
 		}
 		// Check numpad
 		for i, code := range numpadCodes {
-			if C.isKeyPressedNative(C.kCGEventSourceStateCombinedSessionState, C.int(code)) != 0 ||
-				C.isKeyPressedNative(C.kCGEventSourceStateHIDSystemState, C.int(code)) != 0 {
+			if C.isKeyPressedNative(C.kCGEventSourceStateHIDSystemState, C.int(code)) != 0 ||
+				C.isKeyPressedNative(C.kCGEventSourceStateCombinedSessionState, C.int(code)) != 0 {
+				log.Debugf("[Hotkey] macOS detected numpad monitor key %d on retry %d", i+1, retry)
 				return i
 			}
 		}
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(20 * time.Millisecond)
 	}
 
+	log.Debugf("[Hotkey] No monitor key detected after 10 retries")
 	return -1
 }

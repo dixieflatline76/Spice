@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"os"
 
 	"github.com/dixieflatline76/Spice/pkg/provider"
 	"github.com/dixieflatline76/Spice/util/log"
@@ -26,6 +27,7 @@ type StoreInterface interface {
 	Get(index int) (provider.Image, bool)
 	GetByID(id string) (provider.Image, bool)
 	Remove(id string) (provider.Image, bool)
+	Update(img provider.Image) bool
 	MarkSeen(filePath string)
 	SeenCount() int
 	GetIDsForResolution(resolution string) []string
@@ -67,7 +69,7 @@ func NewMonitorController(id int, m Monitor, store StoreInterface, fm *FileManag
 	return &MonitorController{
 		ID:        id,
 		Monitor:   m,
-		Commands:  make(chan Command, 10), // Buffer slightly to prevent blocking
+		Commands:  make(chan Command, 20), // Buffer slightly more to prevent blocking during bursts
 		Store:     store,
 		fm:        fm,
 		os:        os,
@@ -128,7 +130,7 @@ func (mc *MonitorController) Run(ctx context.Context) {
 }
 
 func (mc *MonitorController) handleCommand(cmd Command) {
-	log.Printf("[DEBUG] [Monitor %d] Actor handling command: %v", mc.ID, cmd)
+	log.Debugf("[Monitor %d] Actor received command %v (Pending: %d)", mc.ID, cmd, len(mc.Commands))
 	switch cmd {
 	case CmdNext:
 		mc.next()
@@ -278,6 +280,19 @@ func (mc *MonitorController) applyImage(img provider.Image) {
 	mc.State.CurrentImage = img
 	mc.State.CurrentImage.FilePath = path // Ensure state reflects actual file used
 
+	// Check if file physically exists before calling OS to avoid generic errors
+	if _, err := mc.os.Stat(path); os.IsNotExist(err) {
+		log.Printf("[Monitor %d] ERROR: Wallpaper file missing: %s. Metadata is stale. Requesting refetch...", mc.ID, path)
+		// Clear local metadata that is proven stale so it's not chosen again
+		img.DerivativePaths = make(map[string]string)
+		img.ProcessingFlags = make(map[string]bool)
+		mc.Store.Update(img)
+		if mc.OnFetchRequest != nil {
+			mc.OnFetchRequest()
+		}
+		return
+	}
+
 	log.Printf("[Monitor %d] Setting wallpaper: %s", mc.ID, path)
 	if err := mc.os.SetWallpaper(path, mc.ID); err != nil {
 		log.Printf("[ERROR] [Monitor %d] Failed to set wallpaper: %v", mc.ID, err)
@@ -285,6 +300,7 @@ func (mc *MonitorController) applyImage(img provider.Image) {
 	mc.Store.MarkSeen(path)
 
 	if mc.OnWallpaperChanged != nil {
+		log.Debugf("[Monitor %d] Triggering async UI refresh for %s", mc.ID, path)
 		mc.OnWallpaperChanged(img, mc.ID)
 	}
 }

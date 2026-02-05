@@ -32,6 +32,10 @@ func (d *DummyOS) SetWallpaper(path string, monitorID int) error {
 	return nil
 }
 
+func (d *DummyOS) Stat(path string) (os.FileInfo, error) {
+	return os.Stat(path)
+}
+
 func (d *DummyOS) GetMonitors() ([]wallpaper.Monitor, error) {
 	width, height, _ := d.GetDesktopDimension()
 	return []wallpaper.Monitor{{ID: 0, Name: "Primary", Rect: image.Rect(0, 0, width, height)}}, nil
