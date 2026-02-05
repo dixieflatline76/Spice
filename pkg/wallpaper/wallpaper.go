@@ -470,7 +470,7 @@ func (wp *Plugin) SetNextWallpaper(monitorID int, forceImmediate bool) {
 
 		if !forceImmediate && stagger && duration > 0 {
 			// Random delay 10-30% of interval
-			pct := 0.1 + (rand.Float64() * 0.2)
+			pct := 0.1 + (rand.Float64() * 0.2) //nolint:gosec // Random delay for UI stagger effect, non-cryptographic
 			delay := time.Duration(float64(duration) * pct)
 
 			log.Printf("[Stagger] Scheduling AUTOMATIC monitor %d update in %v", id, delay)
