@@ -484,6 +484,15 @@ func (s *ImageStore) GetBucketSize(resolution string) int {
 	return len(s.resolutionBuckets[resolution])
 }
 
+// ImageSyncAction defines the cleanup action required for an image.
+type ImageSyncAction int
+
+const (
+	ImageActionKeep       ImageSyncAction = iota
+	ImageActionDelete                     // Prune: Delete everything (Master + Derivatives)
+	ImageActionInvalidate                 // Refresh: Delete only derivatives (Keep Master)
+)
+
 func (s *ImageStore) Sync(limit int, targetFlags map[string]bool, activeQueryIDs map[string]bool) {
 	if s.fm == nil {
 		return
@@ -498,77 +507,13 @@ func (s *ImageStore) Sync(limit int, targetFlags map[string]bool, activeQueryIDs
 	copy(candidates, s.images)
 	s.mu.RUnlock()
 
-	// SyncAction defines the cleanup action required for an image.
-	type SyncAction int
-	const (
-		ActionKeep       SyncAction = iota
-		ActionDelete                // Prune: Delete everything (Master + Derivatives)
-		ActionInvalidate            // Refresh: Delete only derivatives (Keep Master)
-	)
+	badIDs := make(map[string]ImageSyncAction)
 
-	badIDs := make(map[string]SyncAction)
-
+	// 1. Determine actions for all candidates
 	for _, img := range candidates {
-		// Strict Sync: If activeQueryIDs is provided (Strict Mode),
-		// we filter out images that:
-		// 1. Have a SourceQueryID that is NOT in the active set.
-		// 2. Have NO SourceQueryID (Orphan/Legacy), as they cannot be verified against the active set.
-		// Exception: Favorites are protected from deletion later (check below),
-		// but they are still removed from the *active rotation* here unless their SourceQuery is active.
-		isOrphan := img.SourceQueryID == ""
-		isActive := false
-		if img.SourceQueryID != "" && activeQueryIDs != nil {
-			isActive = activeQueryIDs[img.SourceQueryID]
-		}
-
-		if activeQueryIDs != nil {
-			if isOrphan || !isActive {
-				badIDs[img.ID] = ActionDelete
-				continue
-			}
-		}
-
-		if s.avoidSet[img.ID] {
-			badIDs[img.ID] = ActionDelete
-			continue
-		}
-
-		masterPath, err := s.fm.GetMasterPath(img.ID, ".jpg")
-		if err != nil {
-			badIDs[img.ID] = ActionDelete
-			continue
-		}
-		statFunc := s.getStatFunc()
-		if _, err := statFunc(masterPath); os.IsNotExist(err) {
-			masterPath, err = s.fm.GetMasterPath(img.ID, ".png")
-			if err != nil {
-				badIDs[img.ID] = ActionDelete
-				continue
-			}
-			if _, err := statFunc(masterPath); os.IsNotExist(err) {
-				badIDs[img.ID] = ActionDelete
-				continue
-			}
-		}
-
-		// C. Flag Mismatch
-		if len(targetFlags) > 0 {
-			match := true
-			if len(img.ProcessingFlags) != len(targetFlags) {
-				match = false
-			} else {
-				for k, v := range targetFlags {
-					if img.ProcessingFlags[k] != v {
-						match = false
-						break
-					}
-				}
-			}
-			if !match {
-				// Mismatch means the derivative is stale, but the image itself (Master) is valid.
-				// We should only delete the derivatives so the downloader can re-process the Master.
-				badIDs[img.ID] = ActionInvalidate
-			}
+		action := s.determineSyncAction(img, activeQueryIDs, targetFlags)
+		if action != ImageActionKeep {
+			badIDs[img.ID] = action
 		}
 	}
 
@@ -577,11 +522,29 @@ func (s *ImageStore) Sync(limit int, targetFlags map[string]bool, activeQueryIDs
 	var idsToDelete []string
 	var idsToInvalidate []string
 
+	// 2. Apply Actions (Delete/Invalidate)
 	for _, img := range s.images {
-		if action, exists := badIDs[img.ID]; exists && action != ActionKeep {
-			if action == ActionInvalidate {
-				// Mismatch means the derivative is stale.
-				// Clear paths and flags so it can be re-processed with new targets.
+		action, exists := badIDs[img.ID]
+		if !exists || action == ImageActionKeep {
+			finalImages = append(finalImages, img)
+			continue
+		}
+
+		if action == ImageActionInvalidate {
+			// Invalidate: Keep Master, Reset Flags/Paths
+			img.DerivativePaths = make(map[string]string)
+			img.ProcessingFlags = make(map[string]bool)
+			for k, v := range targetFlags {
+				img.ProcessingFlags[k] = v
+			}
+			finalImages = append(finalImages, img)
+			idsToInvalidate = append(idsToInvalidate, img.ID)
+		} else {
+			// ActionDelete
+			if !img.IsFavorited {
+				idsToDelete = append(idsToDelete, img.ID)
+			} else {
+				// Fallback: Favorites are never deleted by Sync, only Invalidated
 				img.DerivativePaths = make(map[string]string)
 				img.ProcessingFlags = make(map[string]bool)
 				for k, v := range targetFlags {
@@ -589,40 +552,100 @@ func (s *ImageStore) Sync(limit int, targetFlags map[string]bool, activeQueryIDs
 				}
 				finalImages = append(finalImages, img)
 				idsToInvalidate = append(idsToInvalidate, img.ID)
-			} else {
-				// ActionDelete
-				if !img.IsFavorited {
-					idsToDelete = append(idsToDelete, img.ID)
-				} else {
-					// Fallback for Favorites: Just invalidate if they were supposed to be deleted
-					img.DerivativePaths = make(map[string]string)
-					img.ProcessingFlags = make(map[string]bool)
-					for k, v := range targetFlags {
-						img.ProcessingFlags[k] = v
-					}
-					finalImages = append(finalImages, img)
-					idsToInvalidate = append(idsToInvalidate, img.ID)
-				}
-				delete(s.idSet, img.ID)
 			}
-		} else {
-			finalImages = append(finalImages, img)
+			delete(s.idSet, img.ID)
 		}
 	}
 
+	// 3. Prune Limit
 	if len(finalImages) > limit {
 		excess := len(finalImages) - limit
 		toPrune := finalImages[:excess]
 		finalImages = finalImages[excess:]
 		for _, img := range toPrune {
 			if !img.IsFavorited {
-				idsToDelete = append(idsToDelete, img.ID) // Pruning = Delete
+				idsToDelete = append(idsToDelete, img.ID)
 			}
 			delete(s.idSet, img.ID)
 		}
 	}
 
+	// 4. Update State
 	s.images = finalImages
+	s.rebuildInternalStateLocked()
+	s.scheduleSaveLocked()
+	s.mu.Unlock()
+
+	// 5. Async Cleanup
+	s.performAsyncCleanup(idsToDelete, idsToInvalidate)
+}
+
+// determineSyncAction decides what to do with an image during sync.
+func (s *ImageStore) determineSyncAction(img provider.Image, activeQueryIDs map[string]bool, targetFlags map[string]bool) ImageSyncAction {
+	// Strict Mode Check
+	if activeQueryIDs != nil {
+		isActive := img.SourceQueryID != "" && activeQueryIDs[img.SourceQueryID]
+		isOrphan := img.SourceQueryID == ""
+		if isOrphan || !isActive {
+			return ImageActionDelete
+		}
+	}
+
+	// AvoidSet Check
+	if s.avoidSet[img.ID] {
+		return ImageActionDelete
+	}
+
+	// Master File Check
+	if !s.masterFileExists(img.ID) {
+		return ImageActionDelete
+	}
+
+	// Flag Mismatch Check
+	if len(targetFlags) > 0 {
+		if !s.flagsMatch(img, targetFlags) {
+			return ImageActionInvalidate
+		}
+	}
+
+	return ImageActionKeep
+}
+
+func (s *ImageStore) masterFileExists(id string) bool {
+	statFunc := s.getStatFunc()
+
+	// Check JPG
+	masterPath, err := s.fm.GetMasterPath(id, ".jpg")
+	if err == nil {
+		if _, err := statFunc(masterPath); err == nil {
+			return true
+		}
+	}
+
+	// Check PNG
+	masterPath, err = s.fm.GetMasterPath(id, ".png")
+	if err == nil {
+		if _, err := statFunc(masterPath); err == nil {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (s *ImageStore) flagsMatch(img provider.Image, target map[string]bool) bool {
+	if len(img.ProcessingFlags) != len(target) {
+		return false
+	}
+	for k, v := range target {
+		if img.ProcessingFlags[k] != v {
+			return false
+		}
+	}
+	return true
+}
+
+func (s *ImageStore) rebuildInternalStateLocked() {
 	s.idSet = make(map[string]bool)
 	s.pathSet = make(map[string]int)
 	s.resolutionBuckets = make(map[string][]string)
@@ -635,21 +658,17 @@ func (s *ImageStore) Sync(limit int, targetFlags map[string]bool, activeQueryIDs
 		if img.Seen {
 			s.seenCount++
 		}
-		// Rebuild buckets during sync
 		for res := range img.DerivativePaths {
 			s.resolutionBuckets[res] = append(s.resolutionBuckets[res], img.ID)
 		}
 	}
+}
 
-	s.scheduleSaveLocked()
-	s.mu.Unlock()
-
-	// Async Cleanup
+func (s *ImageStore) performAsyncCleanup(idsToDelete, idsToInvalidate []string) {
 	if len(idsToDelete) > 0 {
 		go func(ids []string) {
 			for _, id := range ids {
-				// Race Condition Fix: Check if the ID has been resurrected (re-added) to the store
-				// since the sync operation started. If so, DO NOT delete the files.
+				// Race Condition Fix: Check if resurrected
 				if _, exists := s.GetByID(id); exists {
 					log.Printf("[Store] Skipping deletion of resurrected ID: %s", id)
 					continue

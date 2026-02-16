@@ -194,76 +194,109 @@ func (p *Provider) addFavoriteInternal(img provider.Image) {
 	filename := filepath.Base(img.FilePath)
 	destPath := filepath.Join(favDir, filename)
 
-	// FIFO Logic: Limit to 200 images
+	if err := p.pruneOldestFavorite(favDir); err != nil {
+		log.Printf("Failed to prune favorites: %v", err)
+	}
+
+	if err := p.copyFile(img.FilePath, destPath); err != nil {
+		log.Printf("failed to copy favorite: %v", err)
+		return
+	}
+
+	if err := p.updateFavoriteMetadata(favDir, filename, img.Attribution, img.ViewURL); err != nil {
+		log.Printf("Failed to update favorites metadata: %v", err)
+	}
+}
+
+func (p *Provider) pruneOldestFavorite(favDir string) error {
 	entries, err := os.ReadDir(favDir)
-	if err == nil {
-		var images []os.DirEntry
-		for _, e := range entries {
-			if !e.IsDir() && filepath.Ext(e.Name()) != ".json" {
-				images = append(images, e)
-			}
-		}
-		if len(images) >= wallpaper.MaxFavoritesLimit {
-			var oldest string
-			var oldestTime time.Time
-			first := true
-			for _, entry := range images {
-				if info, err := os.Stat(filepath.Join(favDir, entry.Name())); err == nil {
-					if first || info.ModTime().Before(oldestTime) {
-						oldestTime = info.ModTime()
-						oldest = entry.Name()
-						first = false
-					}
-				}
-			}
-			if oldest != "" {
-				os.Remove(filepath.Join(favDir, oldest))
-				// Also remove from favMap
-				oldestID := strings.TrimSuffix(oldest, filepath.Ext(oldest))
-				p.mu.Lock()
-				delete(p.favMap, oldestID)
-				p.mu.Unlock()
-				log.Printf("FIFO: Removed oldest favorite %s", oldest)
-			}
-		}
-	}
-
-	// Perform Copy
-	input, err := os.ReadFile(img.FilePath)
 	if err != nil {
-		log.Printf("failed to read master for favoriting: %v", err)
-		return
-	}
-	if err := os.WriteFile(destPath, input, 0600); err != nil {
-		log.Printf("failed to save favorite: %v", err)
-		return
+		return err
 	}
 
-	// Save Metadata
+	var images []os.DirEntry
+	for _, e := range entries {
+		if !e.IsDir() && filepath.Ext(e.Name()) != ".json" {
+			images = append(images, e)
+		}
+	}
+
+	if len(images) < wallpaper.MaxFavoritesLimit {
+		return nil
+	}
+
+	var oldest string
+	var oldestTime time.Time
+	first := true
+	for _, entry := range images {
+		if info, err := os.Stat(filepath.Join(favDir, entry.Name())); err == nil {
+			if first || info.ModTime().Before(oldestTime) {
+				oldestTime = info.ModTime()
+				oldest = entry.Name()
+				first = false
+			}
+		}
+	}
+
+	if oldest != "" {
+		if err := os.Remove(filepath.Join(favDir, oldest)); err != nil {
+			return err
+		}
+		// Also remove from favMap
+		oldestID := strings.TrimSuffix(oldest, filepath.Ext(oldest))
+		p.mu.Lock()
+		delete(p.favMap, oldestID)
+		p.mu.Unlock()
+		log.Printf("FIFO: Removed oldest favorite %s", oldest)
+	}
+	return nil
+}
+
+func (p *Provider) copyFile(src, dest string) error {
+	input, err := os.ReadFile(src)
+	if err != nil {
+		return fmt.Errorf("read source: %w", err)
+	}
+	if err := os.WriteFile(dest, input, 0600); err != nil {
+		return fmt.Errorf("write dest: %w", err)
+	}
+	return nil
+}
+
+func (p *Provider) updateFavoriteMetadata(favDir, filename, attribution, productURL string) error {
 	metaFile := filepath.Join(favDir, "metadata.json")
 	var meta map[string]interface{}
+
 	if f, err := os.ReadFile(metaFile); err == nil {
 		if err := json.Unmarshal(f, &meta); err != nil {
-			log.Printf("Failed to unmarshal favorites metadata: %v", err)
+			// If corrupted, start fresh? Or return error?
+			// Starting fresh is safer for user experience.
+			meta = make(map[string]interface{})
 		}
+	} else {
+		meta = make(map[string]interface{})
 	}
+
 	if meta == nil {
 		meta = make(map[string]interface{})
 	}
+
 	filesMeta, ok := meta["files"].(map[string]interface{})
 	if !ok {
 		filesMeta = make(map[string]interface{})
 	}
+
 	filesMeta[filename] = map[string]string{
-		"attribution": img.Attribution,
-		"product_url": img.ViewURL,
+		"attribution": attribution,
+		"product_url": productURL,
 	}
 	meta["files"] = filesMeta
-	if data, err := json.MarshalIndent(meta, "", "  "); err == nil {
-		if err := os.WriteFile(metaFile, data, 0600); err != nil {
-			log.Printf("Failed to save favorites metadata: %v", err)
-		}
+
+	data, err := json.MarshalIndent(meta, "", "  ")
+	if err != nil {
+		return err
 	}
+	return os.WriteFile(metaFile, data, 0600)
 }
 
 func (p *Provider) RemoveFavorite(img provider.Image) error {

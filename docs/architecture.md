@@ -255,12 +255,22 @@ To maintain responsiveness under load, the following optimizations are employed:
 1. **O(1) Image Store**: The store uses a secondary `idSet map[string]bool` to perform existence checks in constant time (45ns) rather than linear scans (470ns+), ensuring that the Writer Loop never lags even with thousands of images.
 2. **Synchronous Race Prevention**: The Controller synchronously anticipates background work (setting `isDownloading = true` under lock) *before* spawning goroutines. This prevents "job storms" and CPU saturation during rapid UI interactions.
 
-## 3.8 Smart Fit Algorithm
-Spice uses a "Holistic Imaging" approach that combines Face Detection (Pigo), Entropy Analysis (SmartCrop), and Composition Rules.
+## 3.8 Smart Fit Algorithm (Strategy Pattern)
+Spice's imaging engine (`pkg/wallpaper/smart_image_processor.go`) implements the **Strategy Pattern** to dynamically select the best cropping method based on image content and user settings.
 
-*   **Face Rescue**: High-quality images with incorrect aspect ratios are "Rescued" only if a dominant face is detected, ensuring we never crop heads.
-*   **Feet Guard**: A heuristic that prevents the cropper from selecting the bottom 20% of an image (usually shoes/legs) unless the image has "High Energy" (complex texture).
-*   **Tuning**: All heuristic parameters are externalized in `pkg/wallpaper/tuning.go` to separate logic from magic numbers.
+*   **Strategies**:
+    *   **`FaceCropStrategy`**: Used when a high-confidence face is found. Strictly crops around the face.
+    *   **`EntropyCropStrategy`**: Uses SmartCrop (luminance/energy analysis) to find the most interesting area.
+    *   **`SmartPanStrategy`**: Fallback for specific cases (e.g., "Face Boost" centering).
+*   **Decision Logic**:
+    *   **Face Rescue**: High-quality images with incorrect aspect ratios are "Rescued" only if a dominant face is detected.
+    *   **Feet Guard**: A heuristic within `EntropyCropStrategy` preventing crops of the bottom 20% unless "High Energy" is detected.
+    *   **Tuning**: Heuristic parameters are externalized in `pkg/wallpaper/tuning.go`.
+
+## 3.10 Configuration Management (Migration Chain)
+To manage evolving configuration schemas (e.g., legacy JSON formats, ID backfilling), Spice uses a **Chain of Responsibility** pattern.
+*   **MigrationChain**: A sequence of `MigrationStep` functions (e.g., `UnifyQueriesStep`, `EnsureFavoritesStep`).
+*   **Execution**: On startup, `loadFromPrefs` executes the chain. If any step modifies the config, a save is triggered automatically. This ensures data integrity across version upgrades.
 
 ## 3.9 The "Git-Driven" Content System
 For verified providers (Museums), Spice treats `raw.githubusercontent.com` as a Content Delivery Network (CDN).

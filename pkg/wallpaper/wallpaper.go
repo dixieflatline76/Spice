@@ -699,57 +699,27 @@ func (wp *Plugin) SyncMonitors(force bool) {
 		return
 	}
 
+	// Policy Decision Phase
+	// We do a quick check under lock to see if we even need to proceed,
+	// although the policy handles logic, we want to respect the locking model.
 	wp.monMu.Lock()
-	existingCount := len(wp.Monitors)
-	wp.monMu.Unlock()
+	defer wp.monMu.Unlock()
 
-	if !force && len(current) == existingCount {
-		// Quick check passed: monitor count is identical
-		// Future: could check resolution of each DevicePath here too
+	policy := NewDefaultSyncPolicy()
+	actions := policy.Evaluate(current, wp.Monitors, force)
+
+	if len(actions) == 0 && !force {
 		return
 	}
 
-	log.Printf("[Sync] Display setup changed or forced sync. Existing: %d, Current: %d", existingCount, len(current))
+	log.Printf("[Sync] Display setup analysis complete. Actions: %d", len(actions))
 
-	wp.monMu.Lock()
-	changed := wp.syncMonitorsLocked(current, force)
-	wp.monMu.Unlock()
-
-	if changed {
-		log.Print("[Sync] Display setup synchronized. Triggering Tray Rebuild.")
-		wp.manager.RebuildTrayMenu()
-	}
-}
-
-// syncMonitorsLocked performs the monitor reconciliation while holding the lock.
-func (wp *Plugin) syncMonitorsLocked(current []Monitor, force bool) bool {
-	existingCount := len(wp.Monitors)
-	if !force && len(current) == existingCount {
-		return false
-	}
-
-	log.Printf("[Sync] Display setup changed or forced sync. Existing: %d, Current: %d", existingCount, len(current))
-
-	// Map to track what we currently have
-	foundPaths := make(map[string]bool)
 	changed := false
 
-	// 1. Add/Update Monitors
-	for _, m := range current {
-		foundPaths[m.DevicePath] = true
-
-		if mc, exists := wp.Monitors[m.ID]; exists {
-			// Check for resolution change on the same ID
-			oldRect := mc.Monitor.Rect
-			if oldRect != m.Rect {
-				log.Printf("[Sync] Resolution change for Monitor %d: %v -> %v", m.ID, oldRect, m.Rect)
-				mc.Monitor = m
-				changed = true
-				// Trigger refresh for new resolution
-				go wp.SetNextWallpaper(m.ID, true)
-			}
-		} else {
-			// New Monitor
+	for _, action := range actions {
+		switch action.Type {
+		case SyncActionCreate:
+			m := action.Monitor
 			log.Printf("[Sync] New Monitor detected: %d (%s) at %v", m.ID, m.Name, m.Rect)
 			mc := NewMonitorController(m.ID, m, wp.store, wp.fm, wp.os, wp.cfg, wp.imgProcessor)
 			mc.OnWallpaperChanged = func(img provider.Image, monitorID int) {
@@ -764,38 +734,43 @@ func (wp *Plugin) syncMonitorsLocked(current []Monitor, force bool) bool {
 			mc.Start()
 			wp.Monitors[m.ID] = mc
 			changed = true
-			// Trigger pulse for NEW display
 			go wp.SetNextWallpaper(m.ID, true)
-		}
-	}
 
-	// 2. Remove Stale Monitors
-	for id, mc := range wp.Monitors {
-		stillExists := false
-		for _, m := range current {
-			if m.ID == id {
-				stillExists = true
-				break
+		case SyncActionUpdate:
+			m := action.Monitor
+			if mc, ok := wp.Monitors[action.MonitorID]; ok {
+				log.Printf("[Sync] Resolution change for Monitor %d: %v -> %v", m.ID, mc.Monitor.Rect, m.Rect)
+				mc.Monitor = m
+				changed = true
+				go wp.SetNextWallpaper(m.ID, true)
+			}
+
+		case SyncActionRemove:
+			id := action.MonitorID
+			log.Printf("[Sync] Monitor %d removed. Stopping actor.", id)
+			if mc, ok := wp.Monitors[id]; ok {
+				mc.Stop()
+				delete(wp.Monitors, id)
+				changed = true
 			}
 		}
+	}
 
-		if !stillExists {
-			log.Printf("[Sync] Monitor %d removed. Stopping actor.", id)
-			mc.Stop()
-			delete(wp.Monitors, id)
-			changed = true
+	// Always Refresh UI for active monitors if anything changed or forced
+	// (Original logic ran this force loop always if changed or forced)
+	if changed || force {
+		for id, mc := range wp.Monitors {
+			go wp.updateTrayMenuUI(mc.State.CurrentImage, id)
 		}
 	}
 
-	// 3. Force UI Refresh for ALL active monitors
-	// This ensures that even if monitors persisted, their menu state (attribution) is restored/verified.
-	for id, mc := range wp.Monitors {
-		// Use the current image state
-		go wp.updateTrayMenuUI(mc.State.CurrentImage, id)
+	if changed {
+		log.Print("[Sync] Display setup synchronized. Triggering Tray Rebuild.")
+		wp.manager.RebuildTrayMenu()
 	}
-
-	return changed
 }
+
+// syncMonitorsLocked is removed as it is now integrated into SyncMonitors with Policy.
 
 func (wp *Plugin) startMonitorWatcher() {
 	ticker := time.NewTicker(90 * time.Second)

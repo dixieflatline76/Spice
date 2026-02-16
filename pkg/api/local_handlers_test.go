@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -138,4 +139,73 @@ func TestLocalHandler_Security_Direct(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestLocalHandler_Pagination(t *testing.T) {
+	// Setup
+	tempDir := t.TempDir()
+	gpPath := filepath.Join(tempDir, "listing_test")
+	colPath := filepath.Join(gpPath, "many_images")
+	err := os.MkdirAll(colPath, 0755)
+	assert.NoError(t, err)
+
+	// Create 10 images: img0.jpg -> img9.jpg
+	for i := 0; i < 10; i++ {
+		fname := fmt.Sprintf("img%d.jpg", i)
+		err = os.WriteFile(filepath.Join(colPath, fname), []byte("fake"), 0600)
+		assert.NoError(t, err)
+	}
+
+	s := NewServer()
+	s.RegisterNamespace("listing_test", gpPath)
+	handler := s.Handler()
+
+	// Page 1, PerPage 4 -> should get img0, img1, img2, img3
+	req1 := httptest.NewRequest("GET", "/local/listing_test/many_images/images?page=1&per_page=4", nil)
+	w1 := httptest.NewRecorder()
+	handler.ServeHTTP(w1, req1)
+
+	assert.Equal(t, http.StatusOK, w1.Code)
+	var images1 []LocalImage
+	err = json.Unmarshal(w1.Body.Bytes(), &images1)
+	assert.NoError(t, err)
+	assert.Len(t, images1, 4)
+	assert.Equal(t, "img0", images1[0].ID)
+	assert.Equal(t, "img3", images1[3].ID)
+
+	// Page 2, PerPage 4 -> should get img4, img5, img6, img7
+	req2 := httptest.NewRequest("GET", "/local/listing_test/many_images/images?page=2&per_page=4", nil)
+	w2 := httptest.NewRecorder()
+	handler.ServeHTTP(w2, req2)
+
+	assert.Equal(t, http.StatusOK, w2.Code)
+	var images2 []LocalImage
+	err = json.Unmarshal(w2.Body.Bytes(), &images2)
+	assert.NoError(t, err)
+	assert.Len(t, images2, 4)
+	assert.Equal(t, "img4", images2[0].ID)
+
+	// Page 3, PerPage 4 -> should get img8, img9 (only 2 left)
+	req3 := httptest.NewRequest("GET", "/local/listing_test/many_images/images?page=3&per_page=4", nil)
+	w3 := httptest.NewRecorder()
+	handler.ServeHTTP(w3, req3)
+
+	assert.Equal(t, http.StatusOK, w3.Code)
+	var images3 []LocalImage
+	err = json.Unmarshal(w3.Body.Bytes(), &images3)
+	assert.NoError(t, err)
+	assert.Len(t, images3, 2)
+	assert.Equal(t, "img8", images3[0].ID)
+	assert.Equal(t, "img9", images3[1].ID)
+
+	// Page 4 -> Empty
+	req4 := httptest.NewRequest("GET", "/local/listing_test/many_images/images?page=4&per_page=4", nil)
+	w4 := httptest.NewRecorder()
+	handler.ServeHTTP(w4, req4)
+
+	assert.Equal(t, http.StatusOK, w4.Code)
+	var images4 []LocalImage
+	err = json.Unmarshal(w4.Body.Bytes(), &images4)
+	assert.NoError(t, err)
+	assert.Len(t, images4, 0)
 }
