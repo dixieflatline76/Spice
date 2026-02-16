@@ -2,12 +2,12 @@ module github.com/dixieflatline76/Spice
 
 go 1.24.0
 
-require fyne.io/fyne/v2 v2.6.3
+require fyne.io/fyne/v2 v2.7.2
 
 require (
 	al.essio.dev/pkg/shellescape v1.6.0 // indirect
 	github.com/danieljoos/wincred v1.2.3 // indirect
-	github.com/fyne-io/oksvg v0.1.0 // indirect
+	github.com/fyne-io/oksvg v0.2.0 // indirect
 	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/hack-pad/go-indexeddb v0.3.2 // indirect
 	github.com/hack-pad/safejs v0.1.1 // indirect
@@ -17,7 +17,7 @@ require (
 )
 
 require (
-	fyne.io/systray v1.11.0 // indirect
+	fyne.io/systray v1.12.0 // indirect
 	github.com/BurntSushi/toml v1.6.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/disintegration/imaging v1.6.2
