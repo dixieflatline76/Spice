@@ -1,3 +1,5 @@
+//go:build !linux
+
 package wallpaper
 
 import "fyne.io/fyne/v2"

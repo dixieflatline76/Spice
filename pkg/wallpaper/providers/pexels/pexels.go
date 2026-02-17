@@ -234,9 +234,45 @@ func (p *PexelsProvider) FetchImages(ctx context.Context, apiURL string, page in
 		}
 	}
 
+	fullURL, err := p.buildAPIURL(apiURL, page)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := p.executeRequest(ctx, fullURL)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		if len(body) > 500 {
+			log.Printf("Pexels API Error (%d): %s...", resp.StatusCode, string(body[:500]))
+		} else {
+			log.Printf("Pexels API Error (%d): %s", resp.StatusCode, string(body))
+		}
+		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
+	}
+
+	images, err := p.parseResponse(resp.Body, fullURL)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(images) == 0 {
+		log.Printf("Pexels query returned 0 images for URL: %s", fullURL)
+	} else {
+		log.Debugf("Found %d images from Pexels", len(images))
+	}
+
+	return images, nil
+}
+
+func (p *PexelsProvider) buildAPIURL(apiURL string, page int) (string, error) {
 	u, err := url.Parse(apiURL)
 	if err != nil {
-		return nil, fmt.Errorf("invalid API URL: %w", err)
+		return "", fmt.Errorf("invalid API URL: %w", err)
 	}
 
 	q := u.Query()
@@ -244,7 +280,11 @@ func (p *PexelsProvider) FetchImages(ctx context.Context, apiURL string, page in
 	q.Set("per_page", "30") // Default to 30 images
 	u.RawQuery = q.Encode()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	return u.String(), nil
+}
+
+func (p *PexelsProvider) executeRequest(ctx context.Context, fullURL string) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fullURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -258,54 +298,40 @@ func (p *PexelsProvider) FetchImages(ctx context.Context, apiURL string, page in
 	}
 	req.Header.Set("Authorization", apiKey)
 
-	log.Debugf("Fetching Pexels images from: %s", u.String())
+	log.Debugf("Fetching Pexels images from: %s", fullURL)
 
 	resp, err := p.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		// Don't log full body if it's huge (like HTML), just snippet
-		if len(body) > 500 {
-			log.Printf("Pexels API Error (%d): %s...", resp.StatusCode, string(body[:500]))
-		} else {
-			log.Printf("Pexels API Error (%d): %s", resp.StatusCode, string(body))
-		}
-		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
-	}
+	return resp, nil
+}
 
+func (p *PexelsProvider) parseResponse(body io.Reader, urlStr string) ([]provider.Image, error) {
 	var images []provider.Image
 
 	// Determine response type based on URL path
-	if strings.Contains(u.Path, "/search") {
+	if strings.Contains(urlStr, "/search") {
 		var searchResp PexelsSearchResponse
-		if err := json.NewDecoder(resp.Body).Decode(&searchResp); err != nil {
+		if err := json.NewDecoder(body).Decode(&searchResp); err != nil {
 			return nil, fmt.Errorf("failed to decode search response: %w", err)
 		}
 		for _, photo := range searchResp.Photos {
 			images = append(images, p.mapPexelsImage(photo))
 		}
-	} else if strings.Contains(u.Path, "/collections") {
+	} else if strings.Contains(urlStr, "/collections") {
 		var collectionResp PexelsCollectionResponse
-		if err := json.NewDecoder(resp.Body).Decode(&collectionResp); err != nil {
+		if err := json.NewDecoder(body).Decode(&collectionResp); err != nil {
 			return nil, fmt.Errorf("failed to decode collection response: %w", err)
 		}
 		for _, photo := range collectionResp.Media {
-			if photo.Type == "Photo" { // Ensure we only get photos, though 'media' suggests mixed
+			if photo.Type == "Photo" { // Ensure we only get photos
 				images = append(images, p.mapPexelsImage(photo))
 			}
 		}
 	} else {
 		return nil, fmt.Errorf("unknown Pexels API endpoint")
-	}
-
-	if len(images) == 0 {
-		log.Printf("Pexels query returned 0 images for URL: %s", u.String())
-	} else {
-		log.Debugf("Found %d images from Pexels", len(images))
 	}
 
 	return images, nil

@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/dixieflatline76/Spice/util/log"
-	"golang.design/x/hotkey"
 )
 
 /*
@@ -29,22 +28,10 @@ func HasAccessibility() bool {
 }
 
 const (
-	modCtrl  = hotkey.ModCmd
-	modAlt   = hotkey.ModOption
-	modShift = hotkey.ModShift
-
 	// macOS Virtual Key Codes
 	kVK_Option      = 58
 	kVK_RightOption = 61
 	kVK_Cmd         = 55
-
-	keyRight = hotkey.KeyRight
-	keyLeft  = hotkey.KeyLeft
-	keyUp    = hotkey.KeyUp
-	keyDown  = hotkey.KeyDown
-	keyP     = hotkey.KeyP
-	keyO     = hotkey.KeyO
-	keyD     = hotkey.KeyD
 )
 
 // GetMonitorIDFromKey checks if any number key 1-9 is currently pressed.

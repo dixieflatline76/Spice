@@ -290,101 +290,32 @@ func (b *PrefsPanelBuilder) BuildProviderTabs() (fyne.CanvasObject, fyne.CanvasO
 	var localItems []accordionItem
 	targetTabIndex := 0
 
-	// Get ordered provider names
-	var names []string
-	for n := range b.plugin.providers {
-		names = append(names, n)
-	}
-	sort.Strings(names)
+	names := b.getSortedProviderNames()
 
 	for _, name := range names {
 		p := b.plugin.providers[name]
-
-		// Logic for pending URL / Focus
-		isPending := false
-		pendingURL := ""
-
-		if b.plugin.pendingAddUrl != "" {
-			if _, err := p.ParseURL(b.plugin.pendingAddUrl); err == nil {
-				pendingURL = b.plugin.pendingAddUrl
-				isPending = true
-				b.plugin.pendingAddUrl = "" // Consume
-			}
-		}
-		if b.plugin.focusProviderName == name {
-			isPending = true
-			b.plugin.focusProviderName = "" // Consume
-		}
-
-		if isPending {
-			switch p.Type() {
-			case provider.TypeLocal:
-				targetTabIndex = 2
-			case provider.TypeAI:
-				targetTabIndex = 3
-			default:
-				targetTabIndex = 1
-			}
-		}
-
-		// Create Panels
-		settingsPanel := p.CreateSettingsPanel(b.sm)
-		queryPanel := p.CreateQueryPanel(b.sm, pendingURL)
-
-		if settingsPanel == nil && queryPanel == nil {
+		if p == nil {
 			continue
 		}
 
-		// Combined Content
-		var content fyne.CanvasObject
-		if settingsPanel != nil && queryPanel != nil {
-			content = container.NewBorder(settingsPanel, nil, nil, nil, queryPanel)
-		} else if settingsPanel != nil {
-			content = settingsPanel
-		} else {
-			content = queryPanel
+		item, tabIdx := b.createProviderAccordionItem(p)
+		if tabIdx > 0 {
+			targetTabIndex = tabIdx
 		}
-
-		// Title Func
-		titleFunc := func() string {
-			title := p.Title()
-			if title == "" {
-				title = "Image Sources (" + p.Name() + ")"
-			}
-			activeCount := 0
-			for _, q := range b.plugin.cfg.GetQueries() {
-				if q.Provider == p.Name() && q.Active {
-					activeCount++
-				}
-			}
-			if activeCount > 0 {
-				if activeCount == 1 {
-					return fmt.Sprintf("%s (1 active)", title)
-				}
-				return fmt.Sprintf("%s (%d active)", title, activeCount)
-			}
-			return title
-		}
-
-		item := accordionItem{
-			Title:     titleFunc(),
-			TitleFunc: titleFunc,
-			Content:   content,
-			Open:      isPending,
-			Icon:      p.GetProviderIcon(),
+		if item == nil {
+			continue
 		}
 
 		if p.Type() == provider.TypeLocal {
-			localItems = append(localItems, item)
+			localItems = append(localItems, *item)
 		} else if p.Type() == provider.TypeOnline {
-			onlineItems = append(onlineItems, item)
+			onlineItems = append(onlineItems, *item)
 		}
 	}
 
 	onlineTab, refreshOnline := createAccordion(onlineItems)
 	localTab, refreshLocal := createAccordion(localItems)
 
-	// Callback registration
 	b.sm.RegisterOnSettingsSaved(func() {
 		if refreshOnline != nil {
 			refreshOnline()
@@ -395,4 +326,94 @@ func (b *PrefsPanelBuilder) BuildProviderTabs() (fyne.CanvasObject, fyne.CanvasO
 	})
 
 	return onlineTab, localTab, targetTabIndex
+}
+
+func (b *PrefsPanelBuilder) getSortedProviderNames() []string {
+	var names []string
+	for n := range b.plugin.providers {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	return names
+}
+
+func (b *PrefsPanelBuilder) createProviderAccordionItem(p provider.ImageProvider) (*accordionItem, int) {
+	tabIndex := 0
+	isPending := false
+	pendingURL := ""
+
+	// Check pending state
+	if b.plugin.pendingAddUrl != "" {
+		if _, err := p.ParseURL(b.plugin.pendingAddUrl); err == nil {
+			pendingURL = b.plugin.pendingAddUrl
+			isPending = true
+			b.plugin.pendingAddUrl = ""
+		}
+	}
+	if b.plugin.focusProviderName == p.Name() {
+		isPending = true
+		b.plugin.focusProviderName = ""
+	}
+
+	if isPending {
+		switch p.Type() {
+		case provider.TypeLocal:
+			tabIndex = 2
+		case provider.TypeAI:
+			tabIndex = 3
+		default:
+			tabIndex = 1
+		}
+	}
+
+	content := b.buildProviderContent(p, pendingURL)
+	if content == nil {
+		return nil, tabIndex
+	}
+
+	titleFunc := b.createTitleFunc(p)
+
+	return &accordionItem{
+		Title:     titleFunc(),
+		TitleFunc: titleFunc,
+		Content:   content,
+		Open:      isPending,
+		Icon:      p.GetProviderIcon(),
+	}, tabIndex
+}
+
+func (b *PrefsPanelBuilder) buildProviderContent(p provider.ImageProvider, pendingURL string) fyne.CanvasObject {
+	settingsPanel := p.CreateSettingsPanel(b.sm)
+	queryPanel := p.CreateQueryPanel(b.sm, pendingURL)
+
+	if settingsPanel != nil && queryPanel != nil {
+		return container.NewBorder(settingsPanel, nil, nil, nil, queryPanel)
+	} else if settingsPanel != nil {
+		return settingsPanel
+	} else if queryPanel != nil {
+		return queryPanel
+	}
+	return nil
+}
+
+func (b *PrefsPanelBuilder) createTitleFunc(p provider.ImageProvider) func() string {
+	return func() string {
+		title := p.Title()
+		if title == "" {
+			title = "Image Sources (" + p.Name() + ")"
+		}
+		activeCount := 0
+		for _, q := range b.plugin.cfg.GetQueries() {
+			if q.Provider == p.Name() && q.Active {
+				activeCount++
+			}
+		}
+		if activeCount > 0 {
+			if activeCount == 1 {
+				return fmt.Sprintf("%s (1 active)", title)
+			}
+			return fmt.Sprintf("%s (%d active)", title, activeCount)
+		}
+		return title
+	}
 }

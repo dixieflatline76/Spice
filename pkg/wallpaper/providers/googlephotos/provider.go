@@ -541,10 +541,6 @@ func (p *Provider) cleanupDownload(guid string) {
 }
 
 func (p *Provider) createImgQueryList(sm setting.SettingsManager) *widget.List {
-	// We need to fetch the latest state from config
-	// But List widget callback uses index.
-	// We handle deletion by refreshing the list widget itself.
-
 	pendingState := make(map[string]bool)
 	var queryList *widget.List
 
@@ -552,110 +548,126 @@ func (p *Provider) createImgQueryList(sm setting.SettingsManager) *widget.List {
 		func() int {
 			return len(p.cfg.GetGooglePhotosQueries())
 		},
-		func() fyne.CanvasObject {
-			// Row Layout:
-			// [Label: Description] (Expand) [Check: Active] [Button: Delete]
-			label := widget.NewLabel("Collection Description")
-			label.Truncation = fyne.TextTruncateEllipsis
-
-			activeCheck := widget.NewCheck("", nil)
-			delBtn := widget.NewButton("Delete", nil)
-
-			rightGroup := container.NewHBox(widget.NewLabel("Active"), activeCheck, delBtn)
-			return container.NewBorder(nil, nil, nil, rightGroup, label)
-		},
+		p.createCollectionItem,
 		func(i int, o fyne.CanvasObject) {
 			queries := p.cfg.GetGooglePhotosQueries()
 			if i >= len(queries) {
 				return
 			}
-			q := queries[i]
-			queryKey := q.ID
-
-			// Unpack UI
-			c := o.(*fyne.Container)
-			// Border layout Objects: [0] is Content (Entry)?
-			// Actually Fyne internals are tricky. Use recursion or type check.
-			var label *widget.Label
-			var activeCheck *widget.Check
-			var delBtn *widget.Button
-
-			// Inspect objects known structure
-			// Border: Center is Objects[0] (if only 1 center), etc.
-			// Better to iterate.
-			for _, obj := range c.Objects {
-				if l, ok := obj.(*widget.Label); ok {
-					label = l
-				}
-				if con, ok := obj.(*fyne.Container); ok {
-					// Right Group
-					for _, subObj := range con.Objects {
-						if chk, ok := subObj.(*widget.Check); ok {
-							activeCheck = chk
-						}
-						if btn, ok := subObj.(*widget.Button); ok {
-							delBtn = btn
-						}
-					}
-				}
-			}
-
-			if label != nil {
-				label.SetText(q.Description)
-			}
-
-			if activeCheck != nil && delBtn != nil {
-				// Bind Active Status
-				activeCheck.OnChanged = nil
-				if val, ok := pendingState[queryKey]; ok {
-					activeCheck.SetChecked(val)
-				} else {
-					activeCheck.SetChecked(q.Active)
-				}
-
-				activeCheck.OnChanged = func(b bool) {
-					pendingState[queryKey] = b
-					sm.SetSettingChangedCallback(queryKey, func() {
-						var err error
-						if b {
-							err = p.cfg.EnableGooglePhotosQuery(q.ID)
-						} else {
-							err = p.cfg.DisableGooglePhotosQuery(q.ID)
-						}
-						if err != nil {
-							log.Printf("Failed to update query status: %v", err)
-						}
-						delete(pendingState, queryKey)
-					})
-					sm.SetRefreshFlag(queryKey)
-					sm.GetCheckAndEnableApplyFunc()()
-				}
-
-				// Bind Delete
-				delBtn.OnTapped = func() {
-					dialog.ShowConfirm("Delete Collection", "Delete this collection and all local files?", func(b bool) {
-						if b {
-							// 1. Remove files
-							u, _ := url.Parse(q.URL) // URL stores URL scheme
-							if u != nil && u.Host != "" {
-								guid := u.Host
-								p.cleanupDownload(guid)
-							}
-
-							// 2. Remove Config
-							if err := p.cfg.RemoveGooglePhotosQuery(q.ID); err != nil {
-								dialog.ShowError(err, sm.GetSettingsWindow())
-								return
-							}
-							sm.SetRefreshFlag("queries")
-							queryList.Refresh()
-						}
-					}, sm.GetSettingsWindow())
-				}
-			}
+			p.updateCollectionItem(sm, queries[i], o, pendingState, queryList)
 		},
 	)
 	return queryList
+}
+
+func (p *Provider) createCollectionItem() fyne.CanvasObject {
+	label := widget.NewLabel("Collection Description")
+	label.Truncation = fyne.TextTruncateEllipsis
+
+	activeCheck := widget.NewCheck("", nil)
+	delBtn := widget.NewButton("Delete", nil)
+
+	rightGroup := container.NewHBox(widget.NewLabel("Active"), activeCheck, delBtn)
+	return container.NewBorder(nil, nil, nil, rightGroup, label)
+}
+
+func (p *Provider) updateCollectionItem(sm setting.SettingsManager, q wallpaper.ImageQuery, o fyne.CanvasObject, pendingState map[string]bool, list *widget.List) {
+	label, activeCheck, delBtn := p.unpackCollectionUI(o)
+
+	if label != nil {
+		label.SetText(q.Description)
+	}
+
+	if activeCheck != nil && delBtn != nil {
+		activeCheck.OnChanged = nil
+		if val, ok := pendingState[q.ID]; ok {
+			activeCheck.SetChecked(val)
+		} else {
+			activeCheck.SetChecked(q.Active)
+		}
+
+		activeCheck.OnChanged = func(b bool) {
+			p.handleQueryActivation(sm, q, b, pendingState)
+		}
+
+		delBtn.OnTapped = func() {
+			p.handleQueryDeletion(sm, q, pendingState, list)
+		}
+	}
+}
+
+func (p *Provider) unpackCollectionUI(o fyne.CanvasObject) (*widget.Label, *widget.Check, *widget.Button) {
+	var label *widget.Label
+	var activeCheck *widget.Check
+	var delBtn *widget.Button
+
+	c := o.(*fyne.Container)
+	for _, obj := range c.Objects {
+		if l, ok := obj.(*widget.Label); ok {
+			label = l
+		}
+		if con, ok := obj.(*fyne.Container); ok {
+			for _, subObj := range con.Objects {
+				if chk, ok := subObj.(*widget.Check); ok {
+					activeCheck = chk
+				}
+				if btn, ok := subObj.(*widget.Button); ok {
+					delBtn = btn
+				}
+			}
+		}
+	}
+	return label, activeCheck, delBtn
+}
+
+func (p *Provider) handleQueryActivation(sm setting.SettingsManager, q wallpaper.ImageQuery, active bool, pendingState map[string]bool) {
+	currentQ, found := p.cfg.GetQuery(q.ID)
+	currentActive := q.Active
+	if found {
+		currentActive = currentQ.Active
+	}
+
+	if active != currentActive {
+		pendingState[q.ID] = active
+		sm.SetSettingChangedCallback(q.ID, func() {
+			var err error
+			if active {
+				err = p.cfg.EnableGooglePhotosQuery(q.ID)
+			} else {
+				err = p.cfg.DisableGooglePhotosQuery(q.ID)
+			}
+			if err != nil {
+				log.Printf("Failed to update query status: %v", err)
+			}
+			delete(pendingState, q.ID)
+		})
+		sm.SetRefreshFlag(q.ID)
+	} else {
+		delete(pendingState, q.ID)
+		sm.RemoveSettingChangedCallback(q.ID)
+		sm.UnsetRefreshFlag(q.ID)
+	}
+	sm.GetCheckAndEnableApplyFunc()()
+}
+
+func (p *Provider) handleQueryDeletion(sm setting.SettingsManager, q wallpaper.ImageQuery, pendingState map[string]bool, list *widget.List) {
+	dialog.ShowConfirm("Delete Collection", "Delete this collection and all local files?", func(b bool) {
+		if !b {
+			return
+		}
+		u, _ := url.Parse(q.URL)
+		if u != nil && u.Host != "" {
+			p.cleanupDownload(u.Host)
+		}
+
+		if err := p.cfg.RemoveGooglePhotosQuery(q.ID); err != nil {
+			dialog.ShowError(err, sm.GetSettingsWindow())
+			return
+		}
+		delete(pendingState, q.ID)
+		sm.SetRefreshFlag("queries")
+		list.Refresh()
+	}, sm.GetSettingsWindow())
 }
 
 func (p *Provider) OpenBrowser(urlStr string) error {
