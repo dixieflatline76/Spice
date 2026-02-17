@@ -23,7 +23,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5 # Use latest setup-go action
         with:
-          go-version: 'stable' # Or pin to a specific version e.g., '1.22.x'
+          go-version: '1.25.x' # Pin to 1.25 to prevent fips140 issues
           cache: true
 
 
@@ -39,7 +39,10 @@ jobs:
         uses: golangci/golangci-lint-action@v6
         with:
           version: v1.64.6 # Pinned to a recent stable version
-          args: --timeout=10m --concurrency=2 ./...
+          args: --out-format=colored-line-number ./...
+        env:
+           GOGC: 10
+           CGO_ENABLED: 1
 
       - name: Run tests
         run: go test ./...
