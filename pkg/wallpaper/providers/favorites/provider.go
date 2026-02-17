@@ -434,11 +434,12 @@ func (p *Provider) FetchImages(ctx context.Context, apiURL string, page int) ([]
 	images := make([]provider.Image, len(respData))
 	for i, d := range respData {
 		images[i] = provider.Image{
-			ID:          d.ID,
-			Path:        d.URL, // Map local API 'url' to 'Path' (download)
-			Attribution: d.Attribution,
-			ViewURL:     d.ProductURL, // Map local API 'product_url' to 'ViewURL'
-			Provider:    ProviderName,
+			ID:            d.ID,
+			Path:          d.URL, // Map local API 'url' to 'Path' (download)
+			Attribution:   d.Attribution,
+			ViewURL:       d.ProductURL, // Map local API 'product_url' to 'ViewURL'
+			Provider:      ProviderName,
+			SourceQueryID: wallpaper.FavoritesQueryID,
 		}
 	}
 	return images, nil

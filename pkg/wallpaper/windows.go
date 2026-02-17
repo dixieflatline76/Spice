@@ -106,7 +106,7 @@ func (w *windowsOS) GetMonitors() ([]Monitor, error) {
 		// Note usage: We first need the MonitorID (String) to get the RECT.
 		// So we call GetMonitorDevicePathAt(i) -> String -> GetMonitorRECT(String)
 
-		var monitorIDPtr uintptr
+		var monitorIDPtr unsafe.Pointer
 		// Call GetMonitorDevicePathAt (Index 5)
 		// Signature: HRESULT GetMonitorDevicePathAt([in] UINT monitorIndex, [out] LPWSTR *monitorID)
 		hr, _, _ = syscall.SyscallN(
@@ -123,19 +123,19 @@ func (w *windowsOS) GetMonitors() ([]Monitor, error) {
 		hr, _, _ = syscall.SyscallN(
 			wallpaper.LpVtbl.GetMonitorRECT,
 			uintptr(unsafe.Pointer(wallpaper)),
-			monitorIDPtr,
+			uintptr(monitorIDPtr),
 			uintptr(unsafe.Pointer(&winRect)),
 		)
 
 		devicePath := ""
-		if monitorIDPtr != 0 {
+		if monitorIDPtr != nil {
 			// Converting uintptr from COM call to unsafe.Pointer for string conversion.
 			// This is safe here because we just received the pointer from Windows.
-			devicePath = windows.UTF16PtrToString((*uint16)(unsafe.Pointer(monitorIDPtr))) //nolint:unsafeptr
+			devicePath = windows.UTF16PtrToString((*uint16)(monitorIDPtr))
 		}
 
 		// Free the string returned by GetMonitorDevicePathAt
-		_, _, _ = procCoTaskMemFree.Call(monitorIDPtr)
+		_, _, _ = procCoTaskMemFree.Call(uintptr(monitorIDPtr))
 
 		if hr == 0 {
 			rect = image.Rect(int(winRect.Left), int(winRect.Top), int(winRect.Right), int(winRect.Bottom))

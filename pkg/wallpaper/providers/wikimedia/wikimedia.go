@@ -69,90 +69,106 @@ func (p *WikimediaProvider) ParseURL(input string) (string, error) {
 		return "", errors.New("input cannot be empty")
 	}
 
-	// 0. Idempotency & Prefix Normalization
-	// checks if the input is already a valid internal query string.
+	if normalized, ok := p.checkPrefixNormalization(input); ok {
+		return normalized, nil
+	}
+
+	// 1. Check for Category Match (explicit "Category:" prefix via regex)
+	if normalized, ok, err := p.handleCategoryInput(input); ok || err != nil {
+		return normalized, err
+	}
+
+	// 2. Check for Validation of commons.wikimedia.org domain if http is used
+	if strings.HasPrefix(input, "http") {
+		return p.handleHttpInput(input)
+	}
+
+	// 3. Fallback: Treat as Search Term
+	return "search:" + input, nil
+}
+
+func (p *WikimediaProvider) checkPrefixNormalization(input string) (string, bool) {
 	lowerInput := strings.ToLower(input)
 	if strings.HasPrefix(lowerInput, "search:") {
-		return "search:" + input[7:], nil
+		return "search:" + input[7:], true
 	}
 	if strings.HasPrefix(lowerInput, "category:") {
-		return "category:" + input[9:], nil
+		return "category:" + input[9:], true
 	}
 	// Treat "File:" explicitly as a direct file lookup
 	if strings.HasPrefix(lowerInput, "file:") {
 		// Fix idempotency: If input is already normalized (e.g. "file:File:Name"), return as is.
 		// "file:File:" becomes "file:file:" in lowerInput.
 		if strings.HasPrefix(lowerInput, "file:file:") {
-			return input, nil
+			return input, true
 		}
-		return "file:" + input, nil
+		return "file:" + input, true
 	}
+	return "", false
+}
 
-	// 1. Check for Category Match (explicit "Category:" prefix)
+func (p *WikimediaProvider) handleCategoryInput(input string) (string, bool, error) {
 	catRegex := regexp.MustCompile(WikimediaCategoryRegexp)
-	if catRegex.MatchString(input) {
-		// It's a category. Extract proper title if it's a full URL.
-		if strings.HasPrefix(input, "http") {
-			// e.g. https://commons.wikimedia.org/wiki/Category:Nature
-			u, err := url.Parse(input)
-			if err != nil {
-				return "", err
-			}
-			// Path is usually /wiki/Category:Name
-			parts := strings.Split(u.Path, "/")
-			if len(parts) > 0 {
-				input = parts[len(parts)-1] // Category:Nature
-			}
-		}
-		// Return internal scheme for category
-		// Handle case-insensitive removal of "Category:" or "Category%3A"
-		lowerInput := strings.ToLower(input)
-		if strings.HasPrefix(lowerInput, "category:") {
-			return "category:" + input[9:], nil
-		}
-		if strings.HasPrefix(lowerInput, "category%3a") {
-			return "category:" + input[11:], nil
-		}
-		// Should not happen if regex matched but check just in case
-		return "category:" + strings.TrimPrefix(input, "Category:"), nil
+	if !catRegex.MatchString(input) {
+		return "", false, nil
 	}
 
-	// 2. Check for Validation of commons.wikimedia.org domain if http is used
-	// 2. Check for Validation of commons.wikimedia.org domain if http is used
+	// It's a category. Extract proper title if it's a full URL.
 	if strings.HasPrefix(input, "http") {
-		domainRegex := regexp.MustCompile(WikimediaDomainRegexp)
-		if !domainRegex.MatchString(input) {
-			return "", errors.New("invalid Wikimedia URL: must be commons.wikimedia.org")
-		}
-
-		// Parse standard Search URLs
-		// e.g. https://commons.wikimedia.org/w/index.php?search=dachshund&title=Special%3AMediaSearch&type=image
+		// e.g. https://commons.wikimedia.org/wiki/Category:Nature
 		u, err := url.Parse(input)
 		if err != nil {
-			return "", err
+			return "", false, err
 		}
-
-		if u.Path == "/w/index.php" || strings.Contains(u.Path, "Special:MediaSearch") {
-			searchParam := u.Query().Get("search")
-			if searchParam != "" {
-				return "search:" + searchParam, nil
-			}
+		// Path is usually /wiki/Category:Name
+		parts := strings.Split(u.Path, "/")
+		if len(parts) > 0 {
+			input = parts[len(parts)-1] // Category:Nature
 		}
+	}
+	// Return internal scheme for category
+	// Handle case-insensitive removal of "Category:" or "Category%3A"
+	lowerInput := strings.ToLower(input)
+	if strings.HasPrefix(lowerInput, "category:") {
+		return "category:" + input[9:], true, nil
+	}
+	if strings.HasPrefix(lowerInput, "category%3a") {
+		return "category:" + input[11:], true, nil
+	}
+	// Should not happen if regex matched but check just in case
+	return "category:" + strings.TrimPrefix(input, "Category:"), true, nil
+}
 
-		// If the user pasted a direct file URL like "https://commons.wikimedia.org/wiki/File:Foo.jpg"
-		if strings.Contains(u.Path, "/wiki/File:") {
-			parts := strings.Split(u.Path, "/wiki/")
-			if len(parts) > 1 {
-				return "file:" + parts[1], nil
-			}
-		}
-
-		// Fallback for unhandled full URLs
-		return "", errors.New("only 'Category:', 'File:' or component Search URLs are currently supported directly")
+func (p *WikimediaProvider) handleHttpInput(input string) (string, error) {
+	domainRegex := regexp.MustCompile(WikimediaDomainRegexp)
+	if !domainRegex.MatchString(input) {
+		return "", errors.New("invalid Wikimedia URL: must be commons.wikimedia.org")
 	}
 
-	// 3. Fallback: Treat as Search Term
-	return "search:" + input, nil
+	// Parse standard Search URLs
+	// e.g. https://commons.wikimedia.org/w/index.php?search=dachshund&title=Special%3AMediaSearch&type=image
+	u, err := url.Parse(input)
+	if err != nil {
+		return "", err
+	}
+
+	if u.Path == "/w/index.php" || strings.Contains(u.Path, "Special:MediaSearch") {
+		searchParam := u.Query().Get("search")
+		if searchParam != "" {
+			return "search:" + searchParam, nil
+		}
+	}
+
+	// If the user pasted a direct file URL like "https://commons.wikimedia.org/wiki/File:Foo.jpg"
+	if strings.Contains(u.Path, "/wiki/File:") {
+		parts := strings.Split(u.Path, "/wiki/")
+		if len(parts) > 1 {
+			return "file:" + parts[1], nil
+		}
+	}
+
+	// Fallback for unhandled full URLs
+	return "", errors.New("only 'Category:', 'File:' or component Search URLs are currently supported directly")
 }
 
 type wikimediaResponse struct {

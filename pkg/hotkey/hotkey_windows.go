@@ -7,26 +7,11 @@ import (
 	"time"
 
 	"github.com/dixieflatline76/Spice/util/log"
-	"golang.design/x/hotkey"
 )
 
 var (
 	user32               = syscall.NewLazyDLL("user32.dll")
 	procGetAsyncKeyState = user32.NewProc("GetAsyncKeyState")
-)
-
-const (
-	modCtrl  = hotkey.ModCtrl
-	modAlt   = hotkey.ModAlt
-	modShift = hotkey.ModShift
-
-	keyRight = hotkey.KeyRight
-	keyLeft  = hotkey.KeyLeft
-	keyUp    = hotkey.KeyUp
-	keyDown  = hotkey.KeyDown
-	keyP     = hotkey.KeyP
-	keyO     = hotkey.KeyO
-	keyD     = hotkey.KeyD
 )
 
 // GetMonitorIDFromKey checks if any number key 1-9 is currently pressed.
