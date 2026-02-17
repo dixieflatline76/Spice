@@ -56,10 +56,11 @@ These actions affect all displays simultaneously.
 
 | Action | macOS Shortcut | Windows Shortcut |
 | :--- | :--- | :--- |
-| **Next (All Displays)** | `Cmd + Opt + →` | `Ctrl + Alt + →` |
-| **Previous (All Displays)** | `Cmd + Opt + ←` | `Ctrl + Alt + ←` |
-| **Pause / Resume** | `Cmd + Opt + P` | `Ctrl + Alt + P` |
-| **All Settings** | `Cmd + Opt + O` | `Ctrl + Alt + O` |
+| **Next (All Displays)** | `Ctrl + Opt + →` | `Ctrl + Alt + →` |
+| **Previous (All Displays)** | `Ctrl + Opt + ←` | `Ctrl + Alt + ←` |
+| **Pause / Resume** | `Ctrl + Opt + P` | `Ctrl + Alt + P` |
+| **All Settings** | `Ctrl + Opt + O` | `Ctrl + Alt + O` |
+| **Global Sync** | `Ctrl + Opt + D` | `Ctrl + Alt + D` |
 
 > [!IMPORTANT]
 > **macOS Permissions:** Display-specific (chorded) hotkeys require **Accessibility** or **Input Monitoring** permissions to detect the number keys correctly. Go to *System Settings > Privacy & Security* to enable them for Spice.

@@ -14,8 +14,8 @@ import (
 
 // Constants shared by Windows and Darwin (and potentially others in !linux)
 const (
-	modCtrl  = hotkey.ModCtrl
-	modAlt   = hotkey.ModAlt
+	modCtrl = hotkey.ModCtrl
+
 	modShift = hotkey.ModShift
 
 	keyRight = hotkey.KeyRight

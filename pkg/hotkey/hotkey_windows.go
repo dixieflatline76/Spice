@@ -7,7 +7,10 @@ import (
 	"time"
 
 	"github.com/dixieflatline76/Spice/util/log"
+	"golang.design/x/hotkey"
 )
+
+const modAlt = hotkey.ModAlt
 
 var (
 	user32               = syscall.NewLazyDLL("user32.dll")

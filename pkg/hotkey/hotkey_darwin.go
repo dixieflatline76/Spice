@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/dixieflatline76/Spice/util/log"
+	"golang.design/x/hotkey"
 )
 
 /*
@@ -22,6 +23,8 @@ int checkAccessibilityNative() {
 }
 */
 import "C"
+
+const modAlt = hotkey.ModOption
 
 func HasAccessibility() bool {
 	return C.checkAccessibilityNative() != 0
