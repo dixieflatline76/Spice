@@ -13,7 +13,6 @@ import (
 	"github.com/disintegration/imaging"
 	"github.com/dixieflatline76/Spice/util/log"
 	pigo "github.com/esimov/pigo/core"
-	"github.com/muesli/smartcrop"
 )
 
 // SmartImageProcessor is an image processor that uses smart cropping.
@@ -201,8 +200,6 @@ func (c *SmartImageProcessor) FitImage(ctx context.Context, img image.Image, tar
 		return img, nil
 	}
 
-	// Previously we called c.os.GetDesktopDimension() here.
-	// Now we rely on the caller to provide dimensions.
 	systemWidth := targetWidth
 	systemHeight := targetHeight
 
@@ -212,22 +209,22 @@ func (c *SmartImageProcessor) FitImage(ctx context.Context, img image.Image, tar
 
 	imageWidth := img.Bounds().Dx()
 	imageHeight := img.Bounds().Dy()
-	systemAspect := float64(systemWidth) / float64(systemHeight)
-	imageAspect := float64(imageWidth) / float64(imageHeight)
-	aspectDiff := math.Abs(systemAspect - imageAspect)
 
-	r := &resizer{resampler: c.resampler}
-
-	// Pre-check basic compatibility (Resolution mainly)
+	// Pre-check basic compatibility
 	if err := c.CheckCompatibility(imageWidth, imageHeight, targetWidth, targetHeight); err != nil {
 		log.Debugf("FitImage: %v", err)
 		return nil, err
 	}
 
-	// Perfect fits
+	// Perfect fits or exact aspect checks
+	systemAspect := float64(systemWidth) / float64(systemHeight)
+	imageAspect := float64(imageWidth) / float64(imageHeight)
+
 	if imageWidth == systemWidth && imageHeight == systemHeight {
 		return img, nil
 	}
+
+	r := &resizer{resampler: c.resampler}
 	if imageAspect == systemAspect {
 		resizedImg := r.resizeWithContext(ctx, img, uint(systemWidth), uint(systemHeight)) //nolint:gosec
 		if resizedImg == nil {
@@ -243,157 +240,84 @@ func (c *SmartImageProcessor) FitImage(ctx context.Context, img image.Image, tar
 		c.lastStats.Processing = time.Since(start)
 	}()
 
-	// 1. Face Detection Strategy
-	// We run this early because Quality Mode relies on it for the "Rescue" decision.
-	var faceBox image.Rectangle
-	faceFound := false
-	var faceQ float32
-
-	if (c.config.GetFaceCropEnabled() || c.config.GetFaceBoostEnabled()) && c.pigo != nil {
-		// Variable to hold the image used for analysis
-		// (We use original img here, unlike prev code which shadowed it? prev code used imgForAnalysis = img)
-		fb, err := c.findBestFace(img)
-		if err == nil {
-			faceFound = true
-			faceBox = fb
-			faceQ = c.lastStats.Q
-			c.lastStats.Found = true
-			c.lastStats.Rect = faceBox
-			log.Debugf("Face Logic: Found face (Q:%.1f)", faceQ)
-		} else {
-			log.Debugf("Face Logic: No face found.")
-		}
-	} else if c.pigo == nil {
-		log.Debugf("Face Logic: Skipped (Pigo model not loaded or disabled).")
+	// 1. Analysis Phase
+	faceFound, faceBox, faceQ, err := c.analyzeFace(img)
+	if err != nil {
+		log.Debugf("Face Logic: %v", err) // Log error but proceed (not fatal)
 	}
 
-	// 2. Logic Branching: Quality vs Flexibility
-
-	// MODE: QUALITY (SmartFitNormal)
-	if c.config.GetSmartFitMode() == SmartFitNormal {
-		// Strict Aspect Check (0.9)
-		if aspectDiff > c.config.Tuning.AspectThreshold {
-			// RETRY: Check for "Rescue" (Strong Face)
-			if faceFound && faceQ > c.config.Tuning.FaceRescueQThreshold {
-				log.Debugf("SmartFit [Quality]: EXCEPTION! Image preserved despite Aspect Diff %.2f (> %.2f) due to Strong Face (Q=%.1f)", aspectDiff, c.config.Tuning.AspectThreshold, faceQ)
-				// Proceed to use the face!
-			} else {
-				// REJECT
-				return nil, fmt.Errorf("quality mode rejected: aspect diff %.2f > %.2f and no strong face (Q>%.1f) to rescue", aspectDiff, c.config.Tuning.AspectThreshold, c.config.Tuning.FaceRescueQThreshold)
-			}
-		} else {
-			log.Debugf("SmartFit [Quality]: Accepted (Diff %.2f <= %.2f)", aspectDiff, c.config.Tuning.AspectThreshold)
-		}
-	}
-
-	// 1.5. Calculate Image Energy (required for both Fallback and Holistic Safety)
+	// Calculate Energy (needed for Flexible mode fallbacks and feet guard)
 	energy, energyErr := c.calculateImageEnergy(ctx, img)
 
-	// MODE: FLEXIBILITY (SmartFitAggressive)
+	// 2. Gate Checks
+	if err := c.checkQualityGate(imageAspect, systemAspect, faceFound, faceQ); err != nil {
+		return nil, err
+	}
+
+	// 3. Strategy Selection
+	strategy := c.selectStrategy(img, faceFound, faceBox, energy, energyErr)
+
+	// 4. Execution
+	return strategy.Apply(ctx, img, systemWidth, systemHeight, c)
+}
+
+func (c *SmartImageProcessor) analyzeFace(img image.Image) (bool, image.Rectangle, float32, error) {
+	if (!c.config.GetFaceCropEnabled() && !c.config.GetFaceBoostEnabled()) || c.pigo == nil {
+		return false, image.Rectangle{}, 0, nil
+	}
+
+	fb, err := c.findBestFace(img)
+	if err != nil {
+		return false, image.Rectangle{}, 0, err
+	}
+
+	c.lastStats.Found = true
+	c.lastStats.Rect = fb
+
+	log.Debugf("Face Logic: Found face (Q:%.1f)", c.lastStats.Q)
+	return true, fb, c.lastStats.Q, nil
+}
+
+func (c *SmartImageProcessor) checkQualityGate(imgAspect, sysAspect float64, faceFound bool, faceQ float32) error {
+	if c.config.GetSmartFitMode() != SmartFitNormal {
+		return nil
+	}
+
+	aspectDiff := math.Abs(sysAspect - imgAspect)
+	if aspectDiff <= c.config.Tuning.AspectThreshold {
+		log.Debugf("SmartFit [Quality]: Accepted (Diff %.2f <= %.2f)", aspectDiff, c.config.Tuning.AspectThreshold)
+		return nil
+	}
+
+	// RETRY: Check for "Rescue" (Strong Face)
+	if faceFound && faceQ > c.config.Tuning.FaceRescueQThreshold {
+		log.Debugf("SmartFit [Quality]: EXCEPTION! Image preserved despite Aspect Diff %.2f (> %.2f) due to Strong Face (Q=%.1f)", aspectDiff, c.config.Tuning.AspectThreshold, faceQ)
+		return nil
+	}
+
+	return fmt.Errorf("quality mode rejected: aspect diff %.2f > %.2f and no strong face (Q>%.1f) to rescue", aspectDiff, c.config.Tuning.AspectThreshold, c.config.Tuning.FaceRescueQThreshold)
+}
+
+func (c *SmartImageProcessor) selectStrategy(img image.Image, faceFound bool, faceBox image.Rectangle, energy float64, energyErr error) CropStrategy {
+	// Flexibility Mode Low Energy Fallback
 	if c.config.GetSmartFitMode() == SmartFitAggressive {
-		// Validation was already done in CheckCompatibility (Dynamic Threshold).
-		// Here we handle the "Dual Safety" Fallback.
-		if !faceFound && energyErr == nil {
-			if energy < c.config.Tuning.MinEnergyThreshold {
-				log.Debugf("SmartFit [Flexibility]: Energy %.4f too low (Flat Image). Fallback to Center.", energy)
-				center := image.Point{X: img.Bounds().Dx() / 2, Y: img.Bounds().Dy() / 2}
-				return c.smartPanAndResize(ctx, img, center, systemWidth, systemHeight)
-			}
-			log.Debugf("SmartFit [Flexibility]: Energy %.4f (Pass). Proceeding to SmartCrop.", energy)
+		if !faceFound && energyErr == nil && energy < c.config.Tuning.MinEnergyThreshold {
+			log.Debugf("SmartFit [Flexibility]: Energy %.4f too low (Flat Image). Fallback to Center.", energy)
+			center := image.Point{X: img.Bounds().Dx() / 2, Y: img.Bounds().Dy() / 2}
+			return &SmartPanStrategy{Center: center}
 		}
 	}
 
-	// 3. Execution (Face or Smart)
-
-	// If Face Found (and we are still here), use it.
 	if faceFound {
-		center := image.Point{X: faceBox.Min.X + faceBox.Dx()/2, Y: faceBox.Min.Y + faceBox.Dy()/2}
-
-		// Priority: Face Crop (Hard)
 		if c.config.GetFaceCropEnabled() {
-			cropRect := c.cropAroundFace(img.Bounds(), faceBox, systemWidth, systemHeight)
-			log.Debugf("Face Logic: Hard Crop Clean (Rect: %v)", cropRect)
-			type SubImager interface {
-				SubImage(r image.Rectangle) image.Image
-			}
-			img = img.(SubImager).SubImage(cropRect)
-			resizedImg := r.resizeWithContext(ctx, img, uint(systemWidth), uint(systemHeight)) //nolint:gosec
-			if resizedImg == nil {
-				return nil, ctx.Err()
-			}
-			return resizedImg, nil
+			return &FaceCropStrategy{FaceBox: faceBox}
 		}
-
-		// Priority: Face Boost / Smart Pan
-		return c.smartPanAndResize(ctx, img, center, systemWidth, systemHeight)
+		// Face Boost
+		center := image.Point{X: faceBox.Min.X + faceBox.Dx()/2, Y: faceBox.Min.Y + faceBox.Dy()/2}
+		return &SmartPanStrategy{Center: center}
 	}
 
-	// 4. Fallback to SmartCrop (Entropy)
-	// If we are here:
-	// - Quality Mode: Diff was <= 0.9 (Safe-ish) OR Rescued (but FaceCrop disabled? Unlikely logic path if Face found but FaceCrop off... wait.
-	//   If Quality Mode + Rescue (FaceFound) + FaceCrop OFF -> We fall here?
-	//   CHECK ABOVE: "If Face Found... use it".
-	//   So if we were rescued, FaceFound is true, so we used `smartPanAndResize` with face center. Correct.
-
-	// - Flexibility Mode: Diff was <= 0.4 (Very Safe).
-	log.Debugf("SmartFit: Using Entropy Crop.")
-	analyzer := smartcrop.NewAnalyzer(r)
-
-	type cropResult struct {
-		crop image.Rectangle
-		err  error
-	}
-	resultChan := make(chan cropResult)
-
-	go func() {
-		topCrop, err := analyzer.FindBestCrop(img, systemWidth, systemHeight)
-		resultChan <- cropResult{crop: topCrop, err: err}
-	}()
-
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case result := <-resultChan:
-		if result.err != nil {
-			return nil, fmt.Errorf("finding best crop: %w", result.err)
-		}
-
-		// 2. Feet Guard (The "Shoe" Fix for Flexibility Mode)
-		if c.config.GetSmartFitMode() == SmartFitAggressive && !faceFound {
-			crop := result.crop
-			imgHeight := img.Bounds().Dy()
-
-			// Legacy Guard: If top edge of crop is below half-way
-			if float64(crop.Min.Y) > (float64(imgHeight) * c.config.Tuning.FeetGuardRatio) {
-				log.Debugf("SmartFit [Flexibility]: Feet Guard Triggered (Legacy Ratio). Fallback to Center.")
-				center := image.Point{X: img.Bounds().Dx() / 2, Y: img.Bounds().Dy() / 2}
-				return c.smartPanAndResize(ctx, img, center, systemWidth, systemHeight)
-			}
-
-			// Slack Guard (v1.6.2.2): Holistic Energy-Aware Check.
-			// We relax the threshold for high-energy images (artistic subjects)
-			// and stay strict for medium/low energy images (likely boring ground).
-			slackY := imgHeight - crop.Dy()
-			if slackY > 0 {
-				topMargin := crop.Min.Y
-
-				threshold := c.config.Tuning.FeetGuardSlackThreshold // 0.8
-				if energy > c.config.Tuning.FeetGuardHighEnergyThreshold {
-					threshold = c.config.Tuning.FeetGuardSlackRelaxed // 0.95
-					log.Debugf("SmartFit [Flexibility]: Relaxing Slack Guard for High Energy (%.4f)", energy)
-				}
-
-				if float64(topMargin) > (float64(slackY) * threshold) {
-					log.Debugf("SmartFit [Flexibility]: Feet Guard Triggered (Slack-Aware). Fallback to Center.")
-					center := image.Point{X: img.Bounds().Dx() / 2, Y: img.Bounds().Dy() / 2}
-					return c.smartPanAndResize(ctx, img, center, systemWidth, systemHeight)
-				}
-			}
-		}
-
-		smartCenter := result.crop.Min.Add(result.crop.Size().Div(2))
-		return c.smartPanAndResize(ctx, img, smartCenter, systemWidth, systemHeight)
-	}
+	return &EntropyCropStrategy{FaceFound: faceFound, Energy: energy}
 }
 
 // cropAroundFace calculates the crop rectangle centered on the face.

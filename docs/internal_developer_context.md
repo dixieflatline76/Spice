@@ -15,6 +15,7 @@ Spice is designed to remain responsive (60fps UI) even while downloading 50MB 8K
         *   `RLock()`: Used by the UI (Reader) for instant "Next/Prev" actions.
         *   `Lock()`: Used **ONLY** by the Pipeline's StateManager.
     *   **Persistence**: Uses a "Debounced Save" mechanism. Calling `scheduleSaveLocked()` starts a timer (2s). If called again, the timer resets. This batches 100+ rapid updates (bulk imports) into a single JSON write.
+    *   **Synchronization Model**: The `Sync` method uses a **Policy Pattern** via `ImageSyncAction` (Keep, Delete, Invalidate). This ensures deterministic state transitions for every image based on active queries, avoid sets, and file availability, replacing complex ad-hoc logic.
 
 *   **The Pipeline (`pkg/wallpaper/pipeline.go`)**: The workhorse.
     *   **Worker Pool**: N goroutines (default: NumCPU) that fetch and process images. They communicate results via `resultChan`.
@@ -135,18 +136,17 @@ Use the helpers in `pkg/wallpaper/ui_add_query.go` for consistency:
 
 Spice's imaging engine (`pkg/wallpaper/smart_image_processor.go`) is more than just a cropper. It implements a decision tree to balance "Artistic Integrity" vs "Screen Filling".
 
-### 6.1 The Logic Tree
-1.  **Strict Resolution Floor**: Reject anything smaller than desktop dimensions.
-2.  **Face Detection (Pigo)**:
-    *   **Clustering**: Uses IoU (Intersection over Union) to merge overlapping detections.
-    *   **Edge Safety**: Ignores low-confidence faces in the bottom 30% of the image (often noise/patterns).
-    *   **Rescue**: In "Quality Mode", an image that fails the aspect ratio check (too wide/tall) can be *Rescued* if a high-confidence face is found.
-3.  **Mode Switching**:
-    *   **Quality Mode**: Enforces `AspectThreshold` (0.9). Rejects unless Rescued.
-    *   **Flexibility Mode**: Calculates a `DynamicThreshold` based on resolution surplus. If you have 8K pixels for a 1080p screen, we allow more aggressive cropping.
-4.  **The "Feet Guard" (Holistic Safety)**:
+### 6.1 The Strategy Pattern (Refactored)
+The decision tree is now implemented via the **Strategy Pattern** (`CropStrategy` interface).
+
+1.  **Analysis Phase**: The processor first calculates **Entropy** (Energy) and scans for **Faces**.
+2.  **Strategy Selection**:
+    *   **`FaceCropStrategy`**: Selected if a face is found and Face Crop enabled.
+    *   **`SmartPanStrategy`**: Selected for "Face Boost" or as a fallback for low-energy images in Flexibility Mode.
+    *   **`EntropyCropStrategy`**: The default smart cropper. Contains the **Feet Guard**.
+3.  **The "Feet Guard"**:
     *   If `smartcrop` suggests a crop starting very low (cutting heads?), we force a Center Crop.
-    *   **Energy-Aware**: This threshold relaxes for "High Energy" (busy/detailed) images but stays strict for "Low Energy" (sky/ground) images.
+    *   **Energy-Aware**: This threshold relaxes for "High Energy" (busy/detailed) and stays strict for "Low Energy" (sky/ground).
 
 ### 6.2 Externalized Tuning (`pkg/wallpaper/tuning.go`)
 All magic numbers are extracted into `TuningConfig`.
