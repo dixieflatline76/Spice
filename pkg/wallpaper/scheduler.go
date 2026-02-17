@@ -11,6 +11,12 @@ import (
 
 // StartNightlyRefresh runs a goroutine that periodically checks if a nightly refresh is due.
 func (wp *Plugin) StartNightlyRefresh() {
+	wp.downloadMutex.Lock()
+	if wp.stopNightlyRefresh == nil {
+		wp.stopNightlyRefresh = make(chan struct{})
+	}
+	wp.downloadMutex.Unlock()
+
 	log.Print("Starting nightly refresh checker...")
 
 	ticker := time.NewTicker(5 * time.Minute)

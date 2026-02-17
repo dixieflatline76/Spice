@@ -243,7 +243,7 @@ func (b *PrefsPanelBuilder) addNightlyRefreshSetting(c *fyne.Container) {
 		b.plugin.cfg.SetNightlyRefresh(val)
 		config.InitialValue = val
 		if val {
-			b.plugin.StartNightlyRefresh()
+			go b.plugin.StartNightlyRefresh()
 		} else {
 			b.plugin.StopNightlyRefresh()
 		}

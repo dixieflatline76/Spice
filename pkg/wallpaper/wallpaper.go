@@ -842,7 +842,7 @@ func (wp *Plugin) onQueryRemoved(queryID string) {
 }
 
 func (wp *Plugin) onQueryDisabled(queryID string) {
-	log.Printf("Plugin: Query %s disabled. Clearing from cache/rotation...", queryID)
+	log.Printf("[Plugin] Query %s disabled. Clearing from cache/rotation...", queryID)
 	wp.store.RemoveByQueryID(queryID)
 	wp.downloadMutex.Lock()
 	delete(wp.queryPages, queryID)

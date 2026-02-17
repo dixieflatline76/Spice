@@ -103,13 +103,28 @@ func (fm *FileManager) DerivativeExists(id string, ext string, derivativeDir str
 // DeepDelete removes the Master image and ALL its derivatives.
 // It searches for files with the given ID in all known directories.
 func (fm *FileManager) DeepDelete(id string) error {
+	log.Printf("[DeepDelete] Requested for ID: %s", id)
 	filesToDelete := []string{}
 
 	// Helper to find file by ID in a dir
 	findFile := func(dir string) string {
-		matches, _ := filepath.Glob(filepath.Join(dir, id+".*"))
-		if len(matches) > 0 {
-			return matches[0] // Assume one file per ID per folder
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			log.Printf("DeepDelete: Failed to read dir %s: %v", dir, err)
+			return ""
+		}
+		for _, e := range entries {
+			if e.IsDir() {
+				continue
+			}
+			name := e.Name()
+			ext := filepath.Ext(name)
+			// Match ID (case-insensitive on Windows, though IDs should be exact)
+			// We found that Glob fails on special chars like [], so we use exact string check
+			fileID := strings.TrimSuffix(name, ext)
+			if strings.EqualFold(fileID, id) {
+				return filepath.Join(dir, name)
+			}
 		}
 		return ""
 	}
@@ -152,12 +167,8 @@ func (fm *FileManager) DeepDelete(id string) error {
 			if os.IsNotExist(err) {
 				continue
 			}
-			// Suppress "used by another process" errors (benign race with active download/usage)
-			if strings.Contains(err.Error(), "used by another process") || strings.Contains(err.Error(), "access is denied") {
-				log.Debugf("DeepDelete: Skipped locked file %s: %v", f, err)
-			} else {
-				log.Printf("DeepDelete: Failed to delete %s: %v", f, err)
-			}
+			// Log ALL other errors to prove why it failed
+			log.Printf("DeepDelete: Failed to delete %s: %v", f, err)
 		} else {
 			log.Debugf("DeepDelete: Successfully deleted %s", f)
 		}

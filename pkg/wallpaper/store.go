@@ -306,6 +306,16 @@ func (s *ImageStore) Wipe() {
 	}
 }
 
+func (s *ImageStore) GetKnownIDs() map[string]bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	known := make(map[string]bool, len(s.idSet))
+	for k, v := range s.idSet {
+		known[k] = v
+	}
+	return known
+}
+
 // RemoveByQueryID removes all images associated with a specific provider query ID.
 func (s *ImageStore) RemoveByQueryID(queryID string) {
 	s.mu.Lock()
@@ -316,6 +326,7 @@ func (s *ImageStore) RemoveByQueryID(queryID string) {
 		if img.SourceQueryID == queryID {
 			toDelete = append(toDelete, img)
 			delete(s.idSet, img.ID)
+			log.Printf("[RemoveByQueryID] Matched %s (Source: %s). Queueing for deletion.", img.ID, img.SourceQueryID)
 			if img.FilePath != "" {
 				delete(s.pathSet, img.FilePath)
 			}
@@ -541,18 +552,7 @@ func (s *ImageStore) Sync(limit int, targetFlags map[string]bool, activeQueryIDs
 			idsToInvalidate = append(idsToInvalidate, img.ID)
 		} else {
 			// ActionDelete
-			if !img.IsFavorited {
-				idsToDelete = append(idsToDelete, img.ID)
-			} else {
-				// Fallback: Favorites are never deleted by Sync, only Invalidated
-				img.DerivativePaths = make(map[string]string)
-				img.ProcessingFlags = make(map[string]bool)
-				for k, v := range targetFlags {
-					img.ProcessingFlags[k] = v
-				}
-				finalImages = append(finalImages, img)
-				idsToInvalidate = append(idsToInvalidate, img.ID)
-			}
+			idsToDelete = append(idsToDelete, img.ID)
 			delete(s.idSet, img.ID)
 		}
 	}
@@ -563,9 +563,7 @@ func (s *ImageStore) Sync(limit int, targetFlags map[string]bool, activeQueryIDs
 		toPrune := finalImages[:excess]
 		finalImages = finalImages[excess:]
 		for _, img := range toPrune {
-			if !img.IsFavorited {
-				idsToDelete = append(idsToDelete, img.ID)
-			}
+			idsToDelete = append(idsToDelete, img.ID)
 			delete(s.idSet, img.ID)
 		}
 	}
@@ -577,6 +575,10 @@ func (s *ImageStore) Sync(limit int, targetFlags map[string]bool, activeQueryIDs
 	s.mu.Unlock()
 
 	// 5. Async Cleanup
+	log.Printf("[Sync] Completed. Final Count: %d. Deleting: %d. Invalidating: %d.", len(finalImages), len(idsToDelete), len(idsToInvalidate))
+	if len(idsToDelete) > 0 {
+		log.Printf("[Sync] Deleting IDs: %v", idsToDelete)
+	}
 	s.performAsyncCleanup(idsToDelete, idsToInvalidate)
 }
 
@@ -587,6 +589,7 @@ func (s *ImageStore) determineSyncAction(img provider.Image, activeQueryIDs map[
 		isActive := img.SourceQueryID != "" && activeQueryIDs[img.SourceQueryID]
 		isOrphan := img.SourceQueryID == ""
 		if isOrphan || !isActive {
+			log.Printf("[Sync] Marking %s for deletion. Orphan: %v, ActiveSource: %v (SourceID: '%s')", img.ID, isOrphan, isActive, img.SourceQueryID)
 			return ImageActionDelete
 		}
 	}
@@ -616,6 +619,14 @@ func (s *ImageStore) masterFileExists(id string) bool {
 
 	// Check JPG
 	masterPath, err := s.fm.GetMasterPath(id, ".jpg")
+	if err == nil {
+		if _, err := statFunc(masterPath); err == nil {
+			return true
+		}
+	}
+
+	// Check JPEG (Critical for Pexels which uses .jpeg)
+	masterPath, err = s.fm.GetMasterPath(id, ".jpeg")
 	if err == nil {
 		if _, err := statFunc(masterPath); err == nil {
 			return true
@@ -684,15 +695,4 @@ func (s *ImageStore) performAsyncCleanup(idsToDelete, idsToInvalidate []string) 
 			}
 		}(idsToInvalidate)
 	}
-}
-
-// GetKnownIDs returns a map of all image IDs currently in the store.
-func (s *ImageStore) GetKnownIDs() map[string]bool {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	res := make(map[string]bool)
-	for k := range s.idSet {
-		res[k] = true
-	}
-	return res
 }

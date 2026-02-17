@@ -56,13 +56,16 @@ func (wp *Plugin) FetchNewImages() {
 					continue
 				}
 
-				log.Printf("Provider %s returned %d images. Submitting to pipeline.", q.Provider, len(images))
+				log.Printf("[Fetch] Provider %s returned %d images. Submitting to pipeline.", q.Provider, len(images))
 
 				// Track source
 				activeSources[p.Name()] = true
 				queuedForThisQuery := 0
 
 				for _, img := range images {
+					// Critical Fix: Tag image with its source query ID so Sync knows it's active.
+					img.SourceQueryID = q.ID
+
 					if wp.cfg.InAvoidSet(img.ID) {
 						log.Debugf("Skipping blocked image: %s", img.ID)
 						continue
@@ -110,12 +113,8 @@ func (wp *Plugin) FetchNewImages() {
 // RefreshImagesAndPulse triggers a fetch and then updates the wallpaper.
 func (wp *Plugin) RefreshImagesAndPulse() {
 	go func() {
-		// Master Reset: Reset all query pages to 1
-		wp.downloadMutex.Lock()
-		for id := range wp.queryPages {
-			wp.queryPages[id].Set(1)
-		}
-		wp.downloadMutex.Unlock()
+		// Optimization: Removed Master Reset (Page 1) to prevent cache churn on Settings Apply.
+		// Pages are now persistent per session or untill Nightly Refresh.
 
 		// Robust Sync: Reconcile store and invalidate stale derivatives
 		wp.syncStoreWithConfig()
