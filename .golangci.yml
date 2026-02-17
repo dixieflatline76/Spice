@@ -12,6 +12,7 @@ linters:
     - govet
     - ineffassign
     - typecheck
+    - gosec
 
 linters-settings:
   staticcheck:
