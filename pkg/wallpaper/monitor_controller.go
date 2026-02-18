@@ -19,6 +19,7 @@ const (
 	CmdDelete
 	CmdBlock
 	CmdFavorite
+	CmdUpdateShuffle
 )
 
 // StoreInterface defines the subset of ImageStore methods needed by the controller.
@@ -140,6 +141,8 @@ func (mc *MonitorController) handleCommand(cmd Command) {
 		mc.deleteCurrent()
 	case CmdFavorite:
 		mc.toggleFavorite()
+	case CmdUpdateShuffle:
+		mc.updateShuffle()
 	}
 }
 
@@ -215,6 +218,21 @@ func (mc *MonitorController) rebuildShuffle(ids []string) {
 	mc.State.RandomPos = 0
 }
 
+func (mc *MonitorController) updateShuffle() {
+	log.Debugf("[Monitor %d] Updating shuffle state...", mc.ID)
+	width, height := mc.Monitor.Rect.Dx(), mc.Monitor.Rect.Dy()
+	resKey := fmt.Sprintf("%dx%d", width, height)
+
+	// Get current active bucket
+	bucketIDs := mc.Store.GetIDsForResolution(resKey)
+
+	// Rebuild shuffle with new config state
+	mc.rebuildShuffle(bucketIDs)
+
+	// Note: We do NOT force a wallpaper change here (CmdNext) to avoid jarring the user.
+	// The next automatic or manual change will pick from the new order.
+}
+
 func (mc *MonitorController) prev() {
 	if len(mc.State.History) <= 1 {
 		return // Nothing to go back to
@@ -224,6 +242,20 @@ func (mc *MonitorController) prev() {
 	// Current is now last element
 	prevID := mc.State.History[len(mc.State.History)-1]
 	mc.State.CurrentID = prevID
+
+	// BACKTRACKING FIX:
+	// We must also step back in our shuffle list (RandomPos) so that the next "Next"
+	// call returns us to where we were, rather than skipping ahead.
+	// We use modulo arithmetic to handle wrapping safely, though typically
+	// prev() implies we have history.
+	// RandomPos points to the *next* item to be shown.
+	// So if we go back, we decrement it.
+	if len(mc.State.ShuffleIDs) > 0 {
+		mc.State.RandomPos--
+		if mc.State.RandomPos < 0 {
+			mc.State.RandomPos = len(mc.State.ShuffleIDs) - 1
+		}
+	}
 
 	if img, ok := mc.Store.GetByID(prevID); ok {
 		mc.applyImage(img)

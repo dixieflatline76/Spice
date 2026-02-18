@@ -339,6 +339,7 @@ func TestNavigation(t *testing.T) {
 
 	// 1. Set Shuffle False
 	wp.SetShuffleImage(false)
+	pump() // Consume CmdUpdateShuffle
 
 	// 2. Next
 	wp.SetNextWallpaper(-1, true)

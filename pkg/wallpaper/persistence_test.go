@@ -16,10 +16,15 @@ func TestSetShuffleImage_Persists(t *testing.T) {
 	prefs := NewMockPreferences()
 	cfg := GetConfig(prefs)
 
+	// Mock Manager for NotifyUser
+	mockPM := new(MockPluginManager)
+	mockPM.On("NotifyUser", mock.Anything, mock.Anything).Return()
+
 	wp := &Plugin{
 		cfg:              cfg,
 		store:            NewImageStore(),
 		shuffleImageFlag: util.NewSafeBool(),
+		manager:          mockPM,
 	}
 
 	// Initial State: False (Default)

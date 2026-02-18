@@ -631,6 +631,14 @@ func (wp *Plugin) ToggleFavorite(img provider.Image) {
 
 func (wp *Plugin) SetShuffleImage(enable bool) {
 	wp.cfg.SetImgShuffle(enable)
+	// Force all monitors to re-evaluate their shuffle state
+	wp.dispatch(-1, CmdUpdateShuffle)
+
+	if enable {
+		wp.manager.NotifyUser("Wallpaper Shuffle", "Shuffle Enabled")
+	} else {
+		wp.manager.NotifyUser("Wallpaper Shuffle", "Shuffle Disabled")
+	}
 }
 
 func (wp *Plugin) SetSmartFit(enabled bool) {
