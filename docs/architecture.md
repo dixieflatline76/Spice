@@ -95,6 +95,21 @@ graph TD
 
 ## 3.3 Component Details
 
+### 3.3.1 The Monitor Controller (Actor Pattern)
+*Added in v2.0*
+
+To support independent multi-monitor wallpapers, Spice moved from a single-controller model to an **Actor Model**.
+
+-   **Role**: An autonomous agent responsible for **one** specific display.
+-   **Isolation**: Each monitor has its own:
+    -   **State**: Current Image, History Stack, Shuffle Permutation (`ShuffleIDs`, `RandomPos`).
+    -   **Command Loop**: A dedicated goroutine that `select`s on a `Commands` channel.
+-   **Behavior**:
+    -   Receives high-level commands (`CmdNext`, `CmdPrev`, `CmdUpdateShuffle`) from the central Plugin.
+    -   Executes logic locally (e.g., calculating the next random index).
+    -   Applies the wallpaper *only* to its assigned screen.
+-   **Benefit**: User interaction on Monitor 1 (e.g., browsing history) is completely decoupled from Monitor 2.
+
 ### 4.1 ImageStore (`pkg/wallpaper/store.go`)
 
 A thread-safe, stateless container.
