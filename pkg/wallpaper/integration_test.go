@@ -384,6 +384,7 @@ func setupTestPlugin(t *testing.T, prefs fyne.Preferences) *Plugin {
 		fetchingInProgress: util.NewSafeBool(),
 		providers:          make(map[string]provider.ImageProvider),
 		pipeline:           pipeline,
+		jobSubmitter:       pipeline,
 		Monitors:           make(map[int]*MonitorController),
 		httpClient:         &http.Client{Timeout: 1 * time.Second},
 	}

@@ -20,6 +20,7 @@ const (
 	CmdBlock
 	CmdFavorite
 	CmdUpdateShuffle
+	CmdSyncState
 )
 
 // StoreInterface defines the subset of ImageStore methods needed by the controller.
@@ -63,6 +64,7 @@ type MonitorController struct {
 	OnWallpaperChanged func(img provider.Image, monitorID int)
 	OnFavoriteRequest  func(img provider.Image)
 	OnFetchRequest     func()
+	pendingUpdate      bool // Flag to indicate Store content has changed
 }
 
 // NewMonitorController creates a new actor for managing a specific monitor's state.
@@ -120,6 +122,7 @@ func (mc *MonitorController) Run(ctx context.Context) {
 		case <-updateCh:
 			// Refresh channel immediately for next event (broadcast pattern)
 			updateCh = mc.Store.GetUpdateChannel()
+			mc.pendingUpdate = true
 			if mc.State.WaitingForImages {
 				log.Debugf("[Monitor %d] Store updated while starving. Retrying next()...", mc.ID)
 				mc.next()
@@ -143,6 +146,8 @@ func (mc *MonitorController) handleCommand(cmd Command) {
 		mc.toggleFavorite()
 	case CmdUpdateShuffle:
 		mc.updateShuffle()
+	case CmdSyncState:
+		mc.syncState()
 	}
 }
 
@@ -180,8 +185,20 @@ func (mc *MonitorController) next() {
 	mc.State.WaitingForImages = false
 
 	// 3. Rebuild Shuffle if needed
-	if len(mc.State.ShuffleIDs) != len(bucketIDs) {
-		log.Printf("[Monitor %d] Bucket size changed (%d -> %d). Rebuilding shuffle.", mc.ID, len(mc.State.ShuffleIDs), len(bucketIDs))
+	// Check if shuffle is stale either due to pending updates (content change) or length mismatch (legacy/fallback)
+	isStale := false
+	if mc.pendingUpdate {
+		if mc.isShuffleStale(bucketIDs) {
+			isStale = true
+			log.Debugf("[Monitor %d] Content changed. Marking stale.", mc.ID)
+		}
+		mc.pendingUpdate = false
+	} else if len(mc.State.ShuffleIDs) != len(bucketIDs) {
+		isStale = true
+	}
+
+	if isStale {
+		log.Printf("[Monitor %d] Shuffle list stale (Bucket: %d, Current: %d). Rebuilding.", mc.ID, len(bucketIDs), len(mc.State.ShuffleIDs))
 		mc.rebuildShuffle(bucketIDs)
 	}
 
@@ -289,6 +306,18 @@ func (mc *MonitorController) toggleFavorite() {
 	}
 }
 
+func (mc *MonitorController) syncState() {
+	log.Debugf("[Monitor %d] Syncing state from store...", mc.ID)
+	if mc.State.CurrentID == "" {
+		return
+	}
+
+	if img, ok := mc.Store.GetByID(mc.State.CurrentID); ok {
+		log.Debugf("[Monitor %d] Metadata updated for %s (Favorited: %v)", mc.ID, img.ID, img.IsFavorited)
+		mc.State.CurrentImage = img
+	}
+}
+
 func (mc *MonitorController) applyImage(img provider.Image) {
 	// Determine resolution-specific path
 	path := img.FilePath
@@ -309,9 +338,6 @@ func (mc *MonitorController) applyImage(img provider.Image) {
 		return
 	}
 
-	mc.State.CurrentImage = img
-	mc.State.CurrentImage.FilePath = path // Ensure state reflects actual file used
-
 	// Check if file physically exists before calling OS to avoid generic errors
 	if _, err := mc.os.Stat(path); os.IsNotExist(err) {
 		log.Printf("[Monitor %d] ERROR: Wallpaper file missing: %s. Metadata is stale. Requesting refetch...", mc.ID, path)
@@ -325,6 +351,9 @@ func (mc *MonitorController) applyImage(img provider.Image) {
 		return
 	}
 
+	mc.State.CurrentImage = img
+	mc.State.CurrentImage.FilePath = path // Ensure state reflects actual file used
+
 	log.Printf("[Monitor %d] Setting wallpaper: %s", mc.ID, path)
 	if err := mc.os.SetWallpaper(path, mc.ID); err != nil {
 		log.Printf("[ERROR] [Monitor %d] Failed to set wallpaper: %v", mc.ID, err)
@@ -335,4 +364,25 @@ func (mc *MonitorController) applyImage(img provider.Image) {
 		log.Debugf("[Monitor %d] Triggering async UI refresh for %s", mc.ID, path)
 		mc.OnWallpaperChanged(img, mc.ID)
 	}
+}
+
+func (mc *MonitorController) isShuffleStale(bucketIDs []string) bool {
+	if len(mc.State.ShuffleIDs) != len(bucketIDs) {
+		return true
+	}
+	// Content check - O(N)
+	// Create lookup for new bucket
+	incoming := make(map[string]bool, len(bucketIDs))
+	for _, id := range bucketIDs {
+		incoming[id] = true
+	}
+
+	for _, id := range mc.State.ShuffleIDs {
+		if !incoming[id] {
+			// Found an ID in current shuffle that is NO LONGER in the bucket
+			return true
+		}
+	}
+	// lengths equal and all current IDs are in bucket => sets are identical
+	return false
 }

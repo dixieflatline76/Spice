@@ -100,81 +100,83 @@ func (fm *FileManager) DerivativeExists(id string, ext string, derivativeDir str
 	return err == nil
 }
 
-// DeepDelete removes the Master image and ALL its derivatives.
-// It searches for files with the given ID in all known directories.
-func (fm *FileManager) DeepDelete(id string) error {
-	log.Printf("[DeepDelete] Requested for ID: %s", id)
+// DeepDeleteBatch removes all physical files (Master and Derivatives) associated with a list of IDs.
+// It is significantly more efficient than calling DeepDelete in a loop for multiple IDs.
+func (fm *FileManager) DeepDeleteBatch(ids []string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+
+	idMap := make(map[string]bool)
+	for _, id := range ids {
+		idMap[id] = true
+	}
+
 	filesToDelete := []string{}
 
-	// Helper to find file by ID in a dir
-	findFile := func(dir string) string {
-		entries, err := os.ReadDir(dir)
-		if err != nil {
-			log.Printf("DeepDelete: Failed to read dir %s: %v", dir, err)
-			return ""
-		}
+	// 1. Scan Master (Root)
+	entries, err := os.ReadDir(fm.rootDir)
+	if err == nil {
 		for _, e := range entries {
 			if e.IsDir() {
 				continue
 			}
 			name := e.Name()
 			ext := filepath.Ext(name)
-			// Match ID (case-insensitive on Windows, though IDs should be exact)
-			// We found that Glob fails on special chars like [], so we use exact string check
 			fileID := strings.TrimSuffix(name, ext)
-			if strings.EqualFold(fileID, id) {
-				return filepath.Join(dir, name)
+			if idMap[fileID] {
+				filesToDelete = append(filesToDelete, filepath.Join(fm.rootDir, name))
+				log.Debugf("DeepDeleteBatch: Found Master file %s", name)
 			}
 		}
-		return ""
+	} else {
+		log.Printf("DeepDeleteBatch: Failed to read root dir: %v", err)
 	}
 
-	// 1. Master (Root)
-	if f := findFile(fm.rootDir); f != "" {
-		filesToDelete = append(filesToDelete, f)
-		log.Debugf("DeepDelete: Found Master file %s", f)
-	}
-
-	// 2. Derivatives (Recursive in FittedRoot)
+	// 2. Scan Derivatives (Recursive in FittedRoot)
 	fittedRoot := filepath.Join(fm.rootDir, FittedRootDir)
-	log.Debugf("DeepDelete: Scanning fitted root %s for ID %s", fittedRoot, id)
+	log.Debugf("DeepDeleteBatch: Scanning fitted root %s for %d IDs", fittedRoot, len(ids))
 
-	err := filepath.Walk(fittedRoot, func(path string, info os.FileInfo, err error) error {
+	err = filepath.Walk(fittedRoot, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			log.Printf("DeepDelete: Error accessing path %s: %v", path, err)
+			log.Printf("DeepDeleteBatch: Error accessing path %s: %v", path, err)
 			return nil // Skip access errors
 		}
 		if !info.IsDir() {
 			name := info.Name()
 			ext := filepath.Ext(name)
 			fileID := strings.TrimSuffix(name, ext)
-			if fileID == id {
+			if idMap[fileID] {
 				filesToDelete = append(filesToDelete, path)
-				log.Debugf("DeepDelete: Found Derivative file %s", path)
+				log.Debugf("DeepDeleteBatch: Found Derivative file %s", path)
 			}
 		}
 		return nil
 	})
-	if err != nil {
-		log.Printf("DeepDelete: Error walking fitted dir: %v", err)
+	if err != nil && !os.IsNotExist(err) {
+		log.Printf("DeepDeleteBatch: Error walking fitted dir: %v", err)
 	}
 
-	log.Debugf("DeepDelete: Total files to delete for %s: %d", id, len(filesToDelete))
+	log.Printf("DeepDeleteBatch: Total files to delete: %d", len(filesToDelete))
 
 	for _, f := range filesToDelete {
 		if err := os.Remove(f); err != nil {
-			// Suppress benign errors
-			if os.IsNotExist(err) {
-				continue
+			if !os.IsNotExist(err) {
+				log.Printf("DeepDeleteBatch: Failed to delete %s: %v", f, err)
 			}
-			// Log ALL other errors to prove why it failed
-			log.Printf("DeepDelete: Failed to delete %s: %v", f, err)
 		} else {
-			log.Debugf("DeepDelete: Successfully deleted %s", f)
+			log.Debugf("DeepDeleteBatch: Successfully deleted %s", f)
 		}
 	}
 
 	return nil
+}
+
+// DeepDelete removes the Master image and ALL its derivatives.
+// It searches for files with the given ID in all known directories.
+func (fm *FileManager) DeepDelete(id string) error {
+	log.Printf("[DeepDelete] Requested for ID: %s", id)
+	return fm.DeepDeleteBatch([]string{id})
 }
 
 // CleanupOrphans removes files from the root directory and subdirectories
@@ -266,6 +268,59 @@ func (fm *FileManager) DeleteDerivatives(id string) error {
 				log.Printf("DeleteDerivatives: Failed to delete %s: %v", f, err)
 			}
 		}
+	}
+
+	return nil
+}
+
+// RenameAllAssets renames the Master image and ALL its derivatives to a new ID.
+// This is used for namespacing migrations.
+func (fm *FileManager) RenameAllAssets(oldID, newID string) error {
+	log.Printf("[FileManager] Renaming assets: %s -> %s", oldID, newID)
+
+	// 1. Rename Master (Root)
+	entries, err := os.ReadDir(fm.rootDir)
+	if err == nil {
+		for _, e := range entries {
+			if e.IsDir() {
+				continue
+			}
+			name := e.Name()
+			ext := filepath.Ext(name)
+			fileID := strings.TrimSuffix(name, ext)
+			if fileID == oldID {
+				oldPath := filepath.Join(fm.rootDir, name)
+				newPath := filepath.Join(fm.rootDir, newID+ext)
+				log.Debugf("FileManager: Renaming Master %s -> %s", oldPath, newPath)
+				if err := os.Rename(oldPath, newPath); err != nil {
+					log.Printf("FileManager: Failed to rename Master %s: %v", oldPath, err)
+				}
+			}
+		}
+	}
+
+	// 2. Rename Derivatives (Recursive in FittedRoot)
+	fittedRoot := filepath.Join(fm.rootDir, FittedRootDir)
+	err = filepath.Walk(fittedRoot, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		if !info.IsDir() {
+			name := info.Name()
+			ext := filepath.Ext(name)
+			fileID := strings.TrimSuffix(name, ext)
+			if fileID == oldID {
+				newPath := filepath.Join(filepath.Dir(path), newID+ext)
+				log.Debugf("FileManager: Renaming Derivative %s -> %s", path, newPath)
+				if err := os.Rename(path, newPath); err != nil {
+					log.Printf("FileManager: Failed to rename Derivative %s: %v", path, err)
+				}
+			}
+		}
+		return nil
+	})
+	if err != nil && !os.IsNotExist(err) {
+		log.Printf("FileManager: Error walking fitted dir during rename: %v", err)
 	}
 
 	return nil

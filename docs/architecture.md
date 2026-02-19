@@ -5,8 +5,8 @@ title: Architecture
 
 # Spice Architecture Documentation (Wallpaper Plugin)
 
-> **Status**: Current as of v1.6.5
-> **Focus**: Concurrency Model, Image Pipeline, and UI Synchronization
+> **Status**: Current as of v2.2.0
+> **Focus**: Concurrency Model, Image Pipeline, and Actor-based Display Management
 
 ## 1. Executive Summary
 
@@ -58,39 +58,38 @@ The system is divided into two distinct execution contexts:
 ```mermaid
 graph TD
     classDef ui fill:#e1f5fe,stroke:#01579b,stroke-width:2px,color:#000,font-size:16px;
+    classDef actor fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,color:#000,font-size:16px;
     classDef pipe fill:#fff3e0,stroke:#e65100,stroke-width:2px,color:#000,font-size:16px;
     classDef store fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px,color:#000,font-size:16px;
 
-    subgraph UI_Context ["UI Context (Plugin)"]
-        NextBtn[Next Button]:::ui
-        PrevBtn[Delete Button]:::ui
-        LocalState["Session State<br/>(Current Index, History)"]:::ui
+    subgraph UI_Orchestration [Plugin Manager & Plugin]
+        Plugin[Wallpaper Plugin]:::ui
+    end
+
+    subgraph Actor_Layer [Actor Model (per Monitor)]
+        Monitor1[Monitor Controller 0]:::actor
+        Monitor2[Monitor Controller 1]:::actor
     end
 
     subgraph Shared_Resource [Shared Resources]
         Store[(ImageStore)]:::store
     end
 
-    subgraph Pipeline_Context ["Pipeline Context"]
+    subgraph Pipeline_Layer [Pipeline Context]
         Workers[["Worker Pool<br/>(Download/Crop)"]]:::pipe
-        LazyWorker(("Persistent Worker<br/>(Enrichment)")):::pipe
         Manager(("State Manager<br/>Loop")):::pipe
     end
 
-    %% Reads
-    NextBtn -- 1. RLock (Fast) --> Store
-    LocalState -- Read Image Info --> Store
-
-    %% Async Commands
-    NextBtn -- 2. CmdMarkSeen (Async) --> Manager
-    PrevBtn -- CmdDelete (Async) --> Manager
+    %% Interaction Flows
+    Plugin -- 1. Dispatch Cmd --> Monitor1
+    Monitor1 -- 2. RLock (Fast) --> Store
+    
     Workers -- Result (New Image) --> Manager
-
-    %% Writers
     Manager -- 3. Lock (Exclusive) --> Store
-
+    
     %% Feedback
-    Manager -- Yield (Gosched) --> Manager
+    Manager -- Seen Counter Updates --> Plugin
+    Monitor1 -- Current Wallpaper Change --> Plugin
 ```
 
 ## 3.3 Component Details
@@ -160,32 +159,26 @@ This flow demonstrates how the UI updates instantly without waiting for a write 
 ```mermaid
 sequenceDiagram
     participant User
-    participant UI as UI (Plugin)
+    participant Plugin as Wallpaper Plugin
+    participant Actor as Monitor Controller (Actor)
     participant Store as ImageStore
-    participant Mgr as State Manager
+    participant OS as OS / Wallpaper API
 
-    User->>UI: Click "Next"
-    activate UI
-    Note right of UI: 1. Calculate new index (Local)
-    UI->>Store: Get(newIndex) [RLock]
-    Store-->>UI: Image
+    User->>Plugin: Click "Next"
+    activate Plugin
+    Plugin->>Actor: Dispatch(CmdNext)
+    deactivate Plugin
     
-    Note right of UI: 2. Optimistic Update
-    UI->>UI: Update Tray Menu & currentImage
+    activate Actor
+    Note right of Actor: 1. Calculate next image (Shuffled/History)
+    Actor->>Store: GetByID(nextID) [RLock]
+    Store-->>Actor: Image Info
     
-    Note right of UI: 3. Async Command
-    UI--)Mgr: CmdMarkSeen(ImageID)
-    
-    Note right of UI: 4. Apply Wallpaper
-    UI->>OS: setWallpaper(path)
-    
-    deactivate UI
-    
-    activate Mgr
-    Note left of Mgr: Process CmdMarkSeen
-    Mgr->>Store: MarkSeen() [Lock]
-    
-    deactivate Mgr
+    Note right of Actor: 2. Process Change
+    Actor->>OS: setWallpaper(path)
+    Actor->>Store: MarkSeen(path) [Exclusive Lock]
+    Actor->>Plugin: Signal Change (for Tray Menu update)
+    deactivate Actor
 ```
 
 ### 3.4.2 "Delete Wallpaper" Flow
@@ -195,34 +188,32 @@ Deleting requires modifying the store, handled asynchronously.
 ```mermaid
 sequenceDiagram
     participant User
-    participant UI as UI (Plugin)
-    participant Mgr as State Manager
+    participant Plugin as Wallpaper Plugin
+    participant Actor as Monitor Controller (Actor)
     participant Store as ImageStore
 
-    User->>UI: Click "Delete"
-    activate UI
+    User->>Plugin: Click "Delete"
+    activate Plugin
+    Plugin->>Actor: Dispatch(CmdDelete)
+    deactivate Plugin
     
-    UI--)Mgr: CmdRemove(ImageID)
-    UI->>OS: Remove File (Disk)
-    
-    Note right of UI: Move to Next
-    UI->>UI: setNextWallpaper()
-    
-    deactivate UI
-    
-    activate Mgr
-    Note left of Mgr: Process CmdRemove
-    Mgr->>Store: Remove(ID) [Lock]
-    deactivate Mgr
+    activate Actor
+    Actor->>OS: Remove File from Disk
+    Actor->>Store: Remove(ID) [Lock]
+    Note right of Actor: Trigger auto-navigation to next
+    Actor->>Actor: next()
+    deactivate Actor
 ```
 
 ## 3.5 Directory Structure & Key Files
 
 | Component | File Path | Responsibility |
 | :--- | :--- | :--- |
+| **Interfaces**| `pkg/wallpaper/interfaces.go`| Definitions for `JobSubmitter` and `StoreInterface`. |
 | **Store** | `pkg/wallpaper/store.go` | Data repository. RWMutex protected. |
 | **Pipeline** | `pkg/wallpaper/pipeline.go` | Worker pool & State Manager Loop. |
-| **Controller**| `pkg/wallpaper/wallpaper.go` | UI logic, Lifecycle, Optimistic Updates. |
+| **Actor** | `pkg/wallpaper/monitor_controller.go`| Monitor-specific state & logic. |
+| **Controller**| `pkg/wallpaper/wallpaper.go` | Main plugin orchestrator & UI dispatch. |
 | **Processor** | `pkg/wallpaper/smart_image_processor.go` | Face detection, cropping (Heavy CPU). |
 
 ## 3.5 Resource Management
@@ -286,6 +277,39 @@ Spice's imaging engine (`pkg/wallpaper/smart_image_processor.go`) implements the
 To manage evolving configuration schemas (e.g., legacy JSON formats, ID backfilling), Spice uses a **Chain of Responsibility** pattern.
 *   **MigrationChain**: A sequence of `MigrationStep` functions (e.g., `UnifyQueriesStep`, `EnsureFavoritesStep`).
 *   **Execution**: On startup, `loadFromPrefs` executes the chain. If any step modifies the config, a save is triggered automatically. This ensures data integrity across version upgrades.
+
+## 3.11 ID Namespacing (Middleware)
+
+To prevent ID collisions across different providers (e.g., Pexels and Wallhaven both using numeric IDs), Spice implements a centralized middleware strategy.
+
+### 3.11.1 Namespacing Lifecycle
+
+IDs are namespaced at the ingestion boundary and de-namespaced when interacting with the original provider.
+
+```mermaid
+sequenceDiagram
+    participant P as Plugin (FetchNewImages)
+    participant Prov as ImageProvider
+    participant Pipe as Pipeline/Store
+    participant W as Worker (enrichImage)
+
+    Note over P,Prov: 1. Ingestion Phase
+    P->>Prov: FetchImages()
+    Prov-->>P: []Image (IDs: 123, 456)
+    Note right of P: Middleware: Prefix IDs (Provider_123)
+    P->>Pipe: Submit(namespacedJob)
+
+    Note over W,Prov: 2. Interaction Phase (Lazy Enrichment)
+    W->>W: Get namespaced ID (Provider_123)
+    Note right of W: Middleware: Strip Prefix (123)
+    W->>Prov: EnrichImage(raw_img)
+    Prov-->>W: raw_modified_img
+    Note right of W: Middleware: Restore Prefix (Provider_123)
+    W->>Pipe: Save enriched image
+```
+
+-   **Persistence**: The `ImageStore` and `FileManager` only see and store namespaced IDs (`Provider_ID`).
+-   **Transparency**: Standard providers remain unaware of namespacing; they only ever see their own raw IDs.
 
 ## 3.9 The "Git-Driven" Content System
 For verified providers (Museums), Spice treats `raw.githubusercontent.com` as a Content Delivery Network (CDN).

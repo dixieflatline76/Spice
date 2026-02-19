@@ -79,9 +79,10 @@ type Plugin struct {
 	actionChan          chan func()
 
 	// New Components
-	store    *ImageStore
-	fm       *FileManager
-	pipeline *Pipeline
+	store        *ImageStore
+	fm           *FileManager
+	pipeline     *Pipeline
+	jobSubmitter JobSubmitter // Interface for testing
 
 	// Configuration and State
 	fetchingInProgress *util.SafeFlag
@@ -252,6 +253,7 @@ func (wp *Plugin) Init(manager ui.PluginManager) {
 
 	wp.cfg.SetQueryRemovedCallback(wp.onQueryRemoved)
 	wp.cfg.SetQueryDisabledCallback(wp.onQueryDisabled)
+	wp.cfg.SetFavoritesClearedCallback(wp.ResetFavorites)
 
 	wp.providers = make(map[string]provider.ImageProvider)
 	for _, factory := range GetRegisteredProviders() {
@@ -276,6 +278,7 @@ func (wp *Plugin) Init(manager ui.PluginManager) {
 	wp.Monitors = make(map[int]*MonitorController)
 
 	wp.pipeline = NewPipeline(wp.cfg, wp.store, wp.ProcessImageJob)
+	wp.jobSubmitter = wp.pipeline
 	wp.enrichmentSignal = make(chan int, 1)
 
 	log.Debugf("Wallpaper Plugin Initialized.")
@@ -615,17 +618,33 @@ func (wp *Plugin) ToggleFavorite(img provider.Image) {
 		}
 		img.IsFavorited = true
 		wp.store.Update(img)
+
+		// Responsiveness Fix: Reset Favorites page counter so the new file is detected immediately
+		wp.downloadMutex.Lock()
+		if _, ok := wp.queryPages[FavoritesQueryID]; ok {
+			wp.queryPages[FavoritesQueryID].Set(1)
+		}
+		wp.downloadMutex.Unlock()
+
 		wp.manager.NotifyUser("Favorites", "Added to favorites.")
+		// Trigger immediate fetch to bring the new favorite into the store
+		go wp.RequestFetch()
 	}
 
 	// Update UI for all monitors that might have this image
+	var syncIDs []int
 	wp.monMu.RLock()
-	defer wp.monMu.RUnlock()
 	for id, mc := range wp.Monitors {
 		if mc.State.CurrentImage.ID == img.ID {
-			// Update UI
+			syncIDs = append(syncIDs, id)
 			wp.updateTrayMenuUI(img, id)
 		}
+	}
+	wp.monMu.RUnlock()
+
+	// Dispatch sync command outside of lock to avoid reentrancy issues
+	for _, id := range syncIDs {
+		wp.dispatch(id, CmdSyncState)
 	}
 }
 
@@ -855,6 +874,16 @@ func (wp *Plugin) onQueryDisabled(queryID string) {
 	wp.downloadMutex.Lock()
 	delete(wp.queryPages, queryID)
 	wp.downloadMutex.Unlock()
+
+	// Trigger fetch to ensure store is replenished from other active sources (including Favorites)
+	go wp.RequestFetch()
+}
+
+func (wp *Plugin) ResetFavorites() {
+	log.Printf("[Plugin] Resetting all favorites in store...")
+	wp.store.ResetFavorites()
+	wp.manager.NotifyUser("Favorites", "All favorites cleared.")
+	go wp.RequestFetch()
 }
 
 // syncStoreWithConfig reconciles the image store with the current configuration.

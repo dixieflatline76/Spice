@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/dixieflatline76/Spice/pkg/provider"
 	"github.com/dixieflatline76/Spice/util"
 	"github.com/dixieflatline76/Spice/util/log"
 )
@@ -21,8 +23,13 @@ func (wp *Plugin) FetchNewImages() {
 			queries := wp.cfg.Queries
 			wp.downloadMutex.RUnlock()
 
-			totalQueued := 0
+			totalQueued := util.NewSafeInt()
 			activeSources := make(map[string]bool)
+			var sourcesMutex sync.Mutex
+
+			// Semaphore to limit concurrent fetches
+			sem := make(chan struct{}, 5)
+			var wg sync.WaitGroup
 
 			for _, q := range queries {
 				if !q.Active {
@@ -35,61 +42,90 @@ func (wp *Plugin) FetchNewImages() {
 					continue
 				}
 
-				// Get or create per-query page counter
-				wp.downloadMutex.Lock()
-				pg, ok := wp.queryPages[q.ID]
-				if !ok {
-					pg = util.NewSafeIntWithValue(1)
-					wp.queryPages[q.ID] = pg
-				}
-				wp.downloadMutex.Unlock()
+				wg.Add(1)
+				go func(q ImageQuery, p provider.ImageProvider) {
+					defer wg.Done()
+					sem <- struct{}{}        // Acquire
+					defer func() { <-sem }() // Release
 
-				page := pg.Value()
-				log.Printf("Fetching from provider: %s (Query: %s, Page: %d)", q.Provider, q.Description, page)
-				images, err := p.FetchImages(context.Background(), q.URL, page)
-				if err != nil {
-					log.Printf("Provider %s fetch failed: %v", q.Provider, err)
-					continue
-				}
-				if len(images) == 0 {
-					log.Printf("Provider %s returned no new images.", q.Provider)
-					continue
-				}
-
-				log.Printf("[Fetch] Provider %s returned %d images. Submitting to pipeline.", q.Provider, len(images))
-
-				// Track source
-				activeSources[p.Name()] = true
-				queuedForThisQuery := 0
-
-				for _, img := range images {
-					// Critical Fix: Tag image with its source query ID so Sync knows it's active.
-					img.SourceQueryID = q.ID
-
-					if wp.cfg.InAvoidSet(img.ID) {
-						log.Debugf("Skipping blocked image: %s", img.ID)
-						continue
+					// Get or create per-query page counter
+					wp.downloadMutex.Lock()
+					pg, ok := wp.queryPages[q.ID]
+					if !ok {
+						pg = util.NewSafeIntWithValue(1)
+						wp.queryPages[q.ID] = pg
 					}
-					job := DownloadJob{
-						Image:    img,
-						Provider: p,
-					}
-					// Submit non-blocking
-					if wp.pipeline.Submit(job) {
-						totalQueued++
-						queuedForThisQuery++
-					} else {
-						log.Printf("WARN: Pipeline full or stopped. Dropping job.")
-					}
-				}
+					wp.downloadMutex.Unlock()
 
-				if queuedForThisQuery > 0 {
-					pg.Increment()
-					log.Printf("Query %s: Successfully queued %d images. Incrementing to page %d", q.ID, queuedForThisQuery, pg.Value())
-				}
+					page := pg.Value()
+					log.Printf("Fetching from provider: %s (Query: %s, Page: %d)", q.Provider, q.Description, page)
+
+					// Add timeout to prevent hangs
+					ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+					defer cancel()
+
+					images, err := p.FetchImages(ctx, q.URL, page)
+					if err != nil {
+						log.Printf("Provider %s fetch failed: %v", q.Provider, err)
+						return
+					}
+					if len(images) == 0 {
+						log.Printf("Provider %s returned no new images.", q.Provider)
+						return
+					}
+
+					log.Printf("[Fetch] Provider %s returned %d images. Submitting to pipeline.", q.Provider, len(images))
+
+					// Track source
+					sourcesMutex.Lock()
+					activeSources[p.Name()] = true
+					sourcesMutex.Unlock()
+
+					queuedForThisQuery := 0
+
+					for _, img := range images {
+						// Critical Fix: Tag image with its source query ID so Sync knows it's active.
+						img.SourceQueryID = q.ID
+
+						// *** NAMESPACING Middleware ***
+						// Ensure ID is unique across providers by prefixing it.
+						// This prevents collisions in Store (memory) and FileManager (disk).
+						if p.Type() == provider.TypeOnline {
+							// Only namespace if not already namespaced (though we assume raw from provider)
+							// We trust the provider returns raw IDs.
+							prefix := p.Name() + "_"
+							if !strings.HasPrefix(img.ID, prefix) {
+								img.ID = prefix + img.ID
+							}
+						}
+
+						if wp.cfg.InAvoidSet(img.ID) {
+							log.Debugf("Skipping blocked image: %s", img.ID)
+							continue
+						}
+						job := DownloadJob{
+							Image:    img,
+							Provider: p,
+						}
+						// Submit non-blocking
+						if wp.jobSubmitter.Submit(job) {
+							totalQueued.Increment()
+							queuedForThisQuery++
+						} else {
+							log.Printf("WARN: Pipeline full or stopped. Dropping job.")
+						}
+					}
+
+					if queuedForThisQuery > 0 {
+						pg.Increment()
+						log.Printf("Query %s: Successfully queued %d images. Incrementing to page %d", q.ID, queuedForThisQuery, pg.Value())
+					}
+				}(q, p)
 			}
 
-			if totalQueued > 0 {
+			wg.Wait()
+
+			if totalQueued.Value() > 0 {
 				sources := []string{}
 				for s := range activeSources {
 					sources = append(sources, s)
@@ -98,7 +134,7 @@ func (wp *Plugin) FetchNewImages() {
 				if len(sources) > 0 {
 					sourceStr = " from " + strings.Join(sources, ", ")
 				}
-				wp.manager.NotifyUser("Wallpaper Fetch", fmt.Sprintf("Downloading %d new images%s...", totalQueued, sourceStr))
+				wp.manager.NotifyUser("Wallpaper Fetch", fmt.Sprintf("Downloading %d new images%s...", totalQueued.Value(), sourceStr))
 			} else {
 				log.Println("Fetch returned 0 new images from all active queries.")
 			}

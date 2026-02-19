@@ -3,6 +3,7 @@ package wallpaper
 import (
 	"encoding/json"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -296,6 +297,17 @@ func (s *ImageStore) Clear() {
 	s.scheduleSaveLocked()
 }
 
+// ResetFavorites clears the IsFavorited flag on all images in the store.
+func (s *ImageStore) ResetFavorites() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for i := range s.images {
+		s.images[i].IsFavorited = false
+	}
+	s.scheduleSaveLocked()
+}
+
 func (s *ImageStore) Wipe() {
 	s.Clear()
 	s.mu.Lock()
@@ -353,9 +365,11 @@ func (s *ImageStore) RemoveByQueryID(queryID string) {
 	s.mu.Unlock()
 
 	if s.fm != nil {
-		for _, img := range toDelete {
-			go func(id string) { _ = s.fm.DeepDelete(id) }(img.ID)
+		ids := make([]string, len(toDelete))
+		for i, img := range toDelete {
+			ids[i] = img.ID
 		}
+		go func(targetIDs []string) { _ = s.fm.DeepDeleteBatch(targetIDs) }(ids)
 	}
 }
 
@@ -395,6 +409,55 @@ func (s *ImageStore) LoadCache() error {
 
 	if err := json.NewDecoder(file).Decode(&s.images); err != nil {
 		return err
+	}
+
+	// Namespacing Migration: Upgrade legacy IDs to namespaced format
+	migrationOccurred := false
+	for i, img := range s.images {
+		// Rule: Only online providers had raw numeric/string IDs.
+		// Skip Favorites (already namespaced via filenames) and already-namespaced IDs.
+		if img.Provider != "" && img.Provider != "Favorites" {
+			prefix := img.Provider + "_"
+			if !strings.HasPrefix(img.ID, prefix) {
+				oldID := img.ID
+				newID := prefix + oldID
+				log.Printf("Migration: Upgrading legacy image ID %s -> %s for provider %s", oldID, newID, img.Provider)
+
+				// 1. Rename files on disk (Master and Derivatives)
+				if s.fm != nil {
+					if err := s.fm.RenameAllAssets(oldID, newID); err != nil {
+						log.Printf("Migration: Failed to rename assets for %s: %v", oldID, err)
+					}
+				}
+
+				// 2. Update Image Metadata
+				s.images[i].ID = newID
+
+				// 3. Update Derivative Paths
+				if img.DerivativePaths != nil {
+					newPaths := make(map[string]string)
+					for res, oldPath := range img.DerivativePaths {
+						// Derivative paths include the ID in the filename
+						newPath := strings.Replace(oldPath, oldID, newID, 1)
+						newPaths[res] = newPath
+					}
+					s.images[i].DerivativePaths = newPaths
+				}
+
+				// 4. Update FilePath
+				if img.FilePath != "" {
+					s.images[i].FilePath = strings.Replace(img.FilePath, oldID, newID, 1)
+				}
+
+				migrationOccurred = true
+			}
+		}
+	}
+
+	if migrationOccurred {
+		log.Printf("Migration: Namespacing upgrade complete. Saving updated cache.")
+		// No lock needed as we're inside LoadCache which holds mu.Lock()
+		s.scheduleSaveLocked()
 	}
 
 	s.idSet = make(map[string]bool)
@@ -677,16 +740,7 @@ func (s *ImageStore) rebuildInternalStateLocked() {
 
 func (s *ImageStore) performAsyncCleanup(idsToDelete, idsToInvalidate []string) {
 	if len(idsToDelete) > 0 {
-		go func(ids []string) {
-			for _, id := range ids {
-				// Race Condition Fix: Check if resurrected
-				if _, exists := s.GetByID(id); exists {
-					log.Printf("[Store] Skipping deletion of resurrected ID: %s", id)
-					continue
-				}
-				_ = s.fm.DeepDelete(id)
-			}
-		}(idsToDelete)
+		go func(targetIDs []string) { _ = s.fm.DeepDeleteBatch(targetIDs) }(idsToDelete)
 	}
 	if len(idsToInvalidate) > 0 {
 		go func(ids []string) {

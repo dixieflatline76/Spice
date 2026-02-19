@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/disintegration/imaging"
 	"github.com/dixieflatline76/Spice/pkg/provider"
@@ -124,12 +125,35 @@ func (wp *Plugin) enrichImage(ctx context.Context, img provider.Image, p provide
 	if p == nil {
 		return img
 	}
+
+	// *** NAMESPACING Middleware ***
+	// Strip prefix so provider sees raw ID
+	originalID := img.ID
+	namespaced := false
+	if p.Type() == provider.TypeOnline {
+		prefix := p.Name() + "_"
+		if strings.HasPrefix(img.ID, prefix) {
+			img.ID = strings.TrimPrefix(img.ID, prefix)
+			namespaced = true
+		}
+	}
+
 	enrichedImg, err := p.EnrichImage(ctx, img)
 	if err != nil {
 		// SOFT FAIL: Log warning but proceed.
-		log.Printf("Warning: Lazy enrichment failed for %s (will try later): %v", img.ID, err)
+		log.Printf("Warning: Lazy enrichment failed for %s (will try later): %v", originalID, err)
+		// Restore ID if we stripped it, just in case
+		if namespaced {
+			img.ID = originalID
+		}
 		return img
 	}
+
+	// Restore Namespaced ID
+	if namespaced {
+		enrichedImg.ID = originalID
+	}
+
 	return enrichedImg
 }
 

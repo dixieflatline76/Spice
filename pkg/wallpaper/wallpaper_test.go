@@ -82,12 +82,12 @@ func TestDownloadAllImages(t *testing.T) {
 
 	// Update the mock provider to return the ts URL for the image path
 	mockProvider.ExpectedCalls = nil // Setup mock provider
-	mockProvider.On("Name").Return("MockProvider")
+	mockProvider.On("Name").Return("Wallhaven")
 	// ParseURL with Specific Match (Success)
 	mockProvider.On("ParseURL", "http://mock.url").Return("http://api.mock.url", nil)
 	// ParseURL with Catch-All (Error) - MUST BE DEFINED AFTER SPECIFIC
 	mockProvider.On("ParseURL", mock.Anything).Return("", assert.AnError)
-	img := provider.Image{ID: "test_img_1", Path: ts.URL + "/image1.jpg", Provider: "MockProvider"}
+	img := provider.Image{ID: "test_img_1", Path: ts.URL + "/image1.jpg", Provider: "Wallhaven"}
 	mockProvider.On("FetchImages", mock.Anything, "http://mock.url", 1).Return([]provider.Image{img}, nil)
 	// Expect EnrichImage call
 	mockProvider.On("EnrichImage", mock.Anything, mock.Anything).Return(img, nil)
@@ -119,6 +119,7 @@ func TestDownloadAllImages(t *testing.T) {
 	assert.NoError(t, wp.fm.EnsureDirs())
 	wp.store.SetFileManager(wp.fm, wp.downloadedDir+"/cache.json")
 	wp.pipeline = NewPipeline(wp.cfg, wp.store, wp.ProcessImageJob)
+	wp.jobSubmitter = wp.pipeline
 	wp.pipeline.Start(1)
 	defer wp.pipeline.Stop()
 	wp.providers["Wallhaven"] = mockProvider
@@ -140,7 +141,7 @@ func TestDownloadAllImages(t *testing.T) {
 
 	imgStored, ok := wp.store.Get(0)
 	assert.True(t, ok)
-	assert.Equal(t, "test_img_1", imgStored.ID)
+	assert.Equal(t, "Wallhaven_test_img_1", imgStored.ID)
 }
 
 func TestDownloadAllImages_EnrichmentFailure(t *testing.T) {
@@ -203,8 +204,7 @@ func TestDownloadAllImages_EnrichmentFailure(t *testing.T) {
 	img.Path = ts.URL + "/image_fail.jpg"
 	// Re-setup FetchImages with correct path
 	mockProvider.ExpectedCalls = nil
-	mockProvider.On("Name").Return("MockProvider")
-	mockProvider.On("Name").Return("MockProvider")
+	mockProvider.On("Name").Return("Wallhaven")
 	// The producer now iterates providers and calls ParseURL, so we must expect it implicitly or explicitly.
 	// Since we iterate, it might be called with any typical URL.
 	// But in this test, we call produceJobsForURL explicitly? No, downloadAllImages calls it.
@@ -238,6 +238,7 @@ func TestDownloadAllImages_EnrichmentFailure(t *testing.T) {
 	assert.NoError(t, wp.fm.EnsureDirs())
 	wp.store.SetFileManager(wp.fm, wp.downloadedDir+"/cache.json")
 	wp.pipeline = NewPipeline(wp.cfg, wp.store, wp.ProcessImageJob)
+	wp.jobSubmitter = wp.pipeline
 	wp.pipeline.Start(1)
 	defer wp.pipeline.Stop()
 	wp.providers["MockProvider"] = mockProvider
@@ -657,9 +658,12 @@ func TestAddQuery_InitializesPage(t *testing.T) {
 		queryPages:         make(map[string]*util.SafeCounter),
 		fetchingInProgress: util.NewSafeBool(),
 		providers:          make(map[string]provider.ImageProvider),
-		pipeline:           NewPipeline(cfg, NewImageStore(), func(ctx context.Context, job DownloadJob) (provider.Image, error) { return job.Image, nil }),
+		pipeline:           nil, // Pipeline will be set below
+		jobSubmitter:       nil,
 		httpClient:         &http.Client{},
 	}
+	wp.pipeline = NewPipeline(cfg, NewImageStore(), func(ctx context.Context, job DownloadJob) (provider.Image, error) { return job.Image, nil })
+	wp.jobSubmitter = wp.pipeline
 	wp.fm = NewFileManager(wp.downloadedDir)
 
 	// Add a provider
