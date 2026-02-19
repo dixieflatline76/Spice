@@ -45,6 +45,7 @@ type Config struct {
 	QueryRemovedCallback     func(queryID string) `json:"-"`
 	QueryDisabledCallback    func(queryID string) `json:"-"`
 	FavoritesClearedCallback func()               `json:"-"`
+	ShortcutsDisabled        bool                 `json:"shortcuts_disabled"`
 }
 
 // ImageQuery struct to hold the URL of an image and whether it is active
@@ -472,16 +473,12 @@ func (c *Config) SetWallpaperChangeFrequency(frequency Frequency) {
 
 // GetImgShuffle returns the image shuffle preference from the config.
 func (c *Config) GetImgShuffle() bool {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.BoolWithFallback(ImgShufflePrefKey, false)
+	return true // Permanently enabled
 }
 
 // SetImgShuffle sets the image shuffle preference.
 func (c *Config) SetImgShuffle(enabled bool) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.SetBool(ImgShufflePrefKey, enabled)
+	// No-op: Permanent Shuffle is active
 }
 
 // GetUnsplashToken returns the Unsplash Access Token from the keyring.
@@ -732,6 +729,20 @@ func (c *Config) GetFaceCropEnabled() bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.BoolWithFallback(FaceCropPrefKey, true) // Default: true
+}
+
+// GetShortcutsDisabled returns the hotkey disabled preference.
+func (c *Config) GetShortcutsDisabled() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.BoolWithFallback(ShortcutsDisabledPrefKey, false) // Default: active
+}
+
+// SetShortcutsDisabled sets the hotkey disabled preference.
+func (c *Config) SetShortcutsDisabled(disabled bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.SetBool(ShortcutsDisabledPrefKey, disabled)
 }
 
 // GetAssetManager returns the asset manager

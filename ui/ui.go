@@ -502,6 +502,24 @@ func (sa *SpiceApp) RebuildPreferencesContent(initialTab string) {
 	}
 	sm.CreateBoolSetting(&updateCheckConfig, generalContainer)
 
+	// Enable Global Shortcuts
+	shortcutsGuideURL, _ := url.Parse("https://github.com/dixieflatline76/Spice/blob/main/docs/user_guide.md#keyboard-shortcuts")
+	shortcutsLink := widget.NewHyperlink("View all shortcuts →", shortcutsGuideURL)
+	shortcutsHelpContainer := container.NewVBox(
+		sm.CreateSettingDescriptionLabel("Use keyboard shortcuts (Alt/Option + Number + Arrow) to control wallpapers. Disable if they conflict with other apps."),
+		shortcutsLink,
+	)
+	shortcutConfig := setting.BoolConfig{
+		Name:         "enableShortcuts",
+		InitialValue: !wallpaper.GetInstance().GetShortcutsDisabled(),
+		Label:        sm.CreateSettingTitleLabel("Enable global shortcuts:"),
+		HelpContent:  shortcutsHelpContainer,
+		ApplyFunc: func(val bool) {
+			wallpaper.GetInstance().SetShortcutsDisabled(!val)
+		},
+	}
+	sm.CreateBoolSetting(&shortcutConfig, generalContainer)
+
 	// Theme Selection
 	themeOptions := []string{"System", "Dark", "Light"}
 	currentTheme := sa.appConfig.GetTheme()

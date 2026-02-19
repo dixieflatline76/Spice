@@ -23,6 +23,8 @@ const (
 	CmdFavorite
 	CmdUpdateShuffle
 	CmdSyncState
+	CmdPause
+	CmdNextAuto
 )
 
 // StoreInterface defines the subset of ImageStore methods needed by the controller.
@@ -59,6 +61,8 @@ type MonitorMenuItems struct {
 	ProviderMenuItem *fyne.MenuItem
 	ArtistMenuItem   *fyne.MenuItem
 	FavoriteMenuItem *fyne.MenuItem
+	PauseMenuItem    *fyne.MenuItem
+	ShuffleMenuItem  *fyne.MenuItem
 }
 
 // MonitorState holds the persistence/cursor state for a single monitor.
@@ -69,6 +73,8 @@ type MonitorState struct {
 	ShuffleIDs       []string // Each monitor tracks its own IDs for its resolution
 	CurrentImage     provider.Image
 	WaitingForImages bool
+	Paused           bool
+	ManualRecovery   bool // True if WaitingForImages was triggered by a manual request
 }
 
 // MonitorController is an Actor that manages one specific monitor.
@@ -148,8 +154,8 @@ func (mc *MonitorController) Run(ctx context.Context) {
 			updateCh = mc.Store.GetUpdateChannel()
 			mc.pendingUpdate = true
 			if mc.State.WaitingForImages {
-				log.Debugf("[Monitor %d] Store updated while starving. Retrying next()...", mc.ID)
-				mc.next()
+				log.Debugf("[Monitor %d] Store updated while starving. Retrying next(manual=%v)...", mc.ID, mc.State.ManualRecovery)
+				mc.next(mc.State.ManualRecovery)
 			}
 		case cmd := <-mc.Commands:
 			mc.handleCommand(cmd)
@@ -161,7 +167,9 @@ func (mc *MonitorController) handleCommand(cmd Command) {
 	log.Debugf("[Monitor %d] Actor received command %v (Pending: %d)", mc.ID, cmd, len(mc.Commands))
 	switch cmd {
 	case CmdNext:
-		mc.next()
+		mc.next(true)
+	case CmdNextAuto:
+		mc.next(false)
 	case CmdPrev:
 		mc.prev()
 	case CmdDelete:
@@ -172,10 +180,24 @@ func (mc *MonitorController) handleCommand(cmd Command) {
 		mc.updateShuffle()
 	case CmdSyncState:
 		mc.syncState()
+	case CmdPause:
+		mc.togglePause()
 	}
 }
 
-func (mc *MonitorController) next() {
+func (mc *MonitorController) togglePause() {
+	mc.State.Paused = !mc.State.Paused
+	log.Printf("[Monitor %d] Pause set to %v", mc.ID, mc.State.Paused)
+	if mc.OnWallpaperChanged != nil {
+		mc.OnWallpaperChanged(mc.State.CurrentImage, mc.ID)
+	}
+}
+
+func (mc *MonitorController) next(manual bool) {
+	if !manual && mc.State.Paused {
+		log.Debugf("[Monitor %d] Skipping automatic Next (Monitor is paused)", mc.ID)
+		return
+	}
 	width, height := mc.Monitor.Rect.Dx(), mc.Monitor.Rect.Dy()
 	resKey := fmt.Sprintf("%dx%d", width, height)
 
@@ -204,9 +226,11 @@ func (mc *MonitorController) next() {
 	if len(bucketIDs) == 0 {
 		log.Printf("[Monitor %d] No images found for resolution %s. Waiting for fetch...", mc.ID, resKey)
 		mc.State.WaitingForImages = true
+		mc.State.ManualRecovery = manual
 		return
 	}
 	mc.State.WaitingForImages = false
+	mc.State.ManualRecovery = false
 
 	// 3. Rebuild Shuffle if needed
 	// Check if shuffle is stale either due to pending updates (content change) or length mismatch (legacy/fallback)
@@ -246,14 +270,10 @@ func (mc *MonitorController) rebuildShuffle(ids []string) {
 	shuffled := make([]string, len(ids))
 	copy(shuffled, ids)
 
-	if mc.cfg != nil && !mc.cfg.GetImgShuffle() {
-		// Sequential - no shuffle needed, already copied in order
-	} else {
-		// Random
-		rand.Shuffle(len(shuffled), func(i, j int) {
-			shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
-		})
-	}
+	// Always shuffle in modern Spice
+	rand.Shuffle(len(shuffled), func(i, j int) {
+		shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
+	})
 
 	mc.State.ShuffleIDs = shuffled
 	mc.State.RandomPos = 0
@@ -317,7 +337,7 @@ func (mc *MonitorController) deleteCurrent() {
 	}
 
 	// 3. Move to next
-	mc.next()
+	mc.next(true)
 }
 
 func (mc *MonitorController) toggleFavorite() {

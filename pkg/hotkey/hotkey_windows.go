@@ -10,7 +10,10 @@ import (
 	"golang.design/x/hotkey"
 )
 
-const modAlt = hotkey.ModAlt
+const (
+	modBase  = hotkey.ModAlt
+	modExtra = hotkey.ModCtrl
+)
 
 var (
 	user32               = syscall.NewLazyDLL("user32.dll")

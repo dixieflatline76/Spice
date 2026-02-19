@@ -338,66 +338,51 @@ func TestNavigation(t *testing.T) {
 		}
 	}
 
-	// 1. Set Shuffle False
-	wp.SetShuffleImage(false)
-	pump() // Consume CmdUpdateShuffle
+	// Shuffle is now permanent and global.
 
 	// 2. Next
 	wp.SetNextWallpaper(-1, true)
 	pump()
 
-	// Verify
-	assert.Equal(t, "img1", mc.State.CurrentImage.ID)
+	firstID := mc.State.CurrentImage.ID
+	assert.Contains(t, []string{"img1", "img2"}, firstID)
 	mockOS.AssertCalled(t, "SetWallpaper", mock.MatchedBy(func(path string) bool {
-		return strings.HasSuffix(path, "img1.jpg")
+		return strings.HasSuffix(path, firstID+".jpg")
 	}), 0)
 
-	// 3. Next -> img2
-	wp.SetNextWallpaper(-1, true)
-	pump()
-	assert.Equal(t, "img2", mc.State.CurrentImage.ID)
+	otherID := "img2"
+	if firstID == "img2" {
+		otherID = "img1"
+	}
 
-	// 4. Next -> img1 (wrap)
+	// 3. Next -> otherID
 	wp.SetNextWallpaper(-1, true)
 	pump()
-	assert.Equal(t, "img1", mc.State.CurrentImage.ID)
+	assert.Equal(t, otherID, mc.State.CurrentImage.ID)
+
+	// 4. Next -> firstID (wrap)
+	wp.SetNextWallpaper(-1, true)
+	pump()
+	assert.Equal(t, firstID, mc.State.CurrentImage.ID)
 }
 
-func TestTogglePause(t *testing.T) {
+func TestFrequencyNever(t *testing.T) {
 	// Setup
 	ResetConfig()
 	prefs := NewMockPreferences()
 	cfg := GetConfig(prefs)
-	mockPM := new(MockPluginManager)
 
 	wp := &Plugin{
-		cfg:     cfg,
-		manager: mockPM,
+		cfg: cfg,
 	}
-
-	// Mock NotifyUser for frequency change
-	mockPM.On("NotifyUser", "Wallpaper Change", mock.Anything).Return()
 
 	// Initial state: Default frequency (Hourly)
 	assert.Equal(t, FrequencyHourly, wp.cfg.GetWallpaperChangeFrequency())
-	assert.False(t, wp.IsPaused())
 
-	// Toggle Pause -> Should become Never
-	wp.TogglePause()
+	// Set to Never
+	wp.cfg.SetWallpaperChangeFrequency(FrequencyNever)
 	assert.Equal(t, FrequencyNever, wp.cfg.GetWallpaperChangeFrequency())
 	assert.True(t, wp.IsPaused())
-	assert.Equal(t, FrequencyHourly, wp.prePauseFrequency) // Should store previous
-
-	// Toggle Resume -> Should restore Hourly
-	wp.TogglePause()
-	assert.Equal(t, FrequencyHourly, wp.cfg.GetWallpaperChangeFrequency())
-	assert.False(t, wp.IsPaused())
-
-	// Test Resume with no history (simulate fresh start paused)
-	wp.prePauseFrequency = FrequencyNever // Reset history
-	wp.cfg.SetWallpaperChangeFrequency(FrequencyNever)
-	wp.TogglePause()
-	assert.Equal(t, FrequencyHourly, wp.cfg.GetWallpaperChangeFrequency()) // Should default to Hourly
 }
 
 func TestGetInstance(t *testing.T) {
@@ -743,7 +728,7 @@ func TestSetNextWallpaper_Stagger(t *testing.T) {
 	// Check Mon 0 (Immediate)
 	select {
 	case cmd := <-mon0.Commands:
-		assert.Equal(t, CmdNext, cmd, "Monitor 0 should receive CmdNext immediately")
+		assert.Equal(t, CmdNextAuto, cmd, "Monitor 0 should receive CmdNextAuto immediately")
 	default:
 		t.Error("Monitor 0 did not receive command immediately")
 	}
@@ -770,7 +755,7 @@ func TestSetNextWallpaper_Stagger(t *testing.T) {
 	// Check Mon 0
 	select {
 	case cmd := <-mon0.Commands:
-		assert.Equal(t, CmdNext, cmd)
+		assert.Equal(t, CmdNextAuto, cmd)
 	default:
 		t.Error("Monitor 0 missing command")
 	}
@@ -778,7 +763,7 @@ func TestSetNextWallpaper_Stagger(t *testing.T) {
 	// Check Mon 1 (Immediate now)
 	select {
 	case cmd := <-mon1.Commands:
-		assert.Equal(t, CmdNext, cmd, "Monitor 1 should receive CmdNext immediately when Stagger is OFF")
+		assert.Equal(t, CmdNextAuto, cmd, "Monitor 1 should receive CmdNextAuto immediately when Stagger is OFF")
 	default:
 		t.Error("Monitor 1 missing command when Stagger is OFF")
 	}

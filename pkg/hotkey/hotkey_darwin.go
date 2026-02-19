@@ -24,7 +24,10 @@ int checkAccessibilityNative() {
 */
 import "C"
 
-const modAlt = hotkey.ModOption
+const (
+	modBase  = hotkey.ModCtrl
+	modExtra = hotkey.ModOption
+)
 
 func HasAccessibility() bool {
 	return C.checkAccessibilityNative() != 0

@@ -64,9 +64,7 @@ type Plugin struct {
 	ctx                 context.Context
 	cancel              context.CancelFunc
 	downloadWaitGroup   *sync.WaitGroup
-	prePauseFrequency   Frequency
 	pauseChangeCallback func(bool)
-	pauseMenuItem       *fyne.MenuItem
 	providers           map[string]provider.ImageProvider
 	favoriter           provider.Favoriter
 	actionChan          chan func()
@@ -354,6 +352,23 @@ func (wp *Plugin) Activate() {
 		wp.Monitors[m.ID] = mc
 		log.Printf("Monitor Actor %d started: %s %v", m.ID, m.Name, m.Rect)
 	}
+	wp.pauseChangeCallback = func(paused bool) {
+		wp.monMu.RLock()
+		ids := make([]int, 0, len(wp.Monitors))
+		for id := range wp.Monitors {
+			ids = append(ids, id)
+		}
+		wp.monMu.RUnlock()
+
+		for _, id := range ids {
+			wp.monMu.RLock()
+			mc, ok := wp.Monitors[id]
+			wp.monMu.RUnlock()
+			if ok {
+				go wp.updateTrayMenuUI(mc.State.CurrentImage, id)
+			}
+		}
+	}
 	wp.monMu.Unlock()
 
 	wp.syncStoreWithConfig()
@@ -370,11 +385,13 @@ func (wp *Plugin) Activate() {
 		go wp.StartNightlyRefresh()
 	}
 
-	wp.SetShuffleImage(wp.cfg.GetImgShuffle())
 	wp.SetSmartFit(wp.cfg.GetSmartFit())
 
 	if wp.cfg.GetChgImgOnStart() {
-		wp.RefreshImagesAndPulse()
+		go func() {
+			time.Sleep(3 * time.Second)
+			wp.RefreshImagesAndPulse()
+		}()
 	} else {
 		// Reset all pages to 1 on clean activation if not pulsing
 		wp.downloadMutex.Lock()
@@ -384,7 +401,7 @@ func (wp *Plugin) Activate() {
 		wp.downloadMutex.Unlock()
 		wp.FetchNewImages()
 	}
-	wp.ChangeWallpaperFrequency(wp.cfg.GetWallpaperChangeFrequency())
+	wp.ChangeWallpaperFrequency(wp.cfg.GetWallpaperChangeFrequency(), false)
 
 	// Start monitor watcher
 	go wp.startMonitorWatcher()
@@ -460,7 +477,7 @@ func (wp *Plugin) SetNextWallpaper(monitorID int, forceImmediate bool) {
 	for _, id := range ids {
 		if id == 0 {
 			// Primary always immediate
-			wp.dispatch(id, CmdNext)
+			wp.dispatch(id, CmdNextAuto)
 			continue
 		}
 
@@ -475,11 +492,11 @@ func (wp *Plugin) SetNextWallpaper(monitorID int, forceImmediate bool) {
 			mID := id
 			time.AfterFunc(delay, func() {
 				log.Printf("[Stagger] Executing staggered update for monitor %d", mID)
-				wp.dispatch(mID, CmdNext)
+				wp.dispatch(mID, CmdNextAuto)
 			})
 		} else {
 			log.Printf("[Stagger] Executing IMMEDIATE update for monitor %d (Force: %v, StaggerCfg: %v)", id, forceImmediate, stagger)
-			wp.dispatch(id, CmdNext)
+			wp.dispatch(id, CmdNextAuto)
 		}
 	}
 }
@@ -496,30 +513,46 @@ func (wp *Plugin) DeleteCurrentImage(monitorID int) {
 	wp.dispatch(monitorID, CmdDelete)
 }
 
-// TogglePause toggles the pause state.
-func (wp *Plugin) TogglePause() {
-	current := wp.cfg.GetWallpaperChangeFrequency()
-	if current == FrequencyNever {
-		if wp.prePauseFrequency != FrequencyNever {
-			wp.ChangeWallpaperFrequency(wp.prePauseFrequency)
-		} else {
-			wp.ChangeWallpaperFrequency(FrequencyHourly)
-		}
-	} else {
-		wp.prePauseFrequency = current
-		wp.ChangeWallpaperFrequency(FrequencyNever)
+// TogglePauseMonitorAction toggles pause for a specific monitor.
+func (wp *Plugin) TogglePauseMonitorAction(monitorID int) {
+	if wp.IsPaused() {
+		return
 	}
-	// Notify UI via callback if set
-	if wp.pauseChangeCallback != nil {
-		wp.pauseChangeCallback(wp.IsPaused())
+	wp.dispatch(monitorID, CmdPause)
+
+	// Notify user of the change (reflecting the keyboard shortcut style)
+	state := "Resumed Play"
+	if wp.IsMonitorPaused(monitorID) {
+		state = "Paused Play"
 	}
+	wp.manager.NotifyUser(fmt.Sprintf("Display %d", monitorID+1), state)
 }
 
 func (wp *Plugin) IsPaused() bool {
 	return wp.cfg.GetWallpaperChangeFrequency() == FrequencyNever
 }
 
-func (wp *Plugin) ChangeWallpaperFrequency(newFreq Frequency) {
+// IsMonitorPaused returns whether a specific monitor is paused (locally).
+func (wp *Plugin) IsMonitorPaused(monitorID int) bool {
+	wp.monMu.RLock()
+	defer wp.monMu.RUnlock()
+	if mc, ok := wp.Monitors[monitorID]; ok {
+		return mc.State.Paused
+	}
+	return false
+}
+
+// GetShortcutsDisabled returns whether hotkeys are disabled.
+func (wp *Plugin) GetShortcutsDisabled() bool {
+	return wp.cfg.GetShortcutsDisabled()
+}
+
+// SetShortcutsDisabled sets the hotkey disabled preference.
+func (wp *Plugin) SetShortcutsDisabled(disabled bool) {
+	wp.cfg.SetShortcutsDisabled(disabled)
+}
+
+func (wp *Plugin) ChangeWallpaperFrequency(newFreq Frequency, silent bool) {
 	wp.cfg.SetWallpaperChangeFrequency(newFreq)
 
 	wp.downloadMutex.Lock()
@@ -549,7 +582,17 @@ func (wp *Plugin) ChangeWallpaperFrequency(newFreq Frequency) {
 		}
 	}
 
-	wp.manager.NotifyUser("Wallpaper Change", newFreq.String())
+	if !silent {
+		msg := newFreq.String()
+		if newFreq == FrequencyNever {
+			msg = "Never (Paused)"
+		}
+		wp.manager.NotifyUser("Wallpaper Change Frequency", msg)
+	}
+
+	if wp.manager != nil {
+		wp.manager.RebuildTrayMenu()
+	}
 }
 
 func (wp *Plugin) GetOS() OS {
@@ -560,10 +603,6 @@ func (wp *Plugin) GetOS() OS {
 func (wp *Plugin) TriggerFavorite(monitorID int) {
 	log.Printf("[DEBUG] TriggerFavorite called for monitor %d", monitorID)
 	wp.dispatch(monitorID, CmdFavorite)
-}
-
-func (wp *Plugin) TogglePauseAction() {
-	wp.TogglePause()
 }
 
 func (wp *Plugin) TriggerOpenSettings() {
@@ -660,18 +699,6 @@ func (wp *Plugin) ToggleFavorite(img provider.Image) {
 	// Dispatch sync command outside of lock to avoid reentrancy issues
 	for _, id := range syncIDs {
 		wp.dispatch(id, CmdSyncState)
-	}
-}
-
-func (wp *Plugin) SetShuffleImage(enable bool) {
-	wp.cfg.SetImgShuffle(enable)
-	// Force all monitors to re-evaluate their shuffle state
-	wp.dispatch(-1, CmdUpdateShuffle)
-
-	if enable {
-		wp.manager.NotifyUser("Wallpaper Shuffle", "Shuffle Enabled")
-	} else {
-		wp.manager.NotifyUser("Wallpaper Shuffle", "Shuffle Disabled")
 	}
 }
 
@@ -871,6 +898,19 @@ func (wp *Plugin) updateTrayMenuUI(img provider.Image, monitorID int) {
 			} else {
 				mItems.FavoriteMenuItem.Label = "Add to Favorites"
 				mItems.FavoriteMenuItem.Icon, _ = wp.manager.GetAssetManager().GetIcon("favorite.png")
+			}
+		}
+
+		// Update Pause State
+		if mItems.PauseMenuItem != nil {
+			paused := wp.IsMonitorPaused(monitorID)
+			mItems.PauseMenuItem.Checked = paused
+			if paused {
+				mItems.PauseMenuItem.Label = "Resume Play"
+				mItems.PauseMenuItem.Icon, _ = wp.manager.GetAssetManager().GetIcon("play.png")
+			} else {
+				mItems.PauseMenuItem.Label = "Pause Play"
+				mItems.PauseMenuItem.Icon, _ = wp.manager.GetAssetManager().GetIcon("pause.png")
 			}
 		}
 
