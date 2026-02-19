@@ -44,13 +44,6 @@ type ImageProcessor interface {
 	CheckCompatibility(imgWidth, imgHeight, targetWidth, targetHeight int) error
 }
 
-// MonitorMenuItems holds the tray menu items for a specific monitor.
-type MonitorMenuItems struct {
-	ProviderMenuItem *fyne.MenuItem
-	ArtistMenuItem   *fyne.MenuItem
-	FavoriteMenuItem *fyne.MenuItem
-}
-
 // Plugin is the main struct for the wallpaper downloader plugin.
 type Plugin struct {
 	os                  OS
@@ -79,7 +72,7 @@ type Plugin struct {
 	actionChan          chan func()
 
 	// New Components
-	store        *ImageStore
+	store        StoreInterface
 	fm           *FileManager
 	pipeline     *Pipeline
 	jobSubmitter JobSubmitter // Interface for testing
@@ -194,7 +187,7 @@ func (wp *Plugin) RequestFetch() {
 	defer wp.downloadMutex.Unlock()
 
 	// 1. Basic Debounce (Avoid spamming from UI or multiple monitors)
-	if wp.isDownloading || wp.fetchingInProgress.Value() {
+	if wp.isDownloading || (wp.fetchingInProgress != nil && wp.fetchingInProgress.Value()) {
 		return
 	}
 
@@ -608,7 +601,29 @@ func (wp *Plugin) ToggleFavorite(img provider.Image) {
 			return
 		}
 		img.IsFavorited = false
-		wp.store.Update(img)
+
+		if img.Provider == "Favorites" {
+			log.Printf("ToggleFavorite: Deep deleting unfavorited local favorite %s", img.ID)
+			wp.store.Remove(img.ID)
+
+			// Auto-Advance Fix: If this image is currently active on any monitor, pulse forward.
+			// This ensures we don't try to maintain a reference to a deleted file.
+			wp.monMu.RLock()
+			var affectedMonitors []int
+			for id, mc := range wp.Monitors {
+				if mc.State.CurrentImage.ID == img.ID {
+					affectedMonitors = append(affectedMonitors, id)
+				}
+			}
+			wp.monMu.RUnlock()
+
+			for _, id := range affectedMonitors {
+				log.Printf("ToggleFavorite: Auto-advancing monitor %d after deep delete", id)
+				wp.SetNextWallpaper(id, true)
+			}
+		} else {
+			wp.store.Update(img)
+		}
 		wp.manager.NotifyUser("Favorites", "Removed from favorites.")
 	} else {
 		// Add
@@ -815,6 +830,9 @@ func (wp *Plugin) startMonitorWatcher() {
 }
 
 func (wp *Plugin) updateTrayMenuUI(img provider.Image, monitorID int) {
+	if wp.runOnUI == nil {
+		return
+	}
 	wp.runOnUI(func() {
 		wp.monMu.RLock()
 		mItems, ok := wp.monitorMenu[monitorID]

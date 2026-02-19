@@ -20,6 +20,10 @@ func (wp *Plugin) FetchNewImages() {
 			log.Println("Starting image fetch from active queries...")
 
 			wp.downloadMutex.RLock()
+			if wp.cfg == nil {
+				wp.downloadMutex.RUnlock()
+				return
+			}
 			queries := wp.cfg.Queries
 			wp.downloadMutex.RUnlock()
 

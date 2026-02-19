@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"time"
 
+	"fyne.io/fyne/v2"
 	"github.com/dixieflatline76/Spice/pkg/provider"
 	"github.com/dixieflatline76/Spice/util/log"
 )
@@ -30,11 +32,33 @@ type StoreInterface interface {
 	GetByID(id string) (provider.Image, bool)
 	Remove(id string) (provider.Image, bool)
 	Update(img provider.Image) bool
+	Add(img provider.Image) bool
+	Clear()
 	MarkSeen(filePath string)
 	SeenCount() int
 	GetIDsForResolution(resolution string) []string
 	GetBucketSize(resolution string) int
 	GetUpdateChannel() <-chan struct{}
+
+	// Administrative and Batch Operations
+	Sync(limit int, targetFlags map[string]bool, activeQueryIDs map[string]bool)
+	GetKnownIDs() map[string]bool
+	SetFileManager(fm *FileManager, cacheFile string)
+	SetAsyncSave(enabled bool)
+	SetDebounceDuration(d time.Duration)
+	LoadCache() error
+	LoadAvoidSet(avoidSet map[string]bool)
+	Wipe()
+	RemoveByQueryID(queryID string)
+	ResetFavorites()
+	WaitForImages(ctx context.Context) error
+}
+
+// MonitorMenuItems holds the tray menu items for a specific monitor.
+type MonitorMenuItems struct {
+	ProviderMenuItem *fyne.MenuItem
+	ArtistMenuItem   *fyne.MenuItem
+	FavoriteMenuItem *fyne.MenuItem
 }
 
 // MonitorState holds the persistence/cursor state for a single monitor.
