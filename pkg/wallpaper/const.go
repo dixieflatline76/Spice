@@ -22,6 +22,7 @@ const (
 	FaceBoostPrefKey             = pluginPrefix + "face_boost_key"         // FaceBoostPrefKey is used to set and retrieve the boolean flag for face boost
 	FaceCropPrefKey              = pluginPrefix + "face_crop_key"          // FaceCropPrefKey is used to set and retrieve the boolean flag for face crop
 	StaggerMonitorChangesPrefKey = pluginPrefix + "stagger_changes_key"    // StaggerMonitorChangesPrefKey is used to set and retrieve the boolean flag for staggering wallpaper changes
+	ShortcutsDisabledPrefKey     = pluginPrefix + "shortcuts_disabled_key" // ShortcutsDisabledPrefKey is used to set and retrieve the boolean flag for disabling hotkeys
 
 	// Provider keys (Shared)
 	UnsplashTokenPrefKey            = "unsplash_access_token"

@@ -19,7 +19,7 @@ type Pipeline struct {
 	ctx        context.Context
 	cancel     context.CancelFunc
 	config     *Config
-	store      *ImageStore
+	store      StoreInterface
 	processor  ProcessFunc
 }
 
@@ -52,7 +52,7 @@ type StateCmd struct {
 }
 
 // NewPipeline creates a new pipeline with the given configuration and store.
-func NewPipeline(cfg *Config, store *ImageStore, processor ProcessFunc) *Pipeline {
+func NewPipeline(cfg *Config, store StoreInterface, processor ProcessFunc) *Pipeline {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Pipeline{
 		jobChan:    make(chan DownloadJob, 100), // Buffered job channel

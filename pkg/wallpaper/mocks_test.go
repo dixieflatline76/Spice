@@ -7,6 +7,7 @@ import (
 	"image"
 	"net/url"
 	"os"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"github.com/dixieflatline76/Spice/asset"
@@ -124,6 +125,9 @@ type MockImageStore struct {
 
 func (m *MockImageStore) Count() int {
 	args := m.Called()
+	if len(args) == 0 {
+		return 0
+	}
 	return args.Int(0)
 }
 
@@ -143,6 +147,9 @@ func (m *MockImageStore) MarkSeen(filePath string) {
 
 func (m *MockImageStore) SeenCount() int {
 	args := m.Called()
+	if len(args) == 0 {
+		return 0
+	}
 	return args.Int(0)
 }
 
@@ -172,6 +179,62 @@ func (m *MockImageStore) GetUpdateChannel() <-chan struct{} {
 		return nil
 	}
 	return args.Get(0).(<-chan struct{})
+}
+
+func (m *MockImageStore) Add(img provider.Image) bool {
+	args := m.Called(img)
+	return args.Bool(0)
+}
+
+func (m *MockImageStore) Clear() {
+	m.Called()
+}
+
+func (m *MockImageStore) Sync(limit int, targetFlags map[string]bool, activeQueryIDs map[string]bool) {
+	m.Called(limit, targetFlags, activeQueryIDs)
+}
+
+func (m *MockImageStore) GetKnownIDs() map[string]bool {
+	args := m.Called()
+	return args.Get(0).(map[string]bool)
+}
+
+func (m *MockImageStore) SetFileManager(fm *FileManager, cacheFile string) {
+	m.Called(fm, cacheFile)
+}
+
+func (m *MockImageStore) SetAsyncSave(enabled bool) {
+	m.Called(enabled)
+}
+
+func (m *MockImageStore) SetDebounceDuration(d time.Duration) {
+	m.Called(d)
+}
+
+func (m *MockImageStore) LoadCache() error {
+	args := m.Called()
+	return args.Error(0)
+}
+
+func (m *MockImageStore) LoadAvoidSet(avoidSet map[string]bool) {
+	m.Called(avoidSet)
+}
+
+func (m *MockImageStore) Wipe() {
+	m.Called()
+}
+
+func (m *MockImageStore) RemoveByQueryID(queryID string) {
+	m.Called(queryID)
+}
+
+func (m *MockImageStore) ResetFavorites() {
+	m.Called()
+}
+
+func (m *MockImageStore) WaitForImages(ctx context.Context) error {
+	args := m.Called(ctx)
+	return args.Error(0)
 }
 
 // MockImageProcessor is a mock implementation of the ImageProcessor interface.

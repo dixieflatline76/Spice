@@ -63,7 +63,7 @@ func (b *PrefsPanelBuilder) addFrequencySetting(c *fyne.Container) {
 	config.ApplyFunc = func(val interface{}) {
 		freq := Frequency(val.(int))
 		b.plugin.cfg.SetWallpaperChangeFrequency(freq)
-		b.plugin.ChangeWallpaperFrequency(freq)
+		b.plugin.ChangeWallpaperFrequency(freq, true)
 		config.InitialValue = int(freq)
 	}
 	b.sm.CreateSelectSetting(&config, c)

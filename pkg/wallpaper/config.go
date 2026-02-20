@@ -42,8 +42,10 @@ type Config struct {
 	Tuning                  TuningConfig `json:"tuning"`
 
 	// Callbacks
-	QueryRemovedCallback  func(queryID string) `json:"-"`
-	QueryDisabledCallback func(queryID string) `json:"-"`
+	QueryRemovedCallback     func(queryID string) `json:"-"`
+	QueryDisabledCallback    func(queryID string) `json:"-"`
+	FavoritesClearedCallback func()               `json:"-"`
+	ShortcutsDisabled        bool                 `json:"shortcuts_disabled"`
 }
 
 // ImageQuery struct to hold the URL of an image and whether it is active
@@ -293,6 +295,13 @@ func (c *Config) SetQueryDisabledCallback(callback func(queryID string)) {
 	c.QueryDisabledCallback = callback
 }
 
+// SetFavoritesClearedCallback sets the callback for when all favorites are cleared.
+func (c *Config) SetFavoritesClearedCallback(callback func()) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.FavoritesClearedCallback = callback
+}
+
 // RemoveUnsplashQuery removes an Unsplash query from the unified list.
 func (c *Config) RemoveUnsplashQuery(id string) error {
 	return c.RemoveImageQuery(id) // Reuse generic remove
@@ -371,10 +380,24 @@ func (c *Config) GetActiveQueryIDs() map[string]bool {
 	return active
 }
 
-// InAvoidSet checks if the given ID is in the avoid set
+// InAvoidSet checks if the given ID is in the avoid set.
+// It supports fuzzy matching for namespaced IDs to maintain compatibility with legacy raw IDs.
 func (c *Config) InAvoidSet(id string) bool {
-	_, found := c.avoidMap.Load(id)
-	return found
+	// 1. Direct match (Exact namespaced or legacy)
+	if _, found := c.avoidMap.Load(id); found {
+		return true
+	}
+
+	// 2. Fuzzy match: If namespaced (e.g. Wallhaven_123), check for raw legacy (e.g. 123)
+	if idx := strings.Index(id, "_"); idx != -1 {
+		legacyID := id[idx+1:]
+		if _, found := c.avoidMap.Load(legacyID); found {
+			log.Debugf("AvoidSet: Blocked namespaced ID %s via legacy match %s", id, legacyID)
+			return true
+		}
+	}
+
+	return false
 }
 
 // AddToAvoidSet adds the given ID to the avoid set
@@ -450,16 +473,12 @@ func (c *Config) SetWallpaperChangeFrequency(frequency Frequency) {
 
 // GetImgShuffle returns the image shuffle preference from the config.
 func (c *Config) GetImgShuffle() bool {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.BoolWithFallback(ImgShufflePrefKey, false)
+	return true // Permanently enabled
 }
 
 // SetImgShuffle sets the image shuffle preference.
 func (c *Config) SetImgShuffle(enabled bool) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.SetBool(ImgShufflePrefKey, enabled)
+	// No-op: Permanent Shuffle is active
 }
 
 // GetUnsplashToken returns the Unsplash Access Token from the keyring.
@@ -710,6 +729,20 @@ func (c *Config) GetFaceCropEnabled() bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.BoolWithFallback(FaceCropPrefKey, true) // Default: true
+}
+
+// GetShortcutsDisabled returns the hotkey disabled preference.
+func (c *Config) GetShortcutsDisabled() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.BoolWithFallback(ShortcutsDisabledPrefKey, false) // Default: active
+}
+
+// SetShortcutsDisabled sets the hotkey disabled preference.
+func (c *Config) SetShortcutsDisabled(disabled bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.SetBool(ShortcutsDisabledPrefKey, disabled)
 }
 
 // GetAssetManager returns the asset manager

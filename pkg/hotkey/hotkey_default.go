@@ -13,11 +13,8 @@ import (
 )
 
 // Constants shared by Windows and Darwin (and potentially others in !linux)
+// modBase and modExtra are defined in platform-specific files.
 const (
-	modCtrl = hotkey.ModCtrl
-
-	modShift = hotkey.ModShift
-
 	keyRight = hotkey.KeyRight
 	keyLeft  = hotkey.KeyLeft
 	keyUp    = hotkey.KeyUp
@@ -39,84 +36,94 @@ const (
 // StartListeners initializes and starts the global hotkey listeners.
 // It registers shortcuts for Next, Previous, Trash, Favorites, Pause, and Options.
 func StartListeners(mgr ui.PluginManager) {
-	// Define shortcuts
+	wp := wallpaper.GetInstance()
 
-	// --- 1. Targeted Handlers (Opt/Alt + Arrows) ---
-	hkNext := hotkey.New([]hotkey.Modifier{modAlt}, keyRight)
-	hkPrev := hotkey.New([]hotkey.Modifier{modAlt}, keyLeft)
-	hkTrash := hotkey.New([]hotkey.Modifier{modAlt}, keyDown)
-	hkFav := hotkey.New([]hotkey.Modifier{modAlt}, keyUp)
+	// --- 1. Targeted Handlers (Base Modifier + [1-9] + Key) ---
+	// These only trigger if a number key 1-9 is held.
+	hkTargetedNext := hotkey.New([]hotkey.Modifier{modBase}, keyRight)
+	hkTargetedPrev := hotkey.New([]hotkey.Modifier{modBase}, keyLeft)
+	hkTargetedTrash := hotkey.New([]hotkey.Modifier{modBase}, keyDown)
+	hkTargetedFav := hotkey.New([]hotkey.Modifier{modBase}, keyUp)
+	hkTargetedPause := hotkey.New([]hotkey.Modifier{modBase}, keyP)
 
-	// --- 2. Global Handlers (Cmd+Opt / Ctrl+Alt + Arrows) ---
-	hkGlobalNext := hotkey.New([]hotkey.Modifier{modCtrl, modAlt}, keyRight)
-	hkGlobalPrev := hotkey.New([]hotkey.Modifier{modCtrl, modAlt}, keyLeft)
+	// --- 2. Global Handlers (Base + Extra Modifier + Key) ---
+	// These apply to ALL monitors simultaneously.
+	hkGlobalNext := hotkey.New([]hotkey.Modifier{modBase, modExtra}, keyRight)
+	hkGlobalPrev := hotkey.New([]hotkey.Modifier{modBase, modExtra}, keyLeft)
+	hkGlobalSync := hotkey.New([]hotkey.Modifier{modBase, modExtra}, keyD)
+	hkOpts := hotkey.New([]hotkey.Modifier{modBase, modExtra}, keyO)
 
-	// --- 3. Management (Cmd+Opt / Ctrl+Alt + Letters) ---
-	hkPause := hotkey.New([]hotkey.Modifier{modCtrl, modAlt}, keyP)
-	hkOpts := hotkey.New([]hotkey.Modifier{modCtrl, modAlt}, keyO)
-	hkGlobalSync := hotkey.New([]hotkey.Modifier{modCtrl, modAlt}, keyD)
-
-	// Start Targeted listeners
-	registerAndListen(hkNext, "Targeted Next", func() {
-		handleTargeted(mgr, "Next Wallpaper", func(mid int) {
-			if wp := wallpaper.GetInstance(); wp != nil {
+	// Register Targeted listeners
+	registerAndListen(hkTargetedNext, "Targeted Next", func() {
+		handleTargeted(mgr, func(mid int) string {
+			if wp != nil {
 				wp.SetNextWallpaper(mid, true)
+				return fmt.Sprintf("Display %d: Next Wallpaper", mid+1)
 			}
+			return ""
 		})
 	})
 
-	registerAndListen(hkPrev, "Targeted Previous", func() {
-		handleTargeted(mgr, "Previous Wallpaper", func(mid int) {
-			if wp := wallpaper.GetInstance(); wp != nil {
+	registerAndListen(hkTargetedPrev, "Targeted Previous", func() {
+		handleTargeted(mgr, func(mid int) string {
+			if wp != nil {
 				wp.SetPreviousWallpaper(mid, true)
+				return fmt.Sprintf("Display %d: Previous Wallpaper", mid+1)
 			}
+			return ""
 		})
 	})
 
-	registerAndListen(hkTrash, "Targeted Trash", func() {
-		handleTargeted(mgr, "Image Blocked", func(mid int) {
-			if wp := wallpaper.GetInstance(); wp != nil {
+	registerAndListen(hkTargetedTrash, "Targeted Trash", func() {
+		handleTargeted(mgr, func(mid int) string {
+			if wp != nil {
 				wp.DeleteCurrentImage(mid)
+				return fmt.Sprintf("Display %d: Image Blocked", mid+1)
 			}
+			return ""
 		})
 	})
 
-	registerAndListen(hkFav, "Targeted Favorite", func() {
-		handleTargeted(mgr, "Added to Favorites", func(mid int) {
-			if wp := wallpaper.GetInstance(); wp != nil {
+	registerAndListen(hkTargetedFav, "Targeted Favorite", func() {
+		handleTargeted(mgr, func(mid int) string {
+			if wp != nil {
 				wp.TriggerFavorite(mid)
+				return fmt.Sprintf("Display %d: Added to Favorites", mid+1)
 			}
+			return ""
 		})
 	})
 
-	// Start Global listeners
+	registerAndListen(hkTargetedPause, "Targeted Pause", func() {
+		handleTargeted(mgr, func(mid int) string {
+			if wp != nil {
+				wp.TogglePauseMonitorAction(mid)
+			}
+			return ""
+		})
+	})
+
+	// Register Global listeners
 	registerAndListen(hkGlobalNext, "Global Next", func() {
-		if wp := wallpaper.GetInstance(); wp != nil {
+		if wp != nil {
 			wp.SetNextWallpaper(-1, true)
 		}
 	})
 
 	registerAndListen(hkGlobalPrev, "Global Previous", func() {
-		if wp := wallpaper.GetInstance(); wp != nil {
+		if wp != nil {
 			wp.SetPreviousWallpaper(-1, true)
 		}
 	})
 
-	// Start Management listeners
-	registerAndListen(hkPause, "Toggle Pause", func() {
-		if wp := wallpaper.GetInstance(); wp != nil {
-			wp.TogglePauseAction()
-		}
-	})
-
 	registerAndListen(hkOpts, "Open Preferences", func() {
-		if wp := wallpaper.GetInstance(); wp != nil {
+		if wp != nil {
 			wp.TriggerOpenSettings()
 		}
 	})
 
 	registerAndListen(hkGlobalSync, "Sync Monitors", func() {
-		if wp := wallpaper.GetInstance(); wp != nil {
+		if wp != nil {
 			wp.SyncMonitors(true)
 		}
 	})
@@ -137,6 +144,9 @@ func registerAndListen(hk *hotkey.Hotkey, name string, action func()) {
 		}()
 
 		for range hk.Keydown() {
+			if wp := wallpaper.GetInstance(); wp != nil && wp.GetShortcutsDisabled() {
+				continue
+			}
 			now := time.Now().Format("15:04:05.000")
 			log.Debugf("[%s] Hotkey triggered: %s", now, name)
 			action()
@@ -147,21 +157,19 @@ func registerAndListen(hk *hotkey.Hotkey, name string, action func()) {
 	}()
 }
 
-func handleTargeted(mgr ui.PluginManager, actionName string, action func(mid int)) {
+func handleTargeted(mgr ui.PluginManager, action func(mid int) string) {
 	mid := GetMonitorIDFromKey()
 	title := "Wallpaper Action"
 	msg := ""
 
 	if mid != -1 {
-		msg = fmt.Sprintf("Display %d: %s", mid+1, actionName)
-		action(mid)
+		msg = action(mid)
 	} else {
-		// Default to display 1 if no number key is held
-		msg = fmt.Sprintf("Display 1: %s", actionName)
-		action(0)
+		log.Debugf("[Hotkey] Suppression: Base modifier combination detected but no number key held. Skipping.")
+		return
 	}
 
-	if mgr != nil {
+	if mgr != nil && msg != "" {
 		go func() {
 			log.Debugf("[Hotkey] Dispatching async notification: %s - %s", title, msg)
 			mgr.NotifyUser(title, msg)

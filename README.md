@@ -46,30 +46,31 @@ Target a specific monitor (**1-9**) by holding that number key while pressing th
 
 | Action | macOS Shortcut | Windows Shortcut |
 | :--- | :--- | :--- |
-| **Next Wallpaper** | `Option` + `1-9` + `→` | `Alt` + `1-9` + `→` |
-| **Prev Wallpaper** | `Option` + `1-9` + `←` | `Alt` + `1-9` + `←` |
-| **Fav / Unfav** | `Option` + `1-9` + `↑` | `Alt` + `1-9` + `↑` |
-| **Del + Block** | `Option` + `1-9` + `↓` | `Alt` + `1-9` + `↓` |
+| **Next Wallpaper** | `Command` + `1-9` + `→` | `Alt` + `1-9` + `→` |
+| **Prev Wallpaper** | `Command` + `1-9` + `←` | `Alt` + `1-9` + `←` |
+| **Fav / Unfav** | `Command` + `1-9` + `↑` | `Alt` + `1-9` + `↑` |
+| **Del + Block** | `Command` + `1-9` + `↓` | `Alt` + `1-9` + `↓` |
+| **Pause Play** | `Command` + `1-9` + `P` | `Alt` + `1-9` + `P` |
 
 #### Global Actions (All Monitors)
 These actions affect all displays simultaneously.
 
 | Action | macOS Shortcut | Windows Shortcut |
 | :--- | :--- | :--- |
-| **Next (All Displays)** | `Ctrl + Opt + →` | `Ctrl + Alt + →` |
-| **Previous (All Displays)** | `Ctrl + Opt + ←` | `Ctrl + Alt + ←` |
-| **Pause / Resume** | `Ctrl + Opt + P` | `Ctrl + Alt + P` |
-| **All Settings** | `Ctrl + Opt + O` | `Ctrl + Alt + O` |
-| **Global Sync** | `Ctrl + Opt + D` | `Ctrl + Alt + D` |
+| **Next (All Displays)** | `Cmd + Ctrl + →` | `Ctrl + Alt + →` |
+| **Previous (All Displays)** | `Cmd + Ctrl + ←` | `Ctrl + Alt + ←` |
+| **All Settings** | `Cmd + Ctrl + O` | `Ctrl + Alt + O` |
+| **Global Sync** | `Cmd + Ctrl + D` | `Ctrl + Alt + D` |
 
 > [!IMPORTANT]
 > **macOS Permissions:** Display-specific (chorded) hotkeys require **Accessibility** or **Input Monitoring** permissions to detect the number keys correctly. Go to *System Settings > Privacy & Security* to enable them for Spice.
 *   **🏷️ Instant Attribution:** See the artist/photographer name via the tray menu in real-time.
-*   **⏯️ Pause & Resume:** Hold onto a wallpaper you love, then resume the rotation when ready.
+*   **⏯️ Per-Display Pause:** Pause rotation on a specific monitor while keeping others moving, or stop all rotation via the "Never" frequency setting.
 *   **⛔ Blocklist:** Trash a wallpaper once, and it's gone forever.
 
-## Developers
+## 📚 Documentation
 
+* **User Guide:** For a comprehensive look at all settings and features, see our [**Detailed User Guide**](docs/user_guide.md).
 * **Architecture:** Curious how Spice works under the hood? Read our [**Architecture Documentation**](docs/architecture.md) for a deep dive into our Single-Writer concurrency model.
 * **New Providers:** Want to add your own wallpaper source? Check out our [**Provider Creation Guide**](docs/creating_new_providers.md) to learn how to implement the `ImageProvider` interface in minutes.
 * **New Plugins:** Want to extend Spice with completely new features? Read our [**Plugin Development Guide**](docs/creating_new_plugins.md).
@@ -102,6 +103,8 @@ Head to the [**Releases Page**](https://github.com/dixieflatline76/Spice/release
     *   Click "Always Allow on Every Website" to ensure seamless detection.
 
 ## 🚀 Usage
+
+For a comprehensive walkthrough of all features, keyboard shortcuts, and configuration options, please refer to the [**Detailed User Guide**](docs/user_guide.md).
 
 ### Tips
 

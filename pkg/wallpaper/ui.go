@@ -37,14 +37,9 @@ func (wp *Plugin) CreateTrayMenuItems() []*fyne.MenuItem {
 
 		// Global (but requested in root and submenus?)
 		// User instruction said: "sub menu with items starting from Next Wallpaper to Delete And Block"
-		// which includes Pause and Shuffle in his root list.
-		pauseItem := wp.manager.CreateToggleMenuItem("Pause Wallpaper", func(b bool) {
-			wp.TogglePause()
-			// This is a bit tricky since we have multiple menu items now.
-			// wp.RefreshTrayMenu() will handle it via updateTrayMenuUI if we trigger it.
-		}, "pause.png", wp.IsPaused())
-
-		shuffleItem := wp.manager.CreateToggleMenuItem("Shuffle Wallpapers", wp.SetShuffleImage, "shuffle.png", wp.cfg.GetImgShuffle())
+		pauseItem := wp.manager.CreateMenuItem("Pause Play", func() {
+			wp.TogglePauseMonitorAction(mID)
+		}, "pause.png")
 
 		// Info Items (Store in monitorMenu for updates)
 		mItems := &MonitorMenuItems{
@@ -67,21 +62,18 @@ func (wp *Plugin) CreateTrayMenuItems() []*fyne.MenuItem {
 		wp.monitorMenu[mID] = mItems
 		wp.monMu.Unlock()
 
-		// Store root pause/shuffle for global updates if it's the primary
-		if mID == 0 {
-			wp.pauseMenuItem = pauseItem
-			// We don't have a shuffleMenuItem field but we could add it if needed.
-		}
+		mItems.PauseMenuItem = pauseItem
 
 		res := []*fyne.MenuItem{
 			nextItem,
 			prevItem,
-			pauseItem,
-			shuffleItem,
-			fyne.NewMenuItemSeparator(),
-			mItems.ProviderMenuItem,
-			mItems.ArtistMenuItem,
 		}
+		if wp.cfg.GetWallpaperChangeFrequency() != FrequencyNever {
+			res = append(res, pauseItem)
+		}
+		res = append(res, fyne.NewMenuItemSeparator())
+		res = append(res, mItems.ProviderMenuItem)
+		res = append(res, mItems.ArtistMenuItem)
 		if mItems.FavoriteMenuItem != nil {
 			res = append(res, mItems.FavoriteMenuItem)
 		}

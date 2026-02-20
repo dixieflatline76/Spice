@@ -82,12 +82,12 @@ func TestDownloadAllImages(t *testing.T) {
 
 	// Update the mock provider to return the ts URL for the image path
 	mockProvider.ExpectedCalls = nil // Setup mock provider
-	mockProvider.On("Name").Return("MockProvider")
+	mockProvider.On("Name").Return("Wallhaven")
 	// ParseURL with Specific Match (Success)
 	mockProvider.On("ParseURL", "http://mock.url").Return("http://api.mock.url", nil)
 	// ParseURL with Catch-All (Error) - MUST BE DEFINED AFTER SPECIFIC
 	mockProvider.On("ParseURL", mock.Anything).Return("", assert.AnError)
-	img := provider.Image{ID: "test_img_1", Path: ts.URL + "/image1.jpg", Provider: "MockProvider"}
+	img := provider.Image{ID: "test_img_1", Path: ts.URL + "/image1.jpg", Provider: "Wallhaven"}
 	mockProvider.On("FetchImages", mock.Anything, "http://mock.url", 1).Return([]provider.Image{img}, nil)
 	// Expect EnrichImage call
 	mockProvider.On("EnrichImage", mock.Anything, mock.Anything).Return(img, nil)
@@ -119,6 +119,7 @@ func TestDownloadAllImages(t *testing.T) {
 	assert.NoError(t, wp.fm.EnsureDirs())
 	wp.store.SetFileManager(wp.fm, wp.downloadedDir+"/cache.json")
 	wp.pipeline = NewPipeline(wp.cfg, wp.store, wp.ProcessImageJob)
+	wp.jobSubmitter = wp.pipeline
 	wp.pipeline.Start(1)
 	defer wp.pipeline.Stop()
 	wp.providers["Wallhaven"] = mockProvider
@@ -140,7 +141,7 @@ func TestDownloadAllImages(t *testing.T) {
 
 	imgStored, ok := wp.store.Get(0)
 	assert.True(t, ok)
-	assert.Equal(t, "test_img_1", imgStored.ID)
+	assert.Equal(t, "Wallhaven_test_img_1", imgStored.ID)
 }
 
 func TestDownloadAllImages_EnrichmentFailure(t *testing.T) {
@@ -203,8 +204,7 @@ func TestDownloadAllImages_EnrichmentFailure(t *testing.T) {
 	img.Path = ts.URL + "/image_fail.jpg"
 	// Re-setup FetchImages with correct path
 	mockProvider.ExpectedCalls = nil
-	mockProvider.On("Name").Return("MockProvider")
-	mockProvider.On("Name").Return("MockProvider")
+	mockProvider.On("Name").Return("Wallhaven")
 	// The producer now iterates providers and calls ParseURL, so we must expect it implicitly or explicitly.
 	// Since we iterate, it might be called with any typical URL.
 	// But in this test, we call produceJobsForURL explicitly? No, downloadAllImages calls it.
@@ -238,6 +238,7 @@ func TestDownloadAllImages_EnrichmentFailure(t *testing.T) {
 	assert.NoError(t, wp.fm.EnsureDirs())
 	wp.store.SetFileManager(wp.fm, wp.downloadedDir+"/cache.json")
 	wp.pipeline = NewPipeline(wp.cfg, wp.store, wp.ProcessImageJob)
+	wp.jobSubmitter = wp.pipeline
 	wp.pipeline.Start(1)
 	defer wp.pipeline.Stop()
 	wp.providers["MockProvider"] = mockProvider
@@ -337,65 +338,51 @@ func TestNavigation(t *testing.T) {
 		}
 	}
 
-	// 1. Set Shuffle False
-	wp.SetShuffleImage(false)
+	// Shuffle is now permanent and global.
 
 	// 2. Next
 	wp.SetNextWallpaper(-1, true)
 	pump()
 
-	// Verify
-	assert.Equal(t, "img1", mc.State.CurrentImage.ID)
+	firstID := mc.State.CurrentImage.ID
+	assert.Contains(t, []string{"img1", "img2"}, firstID)
 	mockOS.AssertCalled(t, "SetWallpaper", mock.MatchedBy(func(path string) bool {
-		return strings.HasSuffix(path, "img1.jpg")
+		return strings.HasSuffix(path, firstID+".jpg")
 	}), 0)
 
-	// 3. Next -> img2
-	wp.SetNextWallpaper(-1, true)
-	pump()
-	assert.Equal(t, "img2", mc.State.CurrentImage.ID)
+	otherID := "img2"
+	if firstID == "img2" {
+		otherID = "img1"
+	}
 
-	// 4. Next -> img1 (wrap)
+	// 3. Next -> otherID
 	wp.SetNextWallpaper(-1, true)
 	pump()
-	assert.Equal(t, "img1", mc.State.CurrentImage.ID)
+	assert.Equal(t, otherID, mc.State.CurrentImage.ID)
+
+	// 4. Next -> firstID (wrap)
+	wp.SetNextWallpaper(-1, true)
+	pump()
+	assert.Equal(t, firstID, mc.State.CurrentImage.ID)
 }
 
-func TestTogglePause(t *testing.T) {
+func TestFrequencyNever(t *testing.T) {
 	// Setup
 	ResetConfig()
 	prefs := NewMockPreferences()
 	cfg := GetConfig(prefs)
-	mockPM := new(MockPluginManager)
 
 	wp := &Plugin{
-		cfg:     cfg,
-		manager: mockPM,
+		cfg: cfg,
 	}
-
-	// Mock NotifyUser for frequency change
-	mockPM.On("NotifyUser", "Wallpaper Change", mock.Anything).Return()
 
 	// Initial state: Default frequency (Hourly)
 	assert.Equal(t, FrequencyHourly, wp.cfg.GetWallpaperChangeFrequency())
-	assert.False(t, wp.IsPaused())
 
-	// Toggle Pause -> Should become Never
-	wp.TogglePause()
+	// Set to Never
+	wp.cfg.SetWallpaperChangeFrequency(FrequencyNever)
 	assert.Equal(t, FrequencyNever, wp.cfg.GetWallpaperChangeFrequency())
 	assert.True(t, wp.IsPaused())
-	assert.Equal(t, FrequencyHourly, wp.prePauseFrequency) // Should store previous
-
-	// Toggle Resume -> Should restore Hourly
-	wp.TogglePause()
-	assert.Equal(t, FrequencyHourly, wp.cfg.GetWallpaperChangeFrequency())
-	assert.False(t, wp.IsPaused())
-
-	// Test Resume with no history (simulate fresh start paused)
-	wp.prePauseFrequency = FrequencyNever // Reset history
-	wp.cfg.SetWallpaperChangeFrequency(FrequencyNever)
-	wp.TogglePause()
-	assert.Equal(t, FrequencyHourly, wp.cfg.GetWallpaperChangeFrequency()) // Should default to Hourly
 }
 
 func TestGetInstance(t *testing.T) {
@@ -656,9 +643,12 @@ func TestAddQuery_InitializesPage(t *testing.T) {
 		queryPages:         make(map[string]*util.SafeCounter),
 		fetchingInProgress: util.NewSafeBool(),
 		providers:          make(map[string]provider.ImageProvider),
-		pipeline:           NewPipeline(cfg, NewImageStore(), func(ctx context.Context, job DownloadJob) (provider.Image, error) { return job.Image, nil }),
+		pipeline:           nil, // Pipeline will be set below
+		jobSubmitter:       nil,
 		httpClient:         &http.Client{},
 	}
+	wp.pipeline = NewPipeline(cfg, NewImageStore(), func(ctx context.Context, job DownloadJob) (provider.Image, error) { return job.Image, nil })
+	wp.jobSubmitter = wp.pipeline
 	wp.fm = NewFileManager(wp.downloadedDir)
 
 	// Add a provider
@@ -738,7 +728,7 @@ func TestSetNextWallpaper_Stagger(t *testing.T) {
 	// Check Mon 0 (Immediate)
 	select {
 	case cmd := <-mon0.Commands:
-		assert.Equal(t, CmdNext, cmd, "Monitor 0 should receive CmdNext immediately")
+		assert.Equal(t, CmdNextAuto, cmd, "Monitor 0 should receive CmdNextAuto immediately")
 	default:
 		t.Error("Monitor 0 did not receive command immediately")
 	}
@@ -765,7 +755,7 @@ func TestSetNextWallpaper_Stagger(t *testing.T) {
 	// Check Mon 0
 	select {
 	case cmd := <-mon0.Commands:
-		assert.Equal(t, CmdNext, cmd)
+		assert.Equal(t, CmdNextAuto, cmd)
 	default:
 		t.Error("Monitor 0 missing command")
 	}
@@ -773,7 +763,7 @@ func TestSetNextWallpaper_Stagger(t *testing.T) {
 	// Check Mon 1 (Immediate now)
 	select {
 	case cmd := <-mon1.Commands:
-		assert.Equal(t, CmdNext, cmd, "Monitor 1 should receive CmdNext immediately when Stagger is OFF")
+		assert.Equal(t, CmdNextAuto, cmd, "Monitor 1 should receive CmdNextAuto immediately when Stagger is OFF")
 	default:
 		t.Error("Monitor 1 missing command when Stagger is OFF")
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -73,6 +74,11 @@ func NewProvider(cfg *wallpaper.Config) *Provider {
 func (p *Provider) SetTestConfig(host, rootDir string) {
 	p.apiHost = host
 	p.rootDir = rootDir
+	// Reload metadata from new rootDir
+	p.mu.Lock()
+	p.favMap = make(map[string]bool)
+	p.mu.Unlock()
+	p.loadInitialMetadata()
 }
 
 func (p *Provider) Name() string {
@@ -253,12 +259,20 @@ func (p *Provider) pruneOldestFavorite(favDir string) error {
 }
 
 func (p *Provider) copyFile(src, dest string) error {
-	input, err := os.ReadFile(src)
+	in, err := os.Open(src)
 	if err != nil {
-		return fmt.Errorf("read source: %w", err)
+		return fmt.Errorf("open source: %w", err)
 	}
-	if err := os.WriteFile(dest, input, 0600); err != nil {
-		return fmt.Errorf("write dest: %w", err)
+	defer in.Close()
+
+	out, err := os.Create(dest)
+	if err != nil {
+		return fmt.Errorf("create dest: %w", err)
+	}
+	defer out.Close()
+
+	if _, err := io.Copy(out, in); err != nil {
+		return fmt.Errorf("io.copy: %w", err)
 	}
 	return nil
 }
@@ -455,8 +469,14 @@ func (p *Provider) CreateSettingsPanel(sm setting.SettingsManager) fyne.CanvasOb
 					log.Printf("Failed to create favorites directory: %v", err)
 				}
 				log.Println("Favorites cleared.")
-				// Logic to refresh plugin will be triggered by Apply if we mark it?
-				// Actually this is immediate.
+
+				p.mu.Lock()
+				p.favMap = make(map[string]bool)
+				p.mu.Unlock()
+
+				if p.cfg.FavoritesClearedCallback != nil {
+					go p.cfg.FavoritesClearedCallback()
+				}
 			}
 		}, sm.GetSettingsWindow())
 	})

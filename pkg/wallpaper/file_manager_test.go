@@ -202,3 +202,39 @@ func TestCleanupOrphans_DeepResolutionStructure(t *testing.T) {
 		t.Errorf("Valid file should have been kept: %s", validPath)
 	}
 }
+func TestDeepDeleteBatch(t *testing.T) {
+	tmpDir := t.TempDir()
+	fm := NewFileManager(tmpDir)
+	if err := fm.EnsureDirs(); err != nil {
+		t.Fatalf("EnsureDirs failed: %v", err)
+	}
+
+	ids := []string{"id1", "id2"}
+	paths := []string{}
+
+	for _, id := range ids {
+		master, _ := fm.GetMasterPath(id, ".jpg")
+		if err := os.WriteFile(master, []byte("data"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		paths = append(paths, master)
+
+		deriv, _ := fm.GetDerivativePath(id, ".jpg", filepath.Join(FittedRootDir, QualityDir, StandardDir))
+		if err := os.WriteFile(deriv, []byte("data"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		paths = append(paths, deriv)
+	}
+
+	// Action
+	if err := fm.DeepDeleteBatch(ids); err != nil {
+		t.Fatalf("DeepDeleteBatch failed: %v", err)
+	}
+
+	// Verify
+	for _, p := range paths {
+		if _, err := os.Stat(p); !os.IsNotExist(err) {
+			t.Errorf("File %s should have been deleted", p)
+		}
+	}
+}

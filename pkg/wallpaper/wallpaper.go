@@ -44,13 +44,6 @@ type ImageProcessor interface {
 	CheckCompatibility(imgWidth, imgHeight, targetWidth, targetHeight int) error
 }
 
-// MonitorMenuItems holds the tray menu items for a specific monitor.
-type MonitorMenuItems struct {
-	ProviderMenuItem *fyne.MenuItem
-	ArtistMenuItem   *fyne.MenuItem
-	FavoriteMenuItem *fyne.MenuItem
-}
-
 // Plugin is the main struct for the wallpaper downloader plugin.
 type Plugin struct {
 	os                  OS
@@ -71,17 +64,16 @@ type Plugin struct {
 	ctx                 context.Context
 	cancel              context.CancelFunc
 	downloadWaitGroup   *sync.WaitGroup
-	prePauseFrequency   Frequency
 	pauseChangeCallback func(bool)
-	pauseMenuItem       *fyne.MenuItem
 	providers           map[string]provider.ImageProvider
 	favoriter           provider.Favoriter
 	actionChan          chan func()
 
 	// New Components
-	store    *ImageStore
-	fm       *FileManager
-	pipeline *Pipeline
+	store        StoreInterface
+	fm           *FileManager
+	pipeline     *Pipeline
+	jobSubmitter JobSubmitter // Interface for testing
 
 	// Configuration and State
 	fetchingInProgress *util.SafeFlag
@@ -193,7 +185,7 @@ func (wp *Plugin) RequestFetch() {
 	defer wp.downloadMutex.Unlock()
 
 	// 1. Basic Debounce (Avoid spamming from UI or multiple monitors)
-	if wp.isDownloading || wp.fetchingInProgress.Value() {
+	if wp.isDownloading || (wp.fetchingInProgress != nil && wp.fetchingInProgress.Value()) {
 		return
 	}
 
@@ -252,6 +244,7 @@ func (wp *Plugin) Init(manager ui.PluginManager) {
 
 	wp.cfg.SetQueryRemovedCallback(wp.onQueryRemoved)
 	wp.cfg.SetQueryDisabledCallback(wp.onQueryDisabled)
+	wp.cfg.SetFavoritesClearedCallback(wp.ResetFavorites)
 
 	wp.providers = make(map[string]provider.ImageProvider)
 	for _, factory := range GetRegisteredProviders() {
@@ -276,6 +269,7 @@ func (wp *Plugin) Init(manager ui.PluginManager) {
 	wp.Monitors = make(map[int]*MonitorController)
 
 	wp.pipeline = NewPipeline(wp.cfg, wp.store, wp.ProcessImageJob)
+	wp.jobSubmitter = wp.pipeline
 	wp.enrichmentSignal = make(chan int, 1)
 
 	log.Debugf("Wallpaper Plugin Initialized.")
@@ -358,6 +352,23 @@ func (wp *Plugin) Activate() {
 		wp.Monitors[m.ID] = mc
 		log.Printf("Monitor Actor %d started: %s %v", m.ID, m.Name, m.Rect)
 	}
+	wp.pauseChangeCallback = func(paused bool) {
+		wp.monMu.RLock()
+		ids := make([]int, 0, len(wp.Monitors))
+		for id := range wp.Monitors {
+			ids = append(ids, id)
+		}
+		wp.monMu.RUnlock()
+
+		for _, id := range ids {
+			wp.monMu.RLock()
+			mc, ok := wp.Monitors[id]
+			wp.monMu.RUnlock()
+			if ok {
+				go wp.updateTrayMenuUI(mc.State.CurrentImage, id)
+			}
+		}
+	}
 	wp.monMu.Unlock()
 
 	wp.syncStoreWithConfig()
@@ -374,11 +385,13 @@ func (wp *Plugin) Activate() {
 		go wp.StartNightlyRefresh()
 	}
 
-	wp.SetShuffleImage(wp.cfg.GetImgShuffle())
 	wp.SetSmartFit(wp.cfg.GetSmartFit())
 
 	if wp.cfg.GetChgImgOnStart() {
-		wp.RefreshImagesAndPulse()
+		go func() {
+			time.Sleep(3 * time.Second)
+			wp.RefreshImagesAndPulse()
+		}()
 	} else {
 		// Reset all pages to 1 on clean activation if not pulsing
 		wp.downloadMutex.Lock()
@@ -388,7 +401,7 @@ func (wp *Plugin) Activate() {
 		wp.downloadMutex.Unlock()
 		wp.FetchNewImages()
 	}
-	wp.ChangeWallpaperFrequency(wp.cfg.GetWallpaperChangeFrequency())
+	wp.ChangeWallpaperFrequency(wp.cfg.GetWallpaperChangeFrequency(), false)
 
 	// Start monitor watcher
 	go wp.startMonitorWatcher()
@@ -464,7 +477,7 @@ func (wp *Plugin) SetNextWallpaper(monitorID int, forceImmediate bool) {
 	for _, id := range ids {
 		if id == 0 {
 			// Primary always immediate
-			wp.dispatch(id, CmdNext)
+			wp.dispatch(id, CmdNextAuto)
 			continue
 		}
 
@@ -479,11 +492,11 @@ func (wp *Plugin) SetNextWallpaper(monitorID int, forceImmediate bool) {
 			mID := id
 			time.AfterFunc(delay, func() {
 				log.Printf("[Stagger] Executing staggered update for monitor %d", mID)
-				wp.dispatch(mID, CmdNext)
+				wp.dispatch(mID, CmdNextAuto)
 			})
 		} else {
 			log.Printf("[Stagger] Executing IMMEDIATE update for monitor %d (Force: %v, StaggerCfg: %v)", id, forceImmediate, stagger)
-			wp.dispatch(id, CmdNext)
+			wp.dispatch(id, CmdNextAuto)
 		}
 	}
 }
@@ -500,30 +513,46 @@ func (wp *Plugin) DeleteCurrentImage(monitorID int) {
 	wp.dispatch(monitorID, CmdDelete)
 }
 
-// TogglePause toggles the pause state.
-func (wp *Plugin) TogglePause() {
-	current := wp.cfg.GetWallpaperChangeFrequency()
-	if current == FrequencyNever {
-		if wp.prePauseFrequency != FrequencyNever {
-			wp.ChangeWallpaperFrequency(wp.prePauseFrequency)
-		} else {
-			wp.ChangeWallpaperFrequency(FrequencyHourly)
-		}
-	} else {
-		wp.prePauseFrequency = current
-		wp.ChangeWallpaperFrequency(FrequencyNever)
+// TogglePauseMonitorAction toggles pause for a specific monitor.
+func (wp *Plugin) TogglePauseMonitorAction(monitorID int) {
+	if wp.IsPaused() {
+		return
 	}
-	// Notify UI via callback if set
-	if wp.pauseChangeCallback != nil {
-		wp.pauseChangeCallback(wp.IsPaused())
+	wp.dispatch(monitorID, CmdPause)
+
+	// Notify user of the change (reflecting the keyboard shortcut style)
+	state := "Resumed Play"
+	if wp.IsMonitorPaused(monitorID) {
+		state = "Paused Play"
 	}
+	wp.manager.NotifyUser(fmt.Sprintf("Display %d", monitorID+1), state)
 }
 
 func (wp *Plugin) IsPaused() bool {
 	return wp.cfg.GetWallpaperChangeFrequency() == FrequencyNever
 }
 
-func (wp *Plugin) ChangeWallpaperFrequency(newFreq Frequency) {
+// IsMonitorPaused returns whether a specific monitor is paused (locally).
+func (wp *Plugin) IsMonitorPaused(monitorID int) bool {
+	wp.monMu.RLock()
+	defer wp.monMu.RUnlock()
+	if mc, ok := wp.Monitors[monitorID]; ok {
+		return mc.State.Paused
+	}
+	return false
+}
+
+// GetShortcutsDisabled returns whether hotkeys are disabled.
+func (wp *Plugin) GetShortcutsDisabled() bool {
+	return wp.cfg.GetShortcutsDisabled()
+}
+
+// SetShortcutsDisabled sets the hotkey disabled preference.
+func (wp *Plugin) SetShortcutsDisabled(disabled bool) {
+	wp.cfg.SetShortcutsDisabled(disabled)
+}
+
+func (wp *Plugin) ChangeWallpaperFrequency(newFreq Frequency, silent bool) {
 	wp.cfg.SetWallpaperChangeFrequency(newFreq)
 
 	wp.downloadMutex.Lock()
@@ -553,7 +582,17 @@ func (wp *Plugin) ChangeWallpaperFrequency(newFreq Frequency) {
 		}
 	}
 
-	wp.manager.NotifyUser("Wallpaper Change", newFreq.String())
+	if !silent {
+		msg := newFreq.String()
+		if newFreq == FrequencyNever {
+			msg = "Never (Paused)"
+		}
+		wp.manager.NotifyUser("Wallpaper Change Frequency", msg)
+	}
+
+	if wp.manager != nil {
+		wp.manager.RebuildTrayMenu()
+	}
 }
 
 func (wp *Plugin) GetOS() OS {
@@ -564,10 +603,6 @@ func (wp *Plugin) GetOS() OS {
 func (wp *Plugin) TriggerFavorite(monitorID int) {
 	log.Printf("[DEBUG] TriggerFavorite called for monitor %d", monitorID)
 	wp.dispatch(monitorID, CmdFavorite)
-}
-
-func (wp *Plugin) TogglePauseAction() {
-	wp.TogglePause()
 }
 
 func (wp *Plugin) TriggerOpenSettings() {
@@ -605,7 +640,29 @@ func (wp *Plugin) ToggleFavorite(img provider.Image) {
 			return
 		}
 		img.IsFavorited = false
-		wp.store.Update(img)
+
+		if img.Provider == "Favorites" {
+			log.Printf("ToggleFavorite: Deep deleting unfavorited local favorite %s", img.ID)
+			wp.store.Remove(img.ID)
+
+			// Auto-Advance Fix: If this image is currently active on any monitor, pulse forward.
+			// This ensures we don't try to maintain a reference to a deleted file.
+			wp.monMu.RLock()
+			var affectedMonitors []int
+			for id, mc := range wp.Monitors {
+				if mc.State.CurrentImage.ID == img.ID {
+					affectedMonitors = append(affectedMonitors, id)
+				}
+			}
+			wp.monMu.RUnlock()
+
+			for _, id := range affectedMonitors {
+				log.Printf("ToggleFavorite: Auto-advancing monitor %d after deep delete", id)
+				wp.SetNextWallpaper(id, true)
+			}
+		} else {
+			wp.store.Update(img)
+		}
 		wp.manager.NotifyUser("Favorites", "Removed from favorites.")
 	} else {
 		// Add
@@ -615,22 +672,34 @@ func (wp *Plugin) ToggleFavorite(img provider.Image) {
 		}
 		img.IsFavorited = true
 		wp.store.Update(img)
+
+		// Responsiveness Fix: Reset Favorites page counter so the new file is detected immediately
+		wp.downloadMutex.Lock()
+		if _, ok := wp.queryPages[FavoritesQueryID]; ok {
+			wp.queryPages[FavoritesQueryID].Set(1)
+		}
+		wp.downloadMutex.Unlock()
+
 		wp.manager.NotifyUser("Favorites", "Added to favorites.")
+		// Trigger immediate fetch to bring the new favorite into the store
+		go wp.RequestFetch()
 	}
 
 	// Update UI for all monitors that might have this image
+	var syncIDs []int
 	wp.monMu.RLock()
-	defer wp.monMu.RUnlock()
 	for id, mc := range wp.Monitors {
 		if mc.State.CurrentImage.ID == img.ID {
-			// Update UI
+			syncIDs = append(syncIDs, id)
 			wp.updateTrayMenuUI(img, id)
 		}
 	}
-}
+	wp.monMu.RUnlock()
 
-func (wp *Plugin) SetShuffleImage(enable bool) {
-	wp.cfg.SetImgShuffle(enable)
+	// Dispatch sync command outside of lock to avoid reentrancy issues
+	for _, id := range syncIDs {
+		wp.dispatch(id, CmdSyncState)
+	}
 }
 
 func (wp *Plugin) SetSmartFit(enabled bool) {
@@ -788,6 +857,9 @@ func (wp *Plugin) startMonitorWatcher() {
 }
 
 func (wp *Plugin) updateTrayMenuUI(img provider.Image, monitorID int) {
+	if wp.runOnUI == nil {
+		return
+	}
 	wp.runOnUI(func() {
 		wp.monMu.RLock()
 		mItems, ok := wp.monitorMenu[monitorID]
@@ -829,6 +901,18 @@ func (wp *Plugin) updateTrayMenuUI(img provider.Image, monitorID int) {
 			}
 		}
 
+		// Update Pause State
+		if mItems.PauseMenuItem != nil {
+			paused := wp.IsMonitorPaused(monitorID)
+			if paused {
+				mItems.PauseMenuItem.Label = "Resume Play"
+				mItems.PauseMenuItem.Icon, _ = wp.manager.GetAssetManager().GetIcon("play.png")
+			} else {
+				mItems.PauseMenuItem.Label = "Pause Play"
+				mItems.PauseMenuItem.Icon, _ = wp.manager.GetAssetManager().GetIcon("pause.png")
+			}
+		}
+
 		wp.manager.RefreshTrayMenu()
 	})
 }
@@ -847,6 +931,16 @@ func (wp *Plugin) onQueryDisabled(queryID string) {
 	wp.downloadMutex.Lock()
 	delete(wp.queryPages, queryID)
 	wp.downloadMutex.Unlock()
+
+	// Trigger fetch to ensure store is replenished from other active sources (including Favorites)
+	go wp.RequestFetch()
+}
+
+func (wp *Plugin) ResetFavorites() {
+	log.Printf("[Plugin] Resetting all favorites in store...")
+	wp.store.ResetFavorites()
+	wp.manager.NotifyUser("Favorites", "All favorites cleared.")
+	go wp.RequestFetch()
 }
 
 // syncStoreWithConfig reconciles the image store with the current configuration.
