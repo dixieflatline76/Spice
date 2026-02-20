@@ -88,7 +88,7 @@ func StartListeners(mgr ui.PluginManager) {
 		handleTargeted(mgr, func(mid int) string {
 			if wp != nil {
 				wp.TriggerFavorite(mid)
-				return fmt.Sprintf("Display %d: Added to Favorites", mid+1)
+				return "" // Plugin handles its own notifications
 			}
 			return ""
 		})

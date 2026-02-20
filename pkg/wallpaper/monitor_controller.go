@@ -406,24 +406,3 @@ func (mc *MonitorController) applyImage(img provider.Image) {
 		mc.OnWallpaperChanged(img, mc.ID)
 	}
 }
-
-func (mc *MonitorController) isShuffleStale(bucketIDs []string) bool {
-	if len(mc.State.ShuffleIDs) != len(bucketIDs) {
-		return true
-	}
-	// Content check - O(N)
-	// Create lookup for new bucket
-	incoming := make(map[string]bool, len(bucketIDs))
-	for _, id := range bucketIDs {
-		incoming[id] = true
-	}
-
-	for _, id := range mc.State.ShuffleIDs {
-		if !incoming[id] {
-			// Found an ID in current shuffle that is NO LONGER in the bucket
-			return true
-		}
-	}
-	// lengths equal and all current IDs are in bucket => sets are identical
-	return false
-}

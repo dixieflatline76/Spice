@@ -78,14 +78,44 @@ func TestStore_NamespacingMigration(t *testing.T) {
 	assert.Contains(t, img.DerivativePaths["standard"], newID)
 }
 
-func TestConfig_AvoidSetFuzzyMatch(t *testing.T) {
+func TestConfig_AvoidSetStrictMatch(t *testing.T) {
 	cfg := &Config{
 		Preferences: NewMockPreferences(),
 	}
-	cfg.AddToAvoidSet("123") // Legacy ID
+	cfg.AddToAvoidSet("Wallhaven_123") // Properly namespaced ID
 
-	assert.True(t, cfg.InAvoidSet("123"), "Exact legacy match should work")
-	assert.True(t, cfg.InAvoidSet("Wallhaven_123"), "Fuzzy namespaced match should work")
-	assert.False(t, cfg.InAvoidSet("Other_1234"), "Non-matching ID should fail")
-	assert.True(t, cfg.InAvoidSet("WrongPrefix_123"), "Fuzzy match should work regardless of prefix for legacy IDs")
+	assert.True(t, cfg.InAvoidSet("Wallhaven_123"), "Exact namespaced match should work")
+	assert.False(t, cfg.InAvoidSet("123"), "Raw numeric ID should NOT match")
+	assert.False(t, cfg.InAvoidSet("Other_123"), "Different provider prefix should NOT match")
+	assert.False(t, cfg.InAvoidSet("Wallhaven_1234"), "Partial numeric match should NOT match")
+}
+
+func TestLoadAvoidSetStep_PurgesLegacyIDs(t *testing.T) {
+	cfg := &Config{
+		Preferences: NewMockPreferences(),
+		AvoidSet: map[string]bool{
+			"24645":         true, // Legacy (no underscore) — should be removed
+			"99999":         true, // Legacy — should be removed
+			"Wallhaven_456": true, // Namespaced — should be kept
+			"Pexels_789":    true, // Namespaced — should be kept
+		},
+	}
+
+	changed, err := LoadAvoidSetStep(cfg)
+	assert.NoError(t, err)
+	assert.True(t, changed, "Should report change since legacy IDs were removed")
+
+	// Legacy IDs should be gone
+	assert.False(t, cfg.InAvoidSet("24645"))
+	assert.False(t, cfg.InAvoidSet("99999"))
+
+	// Namespaced IDs should be kept
+	assert.True(t, cfg.InAvoidSet("Wallhaven_456"))
+	assert.True(t, cfg.InAvoidSet("Pexels_789"))
+
+	// AvoidSet map should also be cleaned
+	assert.NotContains(t, cfg.AvoidSet, "24645")
+	assert.NotContains(t, cfg.AvoidSet, "99999")
+	assert.Contains(t, cfg.AvoidSet, "Wallhaven_456")
+	assert.Contains(t, cfg.AvoidSet, "Pexels_789")
 }

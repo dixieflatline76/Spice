@@ -20,9 +20,14 @@ func (wp *Plugin) FetchNewImages(providerID ...string) {
 		targetProvider = providerID[0]
 	}
 
-	if wp.fetchingInProgress.CompareAndSwap(false, true) {
+	// Special-case Favorites for on-the-fly responsiveness
+	isFavRequest := targetProvider == "Favorites"
+
+	if isFavRequest || wp.fetchingInProgress.CompareAndSwap(false, true) {
 		go func() {
-			defer wp.fetchingInProgress.Set(false)
+			if !isFavRequest {
+				defer wp.fetchingInProgress.Set(false)
+			}
 			log.Printf("Starting image fetch (Target: %s)...", func() string {
 				if targetProvider == "" {
 					return "ALL"
@@ -116,7 +121,7 @@ func (wp *Plugin) FetchNewImages(providerID ...string) {
 							}
 						}
 
-						if wp.cfg.InAvoidSet(img.ID) {
+						if !isFavRequest && wp.cfg.InAvoidSet(img.ID) {
 							log.Debugf("Skipping blocked image: %s", img.ID)
 							continue
 						}

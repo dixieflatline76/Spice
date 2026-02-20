@@ -380,24 +380,10 @@ func (c *Config) GetActiveQueryIDs() map[string]bool {
 	return active
 }
 
-// InAvoidSet checks if the given ID is in the avoid set.
-// It supports fuzzy matching for namespaced IDs to maintain compatibility with legacy raw IDs.
+// InAvoidSet checks if the given ID is in the avoid set (exact match only).
 func (c *Config) InAvoidSet(id string) bool {
-	// 1. Direct match (Exact namespaced or legacy)
-	if _, found := c.avoidMap.Load(id); found {
-		return true
-	}
-
-	// 2. Fuzzy match: If namespaced (e.g. Wallhaven_123), check for raw legacy (e.g. 123)
-	if idx := strings.Index(id, "_"); idx != -1 {
-		legacyID := id[idx+1:]
-		if _, found := c.avoidMap.Load(legacyID); found {
-			log.Debugf("AvoidSet: Blocked namespaced ID %s via legacy match %s", id, legacyID)
-			return true
-		}
-	}
-
-	return false
+	_, found := c.avoidMap.Load(id)
+	return found
 }
 
 // AddToAvoidSet adds the given ID to the avoid set

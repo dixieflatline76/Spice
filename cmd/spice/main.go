@@ -4,7 +4,6 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"time"
 
@@ -52,18 +51,12 @@ func main() {
 
 	go func() {
 		// Register Namespaces for Local Assets
-		tempDir := os.TempDir()
-		gpPath := filepath.Join(tempDir, "spice", "google_photos")
-		apiServer.RegisterNamespace("google_photos", gpPath)
+		appDir := config.GetAppDir()
+		apiServer.RegisterNamespace("google_photos", filepath.Join(appDir, "google_photos")) // Point directly to google_photos subfolder
 
 		// Register favorites namespace to point to spice folder,
 		// allowing favorite_images to be the collection ID.
-		apiServer.RegisterNamespace(wallpaper.FavoritesNamespace, filepath.Join(tempDir, "spice"))
-
-		favPath := filepath.Join(tempDir, "spice", wallpaper.FavoritesCollection)
-		if err := os.MkdirAll(favPath, 0755); err != nil {
-			log.Printf("Warning: Failed to create favorites directory: %v", err)
-		}
+		apiServer.RegisterNamespace(wallpaper.FavoritesNamespace, appDir)
 
 		log.Printf("Starting Local API Server on :49452...")
 		if err := apiServer.Start(); err != nil {

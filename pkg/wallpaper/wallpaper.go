@@ -190,8 +190,12 @@ func (wp *Plugin) RequestFetch(providerID ...string) {
 	}
 
 	// 1. Basic Debounce (Avoid spamming from UI or multiple monitors)
-	if wp.isDownloading || (wp.fetchingInProgress != nil && wp.fetchingInProgress.Value()) {
-		return
+	// Targeted Responsiveness Fix: Allow Favorites fetch to proceed even during active downloads
+	// (Local favorites scan is cheap and avoids "only shows after restart" bugs)
+	if targetProvider != "Favorites" {
+		if wp.isDownloading || (wp.fetchingInProgress != nil && wp.fetchingInProgress.Value()) {
+			return
+		}
 	}
 
 	seenCount := wp.store.SeenCount()
@@ -941,6 +945,11 @@ func (wp *Plugin) onQueryDisabled(queryID string) {
 func (wp *Plugin) ResetFavorites() {
 	log.Printf("[Plugin] Resetting all favorites in store...")
 	wp.store.ResetFavorites()
+
+	// Ghost entries removal: Prune images from the store that belong to the Favorites provider
+	// so they don't remain as "dead" icons in the library view after clearing.
+	wp.store.RemoveByQueryID(FavoritesQueryID)
+
 	wp.manager.NotifyUser("Favorites", "All favorites cleared.")
 	go wp.RequestFetch("Favorites")
 }

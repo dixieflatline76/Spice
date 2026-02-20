@@ -143,6 +143,27 @@ func (s *ImageStore) Add(img provider.Image) bool {
 	defer s.mu.Unlock()
 
 	if _, exists := s.idSet[img.ID]; exists {
+		// Targeted Fix: If the new image comes from Favorites provider, update the existing entry.
+		// This ensures favored copies (persistent) displace original temporary source downloads.
+		if img.SourceQueryID == FavoritesQueryID {
+			for i, existing := range s.images {
+				if existing.ID == img.ID {
+					if existing.FilePath != "" {
+						delete(s.pathSet, existing.FilePath)
+					}
+					// Preserve seen state
+					if existing.Seen && !img.Seen {
+						img.Seen = true
+					}
+					s.images[i] = img
+					if img.FilePath != "" {
+						s.pathSet[img.FilePath] = i
+					}
+					s.scheduleSaveLocked()
+					return true
+				}
+			}
+		}
 		return false
 	}
 	if s.avoidSet[img.ID] {
