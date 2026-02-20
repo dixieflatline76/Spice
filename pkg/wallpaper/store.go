@@ -260,16 +260,18 @@ func (s *ImageStore) Remove(id string) (provider.Image, bool) {
 	defer s.mu.Unlock()
 
 	idx := -1
-	var img provider.Image
 	for i, item := range s.images {
 		if item.ID == id {
 			idx = i
-			img = item
 			break
 		}
 	}
 
-	img = s.images[idx]
+	if idx == -1 {
+		return provider.Image{}, false
+	}
+
+	img := s.images[idx]
 	if img.Seen {
 		s.seenCount--
 	}

@@ -26,6 +26,7 @@ import (
 type Provider struct {
 	cfg    *wallpaper.Config
 	client *http.Client
+	mu     sync.RWMutex
 	// Met Museum specific state
 	collection *Collection // In-memory cache of Spice Melange
 
@@ -58,7 +59,9 @@ func NewMetMuseumProvider(cfg *wallpaper.Config, client *http.Client) *Provider 
 		if err != nil {
 			log.Printf("MET: Failed to init remote collection: %v", err)
 		} else {
+			p.mu.Lock()
 			p.collection = col
+			p.mu.Unlock()
 		}
 	}()
 	return p
@@ -229,16 +232,22 @@ func (p *Provider) resolveQueryToIDs(ctx context.Context, query string) ([]int, 
 
 	// Case 1: Spice Melange (Already cached in p.collection, but needs to be handled uniformly for shuffle)
 	if query == CollectionSpiceMelange || query == "metmuseum://curated" {
+		p.mu.RLock()
 		if p.collection == nil {
+			p.mu.RUnlock()
 			if col, err := InitRemoteCollection(p.cfg); err == nil {
+				p.mu.Lock()
 				p.collection = col
+				p.mu.Unlock()
 			} else {
 				return nil, fmt.Errorf("collection not loaded")
 			}
+			p.mu.RLock()
 		}
 		// Copy IDs to avoid mutating the source collection
 		ids = make([]int, len(p.collection.IDs))
 		copy(ids, p.collection.IDs)
+		p.mu.RUnlock()
 	} else if query == CollectionAmerican {
 		// Case 2: American Art
 		ids, err = p.fetchSearchHighlights(ctx, "American Paintings")

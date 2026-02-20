@@ -40,7 +40,10 @@ func (wp *Plugin) FetchNewImages(providerID ...string) {
 				wp.downloadMutex.RUnlock()
 				return
 			}
-			queries := wp.cfg.Queries
+			wp.cfg.mu.Lock()
+			queries := make([]ImageQuery, len(wp.cfg.Queries))
+			copy(queries, wp.cfg.Queries)
+			wp.cfg.mu.Unlock()
 			wp.downloadMutex.RUnlock()
 
 			totalQueued := util.NewSafeInt()
