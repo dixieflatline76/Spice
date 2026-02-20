@@ -115,7 +115,7 @@ func (h *LocalListingHandler) readMetadata() {
 			h.filesMeta, _ = meta["files"].(map[string]interface{})
 		}
 	}
-	if h.attribution == "" {
+	if h.attribution == "" && h.namespace != "favorites" {
 		h.attribution = h.collectionID
 	}
 }

@@ -19,6 +19,7 @@ import (
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	"github.com/dixieflatline76/Spice/config"
 	"github.com/dixieflatline76/Spice/pkg/provider"
 	"github.com/dixieflatline76/Spice/pkg/ui/setting"
 	"github.com/dixieflatline76/Spice/pkg/wallpaper"
@@ -61,10 +62,11 @@ func NewProvider(cfg *wallpaper.Config) *Provider {
 	p := &Provider{
 		cfg:     cfg,
 		apiHost: "127.0.0.1:49452",
-		rootDir: filepath.Join(os.TempDir(), "spice", wallpaper.FavoritesCollection),
+		rootDir: filepath.Join(config.GetAppDir(), wallpaper.FavoritesCollection),
 		favMap:  make(map[string]bool),
 		jobChan: make(chan favJob, 100),
 	}
+	p.migrateOldFavorites()
 	p.loadInitialMetadata()
 	go p.runWorker()
 	return p
@@ -79,6 +81,57 @@ func (p *Provider) SetTestConfig(host, rootDir string) {
 	p.favMap = make(map[string]bool)
 	p.mu.Unlock()
 	p.loadInitialMetadata()
+}
+
+func (p *Provider) migrateOldFavorites() {
+	oldDir := filepath.Join(os.TempDir(), "spice", wallpaper.FavoritesCollection)
+	if _, err := os.Stat(oldDir); os.IsNotExist(err) {
+		return
+	}
+
+	// Ensure new directory exists
+	if err := os.MkdirAll(p.rootDir, 0755); err != nil {
+		log.Printf("[Favorites] Migration error: failed to create new directory %s: %v", p.rootDir, err)
+		return
+	}
+
+	entries, err := os.ReadDir(oldDir)
+	if err != nil {
+		log.Printf("[Favorites] Migration error: failed to read old directory %s: %v", oldDir, err)
+		return
+	}
+
+	if len(entries) == 0 {
+		return
+	}
+
+	log.Printf("[Favorites] Migrating %d entries from %s to %s...", len(entries), oldDir, p.rootDir)
+
+	for _, entry := range entries {
+		oldPath := filepath.Join(oldDir, entry.Name())
+		newPath := filepath.Join(p.rootDir, entry.Name())
+
+		// Check if destination already exists to avoid overwriting or errors
+		if _, err := os.Stat(newPath); err == nil {
+			log.Debugf("[Favorites] Migration: skipping %s as it already exists in target", entry.Name())
+			continue
+		}
+
+		if err := os.Rename(oldPath, newPath); err != nil {
+			log.Printf("[Favorites] Migration error: failed to move %s: %v", entry.Name(), err)
+			// Fallback: copy and delete if rename fails (e.g. cross-device)
+			if err := p.copyFile(oldPath, newPath); err == nil {
+				os.Remove(oldPath)
+			}
+		}
+	}
+
+	// Attempt to remove the old directory if empty
+	if entries, err := os.ReadDir(oldDir); err == nil && len(entries) == 0 {
+		if err := os.Remove(oldDir); err != nil {
+			log.Debugf("[Favorites] Migration: could not remove empty old directory: %v", err)
+		}
+	}
 }
 
 func (p *Provider) Name() string {
@@ -248,11 +301,29 @@ func (p *Provider) pruneOldestFavorite(favDir string) error {
 		if err := os.Remove(filepath.Join(favDir, oldest)); err != nil {
 			return err
 		}
+
 		// Also remove from favMap
 		oldestID := strings.TrimSuffix(oldest, filepath.Ext(oldest))
 		p.mu.Lock()
 		delete(p.favMap, oldestID)
 		p.mu.Unlock()
+
+		// Cleanup Metadata Entry
+		metaFile := filepath.Join(favDir, "metadata.json")
+		if f, err := os.ReadFile(metaFile); err == nil {
+			var meta map[string]interface{}
+			if err := json.Unmarshal(f, &meta); err == nil {
+				if filesMeta, ok := meta["files"].(map[string]interface{}); ok {
+					if _, exists := filesMeta[oldest]; exists {
+						delete(filesMeta, oldest)
+						if data, err := json.MarshalIndent(meta, "", "  "); err == nil {
+							_ = os.WriteFile(metaFile, data, 0600)
+						}
+					}
+				}
+			}
+		}
+
 		log.Printf("FIFO: Removed oldest favorite %s", oldest)
 	}
 	return nil
@@ -495,7 +566,7 @@ func (p *Provider) CreateSettingsPanel(sm setting.SettingsManager) fyne.CanvasOb
 
 	return container.NewVBox(
 		widget.NewLabelWithStyle("Favorites Management", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-		widget.NewLabel("Wipe all local favorites from your temp folder."),
+		widget.NewLabel("Local favorites are stored persistently in your Spice application folder."),
 		openFolderBtn,
 		clearBtn,
 	)

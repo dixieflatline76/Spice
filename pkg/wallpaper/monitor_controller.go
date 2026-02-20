@@ -233,22 +233,13 @@ func (mc *MonitorController) next(manual bool) {
 	mc.State.ManualRecovery = false
 
 	// 3. Rebuild Shuffle if needed
-	// Check if shuffle is stale either due to pending updates (content change) or length mismatch (legacy/fallback)
-	isStale := false
-	if mc.pendingUpdate {
-		if mc.isShuffleStale(bucketIDs) {
-			isStale = true
-			log.Debugf("[Monitor %d] Content changed. Marking stale.", mc.ID)
-		}
-		mc.pendingUpdate = false
-	} else if len(mc.State.ShuffleIDs) != len(bucketIDs) {
-		isStale = true
-	}
-
-	if isStale {
-		log.Printf("[Monitor %d] Shuffle list stale (Bucket: %d, Current: %d). Rebuilding.", mc.ID, len(bucketIDs), len(mc.State.ShuffleIDs))
+	// Optimization: We no longer reshuffle on every content change (pendingUpdate).
+	// We only reshuffle if the deck is exhausted (below) or if the current IDs have shifted length (safety).
+	if len(mc.State.ShuffleIDs) != len(bucketIDs) {
+		log.Printf("[Monitor %d] Shuffle list length mismatch (Bucket: %d, Current: %d). Rebuilding.", mc.ID, len(bucketIDs), len(mc.State.ShuffleIDs))
 		mc.rebuildShuffle(bucketIDs)
 	}
+	mc.pendingUpdate = false // Always consume the pending update
 
 	// 4. Pick Next
 	if mc.State.RandomPos >= len(mc.State.ShuffleIDs) {
@@ -262,6 +253,12 @@ func (mc *MonitorController) next(manual bool) {
 	if img, ok := mc.Store.GetByID(nextID); ok {
 		mc.State.CurrentID = nextID
 		mc.State.History = append(mc.State.History, nextID)
+
+		// 5. Cap History (Resource Management)
+		if len(mc.State.History) > 100 {
+			mc.State.History = mc.State.History[1:]
+		}
+
 		mc.applyImage(img)
 	}
 }
@@ -408,25 +405,4 @@ func (mc *MonitorController) applyImage(img provider.Image) {
 		log.Debugf("[Monitor %d] Triggering async UI refresh for %s", mc.ID, path)
 		mc.OnWallpaperChanged(img, mc.ID)
 	}
-}
-
-func (mc *MonitorController) isShuffleStale(bucketIDs []string) bool {
-	if len(mc.State.ShuffleIDs) != len(bucketIDs) {
-		return true
-	}
-	// Content check - O(N)
-	// Create lookup for new bucket
-	incoming := make(map[string]bool, len(bucketIDs))
-	for _, id := range bucketIDs {
-		incoming[id] = true
-	}
-
-	for _, id := range mc.State.ShuffleIDs {
-		if !incoming[id] {
-			// Found an ID in current shuffle that is NO LONGER in the bucket
-			return true
-		}
-	}
-	// lengths equal and all current IDs are in bucket => sets are identical
-	return false
 }

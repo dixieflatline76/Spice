@@ -16,6 +16,7 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
+	"github.com/dixieflatline76/Spice/config"
 	"github.com/dixieflatline76/Spice/pkg/provider"
 	"github.com/dixieflatline76/Spice/pkg/ui/setting"
 	"github.com/dixieflatline76/Spice/pkg/wallpaper"
@@ -44,13 +45,15 @@ func init() {
 
 // NewProvider creates a new Google Photos Provider.
 func NewProvider(cfg *wallpaper.Config, client *http.Client) *Provider {
-	return &Provider{
+	p := &Provider{
 		cfg:        cfg,
 		httpClient: client,
 		auth:       NewAuthenticator(cfg, client),
 		apiHost:    "127.0.0.1:49452",
-		rootDir:    filepath.Join(os.TempDir(), "spice", "google_photos"),
+		rootDir:    filepath.Join(config.GetAppDir(), "google_photos"),
 	}
+	p.migrateOldGooglePhotos()
+	return p
 }
 
 // SetTestConfig allows tests to override internal paths and hosts
@@ -668,6 +671,54 @@ func (p *Provider) handleQueryDeletion(sm setting.SettingsManager, q wallpaper.I
 		sm.SetRefreshFlag("queries")
 		list.Refresh()
 	}, sm.GetSettingsWindow())
+}
+
+func (p *Provider) migrateOldGooglePhotos() {
+	oldDir := filepath.Join(os.TempDir(), "spice", "google_photos")
+	if _, err := os.Stat(oldDir); os.IsNotExist(err) {
+		return
+	}
+
+	// Ensure new directory exists
+	if err := os.MkdirAll(p.rootDir, 0755); err != nil {
+		log.Printf("[GooglePhotos] Migration error: failed to create new directory %s: %v", p.rootDir, err)
+		return
+	}
+
+	entries, err := os.ReadDir(oldDir)
+	if err != nil {
+		log.Printf("[GooglePhotos] Migration error: failed to read old directory %s: %v", oldDir, err)
+		return
+	}
+
+	if len(entries) == 0 {
+		return
+	}
+
+	log.Printf("[GooglePhotos] Migrating %d collections from %s to %s...", len(entries), oldDir, p.rootDir)
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		oldPath := filepath.Join(oldDir, entry.Name())
+		newPath := filepath.Join(p.rootDir, entry.Name())
+
+		if _, err := os.Stat(newPath); err == nil {
+			log.Debugf("[GooglePhotos] Migration: skipping collection %s as it already exists in target", entry.Name())
+			continue
+		}
+
+		if err := os.Rename(oldPath, newPath); err != nil {
+			log.Printf("[GooglePhotos] Migration error: failed to move collection %s: %v", entry.Name(), err)
+			// Recursive copy-and-delete is complex, so we just log failure here as it's a cache
+		}
+	}
+
+	// Attempt to remove the old directory if empty
+	if entries, err := os.ReadDir(oldDir); err == nil && len(entries) == 0 {
+		_ = os.Remove(oldDir)
+	}
 }
 
 func (p *Provider) OpenBrowser(urlStr string) error {

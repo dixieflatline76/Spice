@@ -2,6 +2,7 @@ package wallpaper
 
 import (
 	"log"
+	"strings"
 )
 
 // MigrationFunc defines a single migration step.
@@ -75,15 +76,25 @@ func EnsureFavoritesStep(cfg *Config) (bool, error) {
 }
 
 // LoadAvoidSetStep populates the sync.Map from the loaded AvoidSet map.
-// This is strictly an in-memory setup step, not a "change" to persisted config,
-// so it returns false for changed (unless we want to trigger a save for some reason).
+// It also cleans up legacy un-namespaced IDs (e.g. "24645") that cause
+// cross-provider collisions. Only properly namespaced IDs (containing "_")
+// are kept.
 func LoadAvoidSetStep(cfg *Config) (bool, error) {
-	if cfg.AvoidSet != nil {
-		for k, v := range cfg.AvoidSet {
-			cfg.avoidMap.Store(k, v)
-		}
+	if cfg.AvoidSet == nil {
+		return false, nil
 	}
-	return false, nil
+	changed := false
+	for k, v := range cfg.AvoidSet {
+		if !strings.Contains(k, "_") {
+			// Legacy un-namespaced ID — drop it
+			log.Printf("Migration: Removing legacy blocklist entry: %s", k)
+			delete(cfg.AvoidSet, k)
+			changed = true
+			continue
+		}
+		cfg.avoidMap.Store(k, v)
+	}
+	return changed, nil
 }
 
 // BackfillWallhavenStep generates IDs for legacy Wallhaven queries.

@@ -13,11 +13,27 @@ import (
 )
 
 // FetchNewImages iterates over active queries and submits new image jobs to the pipeline.
-func (wp *Plugin) FetchNewImages() {
-	if wp.fetchingInProgress.CompareAndSwap(false, true) {
+// If providerID is specified, only queries for that provider are fetched.
+func (wp *Plugin) FetchNewImages(providerID ...string) {
+	targetProvider := ""
+	if len(providerID) > 0 {
+		targetProvider = providerID[0]
+	}
+
+	// Special-case Favorites for on-the-fly responsiveness
+	isFavRequest := targetProvider == "Favorites"
+
+	if isFavRequest || wp.fetchingInProgress.CompareAndSwap(false, true) {
 		go func() {
-			defer wp.fetchingInProgress.Set(false)
-			log.Println("Starting image fetch from active queries...")
+			if !isFavRequest {
+				defer wp.fetchingInProgress.Set(false)
+			}
+			log.Printf("Starting image fetch (Target: %s)...", func() string {
+				if targetProvider == "" {
+					return "ALL"
+				}
+				return targetProvider
+			}())
 
 			wp.downloadMutex.RLock()
 			if wp.cfg == nil {
@@ -37,6 +53,11 @@ func (wp *Plugin) FetchNewImages() {
 
 			for _, q := range queries {
 				if !q.Active {
+					continue
+				}
+
+				// Targeted Fetch filter
+				if targetProvider != "" && q.Provider != targetProvider {
 					continue
 				}
 
@@ -93,17 +114,14 @@ func (wp *Plugin) FetchNewImages() {
 
 						// *** NAMESPACING Middleware ***
 						// Ensure ID is unique across providers by prefixing it.
-						// This prevents collisions in Store (memory) and FileManager (disk).
 						if p.Type() == provider.TypeOnline {
-							// Only namespace if not already namespaced (though we assume raw from provider)
-							// We trust the provider returns raw IDs.
 							prefix := p.Name() + "_"
 							if !strings.HasPrefix(img.ID, prefix) {
 								img.ID = prefix + img.ID
 							}
 						}
 
-						if wp.cfg.InAvoidSet(img.ID) {
+						if !isFavRequest && wp.cfg.InAvoidSet(img.ID) {
 							log.Debugf("Skipping blocked image: %s", img.ID)
 							continue
 						}
@@ -129,7 +147,12 @@ func (wp *Plugin) FetchNewImages() {
 
 			wg.Wait()
 
+			// Batch Reshuffle Optimization (User Approach):
+			// Signal monitors to update their shuffle lists only after the entire batch is processed.
 			if totalQueued.Value() > 0 {
+				log.Printf("[Fetch] Processed %d new images. Broadcasting shuffle update to monitors...", totalQueued.Value())
+				wp.dispatch(-1, CmdUpdateShuffle)
+
 				sources := []string{}
 				for s := range activeSources {
 					sources = append(sources, s)
