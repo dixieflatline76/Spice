@@ -55,16 +55,16 @@ Each display submenu contains the same full set of controls — Next, Prev, Paus
 
 Spice registers global hotkeys so you can control wallpapers without ever leaving your current app.
 
-> **Note for macOS:** On macOS, the `Control` key is used for targeted actions (similar to Windows `Alt`). Global actions use `Control` + `Option` (similar to Windows `Ctrl` + `Alt`).
+> **Note for macOS:** On macOS, the `Command` key is used for targeted actions (similar to Windows `Alt`). Global actions use `Command` + `Control` (similar to Windows `Ctrl` + `Alt`).
 
 ### Global Actions — All Displays At Once
 
 | Action | Windows | macOS |
 | :--- | :--- | :--- |
-| Next Wallpaper | `Ctrl` + `Alt` + `→` | `Ctrl` + `Option` + `→` |
-| Previous Wallpaper | `Ctrl` + `Alt` + `←` | `Ctrl` + `Option` + `←` |
-| Sync / Detect Displays | `Ctrl` + `Alt` + `D` | `Ctrl` + `Option` + `D` |
-| Open Preferences | `Ctrl` + `Alt` + `O` | `Ctrl` + `Option` + `O` |
+| Next Wallpaper | `Ctrl` + `Alt` + `→` | `Cmd` + `Control` + `→` |
+| Previous Wallpaper | `Ctrl` + `Alt` + `←` | `Cmd` + `Control` + `←` |
+| Sync / Detect Displays | `Ctrl` + `Alt` + `D` | `Cmd` + `Control` + `D` |
+| Open Preferences | `Ctrl` + `Alt` + `O` | `Cmd` + `Control` + `O` |
 
 ### Targeted Actions — One Display At A Time
 
@@ -72,13 +72,13 @@ Hold a **number key (1–9)** alongside the modifier to target a specific displa
 
 | Action | Windows | macOS |
 | :--- | :--- | :--- |
-| Next Wallpaper on Display *N* | `Alt` + `N` + `→` | `Control` + `N` + `→` |
-| Previous Wallpaper on Display *N* | `Alt` + `N` + `←` | `Control` + `N` + `←` |
-| Block Image on Display *N* | `Alt` + `N` + `↓` | `Control` + `N` + `↓` |
-| Add to Favorites on Display *N* | `Alt` + `N` + `↑` | `Control` + `N` + `↑` |
-| Pause Play on Display *N* | `Alt` + `N` + `P` | `Control` + `N` + `P` |
+| Next Wallpaper on Display *N* | `Alt` + `N` + `→` | `Command` + `N` + `→` |
+| Previous Wallpaper on Display *N* | `Alt` + `N` + `←` | `Command` + `N` + `←` |
+| Block Image on Display *N* | `Alt` + `N` + `↓` | `Command` + `N` + `↓` |
+| Add to Favorites on Display *N* | `Alt` + `N` + `↑` | `Command` + `N` + `↑` |
+| Pause Play on Display *N* | `Alt` + `N` + `P` | `Command` + `N` + `P` |
 
-**Example:** To go to the next wallpaper on Display 2, press and hold `Alt` (Windows) or `Control` (macOS), then while still holding it, press `2` and `→` simultaneously.
+**Example:** To go to the next wallpaper on Display 2, press and hold `Alt` (Windows) or `Command` (macOS), then while still holding it, press `2` and `→` simultaneously.
 
 > If the hotkeys conflict with another application, you can disable them in **Preferences → App → Enable global shortcuts**.
 
@@ -88,7 +88,7 @@ Hold a **number key (1–9)** alongside the modifier to target a specific displa
 
 ## Preferences: App Tab
 
-Open via **Tray → Preferences** or `Ctrl` + `Alt` (Windows) / `Ctrl` + `Opt` (macOS) + `O`.
+Open via **Tray → Preferences** or `Ctrl` + `Alt` (Windows) / `Cmd` + `Control` (macOS) + `O`.
 
 The **App** tab controls application-wide behaviour, independent of any wallpaper source.
 
@@ -201,7 +201,7 @@ Favorites lets you permanently save copies of any wallpaper you love, so they ke
 
 ### How Favorites Work
 
-- When you **Add to Favorites** (via the tray menu or `Alt`/`Option` + `N` + `↑`), Spice copies the current wallpaper into a local folder on your machine.
+- When you **Add to Favorites** (via the tray menu or `Alt` (Windows) / `Command` (macOS) + `N` + `↑`), Spice copies the current wallpaper into a local folder on your machine.
 - Spice stores up to **200 favorites** (FIFO — the oldest is pruned when the limit is reached).
 - Favorites are stored as independent image files. They persist even if the original collection is deleted or disabled.
 - Favorites has its own **Active** toggle in **Local → Favorites → Wallpaper Sources**. When active, Spice will include your favorite images in the rotation alongside online sources.
@@ -225,7 +225,7 @@ Spice fully supports any number of connected monitors. Each display is managed i
 When Spice starts, it detects all connected displays automatically. If you connect or disconnect a display while Spice is running:
 
 1. Open **Preferences → Wallpaper → General → Refresh Displays**, or
-2. Use the hotkey `Ctrl` + `Alt` + `D` (Windows) / `Ctrl` + `Option` + `D` (macOS).
+2. Use the hotkey `Ctrl` + `Alt` + `D` (Windows) / `Cmd` + `Control` + `D` (macOS).
 
 ### Per-Display Control
 

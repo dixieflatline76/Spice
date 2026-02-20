@@ -46,21 +46,21 @@ Target a specific monitor (**1-9**) by holding that number key while pressing th
 
 | Action | macOS Shortcut | Windows Shortcut |
 | :--- | :--- | :--- |
-| **Next Wallpaper** | `Control` + `1-9` + `→` | `Alt` + `1-9` + `→` |
-| **Prev Wallpaper** | `Control` + `1-9` + `←` | `Alt` + `1-9` + `←` |
-| **Fav / Unfav** | `Control` + `1-9` + `↑` | `Alt` + `1-9` + `↑` |
-| **Del + Block** | `Control` + `1-9` + `↓` | `Alt` + `1-9` + `↓` |
-| **Pause Play** | `Control` + `1-9` + `P` | `Alt` + `1-9` + `P` |
+| **Next Wallpaper** | `Command` + `1-9` + `→` | `Alt` + `1-9` + `→` |
+| **Prev Wallpaper** | `Command` + `1-9` + `←` | `Alt` + `1-9` + `←` |
+| **Fav / Unfav** | `Command` + `1-9` + `↑` | `Alt` + `1-9` + `↑` |
+| **Del + Block** | `Command` + `1-9` + `↓` | `Alt` + `1-9` + `↓` |
+| **Pause Play** | `Command` + `1-9` + `P` | `Alt` + `1-9` + `P` |
 
 #### Global Actions (All Monitors)
 These actions affect all displays simultaneously.
 
 | Action | macOS Shortcut | Windows Shortcut |
 | :--- | :--- | :--- |
-| **Next (All Displays)** | `Ctrl + Opt + →` | `Ctrl + Alt + →` |
-| **Previous (All Displays)** | `Ctrl + Opt + ←` | `Ctrl + Alt + ←` |
-| **All Settings** | `Ctrl + Opt + O` | `Ctrl + Alt + O` |
-| **Global Sync** | `Ctrl + Opt + D` | `Ctrl + Alt + D` |
+| **Next (All Displays)** | `Cmd + Ctrl + →` | `Ctrl + Alt + →` |
+| **Previous (All Displays)** | `Cmd + Ctrl + ←` | `Ctrl + Alt + ←` |
+| **All Settings** | `Cmd + Ctrl + O` | `Ctrl + Alt + O` |
+| **Global Sync** | `Cmd + Ctrl + D` | `Ctrl + Alt + D` |
 
 > [!IMPORTANT]
 > **macOS Permissions:** Display-specific (chorded) hotkeys require **Accessibility** or **Input Monitoring** permissions to detect the number keys correctly. Go to *System Settings > Privacy & Security* to enable them for Spice.

@@ -904,7 +904,6 @@ func (wp *Plugin) updateTrayMenuUI(img provider.Image, monitorID int) {
 		// Update Pause State
 		if mItems.PauseMenuItem != nil {
 			paused := wp.IsMonitorPaused(monitorID)
-			mItems.PauseMenuItem.Checked = paused
 			if paused {
 				mItems.PauseMenuItem.Label = "Resume Play"
 				mItems.PauseMenuItem.Icon, _ = wp.manager.GetAssetManager().GetIcon("play.png")
