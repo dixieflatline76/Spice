@@ -63,7 +63,6 @@ func Fatalln(v ...interface{}) {
 }
 
 // Debug calls the standard log.Print() with a [DEBUG] prefix
-// Debug calls the standard log.Print() with a [DEBUG] prefix
 func Debug(v ...interface{}) {
 	// No-op in release builds
 }

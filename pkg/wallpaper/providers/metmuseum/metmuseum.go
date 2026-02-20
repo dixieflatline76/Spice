@@ -230,8 +230,9 @@ func (p *Provider) resolveQueryToIDs(ctx context.Context, query string) ([]int, 
 	var ids []int
 	var err error
 
-	// Case 1: Spice Melange (Already cached in p.collection, but needs to be handled uniformly for shuffle)
-	if query == CollectionSpiceMelange || query == "metmuseum://curated" {
+	switch query {
+	case CollectionSpiceMelange, "metmuseum://curated":
+		// Case 1: Spice Melange (Already cached in p.collection, but needs to be handled uniformly for shuffle)
 		p.mu.RLock()
 		if p.collection == nil {
 			p.mu.RUnlock()
@@ -248,10 +249,10 @@ func (p *Provider) resolveQueryToIDs(ctx context.Context, query string) ([]int, 
 		ids = make([]int, len(p.collection.IDs))
 		copy(ids, p.collection.IDs)
 		p.mu.RUnlock()
-	} else if query == CollectionAmerican {
+	case CollectionAmerican:
 		// Case 2: American Art
 		ids, err = p.fetchSearchHighlights(ctx, "American Paintings")
-	} else {
+	default:
 		// Case 3: Department Highlights
 		var deptID int
 		switch query {
