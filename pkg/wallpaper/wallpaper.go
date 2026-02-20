@@ -179,10 +179,15 @@ func getPlugin() *Plugin {
 }
 
 // RequestFetch safely triggers a background fetch if conditions are met.
-// It implements the legacy "Anti-Loop" protection to prevent starvation loops.
-func (wp *Plugin) RequestFetch() {
+// It accepts an optional providerID to restrict the fetch to a specific source.
+func (wp *Plugin) RequestFetch(providerID ...string) {
 	wp.downloadMutex.Lock()
 	defer wp.downloadMutex.Unlock()
+
+	targetProvider := ""
+	if len(providerID) > 0 {
+		targetProvider = providerID[0]
+	}
 
 	// 1. Basic Debounce (Avoid spamming from UI or multiple monitors)
 	if wp.isDownloading || (wp.fetchingInProgress != nil && wp.fetchingInProgress.Value()) {
@@ -192,34 +197,31 @@ func (wp *Plugin) RequestFetch() {
 	seenCount := wp.store.SeenCount()
 	totalCount := wp.store.Count()
 
-	// 2. Anti-Loop Protection
-	// CASE 1: Starvation/Dry Source
-	// We triggered a download previously, but the TotalCount did NOT increase.
-	// This suggests the provider returned 0 new images.
-	if totalCount <= wp.lastTriggeredTotalCount && seenCount > wp.lastTriggeredSeenCount {
-		// Starvation Cooldown: 60 seconds (Wait for new content or user)
-		if time.Since(wp.lastTriggerTime) < 60*time.Second {
-			log.Debugf("Fetch skipped: Starvation cooldown active (%v remaining). Total stuck at %d.",
-				(60*time.Second - time.Since(wp.lastTriggerTime)).Round(time.Second), totalCount)
-			return
+	// 2. Anti-Loop Protection (Only if NOT a targeted fetch)
+	if targetProvider == "" {
+		// CASE 1: Starvation/Dry Source
+		if totalCount <= wp.lastTriggeredTotalCount && seenCount > wp.lastTriggeredSeenCount {
+			if time.Since(wp.lastTriggerTime) < 60*time.Second {
+				log.Debugf("Fetch skipped: Starvation cooldown active (%v remaining). Total stuck at %d.",
+					(60*time.Second - time.Since(wp.lastTriggerTime)).Round(time.Second), totalCount)
+				return
+			}
+		} else if seenCount <= wp.lastTriggeredSeenCount {
+			// CASE 2: Retrying same threshold
+			if time.Since(wp.lastTriggerTime) < 15*time.Second {
+				log.Debugf("Fetch skipped: Debounce cooldown active (%v remaining).",
+					(15*time.Second - time.Since(wp.lastTriggerTime)).Round(time.Second))
+				return
+			}
 		}
-	} else if seenCount <= wp.lastTriggeredSeenCount {
-		// CASE 2: Retrying same threshold (e.g. rapid clicks before Seen advances)
-		// Cooldown Override: If it's been > 15 seconds since last trigger, allow retry.
-		if time.Since(wp.lastTriggerTime) < 15*time.Second {
-			log.Debugf("Fetch skipped: Debounce cooldown active (%v remaining).",
-				(15*time.Second - time.Since(wp.lastTriggerTime)).Round(time.Second))
-			return
-		}
+
+		wp.lastTriggeredSeenCount = seenCount
+		wp.lastTriggeredTotalCount = totalCount
+		wp.lastTriggerTime = time.Now()
 	}
 
 	// 3. Trigger
-	wp.lastTriggeredSeenCount = seenCount
-	wp.lastTriggeredTotalCount = totalCount
-	wp.lastTriggerTime = time.Now()
-
-	// log.Printf("Triggering background fetch (Seen: %d, Total: %d)", seenCount, totalCount)
-	go wp.FetchNewImages()
+	go wp.FetchNewImages(targetProvider)
 }
 
 // GetInstance returns the singleton instance of the wallpaper plugin.
@@ -681,8 +683,8 @@ func (wp *Plugin) ToggleFavorite(img provider.Image) {
 		wp.downloadMutex.Unlock()
 
 		wp.manager.NotifyUser("Favorites", "Added to favorites.")
-		// Trigger immediate fetch to bring the new favorite into the store
-		go wp.RequestFetch()
+		// Targeted Responsiveness Fix: Only trigger fetch for Favorites provider.
+		go wp.RequestFetch("Favorites")
 	}
 
 	// Update UI for all monitors that might have this image
@@ -940,7 +942,7 @@ func (wp *Plugin) ResetFavorites() {
 	log.Printf("[Plugin] Resetting all favorites in store...")
 	wp.store.ResetFavorites()
 	wp.manager.NotifyUser("Favorites", "All favorites cleared.")
-	go wp.RequestFetch()
+	go wp.RequestFetch("Favorites")
 }
 
 // syncStoreWithConfig reconciles the image store with the current configuration.
