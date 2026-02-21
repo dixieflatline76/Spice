@@ -159,32 +159,30 @@ jobs:
       run: dir .
       shell: cmd
 
-    - name: Calculate checksums and create .sha256 files
-      # This step assumes files exist in the current directory after download (bin/ content flattened unless path specified)
-      # Action v4 preserves directory structure if multiple paths uploaded? No, verifies below.
-      # If bin/ and dist/ are side-by-side in artifact, download-artifact puts them in workspace.
-      run: |
-        certutil -hashfile "bin/${{ steps.filenames.outputs.EXE_NAME }}" SHA256 | findstr /V /B /C:"CertUtil" /C:"SHA256" > "bin/${{ steps.filenames.outputs.EXE_NAME }}.sha256"
-        certutil -hashfile "bin/${{ steps.filenames.outputs.SETUP_NAME }}" SHA256 | findstr /V /B /C:"CertUtil" /C:"SHA256" > "bin/${{ steps.filenames.outputs.SETUP_NAME }}.sha256"
-        certutil -hashfile "dist/spice-extension-chrome.zip" SHA256 | findstr /V /B /C:"CertUtil" /C:"SHA256" > "dist/spice-extension-chrome.zip.sha256"
-        certutil -hashfile "dist/spice-extension-firefox.zip" SHA256 | findstr /V /B /C:"CertUtil" /C:"SHA256" > "dist/spice-extension-firefox.zip.sha256"
-      shell: cmd # Use cmd for certutil and findstr piping
-
-    - name: Sign executables with Azure Trusted Signing
-      uses: azure/trusted-signing-action@v0
+    - name: Sign executables with Azure Artifact Signing
+      uses: azure/artifact-signing-action@v1
       with:
         azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
         azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
         azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
         endpoint: https://weu.codesigning.azure.net/
-        trusted-signing-account-name: SpiceOSS
+        signing-account-name: SpiceOSS
         certificate-profile-name: Spice
-        files-folder: ${{ github.workspace }}/bin # Sign files in bin
-        # Sign both the raw exe and the setup exe using the step outputs
-        files-folder-filter: "${{ steps.filenames.outputs.EXE_NAME }},${{ steps.filenames.outputs.SETUP_NAME }}"
+        files: |
+          ${{ github.workspace }}/bin/${{ steps.filenames.outputs.EXE_NAME }}
+          ${{ github.workspace }}/bin/${{ steps.filenames.outputs.SETUP_NAME }}
         file-digest: SHA256
         timestamp-rfc3161: http://timestamp.acs.microsoft.com
         timestamp-digest: SHA256
+
+    - name: Calculate checksums and create .sha256 files
+      # This MUST run after signing because signing modifies the .exe and changed the hash
+      run: |
+        certutil -hashfile "bin/${{ steps.filenames.outputs.EXE_NAME }}" SHA256 | findstr /V /B /C:"CertUtil" /C:"SHA256" > "bin/${{ steps.filenames.outputs.EXE_NAME }}.sha256"
+        certutil -hashfile "bin/${{ steps.filenames.outputs.SETUP_NAME }}" SHA256 | findstr /V /B /C:"CertUtil" /C:"SHA256" > "bin/${{ steps.filenames.outputs.SETUP_NAME }}.sha256"
+        certutil -hashfile "dist/spice-extension-chrome.zip" SHA256 | findstr /V /B /C:"CertUtil" /C:"SHA256" > "dist/spice-extension-chrome.zip.sha256"
+        certutil -hashfile "dist/spice-extension-firefox.zip" SHA256 | findstr /V /B /C:"CertUtil" /C:"SHA256" > "dist/spice-extension-firefox.zip.sha256"
+      shell: cmd
 
     - name: Upload binaries to GitHub Release (CLI)
       env:
