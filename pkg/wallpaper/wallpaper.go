@@ -401,7 +401,7 @@ func (wp *Plugin) Activate() {
 	} else {
 		// Reset all pages to 1 on clean activation if not pulsing
 		wp.downloadMutex.Lock()
-		for _, q := range wp.cfg.Queries {
+		for _, q := range wp.cfg.GetQueries() {
 			wp.queryPages[q.ID] = util.NewSafeIntWithValue(1)
 		}
 		wp.downloadMutex.Unlock()
@@ -656,9 +656,11 @@ func (wp *Plugin) ToggleFavorite(img provider.Image) {
 			wp.monMu.RLock()
 			var affectedMonitors []int
 			for id, mc := range wp.Monitors {
+				mc.mu.RLock()
 				if mc.State.CurrentImage.ID == img.ID {
 					affectedMonitors = append(affectedMonitors, id)
 				}
+				mc.mu.RUnlock()
 			}
 			wp.monMu.RUnlock()
 

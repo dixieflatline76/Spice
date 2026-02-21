@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"sync"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -80,6 +81,8 @@ type MonitorState struct {
 // MonitorController is an Actor that manages one specific monitor.
 // It receives commands via a channel and processes them sequentially.
 type MonitorController struct {
+	mu sync.RWMutex
+
 	ID                 int
 	Monitor            Monitor
 	Commands           chan Command
@@ -158,7 +161,9 @@ func (mc *MonitorController) Run(ctx context.Context) {
 				mc.next(mc.State.ManualRecovery)
 			}
 		case cmd := <-mc.Commands:
+			mc.mu.Lock()
 			mc.handleCommand(cmd)
+			mc.mu.Unlock()
 		}
 	}
 }
