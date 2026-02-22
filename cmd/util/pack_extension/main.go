@@ -120,7 +120,7 @@ func adaptManifestForFirefox(content []byte) ([]byte, error) {
 			"strict_min_version": "140.0", // Bumped for data_collection_permissions support
 		},
 	}
-	// Add data_collection_permissions to gecko settings (Mozilla requirement Nov 2025)
+	// Add data_collection_permissions to gecko settings (Mozilla requirement Nov 2025, verified 2026)
 	if gecko, ok := manifest["browser_specific_settings"].(map[string]interface{})["gecko"].(map[string]interface{}); ok {
 		gecko["data_collection_permissions"] = map[string]interface{}{
 			// "required": ["none"] implies no data collection

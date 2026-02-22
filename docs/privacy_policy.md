@@ -5,7 +5,7 @@ title: Privacy Policy
 
 # Privacy Policy
 
-**Effective Date:** December 18, 2025
+**Effective Date:** February 21, 2026
 
 ## Introduction
 

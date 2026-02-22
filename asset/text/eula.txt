@@ -1,57 +1,46 @@
 # End-User License Agreement (EULA) for Spice
 
-This End-User License Agreement ("EULA") is a legal agreement between you ("User" or "you") and Karl Kwong ("Developer" or "we") for the use of the Spice software application ("Software"). This EULA is effective as of version 1.0 of the Software.
+Version: 2.0.8
+Effective Date: February 22, 2026
 
-By downloading, installing, or using the Software, you agree to be bound by the terms of this EULA. If you do not agree to the terms of this EULA, do not download, install, or use the Software.
+Copyright © 2026 Karl Kwong. All rights reserved.
 
-## 1. Grant of License
+This software is provided under the **PolyForm Noncommercial License 1.0.0**. By downloading, installing, or using the Software, you agree to be bound by the terms of that license and this Agreement.
 
-The Developer grants you a non-exclusive, non-transferable license to use the Software for personal, non-commercial use on a single computer. You may not:
+## 1. Non-Commercial Use Only
 
-* Distribute, sublicense, rent, lease, or lend the Software.
-* Modify, reverse engineer, decompile, or disassemble the Software.
-* Use the Software for any illegal or unauthorized purpose.
+This software is for personal, non-commercial use only. You are free to view, clone, and modify the source code for your own experimentation, but you may not sell, rent, lease, or use it for any commercial advantage or monetary compensation.
 
-## 2. Third-Party Services
+## 2. Third-Party Services and Content
 
-The Software allows you to access content from various third-party services, including but not limited to Wallhaven, Google Photos, Pexels, and Wikimedia Commons.
+Spice integrates with various third-party services. Your use of these services within the app is subject to their respective terms:
 
-### 2.1 Wallhaven
-You are solely responsible for obtaining and using your own Wallhaven API key in compliance with Wallhaven's terms of service.
+### 2.1 Google Photos
+Use of Google Photos integration is subject to Google’s Terms of Service and Privacy Policy. The Software uses the Google Photos Picker API to access only the specific photos you select. Spice is 100% client-side; your photo data is never sent to a central Spice server.
 
-### 2.2 Google Photos
-Use of Google Photos integration is subject to Google's Terms of Service and Privacy Policy. The Software uses the Google Photos Picker API to access only the photos you explicitly select.
+### 2.2 Wallhaven
+You are responsible for using your own Wallhaven API key in compliance with Wallhaven’s terms of service.
 
 ### 2.3 Pexels
 Use of Pexels content is subject to the Pexels License.
 
 ### 2.4 Wikimedia Commons
-Content from Wikimedia Commons is subject to the specific Creative Commons license applicable to each image, which is displayed in the Software's attribution field.
+Content from Wikimedia Commons is subject to the specific Creative Commons license (CC BY-SA, etc.) applicable to each image.
 
-## 3. Disclaimer of Warranty
+### 2.5 The Metropolitan Museum of Art
+Open Access masterpieces from The Met are provided under Creative Commons Zero (CC0) for non-commercial use as part of The Met’s Open Access policy.
 
-The Software is provided "as is" without warranty of any kind, express or implied, including but not limited to the implied warranties of merchantability, fitness for a particular purpose, and non-infringement. The Developer does not warrant that the Software will be error-free or uninterrupted.
+### 2.6 Art Institute of Chicago
+Open Access images from the Art Institute of Chicago are subject to their specific Open Access terms and conditions.
 
-## 4. Limitation of Liability
+## 3. Disclaimers
 
-In no event shall the Developer be liable for any damages whatsoever (including, without limitation, damages for loss of business profits, business interruption, loss of business information, or other pecuniary loss) arising out of the use of or inability to use the Software, even if the Developer has been advised of the possibility of such damages.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND. The Developer is not liable for any damages arising out of the use or inability to use the Software.
 
-## 5. Termination
+## 4. EULA Acceptance
 
-This EULA is effective until terminated by either party. You may terminate this EULA at any time by uninstalling the Software. The Developer may terminate this EULA at any time for any reason, including but not limited to your breach of this EULA.
+To verify your acceptance, the application stores a local record on your machine consisting of a hash of these terms and your acceptance status. No personal data is transmitted off your device for this purpose.
 
-## 6. EULA Acceptance
+## 5. Contact
 
-To verify your acceptance of this EULA, the application stores a record on your local machine. This record includes a hash of the EULA content, the EULA version, and a generic identifier for your machine. This information is not transmitted off your device and is only used to confirm your acceptance of this EULA.
-
-## 7. Governing Law
-
-This EULA shall be governed by and construed in accordance with the laws of Germany Bavaria.
-
-## 8. Entire Agreement
-
-This EULA constitutes the entire agreement between the parties with respect to the subject matter hereof and supersedes all prior or contemporaneous communications and proposals, whether oral or written.
-
-## 9. Contact Information
-
-If you have any questions about this EULA, please contact the Developer at dixieflatline76@gmail.com.
+For questions regarding this license, contact: dixieflatline76@gmail.com
