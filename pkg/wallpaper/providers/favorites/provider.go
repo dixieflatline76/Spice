@@ -186,10 +186,6 @@ func (p *Provider) EnrichImage(ctx context.Context, img provider.Image) (provide
 }
 
 func (p *Provider) IsFavorited(img provider.Image) bool {
-	if img.Provider == ProviderName {
-		return true
-	}
-
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.favMap[img.ID]
@@ -214,6 +210,48 @@ func (p *Provider) loadInitialMetadata() {
 					id := strings.TrimSuffix(filename, filepath.Ext(filename))
 					p.favMap[id] = true
 				}
+			}
+		}
+	}
+
+	// Validate favMap against actual files on disk.
+	// If metadata says a file is favorited but the image doesn't exist, clean it up.
+	orphans := []string{}
+	for id := range p.favMap {
+		matches, _ := filepath.Glob(filepath.Join(favDir, id+".*"))
+		// Filter out .json files from matches
+		hasImage := false
+		for _, m := range matches {
+			ext := strings.ToLower(filepath.Ext(m))
+			if ext != ".json" {
+				hasImage = true
+				break
+			}
+		}
+		if !hasImage {
+			orphans = append(orphans, id)
+		}
+	}
+	if len(orphans) > 0 {
+		// Clean in-memory favMap
+		for _, id := range orphans {
+			log.Printf("[Favorites] Orphan in metadata: %s has no file on disk. Removing.", id)
+			delete(p.favMap, id)
+		}
+
+		// Clean metadata.json on disk so orphans don't accumulate
+		if filesMeta, ok := meta["files"].(map[string]interface{}); ok {
+			for _, id := range orphans {
+				// Find and remove the filename entry matching this orphan ID
+				for filename := range filesMeta {
+					if strings.TrimSuffix(filename, filepath.Ext(filename)) == id {
+						delete(filesMeta, filename)
+						break
+					}
+				}
+			}
+			if data, err := json.MarshalIndent(meta, "", "  "); err == nil {
+				_ = os.WriteFile(metaFile, data, 0600)
 			}
 		}
 	}

@@ -328,6 +328,9 @@ func (wp *Plugin) Activate() {
 		log.Printf("Failed to load cache: %v", err)
 	}
 
+	// Reconcile favorite flags against live data to prevent ghost favorites
+	wp.reconcileFavorites()
+
 	// Initialize Monitors (Actors)
 	monitors, err := wp.os.GetMonitors()
 	if err != nil {
@@ -349,7 +352,7 @@ func (wp *Plugin) Activate() {
 			go wp.updateTrayMenuUI(img, monitorID)
 		}
 		mc.OnFavoriteRequest = func(img provider.Image) {
-			wp.ToggleFavorite(img)
+			go wp.ToggleFavorite(img) // Defensive: ensure never called under mc.mu
 		}
 		mc.OnFetchRequest = func() {
 			wp.RequestFetch()
@@ -371,7 +374,10 @@ func (wp *Plugin) Activate() {
 			mc, ok := wp.Monitors[id]
 			wp.monMu.RUnlock()
 			if ok {
-				go wp.updateTrayMenuUI(mc.State.CurrentImage, id)
+				mc.mu.RLock()
+				img := mc.State.CurrentImage
+				mc.mu.RUnlock()
+				go wp.updateTrayMenuUI(img, id)
 			}
 		}
 	}
@@ -524,11 +530,16 @@ func (wp *Plugin) TogglePauseMonitorAction(monitorID int) {
 	if wp.IsPaused() {
 		return
 	}
+	// 1. Read state BEFORE dispatch to ensure we capture the 'old' value.
+	// Since dispatch is async, reading it after would be a race with the actor.
+	willBePaused := !wp.IsMonitorPaused(monitorID)
+
+	// 2. Dispatch the toggle command
 	wp.dispatch(monitorID, CmdPause)
 
-	// Notify user of the change (reflecting the keyboard shortcut style)
+	// 3. Notify based on the deterministic target state
 	state := "Resumed Play"
-	if wp.IsMonitorPaused(monitorID) {
+	if willBePaused {
 		state = "Paused Play"
 	}
 	wp.manager.NotifyUser(fmt.Sprintf("Display %d", monitorID+1), state)
@@ -651,23 +662,20 @@ func (wp *Plugin) ToggleFavorite(img provider.Image) {
 			log.Printf("ToggleFavorite: Deep deleting unfavorited local favorite %s", img.ID)
 			wp.store.Remove(img.ID)
 
-			// Auto-Advance Fix: If this image is currently active on any monitor, pulse forward.
-			// This ensures we don't try to maintain a reference to a deleted file.
+			// Auto-Advance: If this image is currently active on any monitor, pulse forward.
+			// DEADLOCK FIX: dispatched via `go` from toggleFavorite(), so mc.mu.RLock()
+			// is safe here — we're in a separate goroutine, not the MC's goroutine.
 			wp.monMu.RLock()
-			var affectedMonitors []int
 			for id, mc := range wp.Monitors {
 				mc.mu.RLock()
-				if mc.State.CurrentImage.ID == img.ID {
-					affectedMonitors = append(affectedMonitors, id)
-				}
+				currentID := mc.State.CurrentID
 				mc.mu.RUnlock()
+				if currentID == img.ID {
+					log.Printf("ToggleFavorite: Auto-advancing monitor %d after deep delete", id)
+					go wp.SetNextWallpaper(id, true)
+				}
 			}
 			wp.monMu.RUnlock()
-
-			for _, id := range affectedMonitors {
-				log.Printf("ToggleFavorite: Auto-advancing monitor %d after deep delete", id)
-				wp.SetNextWallpaper(id, true)
-			}
 		} else {
 			wp.store.Update(img)
 		}
@@ -694,19 +702,61 @@ func (wp *Plugin) ToggleFavorite(img provider.Image) {
 	}
 
 	// Update UI for all monitors that might have this image
+	// DEADLOCK FIX: Collect IDs under lock, then update UI outside the lock.
+	// updateTrayMenuUI uses fyne.Do which could cross-deadlock with monitor locks.
 	var syncIDs []int
 	wp.monMu.RLock()
 	for id, mc := range wp.Monitors {
-		if mc.State.CurrentImage.ID == img.ID {
+		mc.mu.RLock()
+		currentID := mc.State.CurrentID
+		mc.mu.RUnlock()
+		if currentID == img.ID {
 			syncIDs = append(syncIDs, id)
-			wp.updateTrayMenuUI(img, id)
 		}
 	}
 	wp.monMu.RUnlock()
 
+	for _, id := range syncIDs {
+		wp.updateTrayMenuUI(img, id)
+	}
+
 	// Dispatch sync command outside of lock to avoid reentrancy issues
 	for _, id := range syncIDs {
 		wp.dispatch(id, CmdSyncState)
+	}
+}
+
+// reconcileFavorites validates all IsFavorited flags in the image cache against the
+// live favorites provider. This prevents "ghost favorites" where the tray menu shows
+// an image as favorited even though its file was deleted from the favorites folder.
+// It also removes stale Provider=Favorites entries whose source files no longer exist.
+func (wp *Plugin) reconcileFavorites() {
+	if wp.favoriter == nil {
+		return
+	}
+	corrected := 0
+	removed := 0
+	for _, img := range wp.store.List() {
+		actual := wp.favoriter.IsFavorited(img)
+		if img.IsFavorited == actual {
+			continue
+		}
+
+		if img.Provider == "Favorites" && !actual {
+			// Source file was deleted from favorites folder — remove dead entry entirely.
+			log.Printf("[Reconcile] %s: Provider=Favorites but no longer in favMap. Removing from store.", img.ID)
+			wp.store.Remove(img.ID)
+			removed++
+		} else {
+			// Non-Favorites image with stale IsFavorited flag — correct it.
+			log.Printf("[Reconcile] %s: IsFavorited %v→%v", img.ID, img.IsFavorited, actual)
+			img.IsFavorited = actual
+			wp.store.Update(img)
+			corrected++
+		}
+	}
+	if corrected > 0 || removed > 0 {
+		log.Printf("[Reconcile] Fixed %d stale flags, removed %d dead favorites entries", corrected, removed)
 	}
 }
 
@@ -719,6 +769,8 @@ func (wp *Plugin) SetStaggerMonitorChanges(enable bool) {
 }
 
 func (wp *Plugin) StopNightlyRefresh() {
+	wp.downloadMutex.Lock()
+	defer wp.downloadMutex.Unlock()
 	if wp.stopNightlyRefresh != nil {
 		close(wp.stopNightlyRefresh)
 		wp.stopNightlyRefresh = nil
@@ -803,7 +855,7 @@ func (wp *Plugin) SyncMonitors(force bool) {
 				go wp.updateTrayMenuUI(img, monitorID)
 			}
 			mc.OnFavoriteRequest = func(img provider.Image) {
-				wp.ToggleFavorite(img)
+				go wp.ToggleFavorite(img) // Defensive: ensure never called under mc.mu
 			}
 			mc.OnFetchRequest = func() {
 				wp.RequestFetch()
@@ -837,7 +889,10 @@ func (wp *Plugin) SyncMonitors(force bool) {
 	// (Original logic ran this force loop always if changed or forced)
 	if changed || force {
 		for id, mc := range wp.Monitors {
-			go wp.updateTrayMenuUI(mc.State.CurrentImage, id)
+			mc.mu.RLock()
+			img := mc.State.CurrentImage
+			mc.mu.RUnlock()
+			go wp.updateTrayMenuUI(img, id)
 		}
 	}
 

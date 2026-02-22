@@ -54,6 +54,7 @@ type StoreInterface interface {
 	Wipe()
 	RemoveByQueryID(queryID string)
 	ResetFavorites()
+	List() []provider.Image
 	WaitForImages(ctx context.Context) error
 }
 
@@ -348,7 +349,10 @@ func (mc *MonitorController) toggleFavorite() {
 		return
 	}
 	if mc.OnFavoriteRequest != nil {
-		mc.OnFavoriteRequest(img)
+		// CRITICAL: Run outside mc.mu.Lock() scope via goroutine.
+		// ToggleFavorite iterates all monitors and acquires mc.mu.RLock(),
+		// which would deadlock if called synchronously (same goroutine holds mc.mu.Lock).
+		go mc.OnFavoriteRequest(img)
 	}
 }
 
