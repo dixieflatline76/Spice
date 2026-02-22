@@ -768,3 +768,36 @@ func TestSetNextWallpaper_Stagger(t *testing.T) {
 		t.Error("Monitor 1 missing command when Stagger is OFF")
 	}
 }
+
+func TestTogglePauseMonitorAction_Notification(t *testing.T) {
+	mockPM := new(MockPluginManager)
+	cfg := GetConfig(NewMockPreferences())
+
+	wp := &Plugin{
+		manager:  mockPM,
+		cfg:      cfg,
+		Monitors: make(map[int]*MonitorController),
+	}
+
+	// 1. Test Transition Play -> Pause
+	// Current state: Playing
+	mon0 := &MonitorController{
+		ID:       0,
+		Commands: make(chan Command, 1), // Buffer to avoid blocking
+		State:    &MonitorState{Paused: false},
+	}
+	wp.Monitors[0] = mon0
+
+	// Expectation: "Paused Play" (the target state)
+	mockPM.On("NotifyUser", "Display 1", "Paused Play").Return()
+	wp.TogglePauseMonitorAction(0)
+	mockPM.AssertExpectations(t)
+
+	// 2. Test Transition Pause -> Play
+	// Current state: Paused
+	mon0.State.Paused = true
+	// Expectation: "Resumed Play" (the target state)
+	mockPM.On("NotifyUser", "Display 1", "Resumed Play").Return()
+	wp.TogglePauseMonitorAction(0)
+	mockPM.AssertExpectations(t)
+}
