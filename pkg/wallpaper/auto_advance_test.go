@@ -48,6 +48,7 @@ func TestToggleFavorite_AutoAdvance(t *testing.T) {
 		ID:       0,
 		Commands: make(chan Command, 10),
 		State: &MonitorState{
+			CurrentID:    img.ID,
 			CurrentImage: provider.Image{ID: img.ID},
 		},
 	}
@@ -56,15 +57,25 @@ func TestToggleFavorite_AutoAdvance(t *testing.T) {
 	// Action
 	wp.ToggleFavorite(img)
 
+	// Wait briefly for async goroutine dispatch to complete
+	time.Sleep(50 * time.Millisecond)
+
 	// Verification
 	mf.AssertExpectations(t)
 	ms.AssertExpectations(t)
 
-	// Check if CmdNext was dispatched to the monitor
-	select {
-	case cmd := <-mc.Commands:
-		assert.Equal(t, CmdNext, cmd, "Expected CmdNext to be dispatched")
-	case <-time.After(100 * time.Millisecond):
-		t.Fatal("Timed out waiting for CmdNext dispatch")
+	// Drain all commands from the channel and verify CmdNext is among them.
+	// Since the deadlock fix dispatches auto-advance via goroutine, CmdSyncState
+	// may arrive before CmdNext on the buffered channel.
+	var commands []Command
+drainLoop:
+	for {
+		select {
+		case cmd := <-mc.Commands:
+			commands = append(commands, cmd)
+		case <-time.After(200 * time.Millisecond):
+			break drainLoop
+		}
 	}
+	assert.Contains(t, commands, CmdNext, "Expected CmdNext to be dispatched among commands: %v", commands)
 }

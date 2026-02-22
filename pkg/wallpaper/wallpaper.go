@@ -328,6 +328,9 @@ func (wp *Plugin) Activate() {
 		log.Printf("Failed to load cache: %v", err)
 	}
 
+	// Reconcile favorite flags against live data to prevent ghost favorites
+	wp.reconcileFavorites()
+
 	// Initialize Monitors (Actors)
 	monitors, err := wp.os.GetMonitors()
 	if err != nil {
@@ -651,23 +654,20 @@ func (wp *Plugin) ToggleFavorite(img provider.Image) {
 			log.Printf("ToggleFavorite: Deep deleting unfavorited local favorite %s", img.ID)
 			wp.store.Remove(img.ID)
 
-			// Auto-Advance Fix: If this image is currently active on any monitor, pulse forward.
-			// This ensures we don't try to maintain a reference to a deleted file.
+			// Auto-Advance: If this image is currently active on any monitor, pulse forward.
+			// DEADLOCK FIX: dispatched via `go` from toggleFavorite(), so mc.mu.RLock()
+			// is safe here — we're in a separate goroutine, not the MC's goroutine.
 			wp.monMu.RLock()
-			var affectedMonitors []int
 			for id, mc := range wp.Monitors {
 				mc.mu.RLock()
-				if mc.State.CurrentImage.ID == img.ID {
-					affectedMonitors = append(affectedMonitors, id)
-				}
+				currentID := mc.State.CurrentID
 				mc.mu.RUnlock()
+				if currentID == img.ID {
+					log.Printf("ToggleFavorite: Auto-advancing monitor %d after deep delete", id)
+					go wp.SetNextWallpaper(id, true)
+				}
 			}
 			wp.monMu.RUnlock()
-
-			for _, id := range affectedMonitors {
-				log.Printf("ToggleFavorite: Auto-advancing monitor %d after deep delete", id)
-				wp.SetNextWallpaper(id, true)
-			}
 		} else {
 			wp.store.Update(img)
 		}
@@ -694,19 +694,49 @@ func (wp *Plugin) ToggleFavorite(img provider.Image) {
 	}
 
 	// Update UI for all monitors that might have this image
+	// DEADLOCK FIX: Collect IDs under lock, then update UI outside the lock.
+	// updateTrayMenuUI uses fyne.Do which could cross-deadlock with monitor locks.
 	var syncIDs []int
 	wp.monMu.RLock()
 	for id, mc := range wp.Monitors {
-		if mc.State.CurrentImage.ID == img.ID {
+		mc.mu.RLock()
+		currentID := mc.State.CurrentID
+		mc.mu.RUnlock()
+		if currentID == img.ID {
 			syncIDs = append(syncIDs, id)
-			wp.updateTrayMenuUI(img, id)
 		}
 	}
 	wp.monMu.RUnlock()
 
+	for _, id := range syncIDs {
+		wp.updateTrayMenuUI(img, id)
+	}
+
 	// Dispatch sync command outside of lock to avoid reentrancy issues
 	for _, id := range syncIDs {
 		wp.dispatch(id, CmdSyncState)
+	}
+}
+
+// reconcileFavorites validates all IsFavorited flags in the image cache against the
+// live favorites provider. This prevents "ghost favorites" where the tray menu shows
+// an image as favorited even though its file was deleted from the favorites folder.
+func (wp *Plugin) reconcileFavorites() {
+	if wp.favoriter == nil {
+		return
+	}
+	corrected := 0
+	for _, img := range wp.store.List() {
+		actual := wp.favoriter.IsFavorited(img)
+		if img.IsFavorited != actual {
+			log.Printf("[Reconcile] %s: IsFavorited %v→%v", img.ID, img.IsFavorited, actual)
+			img.IsFavorited = actual
+			wp.store.Update(img)
+			corrected++
+		}
+	}
+	if corrected > 0 {
+		log.Printf("[Reconcile] Fixed %d stale IsFavorited flags", corrected)
 	}
 }
 

@@ -217,6 +217,29 @@ func (p *Provider) loadInitialMetadata() {
 			}
 		}
 	}
+
+	// Validate favMap against actual files on disk.
+	// If metadata says a file is favorited but the image doesn't exist, clean it up.
+	orphans := []string{}
+	for id := range p.favMap {
+		matches, _ := filepath.Glob(filepath.Join(favDir, id+".*"))
+		// Filter out .json files from matches
+		hasImage := false
+		for _, m := range matches {
+			ext := strings.ToLower(filepath.Ext(m))
+			if ext != ".json" {
+				hasImage = true
+				break
+			}
+		}
+		if !hasImage {
+			orphans = append(orphans, id)
+		}
+	}
+	for _, id := range orphans {
+		log.Printf("[Favorites] Orphan in metadata: %s has no file on disk. Removing from favMap.", id)
+		delete(p.favMap, id)
+	}
 }
 
 func (p *Provider) runWorker() {

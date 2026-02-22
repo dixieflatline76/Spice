@@ -232,6 +232,14 @@ func (m *MockImageStore) ResetFavorites() {
 	m.Called()
 }
 
+func (m *MockImageStore) List() []provider.Image {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return nil
+	}
+	return args.Get(0).([]provider.Image)
+}
+
 func (m *MockImageStore) WaitForImages(ctx context.Context) error {
 	args := m.Called(ctx)
 	return args.Error(0)
