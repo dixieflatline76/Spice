@@ -6,8 +6,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/dixieflatline76/Spice/pkg/provider"
-	"github.com/dixieflatline76/Spice/util/log"
+	"github.com/dixieflatline76/Spice/v2/pkg/provider"
+	"github.com/dixieflatline76/Spice/v2/util/log"
 )
 
 // Pipeline manages a pool of workers to process image downloads.

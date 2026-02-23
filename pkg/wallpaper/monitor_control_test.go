@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dixieflatline76/Spice/pkg/provider"
+	"github.com/dixieflatline76/Spice/v2/pkg/provider"
 	"github.com/stretchr/testify/assert"
 )
 

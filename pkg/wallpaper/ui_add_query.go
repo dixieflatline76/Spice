@@ -7,8 +7,8 @@ import (
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
-	"github.com/dixieflatline76/Spice/pkg/ui/setting"
-	utilLog "github.com/dixieflatline76/Spice/util/log"
+	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
+	utilLog "github.com/dixieflatline76/Spice/v2/util/log"
 )
 
 // AddQueryConfig defines the configuration for the standardized Add Query modal.

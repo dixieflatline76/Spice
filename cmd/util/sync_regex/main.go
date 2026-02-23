@@ -103,7 +103,7 @@ func getEnabledProviders(mainPath string) ([]string, error) {
 	}
 
 	var providers []string
-	prefix := "github.com/dixieflatline76/Spice/pkg/wallpaper/providers/"
+	prefix := "github.com/dixieflatline76/Spice/v2/pkg/wallpaper/providers/"
 
 	for _, imp := range node.Imports {
 		// imp.Path.Value includes quotes, e.g. "github.com/..."

@@ -1,4 +1,4 @@
-module github.com/dixieflatline76/Spice
+module github.com/dixieflatline76/Spice/v2
 
 go 1.24.0
 

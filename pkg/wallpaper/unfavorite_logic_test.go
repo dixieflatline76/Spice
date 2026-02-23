@@ -4,8 +4,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/dixieflatline76/Spice/pkg/provider"
-	"github.com/dixieflatline76/Spice/util"
+	"github.com/dixieflatline76/Spice/v2/pkg/provider"
+	"github.com/dixieflatline76/Spice/v2/util"
 	"github.com/stretchr/testify/mock"
 )
 

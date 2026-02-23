@@ -7,8 +7,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/dixieflatline76/Spice/pkg/wallpaper"
-	"github.com/dixieflatline76/Spice/util/log"
+	"github.com/dixieflatline76/Spice/v2/pkg/wallpaper"
+	"github.com/dixieflatline76/Spice/v2/util/log"
 	"golang.org/x/oauth2"
 )
 

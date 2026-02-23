@@ -13,8 +13,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/dixieflatline76/Spice/pkg/sysinfo"
-	"github.com/dixieflatline76/Spice/util/log"
+	"github.com/dixieflatline76/Spice/v2/pkg/sysinfo"
+	"github.com/dixieflatline76/Spice/v2/util/log"
 )
 
 // linuxOS implements the OS interface for Linux.

@@ -4,7 +4,7 @@ import (
 	"net/url"
 
 	"fyne.io/fyne/v2"
-	"github.com/dixieflatline76/Spice/asset"
+	"github.com/dixieflatline76/Spice/v2/asset"
 )
 
 // PluginManager is the interface that must be implemented by all UI plugin managers.

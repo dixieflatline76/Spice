@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dixieflatline76/Spice/pkg/wallpaper"
+	"github.com/dixieflatline76/Spice/v2/pkg/wallpaper"
 )
 
 // MockPreferences implements fyne.Preferences for testing

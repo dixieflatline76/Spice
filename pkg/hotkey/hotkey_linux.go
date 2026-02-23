@@ -3,8 +3,8 @@
 package hotkey
 
 import (
-	"github.com/dixieflatline76/Spice/pkg/ui"
-	"github.com/dixieflatline76/Spice/util/log"
+	"github.com/dixieflatline76/Spice/v2/pkg/ui"
+	"github.com/dixieflatline76/Spice/v2/util/log"
 )
 
 // StartListeners is a stub for Linux where hotkeys are not yet supported/required.

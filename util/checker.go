@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/dixieflatline76/Spice/config"
+	"github.com/dixieflatline76/Spice/v2/config"
 	"github.com/google/go-github/v63/github"
 	"golang.org/x/mod/semver"
 )

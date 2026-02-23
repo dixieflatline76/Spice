@@ -21,10 +21,10 @@ import (
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
-	"github.com/dixieflatline76/Spice/pkg/provider"
-	"github.com/dixieflatline76/Spice/pkg/ui/setting"
-	"github.com/dixieflatline76/Spice/pkg/wallpaper"
-	"github.com/dixieflatline76/Spice/util/log"
+	"github.com/dixieflatline76/Spice/v2/pkg/provider"
+	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
+	"github.com/dixieflatline76/Spice/v2/pkg/wallpaper"
+	"github.com/dixieflatline76/Spice/v2/util/log"
 )
 
 //go:embed Pexels.png
@@ -96,66 +96,8 @@ func (p *PexelsProvider) ParseURL(webURL string) (string, error) {
 		return webURL, nil
 	}
 
-	// Clean up path
-	// Pexels web URLs often look like https://www.pexels.com/search/nature/
-
 	if pexelsSearchRegex.MatchString(webURL) {
-		matches := pexelsSearchRegex.FindStringSubmatch(webURL)
-		if len(matches) < 2 {
-			return "", fmt.Errorf("could not extract query from search URL")
-		}
-		query, err := url.QueryUnescape(matches[1])
-		if err != nil {
-			return "", fmt.Errorf("failed to decode query from URL: %w", err)
-		}
-
-		apiURL, _ := url.Parse(wallpaper.PexelsAPISearchURL)
-		q := u.Query()
-		q.Set("query", query)
-
-		// Map resolution info to Pexels 'size'
-		// We support both browser (min_width/height) and normalized (res/resolution) formats
-		res := q.Get("res")
-		if res == "" {
-			res = q.Get("resolution")
-		}
-
-		var minWidth, minHeight int
-		if res != "" {
-			parts := strings.Split(res, "x")
-			if len(parts) == 2 {
-				minWidth, _ = strconv.Atoi(parts[0])
-				minHeight, _ = strconv.Atoi(parts[1])
-			}
-		} else {
-			minWidth, _ = strconv.Atoi(q.Get("min_width"))
-			minHeight, _ = strconv.Atoi(q.Get("min_height"))
-		}
-
-		if minWidth > 0 && minHeight > 0 {
-			// size can be: large (24MP), medium (12MP), small (4MP)
-			mp := (float64(minWidth) * float64(minHeight)) / 1000000.0
-			size := "small"
-			if mp > 12 {
-				size = "large"
-			} else if mp > 4 {
-				size = "medium"
-			}
-			q.Set("size", size)
-
-			// Store normalized resolution for Spice internal use
-			q.Set("res", fmt.Sprintf("%dx%d", minWidth, minHeight))
-		}
-
-		// Remove pagination and web-only parameters
-		q.Del("page")
-		q.Del("per_page")
-		q.Del("min_width")
-		q.Del("min_height")
-		q.Del("resolution") // Use normalized 'res'
-
-		apiURL.RawQuery = q.Encode()
-		return apiURL.String(), nil
+		return parsePexelsSearchURL(webURL, u)
 	}
 
 	if pexelsCollectionRegex.MatchString(webURL) {
@@ -168,6 +110,65 @@ func (p *PexelsProvider) ParseURL(webURL string) (string, error) {
 	}
 
 	return "", fmt.Errorf("unsupported Pexels URL format")
+}
+
+func parsePexelsSearchURL(webURL string, u *url.URL) (string, error) {
+	matches := pexelsSearchRegex.FindStringSubmatch(webURL)
+	if len(matches) < 2 {
+		return "", fmt.Errorf("could not extract query from search URL")
+	}
+	query, err := url.QueryUnescape(matches[1])
+	if err != nil {
+		return "", fmt.Errorf("failed to decode query from URL: %w", err)
+	}
+
+	apiURL, _ := url.Parse(wallpaper.PexelsAPISearchURL)
+	q := u.Query()
+	q.Set("query", query)
+
+	// Map resolution info to Pexels 'size'
+	// We support both browser (min_width/height) and normalized (res/resolution) formats
+	res := q.Get("res")
+	if res == "" {
+		res = q.Get("resolution")
+	}
+
+	var minWidth, minHeight int
+	if res != "" {
+		parts := strings.Split(res, "x")
+		if len(parts) == 2 {
+			minWidth, _ = strconv.Atoi(parts[0])
+			minHeight, _ = strconv.Atoi(parts[1])
+		}
+	} else {
+		minWidth, _ = strconv.Atoi(q.Get("min_width"))
+		minHeight, _ = strconv.Atoi(q.Get("min_height"))
+	}
+
+	if minWidth > 0 && minHeight > 0 {
+		// size can be: large (24MP), medium (12MP), small (4MP)
+		mp := (float64(minWidth) * float64(minHeight)) / 1000000.0
+		size := "small"
+		if mp > 12 {
+			size = "large"
+		} else if mp > 4 {
+			size = "medium"
+		}
+		q.Set("size", size)
+
+		// Store normalized resolution for Spice internal use
+		q.Set("res", fmt.Sprintf("%dx%d", minWidth, minHeight))
+	}
+
+	// Remove pagination and web-only parameters
+	q.Del("page")
+	q.Del("per_page")
+	q.Del("min_width")
+	q.Del("min_height")
+	q.Del("resolution") // Use normalized 'res'
+
+	apiURL.RawQuery = q.Encode()
+	return apiURL.String(), nil
 }
 
 // NormalizeURL converts a Pexels web URL to a more compact/standardized format for Spice.

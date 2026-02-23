@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dixieflatline76/Spice/util/log"
+	"github.com/dixieflatline76/Spice/v2/util/log"
 )
 
 // FileManager handles all file system operations for wallpaper images.

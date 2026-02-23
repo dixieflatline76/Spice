@@ -10,9 +10,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dixieflatline76/Spice/config"
-	"github.com/dixieflatline76/Spice/pkg/wallpaper"
-	"github.com/dixieflatline76/Spice/util/log"
+	"github.com/dixieflatline76/Spice/v2/config"
+	"github.com/dixieflatline76/Spice/v2/pkg/wallpaper"
+	"github.com/dixieflatline76/Spice/v2/util/log"
 )
 
 // Collection represents the structure of the remote JSON file

@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dixieflatline76/Spice/pkg/provider"
-	"github.com/dixieflatline76/Spice/util/log"
+	"github.com/dixieflatline76/Spice/v2/pkg/provider"
+	"github.com/dixieflatline76/Spice/v2/util/log"
 )
 
 // ImageStore is a thread-safe storage for wallpaper images.

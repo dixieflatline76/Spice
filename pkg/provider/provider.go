@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	"fyne.io/fyne/v2"
-	"github.com/dixieflatline76/Spice/pkg/ui/setting"
+	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
 )
 
 // Image represents a generic wallpaper image.

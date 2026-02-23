@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/dixieflatline76/Spice/config"
+	"github.com/dixieflatline76/Spice/v2/config"
 	"github.com/stretchr/testify/assert"
 )
 

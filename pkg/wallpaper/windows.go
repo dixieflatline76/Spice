@@ -12,7 +12,7 @@ import (
 
 	"math"
 
-	"github.com/dixieflatline76/Spice/pkg/sysinfo"
+	"github.com/dixieflatline76/Spice/v2/pkg/sysinfo"
 	"golang.org/x/sys/windows"
 )
 

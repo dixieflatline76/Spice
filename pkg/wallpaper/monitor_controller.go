@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"fyne.io/fyne/v2"
-	"github.com/dixieflatline76/Spice/pkg/provider"
-	"github.com/dixieflatline76/Spice/util/log"
+	"github.com/dixieflatline76/Spice/v2/pkg/provider"
+	"github.com/dixieflatline76/Spice/v2/util/log"
 )
 
 // Command constants for the Actor loop

@@ -6,7 +6,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
-	"github.com/dixieflatline76/Spice/pkg/ui/setting"
+	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
 )
 
 // SettingsManager handles UI elements for settings.

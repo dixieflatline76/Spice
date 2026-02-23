@@ -6,9 +6,9 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/dixieflatline76/Spice/pkg/wallpaper/providers/pexels"
-	"github.com/dixieflatline76/Spice/pkg/wallpaper/providers/unsplash"
-	"github.com/dixieflatline76/Spice/pkg/wallpaper/providers/wallhaven"
+	"github.com/dixieflatline76/Spice/v2/pkg/wallpaper/providers/pexels"
+	"github.com/dixieflatline76/Spice/v2/pkg/wallpaper/providers/unsplash"
+	"github.com/dixieflatline76/Spice/v2/pkg/wallpaper/providers/wallhaven"
 )
 
 func TestValidationRegexes(t *testing.T) {
