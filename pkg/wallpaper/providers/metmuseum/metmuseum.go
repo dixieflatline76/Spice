@@ -16,10 +16,10 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
-	"github.com/dixieflatline76/Spice/pkg/provider"
-	"github.com/dixieflatline76/Spice/pkg/ui/setting"
-	"github.com/dixieflatline76/Spice/pkg/wallpaper"
-	"github.com/dixieflatline76/Spice/util/log"
+	"github.com/dixieflatline76/Spice/v2/pkg/provider"
+	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
+	"github.com/dixieflatline76/Spice/v2/pkg/wallpaper"
+	"github.com/dixieflatline76/Spice/v2/util/log"
 	"golang.org/x/sync/errgroup"
 )
 

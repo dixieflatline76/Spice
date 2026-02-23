@@ -12,7 +12,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/dixieflatline76/Spice/asset"
+	"github.com/dixieflatline76/Spice/v2/asset"
 	pigo "github.com/esimov/pigo/core"
 	"github.com/stretchr/testify/require"
 )

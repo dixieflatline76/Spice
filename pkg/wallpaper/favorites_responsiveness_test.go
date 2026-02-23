@@ -5,10 +5,10 @@ import (
 	"testing"
 
 	"fyne.io/fyne/v2"
-	"github.com/dixieflatline76/Spice/asset"
-	"github.com/dixieflatline76/Spice/pkg/provider"
-	"github.com/dixieflatline76/Spice/pkg/ui"
-	"github.com/dixieflatline76/Spice/util"
+	"github.com/dixieflatline76/Spice/v2/asset"
+	"github.com/dixieflatline76/Spice/v2/pkg/provider"
+	"github.com/dixieflatline76/Spice/v2/pkg/ui"
+	"github.com/dixieflatline76/Spice/v2/util"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )

@@ -26,14 +26,14 @@ import (
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/driver/desktop"
 	"github.com/disintegration/imaging"
-	"github.com/dixieflatline76/Spice/asset"
-	"github.com/dixieflatline76/Spice/config"
-	"github.com/dixieflatline76/Spice/pkg/sysinfo"
-	"github.com/dixieflatline76/Spice/pkg/ui"
-	"github.com/dixieflatline76/Spice/pkg/ui/setting"
-	"github.com/dixieflatline76/Spice/pkg/wallpaper"
-	"github.com/dixieflatline76/Spice/util"
-	utilLog "github.com/dixieflatline76/Spice/util/log"
+	"github.com/dixieflatline76/Spice/v2/asset"
+	"github.com/dixieflatline76/Spice/v2/config"
+	"github.com/dixieflatline76/Spice/v2/pkg/sysinfo"
+	"github.com/dixieflatline76/Spice/v2/pkg/ui"
+	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
+	"github.com/dixieflatline76/Spice/v2/pkg/wallpaper"
+	"github.com/dixieflatline76/Spice/v2/util"
+	utilLog "github.com/dixieflatline76/Spice/v2/util/log"
 )
 
 // SpiceApp represents the application

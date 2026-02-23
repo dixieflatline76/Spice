@@ -10,10 +10,10 @@ import (
 	"time"
 
 	"fyne.io/fyne/v2"
-	"github.com/dixieflatline76/Spice/asset"
-	"github.com/dixieflatline76/Spice/pkg/provider"
-	"github.com/dixieflatline76/Spice/pkg/ui"
-	"github.com/dixieflatline76/Spice/pkg/ui/setting"
+	"github.com/dixieflatline76/Spice/v2/asset"
+	"github.com/dixieflatline76/Spice/v2/pkg/provider"
+	"github.com/dixieflatline76/Spice/v2/pkg/ui"
+	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
 	"github.com/stretchr/testify/mock"
 )
 

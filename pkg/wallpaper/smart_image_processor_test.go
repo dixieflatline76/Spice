@@ -12,7 +12,7 @@ import (
 	"testing"
 
 	"github.com/disintegration/imaging"
-	"github.com/dixieflatline76/Spice/asset"
+	"github.com/dixieflatline76/Spice/v2/asset"
 	pigo "github.com/esimov/pigo/core"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

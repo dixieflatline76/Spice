@@ -6,7 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/dixieflatline76/Spice/pkg/wallpaper"
+	"github.com/dixieflatline76/Spice/v2/pkg/wallpaper"
 	"github.com/stretchr/testify/assert"
 )
 

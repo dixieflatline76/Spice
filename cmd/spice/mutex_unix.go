@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"github.com/dixieflatline76/Spice/config"
+	"github.com/dixieflatline76/Spice/v2/config"
 )
 
 var (

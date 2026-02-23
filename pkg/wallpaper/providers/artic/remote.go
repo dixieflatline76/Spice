@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dixieflatline76/Spice/config"
-	"github.com/dixieflatline76/Spice/util/log"
+	"github.com/dixieflatline76/Spice/v2/config"
+	"github.com/dixieflatline76/Spice/v2/util/log"
 )
 
 const (

@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dixieflatline76/Spice/util/log"
+	"github.com/dixieflatline76/Spice/v2/util/log"
 )
 
 // CreatePickerSession starts a new Picker session and returns the Picker URI.

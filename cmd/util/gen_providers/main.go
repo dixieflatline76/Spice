@@ -41,7 +41,7 @@ func main() {
 	sb.WriteString("package main\n\n")
 	sb.WriteString("import (\n")
 	for _, pkg := range packages {
-		sb.WriteString(fmt.Sprintf("\t_ \"github.com/dixieflatline76/Spice/pkg/wallpaper/providers/%s\"\n", pkg))
+		sb.WriteString(fmt.Sprintf("\t_ \"github.com/dixieflatline76/Spice/v2/pkg/wallpaper/providers/%s\"\n", pkg))
 	}
 	sb.WriteString(")\n")
 

@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/dixieflatline76/Spice/util/log"
+	"github.com/dixieflatline76/Spice/v2/util/log"
 )
 
 // StartNightlyRefresh runs a goroutine that periodically checks if a nightly refresh is due.

@@ -11,8 +11,8 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/dixieflatline76/Spice/pkg/wallpaper"
-	"github.com/dixieflatline76/Spice/util/log"
+	"github.com/dixieflatline76/Spice/v2/pkg/wallpaper"
+	"github.com/dixieflatline76/Spice/v2/util/log"
 )
 
 // Authenticator handles the OAuth flow for Google Photos.

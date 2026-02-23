@@ -8,7 +8,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/widget"
-	"github.com/dixieflatline76/Spice/pkg/ui/setting"
+	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )

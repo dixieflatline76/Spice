@@ -7,9 +7,9 @@ import (
 	"errors"
 	"syscall"
 
-	"github.com/dixieflatline76/Spice/util/log"
+	"github.com/dixieflatline76/Spice/v2/util/log"
 
-	"github.com/dixieflatline76/Spice/config"
+	"github.com/dixieflatline76/Spice/v2/config"
 	"golang.org/x/sys/windows"
 )
 

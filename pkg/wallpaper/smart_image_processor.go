@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/disintegration/imaging"
-	"github.com/dixieflatline76/Spice/util/log"
+	"github.com/dixieflatline76/Spice/v2/util/log"
 	pigo "github.com/esimov/pigo/core"
 )
 

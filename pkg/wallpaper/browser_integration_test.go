@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dixieflatline76/Spice/pkg/api"
+	"github.com/dixieflatline76/Spice/v2/pkg/api"
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
 )

@@ -9,7 +9,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/dixieflatline76/Spice/config"
+	"github.com/dixieflatline76/Spice/v2/config"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 

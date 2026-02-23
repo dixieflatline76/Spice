@@ -19,12 +19,12 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
-	"github.com/dixieflatline76/Spice/asset"
-	"github.com/dixieflatline76/Spice/config"
-	"github.com/dixieflatline76/Spice/pkg/provider"
-	"github.com/dixieflatline76/Spice/pkg/ui"
-	"github.com/dixieflatline76/Spice/util"
-	"github.com/dixieflatline76/Spice/util/log"
+	"github.com/dixieflatline76/Spice/v2/asset"
+	"github.com/dixieflatline76/Spice/v2/config"
+	"github.com/dixieflatline76/Spice/v2/pkg/provider"
+	"github.com/dixieflatline76/Spice/v2/pkg/ui"
+	"github.com/dixieflatline76/Spice/v2/util"
+	"github.com/dixieflatline76/Spice/v2/util/log"
 	pigo "github.com/esimov/pigo/core"
 )
 

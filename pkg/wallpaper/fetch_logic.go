@@ -7,9 +7,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dixieflatline76/Spice/pkg/provider"
-	"github.com/dixieflatline76/Spice/util"
-	"github.com/dixieflatline76/Spice/util/log"
+	"github.com/dixieflatline76/Spice/v2/pkg/provider"
+	"github.com/dixieflatline76/Spice/v2/util"
+	"github.com/dixieflatline76/Spice/v2/util/log"
 )
 
 // FetchNewImages iterates over active queries and submits new image jobs to the pipeline.

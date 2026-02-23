@@ -6,7 +6,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/dixieflatline76/Spice/util/log"
+	"github.com/dixieflatline76/Spice/v2/util/log"
 	"golang.design/x/hotkey"
 )
 

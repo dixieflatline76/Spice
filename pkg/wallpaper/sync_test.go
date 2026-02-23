@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"fyne.io/fyne/v2"
-	"github.com/dixieflatline76/Spice/pkg/provider"
+	"github.com/dixieflatline76/Spice/v2/pkg/provider"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )

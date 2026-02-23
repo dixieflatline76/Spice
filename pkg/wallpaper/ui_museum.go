@@ -8,8 +8,8 @@ import (
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
-	"github.com/dixieflatline76/Spice/pkg/ui/setting"
-	"github.com/dixieflatline76/Spice/util/log"
+	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
+	"github.com/dixieflatline76/Spice/v2/util/log"
 )
 
 // CreateMuseumHeader creates a standardized header for museum providers.

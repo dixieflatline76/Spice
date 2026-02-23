@@ -3,7 +3,7 @@ package wallpaper
 import (
 	"net/http"
 
-	"github.com/dixieflatline76/Spice/pkg/provider"
+	"github.com/dixieflatline76/Spice/v2/pkg/provider"
 )
 
 // ProviderFactory defines the function signature for creating a provider.

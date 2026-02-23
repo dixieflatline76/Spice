@@ -9,7 +9,7 @@ import (
 
 	"fyne.io/fyne/v2"
 
-	"github.com/dixieflatline76/Spice/util/log"
+	"github.com/dixieflatline76/Spice/v2/util/log"
 )
 
 //go:embed images/* icons/* text/* models/*
