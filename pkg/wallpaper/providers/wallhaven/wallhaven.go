@@ -74,71 +74,62 @@ func (p *WallhavenProvider) HomeURL() string {
 func (p *WallhavenProvider) ParseURL(webURL string) (string, error) {
 	log.Debugf("Wallhaven Parsing URL: %s", webURL)
 	trimmedURL := strings.TrimSpace(webURL)
-	var baseURL string
 
-	// --- Transformation and Type Detection using constants ---
+	baseURL, err := determineBaseAPIURL(trimmedURL)
+	if err != nil {
+		return "", err
+	}
+
+	return cleanQueryParams(baseURL)
+}
+
+func determineBaseAPIURL(trimmedURL string) (string, error) {
 	switch {
 	case UserFavoritesRegex.MatchString(trimmedURL):
 		matches := UserFavoritesRegex.FindStringSubmatch(trimmedURL)
-		// matches[0]=Full, matches[1]=Username, matches[2]=ID
-		baseURL = fmt.Sprintf(WallhavenAPICollectionURL, matches[1], matches[2])
+		return fmt.Sprintf(WallhavenAPICollectionURL, matches[1], matches[2]), nil
 
 	case MainCategoryRegex.MatchString(trimmedURL):
 		matches := MainCategoryRegex.FindStringSubmatch(trimmedURL)
 		category := matches[1] // "latest", "toplist", etc.
-		baseURL = WallhavenAPISearchURL + "?" + mapCategoryToParams(category)
-		// If query params exist in original URL, we append/merge them later via parsing.
-		// However, Wallhaven main URLs don't usually have params unless user adds them.
-		// We should account for existing params in match[2] if any.
+		baseURL := WallhavenAPISearchURL + "?" + mapCategoryToParams(category)
 		if len(matches) > 2 && matches[2] != "" {
-			// existing query string including ?
 			baseURL += "&" + strings.TrimPrefix(matches[2], "?")
 		}
+		return baseURL, nil
 
 	case SearchRegex.MatchString(trimmedURL):
 		matches := SearchRegex.FindStringSubmatch(trimmedURL)
-		// matches[0]=Full match, matches[1]=Base ("https://wallhaven.cc/"), matches[2]=Query part ("?q=...") or empty string
 		apiSearchBase := WallhavenAPISearchURL
-		if len(matches) == 3 && matches[2] != "" { // Check if query part was captured
-			baseURL = apiSearchBase + matches[2] // Append the captured query part
-		} else {
-			baseURL = apiSearchBase // No query part found
+		if len(matches) == 3 && matches[2] != "" {
+			return apiSearchBase + matches[2], nil
 		}
+		return apiSearchBase, nil
 
-	case APICollectionRegex.MatchString(trimmedURL):
-		baseURL = trimmedURL // Already API format
-
-	case APISearchRegex.MatchString(trimmedURL):
-		baseURL = trimmedURL // Already API format
+	case APICollectionRegex.MatchString(trimmedURL), APISearchRegex.MatchString(trimmedURL):
+		return trimmedURL, nil
 
 	default:
 		return "", fmt.Errorf("entered URL is currently not supported: %s", trimmedURL)
 	}
+}
 
-	// --- Parameter Cleaning (for the URL to be *saved*) ---
+func cleanQueryParams(baseURL string) (string, error) {
 	parsedURL, parseErr := url.Parse(baseURL)
 	if parseErr != nil {
 		return "", fmt.Errorf("internal error parsing transformed URL '%s': %w", baseURL, parseErr)
 	}
 	q := parsedURL.Query()
 	paramsChanged := false
-	// Clean API key (don't store in saved query)
+
 	if q.Has("apikey") {
 		q.Del("apikey")
 		paramsChanged = true
 	}
-	// Clean page (don't store pagination in base query)
 	if q.Has("page") {
 		q.Del("page")
 		paramsChanged = true
 	}
-	// Clean seed (if present, to ensure dynamic results for random sorts, unless user explicitly wants it?
-	// For /random main category, we definitely want to strip it.
-	// For general search, we might arguably want to keep it?
-	// Given the user requirement "Seed ignored", let's strip it to be safe for "Wallpaper Switcher" context/
-	// Actually, let's strictly strip it if it came from the MainCategory logic which sets sorting=random.
-	// But detecting "where it came from" here is hard.
-	// Let's strip 'seed' if 'sorting=random' is set?
 	if q.Get("sorting") == "random" && q.Has("seed") {
 		q.Del("seed")
 		paramsChanged = true
