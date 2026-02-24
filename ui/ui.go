@@ -28,6 +28,7 @@ import (
 	"github.com/disintegration/imaging"
 	"github.com/dixieflatline76/Spice/v2/asset"
 	"github.com/dixieflatline76/Spice/v2/config"
+	"github.com/dixieflatline76/Spice/v2/pkg/hotkey"
 	"github.com/dixieflatline76/Spice/v2/pkg/sysinfo"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
@@ -543,6 +544,7 @@ func (sa *SpiceApp) RebuildPreferencesContent(initialTab string) {
 		HelpContent:  sm.CreateSettingDescriptionLabel("Use keyboard shortcuts to control wallpapers. Disable if they conflict with other apps."),
 		ApplyFunc: func(val bool) {
 			wallpaper.GetInstance().SetShortcutsDisabled(!val)
+			hotkey.StartListeners(GetPluginManager())
 		},
 	}
 	globalShortcutCheck := sm.CreateBoolSetting(&shortcutConfig, generalContainer)
@@ -556,6 +558,7 @@ func (sa *SpiceApp) RebuildPreferencesContent(initialTab string) {
 		HelpContent:  sm.CreateSettingDescriptionLabel("Disable this if Alt+Arrow conflicts with your browser or other apps."),
 		ApplyFunc: func(val bool) {
 			wallpaper.GetInstance().SetTargetedShortcutsDisabled(!val)
+			hotkey.StartListeners(GetPluginManager())
 		},
 	}
 	targetedShortcutCheck := sm.CreateBoolSetting(&targetedShortcutConfig, targetedInner)

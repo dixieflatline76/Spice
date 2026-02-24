@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"sync"
+
 	"github.com/dixieflatline76/Spice/v2/pkg/ui"
 	"github.com/dixieflatline76/Spice/v2/pkg/wallpaper"
 	"github.com/dixieflatline76/Spice/v2/util/log"
@@ -33,10 +35,42 @@ const (
 // So we should define a Stub for it in hotkey_darwin.go, NOT here.
 // Or define it here as a var that can be overridden? No.
 
+var (
+	registeredHotkeys []*hotkey.Hotkey
+	hkMu              sync.Mutex
+)
+
+// StopListeners unregisters all currently active hotkeys.
+func StopListeners() {
+	hkMu.Lock()
+	defer hkMu.Unlock()
+
+	if len(registeredHotkeys) == 0 {
+		return
+	}
+
+	log.Printf("[Hotkey] Stopping %d listeners and unregistering hooks...", len(registeredHotkeys))
+	for _, hk := range registeredHotkeys {
+		if err := hk.Unregister(); err != nil {
+			log.Debugf("[Hotkey] Failed to unregister during stop: %v", err)
+		}
+	}
+	registeredHotkeys = nil
+}
+
 // StartListeners initializes and starts the global hotkey listeners.
-// It registers shortcuts for Next, Previous, Trash, Favorites, Pause, and Options.
 func StartListeners(mgr ui.PluginManager) {
+	// First, stop any existing listeners to ensure a clean state if re-initialized
+	StopListeners()
+
 	wp := wallpaper.GetInstance()
+	if wp != nil && wp.GetShortcutsDisabled() {
+		log.Printf("[Hotkey] Global shortcuts are disabled in preferences. Skipping registration.")
+		return
+	}
+
+	hkMu.Lock()
+	defer hkMu.Unlock()
 
 	// --- 2. Global Handlers (Base + Extra Modifier + Key) ---
 	// These apply to ALL monitors simultaneously.
@@ -135,6 +169,7 @@ func registerAndListen(hk *hotkey.Hotkey, name string, action func()) {
 		return
 	}
 	log.Printf("Registered hotkey: %s", name)
+	registeredHotkeys = append(registeredHotkeys, hk)
 
 	go func() {
 		defer func() {
@@ -158,11 +193,18 @@ func registerAndListen(hk *hotkey.Hotkey, name string, action func()) {
 }
 
 func registerAndListenTargeted(hk *hotkey.Hotkey, name string, action func()) {
+	wp := wallpaper.GetInstance()
+	if wp != nil && (wp.GetTargetedShortcutsDisabled() || wp.GetShortcutsDisabled()) {
+		log.Printf("Skipping targeted hotkey registration for %s (Disabled in Preferences)", name)
+		return
+	}
+
 	if err := hk.Register(); err != nil {
 		log.Printf("Failed to register hotkey %s: %v", name, err)
 		return
 	}
 	log.Printf("Registered Targeted hotkey: %s", name)
+	registeredHotkeys = append(registeredHotkeys, hk)
 
 	go func() {
 		defer func() {
