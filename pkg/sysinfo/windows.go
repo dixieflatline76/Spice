@@ -12,6 +12,7 @@ import (
 var (
 	user32           = syscall.NewLazyDLL("user32.dll")
 	getSystemMetrics = user32.NewProc("GetSystemMetrics")
+	getDpiForSystem  = user32.NewProc("GetDpiForSystem")
 )
 
 const (
@@ -36,4 +37,18 @@ func GetScreenDimensions() (int, int, error) {
 	}
 
 	return int(width), int(height), nil
+}
+
+// GetOSDisplayScale returns the OS-level UI scaling factor (e.g. 1.0 for 100%, 1.75 for 175%).
+// It safely falls back to 1.0 on older systems or error.
+func GetOSDisplayScale() float32 {
+	if err := getDpiForSystem.Find(); err != nil {
+		return 1.0
+	}
+
+	dpi, _, _ := getDpiForSystem.Call()
+	if dpi > 0 {
+		return float32(dpi) / 96.0
+	}
+	return 1.0
 }

@@ -113,6 +113,7 @@ func (sm *SettingsManager) CreateSelectSetting(cfg *setting.SelectConfig, header
 		if selectedIndex != cfg.InitialValue.(int) {
 			sm.SetSettingChangedCallback(cfg.Name, func() {
 				cfg.ApplyFunc(selectedIndex)
+				cfg.InitialValue = selectedIndex
 			})
 			if cfg.NeedsRefresh {
 				sm.SetRefreshFlag(cfg.Name)
@@ -144,6 +145,7 @@ func (sm *SettingsManager) CreateBoolSetting(cfg *setting.BoolConfig, header *fy
 		if b != cfg.InitialValue {
 			sm.SetSettingChangedCallback(cfg.Name, func() {
 				cfg.ApplyFunc(b)
+				cfg.InitialValue = b
 			})
 			if cfg.NeedsRefresh {
 				sm.SetRefreshFlag(cfg.Name)

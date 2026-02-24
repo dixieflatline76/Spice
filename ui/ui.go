@@ -28,6 +28,7 @@ import (
 	"github.com/disintegration/imaging"
 	"github.com/dixieflatline76/Spice/v2/asset"
 	"github.com/dixieflatline76/Spice/v2/config"
+	"github.com/dixieflatline76/Spice/v2/pkg/hotkey"
 	"github.com/dixieflatline76/Spice/v2/pkg/sysinfo"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
@@ -430,25 +431,59 @@ func (sa *SpiceApp) CreatePreferencesWindow(initialTab string) {
 	prefsWindow := sa.NewWindow(fmt.Sprintf("%s Preferences", config.AppName))
 	sa.prefsWindow = prefsWindow // Store reference
 
-	// Set window size based on screen dimensions
-	// Set window size based on screen dimensions
-	_, height, err := sysinfo.GetScreenDimensions()
-	if err != nil {
-		utilLog.Printf("Failed to get screen dimensions: %v", err)
-		prefsWindow.Resize(fyne.NewSize(800, 600)) // Fallback size
-	} else {
-		// Calculate target dimensions
-		targetHeight := float32(height) * PreferencesWindowHeightRatio
-		targetWidth := targetHeight * PreferencesWindowWidthRatio
+	// Build and bind the UI contents first, so the layout engine knows existing elements.
+	sa.RebuildPreferencesContent(initialTab)
 
-		// Fix 1: Clamp width for HiDPI/Ultrawide displays
-		// A width > 1000 starts to look empty for a settings panel.
-		if targetWidth > 1000 {
-			targetWidth = 1000
-		}
+	// Fyne is notoriously stubborn about window minimum sizes.
+	// Since UI scales dynamically, we cannot rely on hardcoded logical or physical sizes.
+	// We read the layout engine's absolute Minimum Size for this content:
+	minSize := prefsWindow.Content().MinSize()
 
-		prefsWindow.Resize(fyne.NewSize(targetWidth, targetHeight))
+	// The user concluded that ~700 logical pixels at 175% Windows scaling was the perfect physical width.
+	// 700 * 1.75 = 1225 physical pixels.
+	// To prevent the window from being "microscopic" when Windows is set to 100% scaling,
+	// we calculate the required Fyne logical width to maintain a ~1225px physical footprint on screen.
+	osScale := sysinfo.GetOSDisplayScale()
+	if osScale <= 0 {
+		osScale = 1.0
 	}
+
+	targetWidth := float32(1225) / osScale
+
+	// Protect against Fyne's layout engine crushing the form fields if the text size demands more space.
+	if targetWidth < minSize.Width*1.25 {
+		targetWidth = minSize.Width * 1.25
+	}
+
+	// We want a portrait/square look, so we tie the height to the width.
+	// Target slightly taller than wide (1.0) to shave off those final few vertical pixels.
+	targetHeight := targetWidth * 1.0
+
+	// Safety check: ensure the resulting height actually fits the vertical content
+	// Adding minimal vertical padding provides some room for scrolling.
+	if targetHeight < minSize.Height*1.05 {
+		targetHeight = minSize.Height * 1.05
+	}
+
+	// Prevent the window from expanding off the top/bottom on smaller physical screens.
+	// Since GetScreenDimensions() currently returns physical pixels on Windows,
+	// we translate that explicitly into Fyne's logical bounds.
+	_, physHeight, err := sysinfo.GetScreenDimensions()
+	if err == nil {
+		logicalScreenHeight := float32(physHeight) / osScale
+		maxSafeHeight := logicalScreenHeight * 0.90 // Keep 10% breathing room for the taskbar/titlebar
+
+		if targetHeight > maxSafeHeight {
+			targetHeight = maxSafeHeight
+
+			// Maintain aspect ratio if we compress the height hard against screen edge
+			if targetWidth > targetHeight {
+				targetWidth = targetHeight
+			}
+		}
+	}
+
+	prefsWindow.Resize(fyne.NewSize(targetWidth, targetHeight))
 
 	prefsWindow.CenterOnScreen()
 	prefsWindow.SetOnClosed(func() {
@@ -457,7 +492,6 @@ func (sa *SpiceApp) CreatePreferencesWindow(initialTab string) {
 		sa.prefsTabs = nil   // Clear tabs reference
 	})
 
-	sa.RebuildPreferencesContent(initialTab)
 	prefsWindow.Show()
 }
 
@@ -503,22 +537,59 @@ func (sa *SpiceApp) RebuildPreferencesContent(initialTab string) {
 	sm.CreateBoolSetting(&updateCheckConfig, generalContainer)
 
 	// Enable Global Shortcuts
-	shortcutsGuideURL, _ := url.Parse("https://github.com/dixieflatline76/Spice/blob/main/docs/user_guide.md#keyboard-shortcuts")
-	shortcutsLink := widget.NewHyperlink("View all shortcuts →", shortcutsGuideURL)
-	shortcutsHelpContainer := container.NewVBox(
-		sm.CreateSettingDescriptionLabel("Use keyboard shortcuts (Alt/Option + Number + Arrow) to control wallpapers. Disable if they conflict with other apps."),
-		shortcutsLink,
-	)
 	shortcutConfig := setting.BoolConfig{
 		Name:         "enableShortcuts",
 		InitialValue: !wallpaper.GetInstance().GetShortcutsDisabled(),
 		Label:        sm.CreateSettingTitleLabel("Enable global shortcuts:"),
-		HelpContent:  shortcutsHelpContainer,
+		HelpContent:  sm.CreateSettingDescriptionLabel("Use keyboard shortcuts to control wallpapers. Disable if they conflict with other apps."),
 		ApplyFunc: func(val bool) {
 			wallpaper.GetInstance().SetShortcutsDisabled(!val)
+			hotkey.StartListeners(GetPluginManager())
 		},
 	}
-	sm.CreateBoolSetting(&shortcutConfig, generalContainer)
+	globalShortcutCheck := sm.CreateBoolSetting(&shortcutConfig, generalContainer)
+
+	targetedInner := container.NewVBox()
+
+	targetedShortcutConfig := setting.BoolConfig{
+		Name:         "enableTargetedShortcuts",
+		InitialValue: !wallpaper.GetInstance().GetTargetedShortcutsDisabled(),
+		Label:        sm.CreateSettingTitleLabel("Enable Display Specific Shortcuts (Alt + Arrow + 1-9):"),
+		HelpContent:  sm.CreateSettingDescriptionLabel("Disable this if Alt+Arrow conflicts with your browser or other apps."),
+		ApplyFunc: func(val bool) {
+			wallpaper.GetInstance().SetTargetedShortcutsDisabled(!val)
+			hotkey.StartListeners(GetPluginManager())
+		},
+	}
+	targetedShortcutCheck := sm.CreateBoolSetting(&targetedShortcutConfig, targetedInner)
+
+	indentation := widget.NewLabel("      ")
+
+	shortcutsGuideURL, _ := url.Parse("https://github.com/dixieflatline76/Spice/blob/main/docs/user_guide.md#keyboard-shortcuts")
+	shortcutsLink := widget.NewHyperlink("View all shortcuts →", shortcutsGuideURL)
+	targetedAndLinkContainer := container.NewVBox(
+		targetedInner,
+		container.NewHBox(shortcutsLink),
+	)
+
+	indentedWrapper := container.NewBorder(nil, nil, indentation, nil, targetedAndLinkContainer)
+	generalContainer.Add(indentedWrapper)
+
+	oldGlobalOnChanged := globalShortcutCheck.OnChanged
+	globalShortcutCheck.OnChanged = func(val bool) {
+		if oldGlobalOnChanged != nil {
+			oldGlobalOnChanged(val)
+		}
+		if !val {
+			targetedShortcutCheck.SetChecked(false)
+			targetedShortcutCheck.Disable()
+		} else {
+			targetedShortcutCheck.Enable()
+		}
+	}
+	if !globalShortcutCheck.Checked {
+		targetedShortcutCheck.Disable()
+	}
 
 	// Theme Selection
 	themeOptions := []string{"System", "Dark", "Light"}

@@ -731,6 +731,20 @@ func (c *Config) SetShortcutsDisabled(disabled bool) {
 	c.SetBool(ShortcutsDisabledPrefKey, disabled)
 }
 
+// GetTargetedShortcutsDisabled returns the targeted hotkey disabled preference.
+func (c *Config) GetTargetedShortcutsDisabled() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.BoolWithFallback(TargetedShortcutsDisabledPrefKey, true) // Default: disabled
+}
+
+// SetTargetedShortcutsDisabled sets the targeted hotkey disabled preference.
+func (c *Config) SetTargetedShortcutsDisabled(disabled bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.SetBool(TargetedShortcutsDisabledPrefKey, disabled)
+}
+
 // GetAssetManager returns the asset manager
 func (c *Config) GetAssetManager() *asset.Manager {
 	return c.assetMgr

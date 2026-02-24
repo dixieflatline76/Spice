@@ -569,6 +569,16 @@ func (wp *Plugin) SetShortcutsDisabled(disabled bool) {
 	wp.cfg.SetShortcutsDisabled(disabled)
 }
 
+// GetTargetedShortcutsDisabled returns whether targeted hotkeys are disabled.
+func (wp *Plugin) GetTargetedShortcutsDisabled() bool {
+	return wp.cfg.GetTargetedShortcutsDisabled()
+}
+
+// SetTargetedShortcutsDisabled sets the targeted hotkey disabled preference.
+func (wp *Plugin) SetTargetedShortcutsDisabled(disabled bool) {
+	wp.cfg.SetTargetedShortcutsDisabled(disabled)
+}
+
 func (wp *Plugin) ChangeWallpaperFrequency(newFreq Frequency, silent bool) {
 	wp.cfg.SetWallpaperChangeFrequency(newFreq)
 
