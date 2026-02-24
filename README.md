@@ -120,7 +120,7 @@ For a comprehensive walkthrough of all features, keyboard shortcuts, and configu
 We have big plans for Spice!
 
 * **Linux & Intel Mac Support:** While we currently focus on Apple Silicon (arm64), we plan to expand our official builds to Intel Macs and Linux.
-* **More Providers:** Adding support for other wallpaper sources like **Pixabay** and **The Met Open Access**.
+* **More Providers:** Adding support for other wallpaper sources like **Pixabay**, **Cleveland Museum of Art**, and the **Rijksmuseum** (Amsterdam).
 * **Local Collections:** Point Spice to any folder on your computer to use your existing wallpaper library.
 
 ## ⚠️ Known Limitations
