@@ -38,7 +38,42 @@ const (
 var (
 	registeredHotkeys []*hotkey.Hotkey
 	hkMu              sync.Mutex
+
+	// Debouncing and Background Work
+	refreshChan = make(chan ui.PluginManager, 1)
+	initOnce    sync.Once
 )
+
+// initWorker starts a dedicated background goroutine to handle hotkey refreshes.
+// This ensures that OS-level hook registration (Carbon/Cocoa/User32) is decoupled
+// from the UI thread and debounced to prevent instability.
+func initWorker() {
+	go func() {
+		var debounceTimer *time.Timer
+		var latestMgr ui.PluginManager
+
+		for {
+			select {
+			case mgr := <-refreshChan:
+				latestMgr = mgr
+				if debounceTimer != nil {
+					debounceTimer.Stop()
+				}
+				debounceTimer = time.NewTimer(250 * time.Millisecond)
+			case <-func() <-chan time.Time {
+				if debounceTimer == nil {
+					return nil
+				}
+				return debounceTimer.C
+			}():
+				debounceTimer = nil
+				if latestMgr != nil {
+					doStartListeners(latestMgr)
+				}
+			}
+		}
+	}()
+}
 
 // StopListeners unregisters all currently active hotkeys.
 func StopListeners() {
@@ -60,6 +95,23 @@ func StopListeners() {
 
 // StartListeners initializes and starts the global hotkey listeners.
 func StartListeners(mgr ui.PluginManager) {
+	initOnce.Do(initWorker)
+
+	// Push to the background worker to handle debounced registration
+	select {
+	case refreshChan <- mgr:
+	default:
+		// Worker is already queued for an update
+	}
+}
+
+func doStartListeners(mgr ui.PluginManager) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("[Hotkey] CRITICAL: Recovered from panic during listener registration: %v", r)
+		}
+	}()
+
 	// First, stop any existing listeners to ensure a clean state if re-initialized
 	StopListeners()
 
