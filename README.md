@@ -62,8 +62,11 @@ These actions affect all displays simultaneously.
 | **Previous (All Displays)** | `Cmd + Ctrl + ←` | `Ctrl + Alt + ←` |
 | **All Settings** | `Cmd + Ctrl + O` | `Ctrl + Alt + O` |
 | **Global Sync** | `Cmd + Ctrl + D` | `Ctrl + Alt + D` |
-
-> [!IMPORTANT]
+ 
+ > [!TIP]
+> **Shortcut Conflicts:** If these hotkeys conflict with your browser (e.g., `Alt + Arrow` on Windows or `Cmd + Arrow` on macOS for navigation) or other apps, you can disable **Global** or **Targeted** shortcuts independently in the **App** settings.
+ 
+ > [!IMPORTANT]
 > **macOS Permissions:** Display-specific (chorded) hotkeys require **Accessibility** or **Input Monitoring** permissions to detect the number keys correctly. Go to *System Settings > Privacy & Security* to enable them for Spice.
 *   **🏷️ Instant Attribution:** See the artist/photographer name via the tray menu in real-time.
 *   **⏯️ Per-Display Pause:** Pause rotation on a specific monitor while keeping others moving, or stop all rotation via the "Never" frequency setting.
