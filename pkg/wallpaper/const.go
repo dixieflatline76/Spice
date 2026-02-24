@@ -11,18 +11,19 @@ const pluginName = "wallpaper"
 
 // Preference keys for wallpaper
 const (
-	pluginPrefix                 = pluginName + "_"
-	SmartFitPrefKey              = pluginPrefix + "smart_fit_key"          // SmartFitPrefKey is used to set and retrieve the boolean flag for wallpaper smart fit
-	SmartFitModePrefKey          = pluginPrefix + "smart_fit_mode_key"     // SmartFitModePrefKey is used to set and retrieve the int smart fit mode
-	CacheSizePrefKey             = pluginPrefix + "cache_size_key"         // WallpaperCacheSizePrefKey is used to set and retrieve the int wallpaper cache size
-	WallpaperChgFreqPrefKey      = pluginPrefix + "wallpaper_chg_freq_key" // WallpaperChgFreqPrefKey is used to set and retrieve the int change frequency for wallpapers
-	ImgShufflePrefKey            = pluginPrefix + "img_shuffle_key"        // ImgShufflePrefKey is used to set and retrieve the boolean flag for wallpaper image shuffle
-	ChgImgOnStartPrefKey         = pluginPrefix + "chg_img_on_start_key"   // ChgImgOnStartPrefKey is used to set and retrieve the boolean flag for changing wallpaper on startup
-	NightlyRefreshPrefKey        = pluginPrefix + "nightly_refresh_key"    // NightlyRefreshPrefKey is used to set and retrieve the boolean flag for nightly refresh
-	FaceBoostPrefKey             = pluginPrefix + "face_boost_key"         // FaceBoostPrefKey is used to set and retrieve the boolean flag for face boost
-	FaceCropPrefKey              = pluginPrefix + "face_crop_key"          // FaceCropPrefKey is used to set and retrieve the boolean flag for face crop
-	StaggerMonitorChangesPrefKey = pluginPrefix + "stagger_changes_key"    // StaggerMonitorChangesPrefKey is used to set and retrieve the boolean flag for staggering wallpaper changes
-	ShortcutsDisabledPrefKey     = pluginPrefix + "shortcuts_disabled_key" // ShortcutsDisabledPrefKey is used to set and retrieve the boolean flag for disabling hotkeys
+	pluginPrefix                     = pluginName + "_"
+	SmartFitPrefKey                  = pluginPrefix + "smart_fit_key"                   // SmartFitPrefKey is used to set and retrieve the boolean flag for wallpaper smart fit
+	SmartFitModePrefKey              = pluginPrefix + "smart_fit_mode_key"              // SmartFitModePrefKey is used to set and retrieve the int smart fit mode
+	CacheSizePrefKey                 = pluginPrefix + "cache_size_key"                  // WallpaperCacheSizePrefKey is used to set and retrieve the int wallpaper cache size
+	WallpaperChgFreqPrefKey          = pluginPrefix + "wallpaper_chg_freq_key"          // WallpaperChgFreqPrefKey is used to set and retrieve the int change frequency for wallpapers
+	ImgShufflePrefKey                = pluginPrefix + "img_shuffle_key"                 // ImgShufflePrefKey is used to set and retrieve the boolean flag for wallpaper image shuffle
+	ChgImgOnStartPrefKey             = pluginPrefix + "chg_img_on_start_key"            // ChgImgOnStartPrefKey is used to set and retrieve the boolean flag for changing wallpaper on startup
+	NightlyRefreshPrefKey            = pluginPrefix + "nightly_refresh_key"             // NightlyRefreshPrefKey is used to set and retrieve the boolean flag for nightly refresh
+	FaceBoostPrefKey                 = pluginPrefix + "face_boost_key"                  // FaceBoostPrefKey is used to set and retrieve the boolean flag for face boost
+	FaceCropPrefKey                  = pluginPrefix + "face_crop_key"                   // FaceCropPrefKey is used to set and retrieve the boolean flag for face crop
+	StaggerMonitorChangesPrefKey     = pluginPrefix + "stagger_changes_key"             // StaggerMonitorChangesPrefKey is used to set and retrieve the boolean flag for staggering wallpaper changes
+	ShortcutsDisabledPrefKey         = pluginPrefix + "shortcuts_disabled_key"          // ShortcutsDisabledPrefKey is used to set and retrieve the boolean flag for disabling hotkeys
+	TargetedShortcutsDisabledPrefKey = pluginPrefix + "targeted_shortcuts_disabled_key" // TargetedShortcutsDisabledPrefKey is used to set and retrieve the boolean flag for disabling targeted hotkeys
 
 	// Provider keys (Shared)
 	UnsplashTokenPrefKey            = "unsplash_access_token"

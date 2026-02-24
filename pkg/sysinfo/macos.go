@@ -80,3 +80,9 @@ func parseResolutionString(s string) (int, int, error) {
 
 	return width, height, nil
 }
+
+// GetOSDisplayScale returns the OS-level UI scaling factor.
+// On macOS Fyne handles backing points natively so we default to 1.0.
+func GetOSDisplayScale() float32 {
+	return 1.0
+}

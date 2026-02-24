@@ -38,6 +38,13 @@ const (
 func StartListeners(mgr ui.PluginManager) {
 	wp := wallpaper.GetInstance()
 
+	// --- 2. Global Handlers (Base + Extra Modifier + Key) ---
+	// These apply to ALL monitors simultaneously.
+	hkGlobalNext := hotkey.New([]hotkey.Modifier{modBase, modExtra}, keyRight)
+	hkGlobalPrev := hotkey.New([]hotkey.Modifier{modBase, modExtra}, keyLeft)
+	hkGlobalSync := hotkey.New([]hotkey.Modifier{modBase, modExtra}, keyD)
+	hkOpts := hotkey.New([]hotkey.Modifier{modBase, modExtra}, keyO)
+
 	// --- 1. Targeted Handlers (Base Modifier + [1-9] + Key) ---
 	// These only trigger if a number key 1-9 is held.
 	hkTargetedNext := hotkey.New([]hotkey.Modifier{modBase}, keyRight)
@@ -46,15 +53,8 @@ func StartListeners(mgr ui.PluginManager) {
 	hkTargetedFav := hotkey.New([]hotkey.Modifier{modBase}, keyUp)
 	hkTargetedPause := hotkey.New([]hotkey.Modifier{modBase}, keyP)
 
-	// --- 2. Global Handlers (Base + Extra Modifier + Key) ---
-	// These apply to ALL monitors simultaneously.
-	hkGlobalNext := hotkey.New([]hotkey.Modifier{modBase, modExtra}, keyRight)
-	hkGlobalPrev := hotkey.New([]hotkey.Modifier{modBase, modExtra}, keyLeft)
-	hkGlobalSync := hotkey.New([]hotkey.Modifier{modBase, modExtra}, keyD)
-	hkOpts := hotkey.New([]hotkey.Modifier{modBase, modExtra}, keyO)
-
 	// Register Targeted listeners
-	registerAndListen(hkTargetedNext, "Targeted Next", func() {
+	registerAndListenTargeted(hkTargetedNext, "Targeted Next", func() {
 		handleTargeted(mgr, func(mid int) string {
 			if wp != nil {
 				wp.SetNextWallpaper(mid, true)
@@ -64,7 +64,7 @@ func StartListeners(mgr ui.PluginManager) {
 		})
 	})
 
-	registerAndListen(hkTargetedPrev, "Targeted Previous", func() {
+	registerAndListenTargeted(hkTargetedPrev, "Targeted Previous", func() {
 		handleTargeted(mgr, func(mid int) string {
 			if wp != nil {
 				wp.SetPreviousWallpaper(mid, true)
@@ -74,7 +74,7 @@ func StartListeners(mgr ui.PluginManager) {
 		})
 	})
 
-	registerAndListen(hkTargetedTrash, "Targeted Trash", func() {
+	registerAndListenTargeted(hkTargetedTrash, "Targeted Trash", func() {
 		handleTargeted(mgr, func(mid int) string {
 			if wp != nil {
 				wp.DeleteCurrentImage(mid)
@@ -84,7 +84,7 @@ func StartListeners(mgr ui.PluginManager) {
 		})
 	})
 
-	registerAndListen(hkTargetedFav, "Targeted Favorite", func() {
+	registerAndListenTargeted(hkTargetedFav, "Targeted Favorite", func() {
 		handleTargeted(mgr, func(mid int) string {
 			if wp != nil {
 				wp.TriggerFavorite(mid)
@@ -94,7 +94,7 @@ func StartListeners(mgr ui.PluginManager) {
 		})
 	})
 
-	registerAndListen(hkTargetedPause, "Targeted Pause", func() {
+	registerAndListenTargeted(hkTargetedPause, "Targeted Pause", func() {
 		handleTargeted(mgr, func(mid int) string {
 			if wp != nil {
 				wp.TogglePauseMonitorAction(mid)
@@ -154,6 +154,35 @@ func registerAndListen(hk *hotkey.Hotkey, name string, action func()) {
 			time.Sleep(200 * time.Millisecond)
 		}
 		log.Printf("[Hotkey] Listener loop exited for %s", name)
+	}()
+}
+
+func registerAndListenTargeted(hk *hotkey.Hotkey, name string, action func()) {
+	if err := hk.Register(); err != nil {
+		log.Printf("Failed to register hotkey %s: %v", name, err)
+		return
+	}
+	log.Printf("Registered Targeted hotkey: %s", name)
+
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("[Hotkey] PANIC in listener loop for %s: %v", name, r)
+			}
+		}()
+
+		for range hk.Keydown() {
+			wp := wallpaper.GetInstance()
+			if wp != nil && (wp.GetShortcutsDisabled() || wp.GetTargetedShortcutsDisabled()) {
+				continue
+			}
+			now := time.Now().Format("15:04:05.000")
+			log.Debugf("[%s] Targeted hotkey triggered: %s", now, name)
+			action()
+			// Safety throttle to prevent accidental double-triggers
+			time.Sleep(200 * time.Millisecond)
+		}
+		log.Printf("[Hotkey] Targeted Listener loop exited for %s", name)
 	}()
 }
 

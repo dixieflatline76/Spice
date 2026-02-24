@@ -1,6 +1,5 @@
 # End-User License Agreement (EULA) for Spice
 
-Version: 2.0.8
 Effective Date: February 22, 2026
 
 Copyright © 2026 Karl Kwong. All rights reserved.

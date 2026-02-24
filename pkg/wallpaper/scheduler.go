@@ -25,16 +25,12 @@ func (wp *Plugin) StartNightlyRefresh() {
 	var lastRefreshDay int = -1 // Initialize to -1 to ensure the first check works correctly
 
 	runCheckWithTimeout := func(now time.Time, lastDay int, isStartup bool) int {
-		done := make(chan int)
+		done := make(chan int, 1)
 		timeoutDuration := 5 * time.Minute
 
 		go func() {
 			result := wp.checkAndRunRefresh(now, lastDay, isStartup)
-			select {
-			case done <- result:
-			default:
-				log.Print("checkAndRunRefresh completed, but the call had already timed out.")
-			}
+			done <- result
 		}()
 
 		select {

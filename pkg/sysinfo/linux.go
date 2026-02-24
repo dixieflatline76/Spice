@@ -39,3 +39,9 @@ func GetScreenDimensions() (int, int, error) {
 
 	return 0, 0, fmt.Errorf("failed to parse screen resolution")
 }
+
+// GetOSDisplayScale returns the OS-level UI scaling factor.
+// On Linux we default to 1.0 as a baseline fallback for Fyne.
+func GetOSDisplayScale() float32 {
+	return 1.0
+}
