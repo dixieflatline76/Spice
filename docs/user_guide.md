@@ -80,7 +80,8 @@ Hold a **number key (1–9)** alongside the modifier to target a specific displa
 
 **Example:** To go to the next wallpaper on Display 2, press and hold `Alt` (Windows) or `Command` (macOS), then while still holding it, press `2` and `→` simultaneously.
 
-> If the hotkeys conflict with another application, you can disable them in **Preferences → App → Enable global shortcuts**.
+> [!TIP]
+> **Browser Navigation Conflicts:** The Targeted Actions (e.g., `Alt + Arrow` on Windows or `Command + Arrow` on macOS) are common shortcuts for browser navigation. If you find Spice is "hijacking" your browser's back/forward buttons, you can disable targeted shortcuts independently in the **App Settings**.
 
 > **macOS Note:** Targeted shortcuts require Accessibility permissions. macOS will prompt you the first time Spice tries to detect which number key is held.
 
@@ -97,6 +98,7 @@ The **App** tab controls application-wide behaviour, independent of any wallpape
 | **Enable System Notifications** | Toggle desktop toast notifications (e.g., "Paused Play", "Next Wallpaper"). Useful to turn off if they become distracting. |
 | **Enable New Version Check** | Spice checks for updates once on startup and once per day. A tray indicator appears when a newer version is available. |
 | **Enable global shortcuts** | Master switch for all keyboard hotkeys. Disable if the shortcuts conflict with another application. |
+| **Enable Targeted Shortcuts** | Enable or disable targeted shortcuts (`Alt + 1-9 + Arrow` on Windows / `Cmd + 1-9 + Arrow` on macOS). Recommended to disable if they conflict with browser navigation. |
 | **Theme** | Choose between *System* (follows OS dark/light mode), *Dark*, or *Light*. Changes apply immediately. |
 
 ---
