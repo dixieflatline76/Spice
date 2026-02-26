@@ -300,6 +300,5 @@ The extension is pre-tuned for high-resolution discovery on:
 - **Wallhaven**: Search results, top lists, and personal favorites.
 - **Pexels**: Curated collections and modern photography searches.
 - **Wikimedia Commons**: Specific categories and MediaSearch topics.
-- **Google Photos**: Individual or shared albums.
 
 > **Pro Tip:** Keep Spice running in your system tray! The extension needs the desktop app to be open to receive its synchronization signals.
