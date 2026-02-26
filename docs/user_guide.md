@@ -52,38 +52,43 @@ Each display submenu contains the same full set of controls — Next, Prev, Paus
 ---
 
 ## Keyboard Shortcuts
+ 
+Spice is designed for power users who want total control without interrupting their flow. Our global hotkeys are instant, responsive, and cross-platform.
 
-Spice registers global hotkeys so you can control wallpapers without ever leaving your current app.
+**Why it's cool:**
+- **Zero-Touch Control**: Advance your wallpapers or save a favorite without ever leaving your IDE, browser, or game.
+- **The "Magic Number" System**: Our unique targeting system lets you control specific monitors independently by simply holding a number key (1-9).
+- **Universal Muscle Memory**: Whether you're on Windows or macOS, the shortcut logic remains consistent and intuitive.
 
-> **Note for macOS:** On macOS, the `Command` key is used for targeted actions (similar to Windows `Alt`). Global actions use `Command` + `Control` (similar to Windows `Ctrl` + `Alt`).
+> **Note for macOS:** Global actions use `Command` + `Control` (similar to Windows `Ctrl` + `Alt`). Targeted actions use `Command` (similar to Windows `Alt`).
 
 ### Global Actions — All Displays At Once
+These shortcuts perform actions across every connected monitor simultaneously.
 
 | Action | Windows | macOS |
 | :--- | :--- | :--- |
-| Next Wallpaper | `Ctrl` + `Alt` + `→` | `Cmd` + `Control` + `→` |
-| Previous Wallpaper | `Ctrl` + `Alt` + `←` | `Cmd` + `Control` + `←` |
-| Sync / Detect Displays | `Ctrl` + `Alt` + `D` | `Cmd` + `Control` + `D` |
-| Open Preferences | `Ctrl` + `Alt` + `O` | `Cmd` + `Control` + `O` |
+| **Next Wallpaper** | `Ctrl` + `Alt` + `→` | `Cmd` + `Ctrl` + `→` |
+| **Previous Wallpaper** | `Ctrl` + `Alt` + `←` | `Cmd` + `Ctrl` + `←` |
+| **Sync / Detect Displays** | `Ctrl` + `Alt` + `D` | `Cmd` + `Ctrl` + `D` |
+| **Open Preferences** | `Ctrl` + `Alt` + `O` | `Cmd` + `Ctrl` + `O` |
 
-### Targeted Actions — One Display At A Time
-
-Hold a **number key (1–9)** alongside the modifier to target a specific display. Display 1 = key `1`, Display 2 = key `2`, and so on. These work with both the top-row number keys and the numeric keypad.
+### Targeted Actions — Precision Monitor Control
+Hold a **number key (1–9)** alongside the modifier to target a specific display. Display 1 = key `1`, Display 2 = key `2`, etc.
 
 | Action | Windows | macOS |
 | :--- | :--- | :--- |
-| Next Wallpaper on Display *N* | `Alt` + `N` + `→` | `Command` + `N` + `→` |
-| Previous Wallpaper on Display *N* | `Alt` + `N` + `←` | `Command` + `N` + `←` |
-| Block Image on Display *N* | `Alt` + `N` + `↓` | `Command` + `N` + `↓` |
-| Add to Favorites on Display *N* | `Alt` + `N` + `↑` | `Command` + `N` + `↑` |
-| Pause Play on Display *N* | `Alt` + `N` + `P` | `Command` + `N` + `P` |
+| Next on Display *N* | `Alt` + `N` + `→` | `Command` + `N` + `→` |
+| Previous on Display *N* | `Alt` + `N` + `←` | `Command` + `N` + `←` |
+| **Block / Delete** | `Alt` + `N` + `↓` | `Command` + `N` + `↓` |
+| **Add to Favorites** | `Alt` + `N` + `↑` | `Command` + `N` + `↑` |
+| **Pause / Play** | `Alt` + `N` + `P` | `Command` + `N` + `P` |
 
-**Example:** To go to the next wallpaper on Display 2, press and hold `Alt` (Windows) or `Command` (macOS), then while still holding it, press `2` and `→` simultaneously.
+**Example:** To skip the wallpaper on your second monitor, press and hold `Alt` (Windows) or `Command` (macOS), tap `2`, and press `→`. 
 
-> [!TIP]
-> **Browser Navigation Conflicts:** The Targeted Actions (e.g., `Alt + Arrow` on Windows or `Command + Arrow` on macOS) are common shortcuts for browser navigation. If you find Spice is "hijacking" your browser's back/forward buttons, you can disable targeted shortcuts independently in the **App Settings**.
+> [!IMPORTANT]
+> **Browser Navigation Shortcuts**: Targeted actions (like `Alt` + `Left/Right`) are often used by browsers for *Back/Forward*. If Spice "hijacks" your browser navigation, you can disable Targeted Shortcuts in **Preferences → App**.
 
-> **macOS Note:** Targeted shortcuts require Accessibility permissions. macOS will prompt you the first time Spice tries to detect which number key is held.
+> **macOS Permissions**: Targeted shortcuts require Accessibility permissions. macOS will prompt you once when Spice first detects a number key press.
 
 ---
 
