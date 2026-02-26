@@ -139,42 +139,45 @@ The **Online** tab lists each cloud and institutional image provider as an expan
 
 #### Wallhaven
  
-Wallhaven requires a free API key for NSFW content and higher search quotas. 
-- **Verification**: Enter your key and click **Verify & Connect**. Spice will perform a live check to ensure the key is valid.
-- **Persistence**: Once verified, the key is automatically saved and **locked** for your security. 
-- **Clearance**: To change or remove it, use the **Clear API Key** button.
-- **Favorites Sync**: Enter your **Wallhaven Username** and click **Verify Username** to enable the "Keep Favorites Synced" feature.
+Wallhaven is a premier destination for high-quality wallpapers. Spice integrates deeply with the Wallhaven API to provide a seamless search and synchronization experience.
 
+**Authentication:**
+Entering your API Key is highly recommended as it enables access to your private favorite collections and higher search quotas.
+- **Verification**: Paste your key and click **Verify & Connect**. Spice performs an immediate live check.
+- **Security**: Once verified, the key is masked (dots) and permanently **locked**.
+- **Change/Remove**: To update the key, you must use the **Clear API Key** button, which performs a [Full Reset](#account-reset).
+
+**Favorites Synchronization:**
+This is the "killer feature" for Wallhaven power users. Instead of manually adding individual search URLs, Spice can mirror your entire Wallhaven account.
+- **Setting it up**:
+  1. Enter your **Wallhaven Username**.
+  2. Click **Verify Username**. (Note: An API Key must be verified first).
+  3. Once verified, the **Keep Favorites Synced** checkbox will become available.
+- **The Magic**: When "Keep Favorites Synced" is enabled, Spice will automatically discover all your public favorite collections and add them as **Managed** queries.
+- **Live Sync**: As you add or remove favorite collections on the Wallhaven website, Spice will detect the changes and automatically update its source list to match.
+
+**Adding Manual Queries:**
+If you want to track a specific search that isn't in your favorites:
+1. Go to [wallhaven.cc](https://wallhaven.cc) and search for a topic.
+2. Copy the browser URL (e.g., `https://wallhaven.cc/search?q=nature&categories=110`).
+3. Back in Spice, click **Add Wallhaven URL**, paste the link, and give it a descriptive name.
+
+<a name="account-reset"></a>
 **Account Reset:**
-Clicking the **Clear API Key** button performs a "Full Reset" of your Wallhaven integration. This will:
-- Clear your API Key and Wallhaven Username.
-- Disable "Keep Favorites Synced".
-- **Remove all managed collections** (synced from your favorites) from your list.
-- *Note: Manually added Wallhaven queries are preserved.*
-#### Pexels
-
-Like Wallhaven, Pexels requires an API key for access.
-- **Verification**: Enter your key and click **Verify & Connect**.
-- **Security**: The key is masked and locked once successfully verified.
- **Discovery & Sync:**
-Spice can automatically discover all your public Wallhaven collections.
-1. Enter your **Wallhaven Username** in the settings panel.
-2. Click **Sync Collections Now**.
-3. Spice will fetch your public collections and add them to the query list automatically.
-4. New collections appear as **Managed** (synchronized) queries.
-
-**Adding a manual collection:**
-1. Go to [wallhaven.cc](https://wallhaven.cc) and search for a topic you like.
-2. Copy the URL from your browser (e.g., `https://wallhaven.cc/search?q=nature&categories=110`).
-3. Paste the URL into the **Add Collection** field, give it a name, and click **Add**.
-4. The new source appears in the list with an **Active** checkbox.
-5. Click **Apply** to save.
+Clicking **Clear API Key** is a destructive but necessary action if you wish to change accounts. It will:
+1. Clear the stored API Key and Username.
+2. Disable the synchronization engine.
+3. **Remove all Managed collections** from your list to prevent data orphans.
+*Note: Your manually added queries are left untouched.*
 
 #### Pexels
  
-Requires a Pexels API key (free). Enter it in the Pexels settings panel. Like Wallhaven, the key is **masked** and **locked** once saved; use the **Clear API Key** button to reset it.
+Pexels is a high-quality stock photography provider. To use it in Spice, you'll need a free API key.
 
-Paste a Pexels search URL or collection URL and give it a name. Adding a collection follows the same pattern as Wallhaven.
+**How to Use:**
+- **Verification**: Paste your API key and click **Verify & Connect**.
+- **Security**: The key is masked and locked once verified. Use **Clear API Key** to change or remove it.
+- **Adding Queries**: Use the **Add Pexels Search** button to paste a search or collection URL.
 
 #### Wikimedia Commons
 
