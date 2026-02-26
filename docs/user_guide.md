@@ -279,44 +279,27 @@ With the **Stagger monitor changes** option enabled (recommended for 2+ displays
 
 ---
 
-## Browser Extension
+## Browser Extensions
+ 
+The Spice Browser Extension is the ultimate companion for discovery. It bridges the gap between your web browser and your desktop, allowing you to sync new collections with zero configuration.
 
-The Spice browser extension brings wallpaper discovery directly into your web browser, allowing you to sync images to your desktop without ever leaving the page. It is available for **Chrome**, **Firefox**, and **Safari**.
+### Why it's cool:
+- **LiveSync Discovery**: The extension is "alive." As you browse supported sites like Wallhaven or Pexels, it silently scans the page for compatible search and collection URLs.
+- **The Pulsing Signal**: When a valid source is found, the Spice icon in your toolbar will **pulse green**. This is your immediate visual signal that a "Masterpiece Collection" has been detected.
+- **One-Click Synchronization**: Clicking the extension opens a small popup where you can instantly add the discovered URL as a new Spice query. No copying, pasting, or manual setup required.
+- **Zero Privacy Sacrifice**: The extension communicates with Spice over a secure local WebSocket (`localhost`). Your browsing habits and selected images are never sent to a cloud server.
 
 ### Installation
-
-| Browser | How to Install |
-| :--- | :--- |
-| **Chrome** | Install from the [Chrome Web Store](https://chromewebstore.google.com) — search for *Spice Wallpaper* |
-| **Firefox** | Install from [Firefox Add-ons (AMO)](https://addons.mozilla.org) — search for *Spice Wallpaper* |
-| **Safari** | Open the Spice DMG and drag **both** the Spice app and the Spice Safari Extension into your **Applications** folder. Then enable it in **Safari → Settings → Extensions**. |
-
-> **Pro Tip:** After installation, **pin the extension** to your browser toolbar so you can always see the status icon.
-
-### How to Use the Extension
-
-The extension acts as an intelligent "remote control" for the Spice app on your computer.
-
-1.  **Automatic Detection:** As you browse supported sites (like *Wallhaven* or *Google Photos*), the extension automatically scans for high-resolution images.
-2.  **The Pulsing Icon:** When a compatible image is found, the Spice icon in your toolbar will **pulse green**. This is your signal that the image can be synced.
-3.  **One-Click Sync:** Simply click the pulsing icon. Spice will instantly download the image and set it as your wallpaper across all displays.
-4.  **Instant Execution:** Thanks to **LiveSync Technology**, the communication between your browser and the desktop app is instantaneous. Your desktop updates the second you click.
+Spice is available for all major desktop browsers:
+- **Chrome / Edge / Brave**: Install from the [Chrome Web Store](https://chromewebstore.google.com).
+- **Firefox**: Install from [Firefox AMO](https://addons.mozilla.org).
+- **Safari**: Included with the Spice macOS app. Activate it in **Safari → Settings → Extensions**.
 
 ### Supported Sites
+The extension is pre-tuned for high-resolution discovery on:
+- **Wallhaven**: Search results, top lists, and personal favorites.
+- **Pexels**: Curated collections and modern photography searches.
+- **Wikimedia Commons**: Specific categories and MediaSearch topics.
+- **Google Photos**: Individual or shared albums.
 
-The extension works out of the box with the following premier sources:
-- **Wallhaven**
-- **Pexels**
-- **Wikimedia Commons**
-- **Google Photos** (when viewing albums)
-
-### Requirements & Privacy
-
-- **Spice must be running:** The extension requires the Spice desktop application to be open and active in the system tray/menu bar.
-- **Local Connection:** All communication happens over a secure local WebSocket (`localhost`). Your browsing data and selected wallpapers never leave your system and are never sent to a cloud server.
-- **Always Responsive:** The extension includes a "Keep-Alive" system to ensure it stays ready even if your browser snoozes background tabs.
-
-
----
-
-*That's everything you need to get the most out of Spice. If you run into issues or have questions, visit the [GitHub repository](https://github.com/dixieflatline76/Spice).*
+> **Pro Tip:** Keep Spice running in your system tray! The extension needs the desktop app to be open to receive its synchronization signals.
