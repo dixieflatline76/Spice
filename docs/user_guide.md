@@ -172,75 +172,82 @@ Clicking **Clear API Key** is a destructive but necessary action if you wish to 
 
 #### Pexels
  
-Pexels is a high-quality stock photography provider. To use it in Spice, you'll need a free API key.
+Pexels is a high-quality stock photography provider known for its vibrant, modern imagery. Spice leverages the Pexels API to bring these professional photos directly to your desktop.
 
 **How to Use:**
-- **Verification**: Paste your API key and click **Verify & Connect**.
-- **Security**: The key is masked and locked once verified. Use **Clear API Key** to change or remove it.
-- **Adding Queries**: Use the **Add Pexels Search** button to paste a search or collection URL.
+- **Verification**: Paste your free API key and click **Verify & Connect**. Like Wallhaven, Spice ensures the key is active before locking it for security.
+- **Adding Queries**: Use the **Add Pexels Search** button to paste a URL from the [Pexels website](https://pexels.com). You can track specific search terms (e.g., "Minimalist Interiors") or follow hand-picked collections from top photographers.
 
 #### Wikimedia Commons
+ 
+Wikimedia Commons is a vast, dynamic repository of freely-licensed media from millions of contributors. Unlike static museum collections, Commons allows you to tap into a live stream of real-world history and discovery.
 
-Wikimedia Commons is a vast, dynamic repository of freely-licensed media. Unlike static museum collections, you can add your own personalized queries to Spice.
+**The Power of Discovery:**
+- **Search**: Use `search:nature` or paste a MediaSearch URL to fetch images matching specific topics.
+- **Category Power**: Follow deep categories like `category:Deep space` or `category:Impressionist paintings` for a focused rotation.
+- **Specific Files**: Want to stick with a single masterpiece? Enter a direct File URL (e.g., `file:File:Earth_Eastern_Hemisphere.jpg`).
 
-**Configuration Guide:**
-- **Search terms**: Enter `search:nature` or paste a MediaSearch URL to fetch images matching a specific topic.
-- **Categories**: Enter `category:Deep space` or paste a Category URL to rotate through all images in a specific Commons category.
-- **Specific Files**: Enter `file:File:Earth_Eastern_Hemisphere.jpg` or a direct File URL to persistently display a single masterpiece.
-
-> **Tip:** Wikimedia Commons is a community-driven project. You can support their mission via the **Donate to Wikimedia** link in the provider settings.
+> **Tip:** Support the community! You can contribute to their mission via the **Donate to Wikimedia** link in the provider settings.
 
 #### Museum Sources (Online)
-
-Spice integrates with world-class museums, bringing curated artistic experiences directly to your desktop. These are high-resolution, open-access collections (CC0) that allow you to explore the world's greatest creative achievements.
+ 
+Art has no borders. Spice integrates with the world’s leading cultural institutions to transform your screen into a rotating gallery of historical masterpieces, all provided under Open Access (CC0) licenses.
 
 **Available Museums:**
 - **Metropolitan Museum of Art** (New York City, USA)
 - **Art Institute of Chicago** (Chicago, IL, USA)
 
+**The "Director's Cut" Collections:**
+Each museum provides curated collections designed to showcase institutional highlights:
+- **Arts of Asia**: From ancient ceramics to modern prints.
+- **The Impressionists**: Iconic works from Monet, Degas, and Renoir.
+- **High Resolution Art**: Masterpieces chosen for their exceptional detail and scale.
+
 **How to Use:**
 1. Open **Preferences → Wallpaper → Online**.
-2. Expand a museum card (e.g., *The Metropolitan Museum of Art*).
-3. Use the **Map** link to explore the museum's location or the **Donate** link to support their open-access initiatives.
-4. Check the boxes next to curated collections (e.g., *Highights*, *European Paintings*) and click **Apply**.
+2. Expand a museum card.
+3. Use the **Map** link to "Plan a Visit" and explore the institution's location.
+4. Toggle the collections you want and click **Apply**.
 
-#### Google Photos *(Beta)*
+#### Google Photos
+ 
+Google Photos is for your personal memories. Spice uses the **Google Photos Picker API**, ensuring a high-privacy integration.
 
-Google Photos integration uses the **Google Photos Picker API**, which lets you grant Spice access to specific albums without giving it access to your entire library. No Google API key is needed — authorization is handled through your browser.
+**Why it's cool:**
+- **Manual Picker**: Instead of giving Spice access to your entire library, the browser-based Picker flow lets you hand-select exactly which albums or media items are available.
+- **Privacy First**: Spice never sees your credentials; authorization is handled securely through the official Google Auth flow in your default browser.
+- **High Resolution**: Images are downloaded at their original resolution (where supported) to ensure your memories look stunning on high-DPI displays.
 
-> **This feature is currently in beta.** To request access, please [open an issue on GitHub](https://github.com/dixieflatline76/Spice/issues) and include your Google account email. Beta testers will be added to the allowlist.
-
-Once access is granted:
-1. Open **Preferences → Online → Google Photos**.
-2. Click **Sign in with Google** and authorize via the Picker flow (only the albums you select are accessible).
-3. Choose the albums you want to use and click **Apply**.
+**How to Use:**
+1. Open **Preferences → Wallpaper → Online → Google Photos**. (Note: May require beta allowlisting).
+2. Click **Connect to Google Photos**.
+3. In your browser, select the albums or specific photos you want to use.
+4. Back in Spice, toggle your Google Photos source and click **Apply**.
 
 ---
 
 ### Local Sources
+ 
+Sometimes the best wallpapers are the ones you already own or have carefully curated into your favorites. These can be managed in the **Local** tab of the Spice Preferences.
 
-The **Local** tab contains your **Favorites** library and any local folder sources you have added.
+#### Local Favorites
+The "Favorites" provider is the heart of Spice's localized content. It acts as a persistent archive of images you've "loved" from other providers.
 
----
+**The "Killer" Features:**
+- **Persistent Storage**: When you favorite an image (via the Tray Menu or Keyboard Shortcut), Spice downloads a permanent copy to your local storage. Even if the original collection on Wallhaven or Pexels is deleted, your favorite remains.
+- **Auto-Syncing**: Your Favorites source is active by default. As soon as you "heart" an image, it's added to your rotation instantly.
+- **Deep Integration**: Favorited images preserve their original metadata, so you can still use the "Open in Browser" feature to visit the original source.
 
-## Favorites
+**How to Use:**
+- **Adding**: Click the Heart icon in the tray menu or use `Alt` + `N` + `↑` (Windows) / `Cmd` + `Control` + `N` + `↑` (macOS).
+- **Managing**: Go to the **Local** tab to see your library. You can browse, open, or clear your entire collection.
+- **Storage**: Favorites images are stored in your system's application data directory. Use the **Open Favorites Folder** button to access them directly.
 
-Favorites lets you permanently save copies of any wallpaper you love, so they keep appearing even if the original source is removed or a query is changed.
-
-### How Favorites Work
-
-- When you **Add to Favorites** (via the tray menu or `Alt` (Windows) / `Command` (macOS) + `N` + `↑`), Spice copies the current wallpaper into a local folder on your machine.
-- Spice stores up to **200 favorites** (FIFO — the oldest is pruned when the limit is reached).
-- Favorites are stored as independent image files. They persist even if the original collection is deleted or disabled.
-- Favorites has its own **Active** toggle in **Local → Favorites → Wallpaper Sources**. When active, Spice will include your favorite images in the rotation alongside online sources.
-
-### Removing a Favorite
-
-- **Unfavoriting from the tray menu:** If the currently displayed wallpaper is a favorite image, the "Add to Favorites" item toggles to remove it. The image is deleted from disk immediately.
-- **Clear All Favorites:** In **Local → Favorites**, a **Clear All Favorites** button wipes the entire collection. This cannot be undone.
-- **Open Favorites Folder:** Lets you browse and manage the raw files in your system's file manager.
-
-> Favorites images are stored in your system temp directory under `spice/favorite_images/`. You can back up this folder to preserve your collection.
+#### Local Folders
+Want to use your own photography or personal collection?
+1. Open **Preferences → Wallpaper → Local**.
+2. Click **Add Folder** to select a directory on your computer.
+3. Spice will recursively search for high-resolution images (`.jpg`, `.png`, `.webp`) and add them to your rotation.
 
 ---
 
