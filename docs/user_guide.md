@@ -85,10 +85,14 @@ Hold a **number key (1–9)** alongside the modifier to target a specific displa
 
 **Example:** To skip the wallpaper on your second monitor, press and hold `Alt` (Windows) or `Command` (macOS), tap `2`, and press `→`. 
 
-> [!IMPORTANT]
-> **Browser Navigation Shortcuts**: Targeted actions (like `Alt` + `Left/Right`) are often used by browsers for *Back/Forward*. If Spice "hijacks" your browser navigation, you can disable Targeted Shortcuts in **Preferences → App**.
+### Customizing & Disabling Shortcuts
+ 
+Spice gives you granular control over how hotkeys interact with your system. If you find that Spice shortcuts conflict with other software (like your IDE or web browser), you have two options in **Preferences → App**:
 
-> **macOS Permissions**: Targeted shortcuts require Accessibility permissions. macOS will prompt you once when Spice first detects a number key press.
+1. **Disable All Shortcuts**: The "Enable global shortcuts" master switch completely unregisters Spice from your system's input loop. Use this if you prefer using the tray menu exclusively.
+2. **Disable Targeted Shortcuts Only**: If you love the global rotation shortcuts (`Ctrl` + `Alt` + `Arrow`) but find that the Targeted Shortcuts (e.g., `Alt` + `1` + `Right`) interfere with your browser's "Go Back/Forward" actions, you can disable **only** the targeted modifiers.
+
+> **macOS Permissions**: Targeted shortcuts require Accessibility permissions. macOS will prompt you once when Spice first detects a number key press. If shortcuts stop working, ensure Spice is still enabled in **System Settings → Privacy & Security → Accessibility**.
 
 ---
 
