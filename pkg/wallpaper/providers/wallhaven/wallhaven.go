@@ -30,9 +30,10 @@ var iconData []byte
 
 // WallhavenProvider implements ImageProvider for Wallhaven.
 type WallhavenProvider struct {
-	cfg        *wallpaper.Config
-	httpClient *http.Client
-	testAPIKey string
+	cfg               *wallpaper.Config
+	httpClient        *http.Client
+	testAPIKey        string
+	validatedUsername string // Successfully verified username via API
 }
 
 // SetAPIKeyForTesting sets an API key for testing purposes.
@@ -158,6 +159,110 @@ func (p *WallhavenProvider) WithResolution(apiURL string, width, height int) str
 	}
 
 	return apiURL
+}
+
+// DiscoverCollections fetches all public collections for a given username.
+func (p *WallhavenProvider) DiscoverCollections(ctx context.Context, username string) ([]wallpaper.ImageQuery, error) {
+	if username == "" {
+		log.Printf("[ERROR] Wallhaven: DiscoverCollections called with empty username")
+		return nil, errors.New("username cannot be empty")
+	}
+
+	apiKey := p.cfg.GetWallhavenAPIKey()
+	if p.testAPIKey != "" {
+		apiKey = p.testAPIKey
+	}
+
+	log.Printf("[DEBUG] Wallhaven: Discovering collections for user: %s (using API Key: %v)", username, apiKey != "")
+
+	url := fmt.Sprintf(WallhavenAPICollectionsRootURL, username)
+	if apiKey != "" {
+		url += "?apikey=" + apiKey
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := p.httpClient.Do(req)
+	if err != nil {
+		log.Printf("[ERROR] Wallhaven: HTTP request failed: %v", err)
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	log.Printf("[DEBUG] Wallhaven: API response status: %d", resp.StatusCode)
+
+	if resp.StatusCode != http.StatusOK {
+		if resp.StatusCode == http.StatusForbidden {
+			return nil, errors.New("access denied: account might be private or API key invalid")
+		}
+		if resp.StatusCode == http.StatusNotFound {
+			return nil, errors.New("user not found on Wallhaven")
+		}
+		return nil, fmt.Errorf("wallhaven API error: status %d", resp.StatusCode)
+	}
+
+	var result CollectionResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		log.Printf("[ERROR] Wallhaven: Failed to decode collection JSON: %v", err)
+		return nil, err
+	}
+
+	log.Printf("[DEBUG] Wallhaven: Found %d remote collections", len(result.Data))
+
+	queries := make([]wallpaper.ImageQuery, 0, len(result.Data))
+	for _, col := range result.Data {
+		apiURL := fmt.Sprintf(WallhavenAPICollectionURL, username, fmt.Sprint(col.ID))
+		privacy := "Private"
+		if col.Public == 1 {
+			privacy = "Public"
+		}
+		queries = append(queries, wallpaper.ImageQuery{
+			ID:          wallpaper.GenerateQueryID(p.Name() + ":" + apiURL),
+			Description: fmt.Sprintf("❤ Collection: %s - %s - %d images", col.Label, privacy, col.Count),
+			URL:         apiURL,
+			Active:      false, // Default to inactive for new synced collections
+			Provider:    "Wallhaven",
+			Managed:     true,
+		})
+	}
+
+	return queries, nil
+}
+
+// Sync performs the actual sync of collections into the config.
+func (p *WallhavenProvider) Sync(ctx context.Context) error {
+	syncEnabled := p.cfg.GetWallhavenSyncEnabled()
+	log.Printf("[DEBUG] Wallhaven: Sync starting. Enabled: %v", syncEnabled)
+
+	if !syncEnabled {
+		log.Printf("[DEBUG] Wallhaven: Sync disabled, clearing managed queries.")
+		p.cfg.SyncManagedQueries("Wallhaven", nil)
+		return nil
+	}
+
+	username := p.cfg.GetWallhavenUsername()
+	log.Printf("[DEBUG] Wallhaven: Sync using username: '%s'", username)
+
+	if username == "" {
+		log.Printf("[DEBUG] Wallhaven: Sync skipped due to empty username.")
+		return nil
+	}
+	remoteQueries, err := p.DiscoverCollections(ctx, username)
+	if err != nil {
+		log.Printf("[ERROR] Wallhaven: Sync discovery failed: %v", err)
+		return err
+	}
+
+	p.cfg.SyncManagedQueries("Wallhaven", remoteQueries)
+	return nil
+}
+
+// SyncCollections is a legacy wrapper (optional cleanup)
+func (p *WallhavenProvider) SyncCollections(ctx context.Context, username string) error {
+	return p.Sync(ctx)
 }
 
 // mapCategoryToParams maps a Wallhaven Main Category to API query parameters reference in alphabetical order.
@@ -368,6 +473,12 @@ func (p *WallhavenProvider) Title() string {
 func (p *WallhavenProvider) CreateSettingsPanel(sm setting.SettingsManager) fyne.CanvasObject {
 	whHeader := container.NewVBox()
 
+	// Forward declarations for dynamic button control
+	var (
+		apiKeyBtn   *widget.Button
+		usernameBtn *widget.Button
+	)
+
 	// Wallhaven API Key
 	whURL, _ := url.Parse("https://wallhaven.cc/settings/account")
 	wallhavenAPIKeyConfig := setting.TextEntrySettingConfig{
@@ -379,30 +490,225 @@ func (p *WallhavenProvider) CreateSettingsPanel(sm setting.SettingsManager) fyne
 		Validator:     validation.NewRegexp(WallhavenAPIKeyRegexp, "32 alphanumeric characters required"),
 		NeedsRefresh:  true,
 		DisplayStatus: true,
-		PostValidateCheck: func(s string) error {
-			// Skip check if empty (clearing key)
-			if s == "" {
-				return nil
+		IsPassword:    true,
+		EnabledIf: func() bool {
+			currentValue := sm.GetValue("wallhavenAPIKey")
+			if currentValue == nil {
+				return true
 			}
-			return CheckWallhavenAPIKey(s)
+			baselineValue := sm.GetBaseline("wallhavenAPIKey")
+			if baselineValue == nil {
+				baselineValue = ""
+			}
+
+			curr := currentValue.(string)
+			base := baselineValue.(string)
+
+			// Enabled if empty OR if we're currently editing/clearing (diff from baseline)
+			return curr == "" || curr != base
+		},
+		OnChanged: func(s string) {
+			if apiKeyBtn == nil {
+				return
+			}
+			base := sm.GetBaseline("wallhavenAPIKey").(string)
+			if s == base {
+				if s == "" {
+					apiKeyBtn.Hide()
+				} else {
+					apiKeyBtn.SetText("Clear API Key")
+					apiKeyBtn.Importance = widget.DangerImportance
+					apiKeyBtn.Show()
+				}
+			} else {
+				apiKeyBtn.SetText("Verify & Connect")
+				apiKeyBtn.Importance = widget.HighImportance
+				if s == "" {
+					apiKeyBtn.Hide()
+				} else {
+					apiKeyBtn.Show()
+				}
+			}
+			apiKeyBtn.Refresh()
 		},
 	}
-	wallhavenAPIKeyConfig.ApplyFunc = func(s string) {
-		p.cfg.SetWallhavenAPIKey(s)
-		wallhavenAPIKeyConfig.InitialValue = s
+
+	// Dynamic update helper for API key button
+	refreshAPIKeyUI := func() {
+		curr := sm.GetValue("wallhavenAPIKey").(string)
+		wallhavenAPIKeyConfig.OnChanged(curr)
 	}
+
+	// We don't use the standard ApplyFunc here because we want the button to handle it
 	sm.CreateTextEntrySetting(&wallhavenAPIKeyConfig, whHeader)
 
-	// Clear API Key Button
-	clearKeyBtn := widget.NewButton("Clear API Key", func() {
-		dialog.NewConfirm("Clear API Key", "Are you sure you want to clear the Wallhaven API Key?", func(b bool) {
-			if b {
-				p.cfg.SetWallhavenAPIKey("")
-				wallhavenAPIKeyConfig.InitialValue = ""
-			}
-		}, sm.GetSettingsWindow()).Show()
+	// API Key Action Button (Verify or Clear)
+	apiKeyBtn = widget.NewButton("Verify & Connect", func() {
+		currKey := sm.GetValue("wallhavenAPIKey").(string)
+		baseKey := sm.GetBaseline("wallhavenAPIKey").(string)
+
+		if currKey == baseKey && currKey != "" {
+			// State: Clear
+			dialog.NewConfirm("Clear API Key", "Are you sure you want to clear the Wallhaven API Key, Username, and all synced collections?", func(b bool) {
+				if b {
+					p.validatedUsername = ""
+					sm.SetValue("wallhavenAPIKey", "")
+					sm.SetValue("Wallhaven Username", "")
+					sm.SetValue("WallhavenSyncEnabled", false)
+					p.cfg.SetWallhavenAPIKey("")
+					p.cfg.SetWallhavenUsername("")
+					p.cfg.SetWallhavenSyncEnabled(false)
+					p.cfg.SyncManagedQueries("Wallhaven", nil)
+					sm.SeedBaseline("wallhavenAPIKey", "")
+					sm.SeedBaseline("Wallhaven Username", "")
+					sm.SeedBaseline("WallhavenSyncEnabled", false)
+					sm.GetCheckAndEnableApplyFunc()()
+					sm.Refresh()
+				}
+			}, sm.GetSettingsWindow()).Show()
+			return
+		}
+
+		// State: Verify & Connect
+		apiKeyBtn.Disable()
+		apiKeyBtn.SetText("Verifying...")
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			err := CheckWallhavenAPIKeyWithContext(ctx, currKey)
+			fyne.Do(func() {
+				apiKeyBtn.Enable()
+				if err != nil {
+					dialog.ShowError(err, sm.GetSettingsWindow())
+					apiKeyBtn.SetText("Verify & Connect")
+					return
+				}
+				// Success! Save immediately and lock
+				p.cfg.SetWallhavenAPIKey(currKey)
+				sm.SeedBaseline("wallhavenAPIKey", currKey)
+				sm.Refresh() // This locks the entry
+				refreshAPIKeyUI()
+			})
+		}()
 	})
-	whHeader.Add(clearKeyBtn)
+	apiKeyBtn.Importance = widget.HighImportance
+	// Initial visibility
+	initialKey := p.cfg.GetWallhavenAPIKey()
+	if initialKey == "" {
+		apiKeyBtn.Hide()
+	} else {
+		apiKeyBtn.SetText("Clear API Key")
+		apiKeyBtn.Importance = widget.DangerImportance
+	}
+	whHeader.Add(apiKeyBtn)
+
+	// Wallhaven Username for Sync
+	whUsernameConfig := setting.TextEntrySettingConfig{
+		Name:          "Wallhaven Username",
+		InitialValue:  p.cfg.GetWallhavenUsername(),
+		PlaceHolder:   "Enter your Wallhaven username...",
+		Label:         sm.CreateSettingTitleLabel("Wallhaven Username:"),
+		Validator:     validation.NewRegexp(WallhavenUsernameRegexp, "3 to 20 alphanumeric characters (or -_) required"),
+		NeedsRefresh:  true,
+		DisplayStatus: false,
+		EnabledIf: func() bool {
+			val := sm.GetValue("WallhavenSyncEnabled")
+			if val == nil {
+				return true
+			}
+			return !val.(bool)
+		},
+		OnChanged: func(s string) {
+			if usernameBtn == nil {
+				return
+			}
+			if s == "" || s == p.validatedUsername {
+				usernameBtn.Hide()
+			} else {
+				usernameBtn.Show()
+			}
+			usernameBtn.Refresh()
+		},
+	}
+	sm.CreateTextEntrySetting(&whUsernameConfig, whHeader)
+
+	usernameBtn = widget.NewButton("Verify Username", func() {
+		currUser := sm.GetValue("Wallhaven Username").(string)
+		apiKeyVal := sm.GetValue("wallhavenAPIKey")
+		var apiKey string
+		if apiKeyVal != nil {
+			apiKey = apiKeyVal.(string)
+		}
+
+		if apiKey == "" {
+			dialog.ShowError(fmt.Errorf("API Key required for verification"), sm.GetSettingsWindow())
+			return
+		}
+
+		usernameBtn.Disable()
+		usernameBtn.SetText("Verifying...")
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			err := CheckWallhavenUsername(ctx, currUser, apiKey)
+			fyne.Do(func() {
+				usernameBtn.Enable()
+				usernameBtn.SetText("Verify Username")
+				if err != nil {
+					dialog.ShowError(err, sm.GetSettingsWindow())
+					p.validatedUsername = ""
+					sm.Refresh()
+					return
+				}
+				// Success!
+				p.validatedUsername = currUser
+				p.cfg.SetWallhavenUsername(currUser)
+				sm.SeedBaseline("Wallhaven Username", currUser)
+				sm.Refresh()
+				usernameBtn.Hide()
+			})
+		}()
+	})
+	usernameBtn.Importance = widget.HighImportance
+	// Initial visibility
+	if p.cfg.GetWallhavenUsername() == "" || p.validatedUsername == p.cfg.GetWallhavenUsername() {
+		usernameBtn.Hide()
+	}
+	whHeader.Add(usernameBtn)
+
+	// Keep Synced Checkbox
+	syncConfig := setting.BoolConfig{
+		Name:         "WallhavenSyncEnabled",
+		InitialValue: p.cfg.GetWallhavenSyncEnabled(),
+		Label:        sm.CreateSettingTitleLabel("Keep Favorites (collections) Synced:"),
+		HelpContent:  sm.CreateSettingDescriptionLabel("Automatically synchronize your Wallhaven collections with Spice. New collections will be added as inactive queries."),
+		EnabledIf: func() bool {
+			currentUsername := sm.GetValue("Wallhaven Username")
+			if currentUsername == nil {
+				return false
+			}
+			// Only enable if the current text matches our successfully validated username
+			return p.validatedUsername == currentUsername.(string) && p.validatedUsername != ""
+		},
+		ApplyFunc: func(b bool) {
+			p.cfg.SetWallhavenSyncEnabled(b)
+
+			// Perform sync/cleanup on Apply
+			if b && p.cfg.GetWallhavenUsername() == "" {
+				dialog.ShowError(errors.New("Please enter your wallhaven.cc username"), sm.GetSettingsWindow())
+				// we don't return here so the setting is still saved, but sync is skipped
+			}
+
+			// Trigger sync in background
+			go func() {
+				_ = p.Sync(context.Background())
+				fyne.Do(func() {
+					sm.SetRefreshFlag("queries") // This will trigger refresh of all registered refresh funcs
+				})
+			}()
+		},
+	}
+	sm.CreateBoolSetting(&syncConfig, whHeader)
 
 	return whHeader
 }
@@ -428,7 +734,7 @@ func (p *WallhavenProvider) CreateQueryPanel(sm setting.SettingsManager, pending
 			}
 
 			// Check for duplicates
-			queryID := wallpaper.GenerateQueryID(apiURL)
+			queryID := wallpaper.GenerateQueryID(p.Title() + ":" + apiURL)
 			if p.cfg.IsDuplicateID(queryID) {
 				return errors.New("Duplicate query: this URL already exists")
 			}
@@ -475,7 +781,6 @@ func (p *WallhavenProvider) CreateQueryPanel(sm setting.SettingsManager, pending
 }
 
 func (p *WallhavenProvider) createImgQueryList(sm setting.SettingsManager) *widget.List {
-	pendingState := make(map[string]bool)
 	var queryList *widget.List
 	queryList = widget.NewList(
 		func() int {
@@ -513,25 +818,11 @@ func (p *WallhavenProvider) createImgQueryList(sm setting.SettingsManager) *widg
 			activeCheck := c.Objects[2].(*widget.Check)
 			deleteButton := c.Objects[3].(*widget.Button)
 
-			initialActive := query.Active
-			activeCheck.OnChanged = nil
-
-			if val, ok := pendingState[queryKey]; ok {
-				activeCheck.SetChecked(val)
-			} else {
-				activeCheck.SetChecked(initialActive)
-			}
+			sm.SeedBaseline(queryKey, query.Active)
+			activeCheck.SetChecked(query.Active)
 
 			activeCheck.OnChanged = func(b bool) {
-				// Fetch latest status to ensure we compare against current config, not stale UI state
-				currentQ, found := p.cfg.GetQuery(queryKey)
-				currentActive := initialActive
-				if found {
-					currentActive = currentQ.Active
-				}
-
-				if b != currentActive {
-					pendingState[queryKey] = b
+				if b != sm.GetBaseline(queryKey).(bool) {
 					sm.SetSettingChangedCallback(queryKey, func() {
 						var err error
 						if b {
@@ -542,11 +833,9 @@ func (p *WallhavenProvider) createImgQueryList(sm setting.SettingsManager) *widg
 						if err != nil {
 							log.Printf("Failed to update query status: %v", err)
 						}
-						delete(pendingState, queryKey)
 					})
 					sm.SetRefreshFlag(queryKey)
 				} else {
-					delete(pendingState, queryKey)
 					sm.RemoveSettingChangedCallback(queryKey)
 					sm.UnsetRefreshFlag(queryKey)
 				}
@@ -554,6 +843,9 @@ func (p *WallhavenProvider) createImgQueryList(sm setting.SettingsManager) *widg
 			}
 
 			deleteButton.OnTapped = func() {
+				if query.Managed {
+					return // Should be disabled/hidden anyway
+				}
 				d := dialog.NewConfirm("Please Confirm", fmt.Sprintf("Are you sure you want to delete %s?", query.Description), func(b bool) {
 					if b {
 						if query.Active {
@@ -561,7 +853,6 @@ func (p *WallhavenProvider) createImgQueryList(sm setting.SettingsManager) *widg
 							// Trigger apply check if needed
 							sm.GetCheckAndEnableApplyFunc()()
 						}
-						delete(pendingState, queryKey)
 						if err := p.cfg.RemoveImageQuery(query.ID); err != nil {
 							log.Printf("Failed to remove image query: %v", err)
 						}
@@ -569,6 +860,12 @@ func (p *WallhavenProvider) createImgQueryList(sm setting.SettingsManager) *widg
 					}
 				}, sm.GetSettingsWindow())
 				d.Show()
+			}
+
+			if query.Managed {
+				deleteButton.Disable()
+			} else {
+				deleteButton.Enable()
 			}
 		},
 	)
@@ -581,8 +878,32 @@ func (p *WallhavenProvider) GetProviderIcon() fyne.Resource {
 }
 
 func (p *WallhavenProvider) getWebURL(apiURL string) *url.URL {
-	urlStr := strings.Replace(apiURL, "https://wallhaven.cc/api/v1/search?", "https://wallhaven.cc/search?", 1)
-	u, err := url.Parse(urlStr)
+	// 1. Handle Search URLs
+	if strings.Contains(apiURL, "/api/v1/search") {
+		urlStr := strings.Replace(apiURL, "https://wallhaven.cc/api/v1/search", "https://wallhaven.cc/search", 1)
+		u, err := url.Parse(urlStr)
+		if err != nil {
+			return nil
+		}
+		return u
+	}
+
+	// 2. Handle Collection URLs
+	if APICollectionIDRegex.MatchString(apiURL) {
+		matches := APICollectionIDRegex.FindStringSubmatch(apiURL)
+		if len(matches) >= 3 {
+			// matches[1]=Username, matches[2]=ID
+			urlStr := fmt.Sprintf("https://wallhaven.cc/user/%s/favorites/%s", matches[1], matches[2])
+			u, err := url.Parse(urlStr)
+			if err != nil {
+				return nil
+			}
+			return u
+		}
+	}
+
+	// Fallback/Default
+	u, err := url.Parse(apiURL)
 	if err != nil {
 		return nil
 	}

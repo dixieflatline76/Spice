@@ -117,6 +117,11 @@ func (wp *Plugin) RefreshImagesAndPulse() {
 		// Robust Sync: Reconcile store and invalidate stale derivatives
 		wp.syncStoreWithConfig()
 
+		// Ensure tray menu is rebuilt (e.g. if Favorites was toggled)
+		if wp.manager != nil {
+			wp.manager.RebuildTrayMenu()
+		}
+
 		// Trigger immediate fetch
 		wp.FetchNewImages()
 

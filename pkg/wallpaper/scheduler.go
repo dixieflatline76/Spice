@@ -43,6 +43,8 @@ func (wp *Plugin) StartNightlyRefresh() {
 	}
 
 	initialTime := time.Now()
+	// Trigger sync on startup if enabled
+	wp.SyncWallhavenCollections()
 	lastRefreshDay = runCheckWithTimeout(initialTime, lastRefreshDay, true) // Force check on startup
 
 	for {
@@ -107,6 +109,9 @@ func (wp *Plugin) checkAndRunRefresh(now time.Time, lastRefreshDay int, isInitia
 		// We get known IDs from store (thread-safe)
 		wp.fm.CleanupOrphans(wp.store.GetKnownIDs())
 		log.Print("Nightly Maintenance: Finished.")
+
+		// Wallhaven Sync
+		wp.SyncWallhavenCollections()
 
 		log.Print("Running nightly refresh action...") // Clarify log message
 		wp.downloadMutex.Lock()

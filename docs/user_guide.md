@@ -114,8 +114,8 @@ The **Wallpaper** plugin tab appears immediately after the App tab. It contains 
 | **Wallpaper Change Frequency** | How often Spice automatically rotates. Options range from *Every 5 Minutes* to *Daily*. Set to *Never* to disable automatic rotation entirely (you can still change manually via the tray or hotkeys). |
 | **Cache Size** | How many images to keep on disk. A larger cache means faster display and fewer network requests at startup. Set to *None* to disable caching (images are fetched fresh each time). |
 | **Smart Fit Mode** | Controls how Spice fits images to your screen — see below. |
-| **Enable Face Crop** | When Smart Fit is active, the cropper aggressively centers on the largest detected face. Best for portrait photography. Mutually exclusive with Face Boost. |
-| **Enable Face Boost** | When Smart Fit is active, the cropper *hints* toward faces but also considers overall composition. Balances faces with the scene. Mutually exclusive with Face Crop. |
+| **Enable Face Crop** | When Smart Fit is active, the cropper aggressively centers on the largest detected face. **Note**: This setting is automatically disabled if Smart Fit Mode is "Disabled". |
+| **Enable Face Boost** | When Smart Fit is active, the cropper *hints* toward faces but also considers overall composition. **Note**: This setting is automatically disabled if Smart Fit Mode is "Disabled". |
 | **Stagger monitor changes** | Adds a small random delay between wallpaper changes on each display during automatic rotation, preventing a distracting simultaneous flash across all screens. |
 | **Change wallpaper on start** | When enabled, Spice immediately changes the wallpaper when the app launches. Disable this to show the last-seen wallpaper until the timer fires. |
 | **Refresh wallpapers nightly** | Spice quietly re-fetches images from all active sources once per night, keeping the cache fresh with new content without interrupting your day. |
@@ -138,20 +138,43 @@ The **Wallpaper** plugin tab appears immediately after the App tab. It contains 
 The **Online** tab lists each cloud and institutional image provider as an expandable accordion card. Click a provider name to expand its settings.
 
 #### Wallhaven
+ 
+Wallhaven requires a free API key for NSFW content and higher search quotas. 
+- **Verification**: Enter your key and click **Verify & Connect**. Spice will perform a live check to ensure the key is valid.
+- **Persistence**: Once verified, the key is automatically saved and **locked** for your security. 
+- **Clearance**: To change or remove it, use the **Clear API Key** button.
+- **Favorites Sync**: Enter your **Wallhaven Username** and click **Verify Username** to enable the "Keep Favorites Synced" feature.
 
-Wallhaven requires a free API key for NSFW content and higher search quotas. Enter it in the Wallhaven settings panel.
-
-**Adding a collection:**
-1. Go to [wallhaven.cc](https://wallhaven.cc) and search for a topic you like.
-2. Copy the URL from your browser (e.g., `https://wallhaven.cc/search?q=nature&categories=110`).
-3. Open Spice Preferences → Online → Wallhaven.
-4. Paste the URL into the **Add Collection** field, give it a name, and click **Add**.
-5. The new source appears in the list with an **Active** checkbox.
-6. Click **Apply** to save.
-
+**Account Reset:**
+Clicking the **Clear API Key** button performs a "Full Reset" of your Wallhaven integration. This will:
+- Clear your API Key and Wallhaven Username.
+- Disable "Keep Favorites Synced".
+- **Remove all managed collections** (synced from your favorites) from your list.
+- *Note: Manually added Wallhaven queries are preserved.*
 #### Pexels
 
-Requires a Pexels API key (free). Paste a Pexels search URL or collection URL and give it a name. Adding a collection follows the same pattern as Wallhaven.
+Like Wallhaven, Pexels requires an API key for access.
+- **Verification**: Enter your key and click **Verify & Connect**.
+- **Security**: The key is masked and locked once successfully verified.
+ **Discovery & Sync:**
+Spice can automatically discover all your public Wallhaven collections.
+1. Enter your **Wallhaven Username** in the settings panel.
+2. Click **Sync Collections Now**.
+3. Spice will fetch your public collections and add them to the query list automatically.
+4. New collections appear as **Managed** (synchronized) queries.
+
+**Adding a manual collection:**
+1. Go to [wallhaven.cc](https://wallhaven.cc) and search for a topic you like.
+2. Copy the URL from your browser (e.g., `https://wallhaven.cc/search?q=nature&categories=110`).
+3. Paste the URL into the **Add Collection** field, give it a name, and click **Add**.
+4. The new source appears in the list with an **Active** checkbox.
+5. Click **Apply** to save.
+
+#### Pexels
+ 
+Requires a Pexels API key (free). Enter it in the Pexels settings panel. Like Wallhaven, the key is **masked** and **locked** once saved; use the **Clear API Key** button to reset it.
+
+Paste a Pexels search URL or collection URL and give it a name. Adding a collection follows the same pattern as Wallhaven.
 
 #### Wikimedia Commons
 

@@ -403,7 +403,7 @@ func (p *WikimediaProvider) CreateQueryPanel(sm setting.SettingsManager, pending
 			if err != nil {
 				return err
 			}
-			id := wallpaper.GenerateQueryID(normalized)
+			id := wallpaper.GenerateQueryID(p.Name() + ":" + normalized)
 			if p.cfg.IsDuplicateID(id) {
 				return fmt.Errorf("duplicate query")
 			}
@@ -443,9 +443,7 @@ func (p *WikimediaProvider) CreateQueryPanel(sm setting.SettingsManager, pending
 }
 
 func (p *WikimediaProvider) createImgQueryList(sm setting.SettingsManager) *widget.List {
-	pendingState := make(map[string]bool)
 	var queryList *widget.List
-
 	queryList = widget.NewList(
 		func() int {
 			return len(p.cfg.GetWikimediaQueries())
@@ -504,25 +502,11 @@ func (p *WikimediaProvider) createImgQueryList(sm setting.SettingsManager) *widg
 				_ = urlLink.SetURLFromString(displayURL)
 			}
 
-			initialActive := q.Active
-			activeCheck.OnChanged = nil // Detach to avoid triggering during setup
-
-			if val, ok := pendingState[queryKey]; ok {
-				activeCheck.SetChecked(val)
-			} else {
-				activeCheck.SetChecked(initialActive)
-			}
+			sm.SeedBaseline(queryKey, q.Active)
+			activeCheck.SetChecked(q.Active)
 
 			activeCheck.OnChanged = func(b bool) {
-				// Fetch latest status to ensure we compare against current config, not stale UI state
-				currentQ, found := p.cfg.GetQuery(queryKey)
-				currentActive := initialActive
-				if found {
-					currentActive = currentQ.Active
-				}
-
-				if b != currentActive {
-					pendingState[queryKey] = b
+				if b != sm.GetBaseline(queryKey).(bool) {
 					sm.SetSettingChangedCallback(queryKey, func() {
 						var err error
 						if b {
@@ -533,11 +517,9 @@ func (p *WikimediaProvider) createImgQueryList(sm setting.SettingsManager) *widg
 						if err != nil {
 							log.Printf("Failed to update query status: %v", err)
 						}
-						delete(pendingState, queryKey)
 					})
 					sm.SetRefreshFlag(queryKey)
 				} else {
-					delete(pendingState, queryKey)
 					sm.RemoveSettingChangedCallback(queryKey)
 					sm.UnsetRefreshFlag(queryKey)
 				}
@@ -551,7 +533,6 @@ func (p *WikimediaProvider) createImgQueryList(sm setting.SettingsManager) *widg
 							sm.SetRefreshFlag(queryKey)
 							sm.GetCheckAndEnableApplyFunc()()
 						}
-						delete(pendingState, queryKey)
 						if err := p.cfg.RemoveImageQuery(q.ID); err != nil {
 							dialog.ShowError(err, sm.GetSettingsWindow())
 						}

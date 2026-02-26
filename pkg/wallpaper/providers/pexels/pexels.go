@@ -406,6 +406,8 @@ func (p *PexelsProvider) Title() string {
 func (p *PexelsProvider) CreateSettingsPanel(sm setting.SettingsManager) fyne.CanvasObject {
 	pexHeader := container.NewVBox()
 
+	var pexKeyBtn *widget.Button
+
 	// Pexels API Key
 	pexURL, _ := url.Parse("https://www.pexels.com/api/key/")
 	pexelsAPIKeyConfig := setting.TextEntrySettingConfig{
@@ -417,24 +419,108 @@ func (p *PexelsProvider) CreateSettingsPanel(sm setting.SettingsManager) fyne.Ca
 		Validator:     validation.NewRegexp(wallpaper.PexelsAPIKeyRegexp, "Invalid API Key format (56 characters)"),
 		NeedsRefresh:  true,
 		DisplayStatus: true,
+		IsPassword:    true,
+		EnabledIf: func() bool {
+			currentValue := sm.GetValue("pexelsAPIKey")
+			if currentValue == nil {
+				return true
+			}
+			baselineValue := sm.GetBaseline("pexelsAPIKey")
+			if baselineValue == nil {
+				baselineValue = ""
+			}
+
+			curr := currentValue.(string)
+			base := baselineValue.(string)
+
+			// Enabled if empty OR if we're currently editing/clearing (diff from baseline)
+			return curr == "" || curr != base
+		},
+		OnChanged: func(s string) {
+			if pexKeyBtn == nil {
+				return
+			}
+			base := sm.GetBaseline("pexelsAPIKey").(string)
+			if s == base {
+				if s == "" {
+					pexKeyBtn.Hide()
+				} else {
+					pexKeyBtn.SetText("Clear API Key")
+					pexKeyBtn.Importance = widget.DangerImportance
+					pexKeyBtn.Show()
+				}
+			} else {
+				pexKeyBtn.SetText("Verify & Connect")
+				pexKeyBtn.Importance = widget.HighImportance
+				if s == "" {
+					pexKeyBtn.Hide()
+				} else {
+					pexKeyBtn.Show()
+				}
+			}
+			pexKeyBtn.Refresh()
+		},
 	}
-	pexelsAPIKeyConfig.ApplyFunc = func(s string) {
-		p.cfg.SetPexelsAPIKey(s)
-		pexelsAPIKeyConfig.InitialValue = s
+
+	// Dynamic update helper for API key button
+	refreshPexelsUI := func() {
+		curr := sm.GetValue("pexelsAPIKey").(string)
+		pexelsAPIKeyConfig.OnChanged(curr)
 	}
+
 	sm.CreateTextEntrySetting(&pexelsAPIKeyConfig, pexHeader)
 
-	// Clear Pexels Key Button
-	clearPexKeyBtn := widget.NewButton("Clear API Key", func() {
-		dialog.NewConfirm("Clear API Key", "Are you sure you want to clear the Pexels API Key?", func(b bool) {
-			if b {
-				p.cfg.SetPexelsAPIKey("")
-				pexelsAPIKeyConfig.InitialValue = ""
-				// NotifyUser logic skipped as we don't have access to manager
-			}
-		}, sm.GetSettingsWindow()).Show()
+	// Pexels API Key Action Button
+	pexKeyBtn = widget.NewButton("Verify & Connect", func() {
+		currKey := sm.GetValue("pexelsAPIKey").(string)
+		baseKey := sm.GetBaseline("pexelsAPIKey").(string)
+
+		if currKey == baseKey && currKey != "" {
+			// State: Clear
+			dialog.NewConfirm("Clear API Key", "Are you sure you want to clear the Pexels API Key?", func(b bool) {
+				if b {
+					sm.SetValue("pexelsAPIKey", "")
+					p.cfg.SetPexelsAPIKey("")
+					sm.SeedBaseline("pexelsAPIKey", "")
+					sm.GetCheckAndEnableApplyFunc()()
+					sm.Refresh()
+				}
+			}, sm.GetSettingsWindow()).Show()
+			return
+		}
+
+		// State: Verify & Connect
+		pexKeyBtn.Disable()
+		pexKeyBtn.SetText("Verifying...")
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			err := CheckPexelsAPIKeyWithContext(ctx, currKey)
+			fyne.Do(func() {
+				pexKeyBtn.Enable()
+				if err != nil {
+					dialog.ShowError(err, sm.GetSettingsWindow())
+					pexKeyBtn.SetText("Verify & Connect")
+					return
+				}
+				// Success! Save immediately and lock
+				p.cfg.SetPexelsAPIKey(currKey)
+				sm.SeedBaseline("pexelsAPIKey", currKey)
+				sm.Refresh()
+				refreshPexelsUI()
+			})
+		}()
 	})
-	pexHeader.Add(clearPexKeyBtn)
+	pexKeyBtn.Importance = widget.HighImportance
+	// Initial visibility
+	initialKey := p.cfg.GetPexelsAPIKey()
+	if initialKey == "" {
+		pexKeyBtn.Hide()
+	} else {
+		pexKeyBtn.SetText("Clear API Key")
+		pexKeyBtn.Importance = widget.DangerImportance
+	}
+	pexHeader.Add(pexKeyBtn)
 
 	return pexHeader
 }
@@ -461,7 +547,7 @@ func (p *PexelsProvider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl
 			// Pexels regex validation happens via InputValidator, so we just check duplicates here
 
 			// Check for duplicates
-			queryID := wallpaper.GenerateQueryID(url)
+			queryID := wallpaper.GenerateQueryID(p.Name() + ":" + url)
 			if p.cfg.IsDuplicateID(queryID) {
 				return errors.New("duplicate query: this URL already exists")
 			}
@@ -508,7 +594,6 @@ func (p *PexelsProvider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl
 }
 
 func (p *PexelsProvider) createImgQueryList(sm setting.SettingsManager) *widget.List {
-	pendingState := make(map[string]bool)
 	var queryList *widget.List
 	queryList = widget.NewList(
 		func() int {
@@ -545,25 +630,11 @@ func (p *PexelsProvider) createImgQueryList(sm setting.SettingsManager) *widget.
 			activeCheck := c.Objects[2].(*widget.Check)
 			deleteButton := c.Objects[3].(*widget.Button)
 
-			initialActive := query.Active
-			activeCheck.OnChanged = nil
-
-			if val, ok := pendingState[queryKey]; ok {
-				activeCheck.SetChecked(val)
-			} else {
-				activeCheck.SetChecked(initialActive)
-			}
+			sm.SeedBaseline(queryKey, query.Active)
+			activeCheck.SetChecked(query.Active)
 
 			activeCheck.OnChanged = func(b bool) {
-				// Fetch latest status to ensure we compare against current config, not stale UI state
-				currentQ, found := p.cfg.GetQuery(queryKey)
-				currentActive := initialActive
-				if found {
-					currentActive = currentQ.Active
-				}
-
-				if b != currentActive {
-					pendingState[queryKey] = b
+				if b != sm.GetBaseline(queryKey).(bool) {
 					sm.SetSettingChangedCallback(queryKey, func() {
 						var err error
 						if b {
@@ -574,11 +645,9 @@ func (p *PexelsProvider) createImgQueryList(sm setting.SettingsManager) *widget.
 						if err != nil {
 							log.Printf("Failed to update query status: %v", err)
 						}
-						delete(pendingState, queryKey)
 					})
 					sm.SetRefreshFlag(queryKey)
 				} else {
-					delete(pendingState, queryKey)
 					sm.RemoveSettingChangedCallback(queryKey)
 					sm.UnsetRefreshFlag(queryKey)
 				}
@@ -592,7 +661,6 @@ func (p *PexelsProvider) createImgQueryList(sm setting.SettingsManager) *widget.
 							sm.SetRefreshFlag(queryKey)
 							sm.GetCheckAndEnableApplyFunc()()
 						}
-						delete(pendingState, queryKey)
 						if err := p.cfg.RemovePexelsQuery(query.ID); err != nil {
 							log.Printf("Failed to remove Pexels query: %v", err)
 						}

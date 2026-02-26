@@ -2,6 +2,7 @@ package wallhaven
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -9,37 +10,98 @@ import (
 
 	"github.com/dixieflatline76/Spice/v2/pkg/wallpaper"
 	"github.com/dixieflatline76/Spice/v2/util/log"
-	"golang.org/x/oauth2"
 )
 
-// CheckWallhavenAPIKey checks if the given API key is valid.
-func CheckWallhavenAPIKey(apiKey string) error {
-	// 1. Configure the OAuth2 HTTP Client
-	// Wallhaven uses API keys as Bearer tokens, which OAuth2 handles nicely.
-	ts := oauth2.StaticTokenSource(
-		&oauth2.Token{AccessToken: apiKey},
-	)
-	client := oauth2.NewClient(context.Background(), ts)
+// CheckWallhavenUsername verifies if the username exists and has accessible collections.
+// Following the sequence:
+// 1. Verify API Key works by fetching its owner's collections.
+// 2. Fetch collections for the specific username to ensure it exists and is public.
+func CheckWallhavenUsername(ctx context.Context, username, apiKey string) error {
+	if apiKey == "" {
+		return fmt.Errorf("API key is required for username verification")
+	}
 
-	// 2. Make a Request to a Protected Endpoint
-	// Choose an endpoint that requires authentication.  The 'account' endpoint is a good option.
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, WallhavenTestAPIKeyURL+apiKey, nil)
+	// 1. Verify API Key owner's collections
+	req, err := http.NewRequestWithContext(ctx, "GET", "https://wallhaven.cc/api/v1/collections", nil)
+	if err != nil {
+		return fmt.Errorf("creating check request: %w", err)
+	}
+
+	q := req.URL.Query()
+	q.Set("apikey", apiKey)
+	req.URL.RawQuery = q.Encode()
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("network error during API key verification: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("API key verification failed (status %d)", resp.StatusCode)
+	}
+
+	var colResp CollectionResponse
+	if err := json.NewDecoder(resp.Body).Decode(&colResp); err != nil {
+		return fmt.Errorf("failed to decode collections list: %w", err)
+	}
+
+	if len(colResp.Data) == 0 {
+		return fmt.Errorf("API key owner has no collections; favorites sync unavailable")
+	}
+
+	// 2. Verify existence of target username's collections
+	usernameURL := fmt.Sprintf(WallhavenAPICollectionsRootURL, username)
+	uReq, err := http.NewRequestWithContext(ctx, "GET", usernameURL, nil)
+	if err != nil {
+		return fmt.Errorf("creating username request: %w", err)
+	}
+
+	uq := uReq.URL.Query()
+	uq.Set("apikey", apiKey)
+	uReq.URL.RawQuery = uq.Encode()
+
+	uResp, err := http.DefaultClient.Do(uReq)
+	if err != nil {
+		return fmt.Errorf("network error during username verification: %w", err)
+	}
+	defer uResp.Body.Close()
+
+	if uResp.StatusCode != http.StatusOK {
+		if uResp.StatusCode == http.StatusNotFound {
+			return fmt.Errorf("username '%s' not found or has no public collections on Wallhaven", username)
+		}
+		return fmt.Errorf("username verification failed (status %d)", uResp.StatusCode)
+	}
+
+	return nil
+}
+
+// CheckWallhavenAPIKeyWithContext checks if the given API key is valid using the provided context.
+func CheckWallhavenAPIKeyWithContext(ctx context.Context, apiKey string) error {
+	// 1. Make a Request to a Protected Endpoint
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, WallhavenTestAPIKeyURL+apiKey, nil)
 	if err != nil {
 		return fmt.Errorf("creating request: %w", err)
 	}
 
-	// 3. Execute the Request
-	resp, err := client.Do(req)
+	// 2. Execute the Request
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("making request: %w", err)
 	}
 	defer resp.Body.Close()
 
-	// 4. Check the Response Status Code
+	// 3. Check the Response Status Code
 	if resp.StatusCode == http.StatusOK {
 		return nil // Success!
 	}
 	return fmt.Errorf("API key is invalid")
+}
+
+// CheckWallhavenAPIKey checks if the given API key is valid (legacy wrapper).
+func CheckWallhavenAPIKey(apiKey string) error {
+	return CheckWallhavenAPIKeyWithContext(context.Background(), apiKey)
 }
 
 // CovertWebToAPIURL converts a web URL to an API URL. validates input, transforms to API format, determines type,

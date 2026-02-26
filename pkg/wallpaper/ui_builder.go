@@ -9,17 +9,12 @@ import (
 	"fyne.io/fyne/v2/widget"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
-	utilLog "github.com/dixieflatline76/Spice/v2/util/log"
 )
 
 // PrefsPanelBuilder constructs the preferences UI.
 type PrefsPanelBuilder struct {
 	plugin *Plugin
 	sm     setting.SettingsManager
-
-	// State for mutual exclusion logic
-	faceCropCheck  *widget.Check
-	faceBoostCheck *widget.Check
 }
 
 func NewPrefsPanelBuilder(p *Plugin, sm setting.SettingsManager) *PrefsPanelBuilder {
@@ -100,18 +95,10 @@ func (b *PrefsPanelBuilder) addSmartFitSection(c *fyne.Container) {
 		config.InitialValue = int(mode)
 	}
 	config.NeedsRefresh = true
-
-	config.OnChanged = func(s string, val interface{}) {
-		mode := SmartFitMode(val.(int))
-		b.updateFaceOptionsState(mode)
-	}
 	b.sm.CreateSelectSetting(&config, c)
 
 	// Face Options (Crop / Boost)
 	b.addFaceOptions(c)
-
-	// Initialize state based on current mode
-	b.updateFaceOptionsState(b.plugin.cfg.GetSmartFitMode())
 }
 
 func (b *PrefsPanelBuilder) addFaceOptions(c *fyne.Container) {
@@ -127,11 +114,18 @@ func (b *PrefsPanelBuilder) addFaceOptions(c *fyne.Container) {
 			b.plugin.cfg.SetFaceCropEnabled(val)
 			if val {
 				b.plugin.cfg.SetFaceBoostEnabled(false)
-				boostConfig.InitialValue = false
+				b.sm.SetValue("faceBoost", false) // Update the other setting's UI
 			}
 			cropConfig.InitialValue = val
 		},
 		NeedsRefresh: true,
+		EnabledIf: func() bool {
+			val := b.sm.GetValue("smartFitMode")
+			if val == nil {
+				return true
+			}
+			return SmartFitMode(val.(int)) != SmartFitOff
+		},
 	}
 
 	// Face Boost
@@ -144,66 +138,27 @@ func (b *PrefsPanelBuilder) addFaceOptions(c *fyne.Container) {
 			b.plugin.cfg.SetFaceBoostEnabled(val)
 			if val {
 				b.plugin.cfg.SetFaceCropEnabled(false)
-				cropConfig.InitialValue = false
+				b.sm.SetValue("faceCrop", false) // Update the other setting's UI
 			}
 			boostConfig.InitialValue = val
 		},
 		NeedsRefresh: true,
+		EnabledIf: func() bool {
+			val := b.sm.GetValue("smartFitMode")
+			if val == nil {
+				return true
+			}
+			return SmartFitMode(val.(int)) != SmartFitOff
+		},
 	}
 
 	subSettingsContainer := container.NewVBox()
-	b.faceCropCheck = b.sm.CreateBoolSetting(&cropConfig, subSettingsContainer)
-	b.faceBoostCheck = b.sm.CreateBoolSetting(&boostConfig, subSettingsContainer)
+	b.sm.CreateBoolSetting(&cropConfig, subSettingsContainer)
+	b.sm.CreateBoolSetting(&boostConfig, subSettingsContainer)
 
 	indentation := widget.NewLabel("      ")
 	indentedWrapper := container.NewBorder(nil, nil, indentation, nil, subSettingsContainer)
 	c.Add(indentedWrapper)
-
-	// Mutual Exclusion Wiring
-	b.wireFaceOptionsMutex()
-}
-
-func (b *PrefsPanelBuilder) wireFaceOptionsMutex() {
-	originalCropHandler := b.faceCropCheck.OnChanged
-	originalBoostHandler := b.faceBoostCheck.OnChanged
-
-	b.faceCropCheck.OnChanged = func(val bool) {
-		utilLog.Debugf("UI: Face Crop Toggled: %v", val)
-		if val {
-			b.faceBoostCheck.SetChecked(false)
-		}
-		if originalCropHandler != nil {
-			originalCropHandler(val)
-		}
-	}
-
-	b.faceBoostCheck.OnChanged = func(val bool) {
-		utilLog.Debugf("UI: Face Boost Toggled: %v", val)
-		if val {
-			b.faceCropCheck.SetChecked(false)
-		}
-		if originalBoostHandler != nil {
-			originalBoostHandler(val)
-		}
-	}
-}
-
-func (b *PrefsPanelBuilder) updateFaceOptionsState(mode SmartFitMode) {
-	if b.faceCropCheck == nil || b.faceBoostCheck == nil {
-		return
-	}
-
-	if mode == SmartFitOff {
-		b.faceCropCheck.SetChecked(false)
-		b.faceCropCheck.Disable()
-		b.faceBoostCheck.SetChecked(false)
-		b.faceBoostCheck.Disable()
-	} else {
-		b.faceCropCheck.Enable()
-		b.faceBoostCheck.Enable()
-	}
-	b.faceCropCheck.Refresh()
-	b.faceBoostCheck.Refresh()
 }
 
 func (b *PrefsPanelBuilder) addToggleSettings(c *fyne.Container) {

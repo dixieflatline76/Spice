@@ -622,25 +622,30 @@ func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl strin
 	activeCheck := widget.NewCheck("Active", nil)
 	activeCheck.SetChecked(query.Active)
 
+	sm.SeedBaseline(wallpaper.FavoritesQueryID, query.Active)
 	activeCheck.OnChanged = func(b bool) {
-		sm.SetSettingChangedCallback(wallpaper.FavoritesQueryID, func() {
-			var err error
-			if b {
-				// Ensure it exists in config
-				if !exists {
-					_, err = p.cfg.AddFavoritesQuery("Favorite Images", wallpaper.FavoritesQueryID, true)
+		if b != sm.GetBaseline(wallpaper.FavoritesQueryID).(bool) {
+			sm.SetSettingChangedCallback(wallpaper.FavoritesQueryID, func() {
+				var err error
+				if b {
+					// Ensure it exists in config
+					if !exists {
+						_, err = p.cfg.AddFavoritesQuery("Favorite Images", wallpaper.FavoritesQueryID, true)
+					} else {
+						err = p.cfg.EnableImageQuery(wallpaper.FavoritesQueryID)
+					}
 				} else {
-					err = p.cfg.EnableImageQuery(wallpaper.FavoritesQueryID)
+					err = p.cfg.DisableImageQuery(wallpaper.FavoritesQueryID)
 				}
-			} else {
-				err = p.cfg.DisableImageQuery(wallpaper.FavoritesQueryID)
-			}
-			if err != nil {
-				log.Printf("Failed to toggle favorites: %v", err)
-			}
-			sm.RebuildTrayMenu()
-		})
-		sm.SetRefreshFlag(wallpaper.FavoritesQueryID)
+				if err != nil {
+					log.Printf("Failed to toggle favorites: %v", err)
+				}
+			})
+			sm.SetRefreshFlag(wallpaper.FavoritesQueryID)
+		} else {
+			sm.RemoveSettingChangedCallback(wallpaper.FavoritesQueryID)
+			sm.UnsetRefreshFlag(wallpaper.FavoritesQueryID)
+		}
 		sm.GetCheckAndEnableApplyFunc()()
 	}
 

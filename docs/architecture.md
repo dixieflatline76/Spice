@@ -5,7 +5,7 @@ title: Architecture
 
 # Spice Architecture Documentation (Wallpaper Plugin)
 
-> **Status**: Current as of v2.2.0
+> **Status**: Current as of v2.5.0 (Settings Registry Refactor)
 > **Focus**: Concurrency Model, Image Pipeline, and Actor-based Display Management
 
 ## 1. Executive Summary
@@ -224,9 +224,10 @@ Spice implements a strict "Zero Orphans" policy for resource management. When a 
 
 1.  **Configuration Callback**: The `Config` triggers a registered callback (`onQueryRemoved`).
 2.  **Store Pruning**: The callback invokes `store.RemoveByQueryID(queryID)`.
-3.  **Deep Delete**: The File Manager's `DeepDelete` function is called for every image ID:
-    - Deletes the **Master Image**.
-    - recursively deletes all **Derivatives** (Smart Fit, Face Crop, Face Boost images) in their respective subdirectories.
+3.  **Deep Delete (Wallhaven Reset Example)**: The File Manager's `DeepDelete` function is called for every image ID:
+    - **Trigger**: Clicking "Clear API Key" for Wallhaven triggers a full account reset.
+    - **Action**: All synced collection IDs are passed to the store for removal.
+    - **Cleanup**: Recursively deletes the **Master Image** and all **Derivatives** (Smart Fit, Face Crop, etc.) in their respective subdirectories.
 
 ### 3.5.2 Provider Strategies
 
@@ -247,7 +248,7 @@ Spice supports two distinct provider interaction models:
 
 To manage the growing number of providers, Spice categorizes them into three distinct types (`provider.ProviderType`), which dictates their UI placement:
 
-*   **TypeOnline**: Remote APIs (Unsplash, Pexels). Placed in the "Online" tab working via network fetch.
+*   **TypeOnline**: Remote APIs (Pexels, Wallhaven). Placed in the "Online" tab working via network fetch.
 *   **TypeLocal**: Local filesystem interactions (Favorites, Local Files). Placed in the "Local" tab.
 *   **TypeAI**: Generative or logical providers. Placed in the "AI" tab (Future).
 
@@ -278,7 +279,26 @@ To manage evolving configuration schemas (e.g., legacy JSON formats, ID backfill
 *   **MigrationChain**: A sequence of `MigrationStep` functions (e.g., `UnifyQueriesStep`, `EnsureFavoritesStep`).
 *   **Execution**: On startup, `loadFromPrefs` executes the chain. If any step modifies the config, a save is triggered automatically. This ensures data integrity across version upgrades.
 
-## 3.11 ID Namespacing (Middleware)
+## 3.11 UI State Management (The Registry Pattern)
+*Added in v2.5*
+
+To solve the "Closure Trap" bug and ensure UI consistency across multiple monitor settings, Spice implemented a centralized **Settings Registry**.
+
+- **Registry**: `SettingsManager` maintains a `map[string]interface{}` (the Baseline) representing the last-saved state of every UI widget.
+- **Advanced Capabilities**:
+    - **Secure Masking**: Supports `IsPassword: true` for automatic masking of sensitive inputs (e.g., API keys).
+    - **Dynamic Locking**: Supports `EnabledIf` predicates to programmatically disable widgets based on other values (e.g., locking an API key field until its value is cleared).
+- **The Lifecycle**:
+    1. **Seeding**: On window creation, widgets `SeedBaseline` with their initial persistent value.
+    2. **Dirty Detection**: `OnChanged` callbacks compare the "Live" value against the "Baseline" (not the ephemeral Config).
+    3. **Atomic Commit**: The "Apply" button executes all queued callbacks and then promotes "Live" values to "Baseline", ensuring the UI remains consistent if the user continues editing without closing the window.
+
+- **The Transactional UI Exception**:
+    - For sensitive credentials (API Keys), Spice bypasses the deferred save model.
+    - **Verification Flow**: Clicking "Verify" performs a network check and *immediately* persists the value upon success.
+    - **Visual Locking**: Success calls `sm.SeedBaseline()` and `sm.Refresh()`, which instantly locks the field and enables dependent features (like sync) without requiring an "Apply" click.
+
+## 3.12 ID Namespacing (Middleware)
 
 To prevent ID collisions across different providers (e.g., Pexels and Wallhaven both using numeric IDs), Spice implements a centralized middleware strategy.
 
