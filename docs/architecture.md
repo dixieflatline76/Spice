@@ -62,34 +62,34 @@ graph TD
     classDef pipe fill:#fff3e0,stroke:#e65100,stroke-width:2px,color:#000,font-size:16px;
     classDef store fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px,color:#000,font-size:16px;
 
-    subgraph UI_Orchestration [Plugin Manager & Plugin]
+    subgraph UI_Orchestration ["Plugin Manager & Plugin"]
         Plugin[Wallpaper Plugin]:::ui
     end
 
-    subgraph Actor_Layer [Actor Model (per Monitor)]
+    subgraph Actor_Layer ["Actor Model (per Monitor)"]
         Monitor1[Monitor Controller 0]:::actor
         Monitor2[Monitor Controller 1]:::actor
     end
 
-    subgraph Shared_Resource [Shared Resources]
+    subgraph Shared_Resource ["Shared Resources"]
         Store[(ImageStore)]:::store
     end
 
-    subgraph Pipeline_Layer [Pipeline Context]
+    subgraph Pipeline_Layer ["Pipeline Context"]
         Workers[["Worker Pool<br/>(Download/Crop)"]]:::pipe
         Manager(("State Manager<br/>Loop")):::pipe
     end
 
     %% Interaction Flows
-    Plugin -- 1. Dispatch Cmd --> Monitor1
-    Monitor1 -- 2. RLock (Fast) --> Store
+    Plugin -- "1. Dispatch Cmd" --> Monitor1
+    Monitor1 -- "2. RLock (Fast)" --> Store
     
-    Workers -- Result (New Image) --> Manager
-    Manager -- 3. Lock (Exclusive) --> Store
+    Workers -- "Result (New Image)" --> Manager
+    Manager -- "3. Lock (Exclusive)" --> Store
     
     %% Feedback
-    Manager -- Seen Counter Updates --> Plugin
-    Monitor1 -- Current Wallpaper Change --> Plugin
+    Manager -- "Seen Counter Updates" --> Plugin
+    Monitor1 -- "Current Wallpaper Change" --> Plugin
 ```
 
 ## 3.3 Component Details
@@ -160,25 +160,25 @@ This flow demonstrates how the UI updates instantly without waiting for a write 
 sequenceDiagram
     participant User
     participant Plugin as Wallpaper Plugin
-    participant Actor as Monitor Controller (Actor)
+    participant MC as "Monitor Controller (Actor)"
     participant Store as ImageStore
-    participant OS as OS / Wallpaper API
+    participant OS as "OS / Wallpaper API"
 
     User->>Plugin: Click "Next"
     activate Plugin
-    Plugin->>Actor: Dispatch(CmdNext)
+    Plugin->>MC: Dispatch(CmdNext)
     deactivate Plugin
     
-    activate Actor
-    Note right of Actor: 1. Calculate next image (Shuffled/History)
-    Actor->>Store: GetByID(nextID) [RLock]
-    Store-->>Actor: Image Info
+    activate MC
+    Note right of MC: 1. Calculate next image (Shuffled/History)
+    MC->>Store: GetByID(nextID) [RLock]
+    Store-->>MC: Image Info
     
-    Note right of Actor: 2. Process Change
-    Actor->>OS: setWallpaper(path)
-    Actor->>Store: MarkSeen(path) [Exclusive Lock]
-    Actor->>Plugin: Signal Change (for Tray Menu update)
-    deactivate Actor
+    Note right of MC: 2. Process Change
+    MC->>OS: setWallpaper(path)
+    MC->>Store: MarkSeen(path) [Exclusive Lock]
+    MC->>Plugin: Signal Change (for Tray Menu update)
+    deactivate MC
 ```
 
 ### 3.4.2 "Delete Wallpaper" Flow
@@ -189,20 +189,21 @@ Deleting requires modifying the store, handled asynchronously.
 sequenceDiagram
     participant User
     participant Plugin as Wallpaper Plugin
-    participant Actor as Monitor Controller (Actor)
+    participant MC as "Monitor Controller (Actor)"
     participant Store as ImageStore
+    participant OS as "OS / Wallpaper API"
 
     User->>Plugin: Click "Delete"
     activate Plugin
-    Plugin->>Actor: Dispatch(CmdDelete)
+    Plugin->>MC: Dispatch(CmdDelete)
     deactivate Plugin
     
-    activate Actor
-    Actor->>OS: Remove File from Disk
-    Actor->>Store: Remove(ID) [Lock]
-    Note right of Actor: Trigger auto-navigation to next
-    Actor->>Actor: next()
-    deactivate Actor
+    activate MC
+    MC->>OS: Remove File from Disk
+    MC->>Store: Remove(ID) [Lock]
+    Note right of MC: Trigger auto-navigation to next
+    MC->>MC: next()
+    deactivate MC
 ```
 
 ## 3.5 Directory Structure & Key Files
@@ -313,18 +314,18 @@ sequenceDiagram
     participant Pipe as Pipeline/Store
     participant W as Worker (enrichImage)
 
-    Note over P,Prov: 1. Ingestion Phase
+    Note over P,Prov: "1. Ingestion Phase"
     P->>Prov: FetchImages()
     Prov-->>P: []Image (IDs: 123, 456)
-    Note right of P: Middleware: Prefix IDs (Provider_123)
+    Note right of P: "Middleware: Prefix IDs (Provider_123)"
     P->>Pipe: Submit(namespacedJob)
 
-    Note over W,Prov: 2. Interaction Phase (Lazy Enrichment)
+    Note over W,Prov: "2. Interaction Phase (Lazy Enrichment)"
     W->>W: Get namespaced ID (Provider_123)
-    Note right of W: Middleware: Strip Prefix (123)
+    Note right of W: "Middleware: Strip Prefix (123)"
     W->>Prov: EnrichImage(raw_img)
     Prov-->>W: raw_modified_img
-    Note right of W: Middleware: Restore Prefix (Provider_123)
+    Note right of W: "Middleware: Restore Prefix (Provider_123)"
     W->>Pipe: Save enriched image
 ```
 

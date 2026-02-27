@@ -52,19 +52,19 @@ favProvider.mu (independent — accessed via Favoriter interface)
 ```mermaid
 sequenceDiagram
     participant User
-    participant Plugin as Plugin.ToggleFavorite
-    participant FavProv as Favorites Provider
+    participant Plugin as "Plugin.ToggleFavorite"
+    participant FavProv as "Favorites Provider"
     participant Store as ImageStore
 
     User->>Plugin: Click "Favorite"
     Plugin->>FavProv: AddFavorite(img)
-    Note right of FavProv: 1. favMap[img.ID] = true
-    Note right of FavProv: 2. Async: copy file to favorites folder
-    Note right of FavProv: 3. Async: update metadata.json
-    Plugin->>Store: Update(img) [IsFavorited=true]
+    Note right of FavProv: "1. favMap[img.ID] = true"
+    Note right of FavProv: "2. Async: copy file to favorites folder"
+    Note right of FavProv: "3. Async: update metadata.json"
+    Plugin->>Store: Update(img) "[IsFavorited=true]"
     Plugin->>Plugin: RequestFetch("Favorites")
-    Note right of Plugin: Next fetch: Favorites provider returns image
-    Note right of Plugin: Store.Add() override: Provider → Favorites
+    Note right of Plugin: "Next fetch: Favorites provider returns image"
+    Note right of Plugin: "Store.Add() override: Provider → Favorites"
 ```
 
 **Result**: Single store entry with `Provider=Favorites, IsFavorited=true`.
@@ -74,20 +74,20 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant User
-    participant Plugin as Plugin.ToggleFavorite
-    participant FavProv as Favorites Provider
+    participant Plugin as "Plugin.ToggleFavorite"
+    participant FavProv as "Favorites Provider"
     participant Store as ImageStore
 
     User->>Plugin: Click "Remove Favorite"
     Plugin->>FavProv: RemoveFavorite(img)
-    Note right of FavProv: 1. delete(favMap, img.ID)
-    Note right of FavProv: 2. Async: delete file + metadata entry
+    Note right of FavProv: "1. delete(favMap, img.ID)"
+    Note right of FavProv: "2. Async: delete file + metadata entry"
 
     alt Provider == Favorites
         Plugin->>Store: Remove(img.ID) [deep delete]
-        Note right of Plugin: Auto-advance monitors showing this image
+        Note right of Plugin: "Auto-advance monitors showing this image"
     else Original provider
-        Plugin->>Store: Update(img) [IsFavorited=false]
+        Plugin->>Store: Update(img) "[IsFavorited=false]"
     end
 ```
 
