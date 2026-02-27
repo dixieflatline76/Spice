@@ -35,21 +35,11 @@ func TestQueryManagement(t *testing.T) {
 	// Add Image Query
 	cfg.Queries = []ImageQuery{} // Clear default queries
 	cfg.ImageQueries = []ImageQuery{}
-	cfg.UnsplashQueries = []ImageQuery{}
 	cfg.PexelsQueries = []ImageQuery{}
 
 	id1, err := cfg.AddImageQuery("Test Wallhaven", "http://example.com/1.jpg", true)
 	assert.NoError(t, err)
 	assert.NotEmpty(t, id1)
-
-	// Add Unsplash Query
-	id2, err := cfg.AddUnsplashQuery("Test Unsplash", fmt.Sprintf("http://example.com/u-%d.jpg", time.Now().UnixNano()), true)
-	if err != nil {
-		t.Fatalf("AddUnsplashQuery failed: %v", err)
-	}
-	if id2 == "" {
-		t.Fatal("AddUnsplashQuery returned empty ID")
-	}
 
 	// Add Pexels Query
 	id3, err := cfg.AddPexelsQuery("Test Pexels", fmt.Sprintf("http://example.com/p-%d.jpg", time.Now().UnixNano()), true)
@@ -61,9 +51,8 @@ func TestQueryManagement(t *testing.T) {
 	}
 
 	// Verify counts
-	assert.Equal(t, 3, len(cfg.GetQueries()))
+	assert.Equal(t, 2, len(cfg.GetQueries()))
 	assert.Equal(t, 1, len(cfg.GetImageQueries()))
-	assert.Equal(t, 1, len(cfg.GetUnsplashQueries()))
 	assert.Equal(t, 1, len(cfg.GetPexelsQueries()))
 
 	// Test Duplication
@@ -92,7 +81,7 @@ func TestQueryManagement(t *testing.T) {
 	assert.NoError(t, err)
 	_, found = cfg.GetQuery(id1)
 	assert.False(t, found)
-	assert.Equal(t, 2, len(cfg.GetQueries()))
+	assert.Equal(t, 1, len(cfg.GetQueries()))
 }
 
 func TestConfigPreferences(t *testing.T) {

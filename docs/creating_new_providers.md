@@ -31,7 +31,7 @@ You must implement the following 6 methods.
 
 * **`Type() ProviderType`**:
   * **Purpose**: Categorizes the provider for the Tabbed UI.
-  * **Returns**: One of `provider.TypeOnline` (APIs), `provider.TypeLocal` (Filesystem), or `provider.TypeAI` (Generative).
+  * **Returns**: One of `provider.TypeOnline` (Pexels, Wallhaven), `provider.TypeLocal` (Filesystem), or `provider.TypeAI` (Generative).
 
 * **`ParseURL(webURL string) (string, error)`**:
   * **Input**: A URL copied from the browser (e.g., `bing.com/images/search?q=foo`).
@@ -118,56 +118,67 @@ Spice uses a **Strict Deferred-Save Model**. Changes made in the UI must NOT be 
 
 ### 4.1 Correct Implementation Pattern
 
-You must implement the following wiring in your `OnChanged` callbacks (e.g., Checkboxes, Entries):
+The `SettingsManager` now handles the "Closure Trap" and dirty detection automatically via the **Registry**.
 
-1.  **Verify Against Live Config**:
-    *   **Anti-Pattern**: Comparing `newValue` against a variable captured at closure creation (e.g., `initialState`). This variable becomes stale after an Apply.
-    *   **Correct Pattern**: Always fetch the *current* persistent state from your config struct inside the callback.
+#### For Standard Settings (API Keys, Toggles)
+When using helpers like `CreateTextEntrySetting`, `CreateBoolSetting`, or `CreateSelectSetting`, the `SettingsManager` will:
+1.  **Seed**: Automatically seed the baseline value in the registry.
+2.  **Monitor**: Automatically compare the live widget state against the registry.
+3.  **Apply**: Automatically execute your `ApplyFunc` only if the value has changed.
 
-    ```go
-    chk.OnChanged = func(on bool) {
-        // 1. Fetch Request: Get the TRUE current state from config
-        // "getDetails" should look up the value in p.cfg
-        isSavedActive, _ := getDetails(col.Key)
+**Example**:
+```go
+pexelsAPIKeyConfig := setting.TextEntrySettingConfig{
+    Name:         "pexelsAPIKey",
+    InitialValue: p.cfg.GetPexelsAPIKey(),
+    // ... other fields
+    ApplyFunc: func(s string) {
+        p.cfg.SetPexelsAPIKey(s)
+    },
+}
+sm.CreateTextEntrySetting(&pexelsAPIKeyConfig, pexHeader)
+```
 
-        // 2. Define Unique Keys
-        dirtyKey := fmt.Sprintf("myprovider_%s", col.Key)
-        callbackKey := fmt.Sprintf("myprovider_cb_%s", col.Key)
+#### For Custom Widgets (Manual Query Lists)
+If you are building a custom list (like a museum collection or query list), you must manually wire into the Registry:
 
-        // 3. Compare New vs Saved
-        if on != isSavedActive {
-            // A. Queue the Save Action
-            sm.SetSettingChangedCallback(callbackKey, func() {
-                // This runs ONLY when "Apply" is clicked
-                if on {
-                    p.cfg.EnableQuery(...)
-                } else {
-                    p.cfg.DisableQuery(...)
-                }
-            })
+1.  **Seed the Baseline**: Call `sm.SeedBaseline(key, initialValue)` for each item.
+2.  **Check in OnChanged**: Compare the new value against `sm.GetBaseline(key)`.
+3.  **Queue the Callback**: Use `sm.SetSettingChangedCallback(key, callback)` and `sm.SetRefreshFlag(key)`.
 
-            // B. Flag as Dirty (Enables "Apply")
-            // Use a unique key. Do NOT use global keys like "queries" here unless necessary for delete.
-            sm.SetRefreshFlag(dirtyKey)
-        } else {
-            // C. Revert: User changed it back to match saved state
-            sm.RemoveSettingChangedCallback(callbackKey)
-            sm.UnsetRefreshFlag(dirtyKey)
-        }
-
-        // 4. Update UI
-        sm.GetCheckAndEnableApplyFunc()()
+```go
+check.OnChanged = func(on bool) {
+    baseline := sm.GetBaseline(queryKey).(bool)
+    if on != baseline {
+        sm.SetSettingChangedCallback(queryKey, func() {
+            if on { p.cfg.EnableQuery(id) } else { p.cfg.DisableQuery(id) }
+        })
+        sm.SetRefreshFlag(queryKey)
+    } else {
+        sm.RemoveSettingChangedCallback(queryKey)
+        sm.UnsetRefreshFlag(queryKey)
     }
-    ```
+    sm.GetCheckAndEnableApplyFunc()()
+}
+```
 
 ### 4.2 Common Pitfalls
 
 *   **Immediate Saving**: `p.cfg.Save()` inside the `OnChanged` callback.
     *   *Result*: The "Apply" button becomes a "Pulse" button because the dirty state is instantly cleared (or never technically dirty).
-*   **Stale Closures**: `if on != capturedActive`.
-    *   *Result*: After clicking Apply, the UI thinks `capturedActive` is the truth, but the config has updated. Toggling back will mistakenly leave the "Apply" button enabled.
+*   **Captured Stale State**: Comparing `on != capturedInitialState`.
+    *   *Result*: After clicking Apply, the UI thinks `capturedInitialState` is the truth, but the config has updated. Toggling back will mistakenly leave the "Apply" button enabled. **Use `sm.GetBaseline(key)` instead.**
 *   **Sticky Global Flags**: `sm.SetRefreshFlag("queries")` on toggle.
     *   *Result*: Global flags are often not cleared by `UnsetRefreshFlag(uniqueKey)`. If a user reverts a change, the global flag remains, leaving the "Apply" button stuck on. Only use global flags for destructive actions (Delete) or inside the *Apply Callback* itself.
+
+### 4.3 The Transactional Exception (Credentials)
+
+While standard settings are deferred, **Sensitive Credentials** (API Keys, Usernames) must follow the **Transactional UI Pattern**.
+
+1.  **Immediate Persistence**: In your `CreateSettingsPanel`, when the user clicks **"Verify & Connect"**, the network check is performed and the value is saved to the config *immediately* upon success.
+2.  **Visual Locking**: You must call `sm.SeedBaseline(key, value)` and `sm.Refresh()` inside the success goroutine. This locks the field and resets the action button.
+3.  **Timeouts**: Network checks must use `context.WithTimeout` (10s) to prevent the UI from hanging on "Verifying...".
+4.  **Consistency**: Use standard labels like "Verify & Connect" (for keys) and "Verify Username".
 
 ## 5. Pagination & Randomization Stability
 

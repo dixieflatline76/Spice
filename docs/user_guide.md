@@ -52,38 +52,47 @@ Each display submenu contains the same full set of controls — Next, Prev, Paus
 ---
 
 ## Keyboard Shortcuts
+ 
+Spice is designed for power users who want total control without interrupting their flow. Our global hotkeys are instant, responsive, and cross-platform.
 
-Spice registers global hotkeys so you can control wallpapers without ever leaving your current app.
+**Why it's cool:**
+- **Zero-Touch Control**: Advance your wallpapers or save a favorite without ever leaving your IDE, browser, or game.
+- **The "Magic Number" System**: Our unique targeting system lets you control specific monitors independently by simply holding a number key (1-9).
+- **Universal Muscle Memory**: Whether you're on Windows or macOS, the shortcut logic remains consistent and intuitive.
 
-> **Note for macOS:** On macOS, the `Command` key is used for targeted actions (similar to Windows `Alt`). Global actions use `Command` + `Control` (similar to Windows `Ctrl` + `Alt`).
+> **Note for macOS:** Global actions use `Command` + `Control` (similar to Windows `Ctrl` + `Alt`). Targeted actions use `Command` (similar to Windows `Alt`).
 
 ### Global Actions — All Displays At Once
+These shortcuts perform actions across every connected monitor simultaneously.
 
 | Action | Windows | macOS |
 | :--- | :--- | :--- |
-| Next Wallpaper | `Ctrl` + `Alt` + `→` | `Cmd` + `Control` + `→` |
-| Previous Wallpaper | `Ctrl` + `Alt` + `←` | `Cmd` + `Control` + `←` |
-| Sync / Detect Displays | `Ctrl` + `Alt` + `D` | `Cmd` + `Control` + `D` |
-| Open Preferences | `Ctrl` + `Alt` + `O` | `Cmd` + `Control` + `O` |
+| **Next Wallpaper** | `Ctrl` + `Alt` + `→` | `Cmd` + `Ctrl` + `→` |
+| **Previous Wallpaper** | `Ctrl` + `Alt` + `←` | `Cmd` + `Ctrl` + `←` |
+| **Sync / Detect Displays** | `Ctrl` + `Alt` + `D` | `Cmd` + `Ctrl` + `D` |
+| **Open Preferences** | `Ctrl` + `Alt` + `O` | `Cmd` + `Ctrl` + `O` |
 
-### Targeted Actions — One Display At A Time
-
-Hold a **number key (1–9)** alongside the modifier to target a specific display. Display 1 = key `1`, Display 2 = key `2`, and so on. These work with both the top-row number keys and the numeric keypad.
+### Targeted Actions — Precision Monitor Control
+Hold a **number key (1–9)** alongside the modifier to target a specific display. Display 1 = key `1`, Display 2 = key `2`, etc.
 
 | Action | Windows | macOS |
 | :--- | :--- | :--- |
-| Next Wallpaper on Display *N* | `Alt` + `N` + `→` | `Command` + `N` + `→` |
-| Previous Wallpaper on Display *N* | `Alt` + `N` + `←` | `Command` + `N` + `←` |
-| Block Image on Display *N* | `Alt` + `N` + `↓` | `Command` + `N` + `↓` |
-| Add to Favorites on Display *N* | `Alt` + `N` + `↑` | `Command` + `N` + `↑` |
-| Pause Play on Display *N* | `Alt` + `N` + `P` | `Command` + `N` + `P` |
+| Next on Display *N* | `Alt` + `N` + `→` | `Command` + `N` + `→` |
+| Previous on Display *N* | `Alt` + `N` + `←` | `Command` + `N` + `←` |
+| **Block / Delete** | `Alt` + `N` + `↓` | `Command` + `N` + `↓` |
+| **Add to Favorites** | `Alt` + `N` + `↑` | `Command` + `N` + `↑` |
+| **Pause / Play** | `Alt` + `N` + `P` | `Command` + `N` + `P` |
 
-**Example:** To go to the next wallpaper on Display 2, press and hold `Alt` (Windows) or `Command` (macOS), then while still holding it, press `2` and `→` simultaneously.
+**Example:** To skip the wallpaper on your second monitor, press and hold `Alt` (Windows) or `Command` (macOS), tap `2`, and press `→`. 
 
-> [!TIP]
-> **Browser Navigation Conflicts:** The Targeted Actions (e.g., `Alt + Arrow` on Windows or `Command + Arrow` on macOS) are common shortcuts for browser navigation. If you find Spice is "hijacking" your browser's back/forward buttons, you can disable targeted shortcuts independently in the **App Settings**.
+### Customizing & Disabling Shortcuts
+ 
+Spice gives you granular control over how hotkeys interact with your system. If you find that Spice shortcuts conflict with other software (like your IDE or web browser), you have two options in **Preferences → App**:
 
-> **macOS Note:** Targeted shortcuts require Accessibility permissions. macOS will prompt you the first time Spice tries to detect which number key is held.
+1. **Disable All Shortcuts**: The "Enable global shortcuts" master switch completely unregisters Spice from your system's input loop. Use this if you prefer using the tray menu exclusively.
+2. **Disable Targeted Shortcuts Only**: If you love the global rotation shortcuts (`Ctrl` + `Alt` + `Arrow`) but find that the Targeted Shortcuts (e.g., `Alt` + `1` + `Right`) interfere with your browser's "Go Back/Forward" actions, you can disable **only** the targeted modifiers.
+
+> **macOS Permissions**: Targeted shortcuts require Accessibility permissions. macOS will prompt you once when Spice first detects a number key press. If shortcuts stop working, ensure Spice is still enabled in **System Settings → Privacy & Security → Accessibility**.
 
 ---
 
@@ -114,8 +123,8 @@ The **Wallpaper** plugin tab appears immediately after the App tab. It contains 
 | **Wallpaper Change Frequency** | How often Spice automatically rotates. Options range from *Every 5 Minutes* to *Daily*. Set to *Never* to disable automatic rotation entirely (you can still change manually via the tray or hotkeys). |
 | **Cache Size** | How many images to keep on disk. A larger cache means faster display and fewer network requests at startup. Set to *None* to disable caching (images are fetched fresh each time). |
 | **Smart Fit Mode** | Controls how Spice fits images to your screen — see below. |
-| **Enable Face Crop** | When Smart Fit is active, the cropper aggressively centers on the largest detected face. Best for portrait photography. Mutually exclusive with Face Boost. |
-| **Enable Face Boost** | When Smart Fit is active, the cropper *hints* toward faces but also considers overall composition. Balances faces with the scene. Mutually exclusive with Face Crop. |
+| **Enable Face Crop** | When Smart Fit is active, the cropper aggressively centers on the largest detected face. **Note**: This setting is automatically disabled if Smart Fit Mode is "Disabled". |
+| **Enable Face Boost** | When Smart Fit is active, the cropper *hints* toward faces but also considers overall composition. **Note**: This setting is automatically disabled if Smart Fit Mode is "Disabled". |
 | **Stagger monitor changes** | Adds a small random delay between wallpaper changes on each display during automatic rotation, preventing a distracting simultaneous flash across all screens. |
 | **Change wallpaper on start** | When enabled, Spice immediately changes the wallpaper when the app launches. Disable this to show the last-seen wallpaper until the timer fires. |
 | **Refresh wallpapers nightly** | Spice quietly re-fetches images from all active sources once per night, keeping the cache fresh with new content without interrupting your day. |
@@ -138,83 +147,116 @@ The **Wallpaper** plugin tab appears immediately after the App tab. It contains 
 The **Online** tab lists each cloud and institutional image provider as an expandable accordion card. Click a provider name to expand its settings.
 
 #### Wallhaven
+ 
+Wallhaven is a premier destination for high-quality wallpapers. Spice integrates deeply with the Wallhaven API to provide a seamless search and synchronization experience.
 
-Wallhaven requires a free API key for NSFW content and higher search quotas. Enter it in the Wallhaven settings panel.
+**Authentication:**
+Entering your API Key is highly recommended as it enables access to your private favorite collections and higher search quotas.
+- **Verification**: Paste your key and click **Verify & Connect**. Spice performs an immediate live check.
+- **Security**: Once verified, the key is masked (dots) and permanently **locked**.
+- **Change/Remove**: To update the key, you must use the **Clear API Key** button, which performs a [Full Reset](#account-reset).
 
-**Adding a collection:**
-1. Go to [wallhaven.cc](https://wallhaven.cc) and search for a topic you like.
-2. Copy the URL from your browser (e.g., `https://wallhaven.cc/search?q=nature&categories=110`).
-3. Open Spice Preferences → Online → Wallhaven.
-4. Paste the URL into the **Add Collection** field, give it a name, and click **Add**.
-5. The new source appears in the list with an **Active** checkbox.
-6. Click **Apply** to save.
+**Favorites Synchronization:**
+This is the "killer feature" for Wallhaven power users. Instead of manually adding individual search URLs, Spice can mirror your entire Wallhaven account.
+- **Setting it up**:
+  1. Enter your **Wallhaven Username**.
+  2. Click **Verify Username**. (Note: An API Key must be verified first).
+  3. Once verified, the **Keep Favorites Synced** checkbox will become available.
+- **The Magic**: When "Keep Favorites Synced" is enabled, Spice will automatically discover all your public favorite collections and add them as **Managed** queries.
+- **Live Sync**: As you add or remove favorite collections on the Wallhaven website, Spice will detect the changes and automatically update its source list to match.
+
+**Adding Manual Queries:**
+If you want to track a specific search that isn't in your favorites:
+1. Go to [wallhaven.cc](https://wallhaven.cc) and search for a topic.
+2. Copy the browser URL (e.g., `https://wallhaven.cc/search?q=nature&categories=110`).
+3. Back in Spice, click **Add Wallhaven URL**, paste the link, and give it a descriptive name.
+
+<a name="account-reset"></a>
+**Account Reset:**
+Clicking **Clear API Key** is a destructive but necessary action if you wish to change accounts. It will:
+1. Clear the stored API Key and Username.
+2. Disable the synchronization engine.
+3. **Remove all Managed collections** from your list to prevent data orphans.
+*Note: Your manually added queries are left untouched.*
 
 #### Pexels
+ 
+Pexels is a high-quality stock photography provider known for its vibrant, modern imagery. Spice leverages the Pexels API to bring these professional photos directly to your desktop.
 
-Requires a Pexels API key (free). Paste a Pexels search URL or collection URL and give it a name. Adding a collection follows the same pattern as Wallhaven.
+**How to Use:**
+- **Verification**: Paste your free API key and click **Verify & Connect**. Like Wallhaven, Spice ensures the key is active before locking it for security.
+- **Adding Queries**: Use the **Add Pexels Search** button to paste a URL from the [Pexels website](https://pexels.com). You can track specific search terms (e.g., "Minimalist Interiors") or follow hand-picked collections from top photographers.
 
 #### Wikimedia Commons
+ 
+Wikimedia Commons is a vast, dynamic repository of freely-licensed media from millions of contributors. Unlike static museum collections, Commons allows you to tap into a live stream of real-world history and discovery.
 
-Wikimedia Commons is a vast, dynamic repository of freely-licensed media. Unlike static museum collections, you can add your own personalized queries to Spice.
+**The Power of Discovery:**
+- **Search**: Use `search:nature` or paste a MediaSearch URL to fetch images matching specific topics.
+- **Category Power**: Follow deep categories like `category:Deep space` or `category:Impressionist paintings` for a focused rotation.
+- **Specific Files**: Want to stick with a single masterpiece? Enter a direct File URL (e.g., `file:File:Earth_Eastern_Hemisphere.jpg`).
 
-**Configuration Guide:**
-- **Search terms**: Enter `search:nature` or paste a MediaSearch URL to fetch images matching a specific topic.
-- **Categories**: Enter `category:Deep space` or paste a Category URL to rotate through all images in a specific Commons category.
-- **Specific Files**: Enter `file:File:Earth_Eastern_Hemisphere.jpg` or a direct File URL to persistently display a single masterpiece.
-
-> **Tip:** Wikimedia Commons is a community-driven project. You can support their mission via the **Donate to Wikimedia** link in the provider settings.
+> **Tip:** Support the community! You can contribute to their mission via the **Donate to Wikimedia** link in the provider settings.
 
 #### Museum Sources (Online)
-
-Spice integrates with world-class museums, bringing curated artistic experiences directly to your desktop. These are high-resolution, open-access collections (CC0) that allow you to explore the world's greatest creative achievements.
+ 
+Art has no borders. Spice integrates with the world’s leading cultural institutions to transform your screen into a rotating gallery of historical masterpieces, all provided under Open Access (CC0) licenses.
 
 **Available Museums:**
 - **Metropolitan Museum of Art** (New York City, USA)
 - **Art Institute of Chicago** (Chicago, IL, USA)
 
+**The "Director's Cut" Collections:**
+Each museum provides curated collections designed to showcase institutional highlights:
+- **Arts of Asia**: From ancient ceramics to modern prints.
+- **The Impressionists**: Iconic works from Monet, Degas, and Renoir.
+- **High Resolution Art**: Masterpieces chosen for their exceptional detail and scale.
+
 **How to Use:**
 1. Open **Preferences → Wallpaper → Online**.
-2. Expand a museum card (e.g., *The Metropolitan Museum of Art*).
-3. Use the **Map** link to explore the museum's location or the **Donate** link to support their open-access initiatives.
-4. Check the boxes next to curated collections (e.g., *Highights*, *European Paintings*) and click **Apply**.
+2. Expand a museum card.
+3. Use the **Map** link to "Plan a Visit" and explore the institution's location.
+4. Toggle the collections you want and click **Apply**.
 
-#### Google Photos *(Beta)*
+#### Google Photos
+ 
+Google Photos is for your personal memories. Spice uses the **Google Photos Picker API**, ensuring a high-privacy integration.
 
-Google Photos integration uses the **Google Photos Picker API**, which lets you grant Spice access to specific albums without giving it access to your entire library. No Google API key is needed — authorization is handled through your browser.
+**Why it's cool:**
+- **Manual Picker**: Instead of giving Spice access to your entire library, the browser-based Picker flow lets you hand-select exactly which albums or media items are available.
+- **Privacy First**: Spice never sees your credentials; authorization is handled securely through the official Google Auth flow in your default browser.
+- **High Resolution**: Images are downloaded at their original resolution (where supported) to ensure your memories look stunning on high-DPI displays.
 
-> **This feature is currently in beta.** To request access, please [open an issue on GitHub](https://github.com/dixieflatline76/Spice/issues) and include your Google account email. Beta testers will be added to the allowlist.
-
-Once access is granted:
-1. Open **Preferences → Online → Google Photos**.
-2. Click **Sign in with Google** and authorize via the Picker flow (only the albums you select are accessible).
-3. Choose the albums you want to use and click **Apply**.
+**How to Use:**
+1. Open **Preferences → Wallpaper → Online → Google Photos**. (Note: May require beta allowlisting).
+2. Click **Connect to Google Photos**.
+3. In your browser, select the albums or specific photos you want to use.
+4. Back in Spice, toggle your Google Photos source and click **Apply**.
 
 ---
 
 ### Local Sources
+ 
+Sometimes the best wallpapers are the ones you already own or have carefully curated into your favorites. These can be managed in the **Local** tab of the Spice Preferences.
 
-The **Local** tab contains your **Favorites** library and any local folder sources you have added.
+#### Local Favorites
+The "Favorites" provider is the heart of Spice's localized content. It acts as a persistent archive of images you've "loved" from other providers.
 
----
+**The "Killer" Features:**
+- **Persistent Storage**: When you favorite an image (via the Tray Menu or Keyboard Shortcut), Spice downloads a permanent copy to your local storage. Even if the original collection on Wallhaven or Pexels is deleted, your favorite remains.
+- **Auto-Syncing**: Your Favorites source is active by default. As soon as you "heart" an image, it's added to your rotation instantly.
+- **Deep Integration**: Favorited images preserve their original metadata, so you can still use the "Open in Browser" feature to visit the original source.
 
-## Favorites
+**How to Use:**
+- **Adding**: Click the Heart icon in the tray menu or use `Alt` + `N` + `↑` (Windows) / `Cmd` + `Control` + `N` + `↑` (macOS).
+- **Managing**: Go to the **Local** tab to see your library. You can browse, open, or clear your entire collection.
+- **Storage**: Favorites images are stored in your system's application data directory. Use the **Open Favorites Folder** button to access them directly.
 
-Favorites lets you permanently save copies of any wallpaper you love, so they keep appearing even if the original source is removed or a query is changed.
-
-### How Favorites Work
-
-- When you **Add to Favorites** (via the tray menu or `Alt` (Windows) / `Command` (macOS) + `N` + `↑`), Spice copies the current wallpaper into a local folder on your machine.
-- Spice stores up to **200 favorites** (FIFO — the oldest is pruned when the limit is reached).
-- Favorites are stored as independent image files. They persist even if the original collection is deleted or disabled.
-- Favorites has its own **Active** toggle in **Local → Favorites → Wallpaper Sources**. When active, Spice will include your favorite images in the rotation alongside online sources.
-
-### Removing a Favorite
-
-- **Unfavoriting from the tray menu:** If the currently displayed wallpaper is a favorite image, the "Add to Favorites" item toggles to remove it. The image is deleted from disk immediately.
-- **Clear All Favorites:** In **Local → Favorites**, a **Clear All Favorites** button wipes the entire collection. This cannot be undone.
-- **Open Favorites Folder:** Lets you browse and manage the raw files in your system's file manager.
-
-> Favorites images are stored in your system temp directory under `spice/favorite_images/`. You can back up this folder to preserve your collection.
+#### Local Folders
+Want to use your own photography or personal collection?
+1. Open **Preferences → Wallpaper → Local**.
+2. Click **Add Folder** to select a directory on your computer.
+3. Spice will recursively search for high-resolution images (`.jpg`, `.png`, `.webp`) and add them to your rotation.
 
 ---
 
@@ -246,44 +288,26 @@ With the **Stagger monitor changes** option enabled (recommended for 2+ displays
 
 ---
 
-## Browser Extension
+## Browser Extensions
+ 
+The Spice Browser Extension is the ultimate companion for discovery. It bridges the gap between your web browser and your desktop, allowing you to sync new collections with zero configuration.
 
-The Spice browser extension brings wallpaper discovery directly into your web browser, allowing you to sync images to your desktop without ever leaving the page. It is available for **Chrome**, **Firefox**, and **Safari**.
+### Why it's cool:
+- **LiveSync Discovery**: The extension is "alive." As you browse supported sites like Wallhaven or Pexels, it silently scans the page for compatible search and collection URLs.
+- **The Pulsing Signal**: When a valid source is found, the Spice icon in your toolbar will **pulse green**. This is your immediate visual signal that a "Masterpiece Collection" has been detected.
+- **One-Click Synchronization**: Clicking the extension opens a small popup where you can instantly add the discovered URL as a new Spice query. No copying, pasting, or manual setup required.
+- **Zero Privacy Sacrifice**: The extension communicates with Spice over a secure local WebSocket (`localhost`). Your browsing habits and selected images are never sent to a cloud server.
 
 ### Installation
-
-| Browser | How to Install |
-| :--- | :--- |
-| **Chrome** | Install from the [Chrome Web Store](https://chromewebstore.google.com) — search for *Spice Wallpaper* |
-| **Firefox** | Install from [Firefox Add-ons (AMO)](https://addons.mozilla.org) — search for *Spice Wallpaper* |
-| **Safari** | Open the Spice DMG and drag **both** the Spice app and the Spice Safari Extension into your **Applications** folder. Then enable it in **Safari → Settings → Extensions**. |
-
-> **Pro Tip:** After installation, **pin the extension** to your browser toolbar so you can always see the status icon.
-
-### How to Use the Extension
-
-The extension acts as an intelligent "remote control" for the Spice app on your computer.
-
-1.  **Automatic Detection:** As you browse supported sites (like *Wallhaven* or *Google Photos*), the extension automatically scans for high-resolution images.
-2.  **The Pulsing Icon:** When a compatible image is found, the Spice icon in your toolbar will **pulse green**. This is your signal that the image can be synced.
-3.  **One-Click Sync:** Simply click the pulsing icon. Spice will instantly download the image and set it as your wallpaper across all displays.
-4.  **Instant Execution:** Thanks to **LiveSync Technology**, the communication between your browser and the desktop app is instantaneous. Your desktop updates the second you click.
+Spice is available for all major desktop browsers:
+- **Chrome / Edge / Brave**: Install from the [Chrome Web Store](https://chromewebstore.google.com).
+- **Firefox**: Install from [Firefox AMO](https://addons.mozilla.org).
+- **Safari**: Included with the Spice macOS app. Activate it in **Safari → Settings → Extensions**.
 
 ### Supported Sites
+The extension is pre-tuned for high-resolution discovery on:
+- **Wallhaven**: Search results, top lists, and personal favorites.
+- **Pexels**: Curated collections and modern photography searches.
+- **Wikimedia Commons**: Specific categories and MediaSearch topics.
 
-The extension works out of the box with the following premier sources:
-- **Wallhaven**
-- **Pexels**
-- **Wikimedia Commons**
-- **Google Photos** (when viewing albums)
-
-### Requirements & Privacy
-
-- **Spice must be running:** The extension requires the Spice desktop application to be open and active in the system tray/menu bar.
-- **Local Connection:** All communication happens over a secure local WebSocket (`localhost`). Your browsing data and selected wallpapers never leave your system and are never sent to a cloud server.
-- **Always Responsive:** The extension includes a "Keep-Alive" system to ensure it stays ready even if your browser snoozes background tabs.
-
-
----
-
-*That's everything you need to get the most out of Spice. If you run into issues or have questions, visit the [GitHub repository](https://github.com/dixieflatline76/Spice).*
+> **Pro Tip:** Keep Spice running in your system tray! The extension needs the desktop app to be open to receive its synchronization signals.

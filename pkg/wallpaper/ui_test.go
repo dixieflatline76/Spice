@@ -13,18 +13,25 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
+type managedMockWidget struct {
+	widget    fyne.Disableable
+	enabledIf func() bool
+}
+
 // MockSettingsManager implements setting.SettingsManager for testing
 type MockSettingsManager struct {
 	mock.Mock
 	// We store the created widgets to inspect them
-	selectWidgets map[string]*setting.SelectConfig
-	checkWidgets  map[string]*widget.Check
+	selectWidgets  map[string]*setting.SelectConfig
+	checkWidgets   map[string]*widget.Check
+	managedWidgets []managedMockWidget
 }
 
 func NewMockSettingsManager() *MockSettingsManager {
 	return &MockSettingsManager{
-		selectWidgets: make(map[string]*setting.SelectConfig),
-		checkWidgets:  make(map[string]*widget.Check),
+		selectWidgets:  make(map[string]*setting.SelectConfig),
+		checkWidgets:   make(map[string]*widget.Check),
+		managedWidgets: make([]managedMockWidget, 0),
 	}
 }
 
@@ -42,6 +49,15 @@ func (m *MockSettingsManager) CreateSettingDescriptionLabel(desc string) fyne.Ca
 
 func (m *MockSettingsManager) CreateSelectSetting(cfg *setting.SelectConfig, header *fyne.Container) {
 	m.selectWidgets[cfg.Name] = cfg
+	// We don't have a real select widget in the mock yet, but let's track the EnabledIf
+	if cfg.EnabledIf != nil {
+		// Mock select widget just to have something to Disable/Enable
+		w := widget.NewSelect(cfg.Options, nil)
+		m.managedWidgets = append(m.managedWidgets, managedMockWidget{
+			widget:    w,
+			enabledIf: cfg.EnabledIf,
+		})
+	}
 }
 
 func (m *MockSettingsManager) CreateBoolSetting(cfg *setting.BoolConfig, header *fyne.Container) *widget.Check {
@@ -51,11 +67,26 @@ func (m *MockSettingsManager) CreateBoolSetting(cfg *setting.BoolConfig, header 
 
 	// We need to store the check widget associated with the config name to retrieve it later
 	m.checkWidgets[cfg.Name] = check
+
+	if cfg.EnabledIf != nil {
+		m.managedWidgets = append(m.managedWidgets, managedMockWidget{
+			widget:    check,
+			enabledIf: cfg.EnabledIf,
+		})
+	}
 	return check
 }
 
-func (m *MockSettingsManager) CreateTextEntrySetting(cfg *setting.TextEntrySettingConfig, header *fyne.Container) {
-	// No-op for regression test
+func (m *MockSettingsManager) CreateTextEntrySetting(cfg *setting.TextEntrySettingConfig, header *fyne.Container) *widget.Entry {
+	// Return a stub entry for tests
+	entry := widget.NewEntry()
+	if cfg.EnabledIf != nil {
+		m.managedWidgets = append(m.managedWidgets, managedMockWidget{
+			widget:    entry,
+			enabledIf: cfg.EnabledIf,
+		})
+	}
+	return entry
 }
 
 func (m *MockSettingsManager) CreateButtonWithConfirmationSetting(cfg *setting.ButtonWithConfirmationConfig, header *fyne.Container) {
@@ -98,7 +129,56 @@ func (m *MockSettingsManager) GetCheckAndEnableApplyFunc() func() {
 	return func() {}
 }
 
-func (m *MockSettingsManager) RebuildTrayMenu() {}
+func (m *MockSettingsManager) RebuildTrayMenu() {
+	// No-op
+}
+
+func (m *MockSettingsManager) SeedBaseline(name string, val interface{}) {
+	// No-op
+}
+
+func (m *MockSettingsManager) GetBaseline(name string) interface{} {
+	return nil
+}
+
+func (m *MockSettingsManager) GetValue(name string) interface{} {
+	// Attempt to return current value from select/check widgets if they exist
+	if cfg, ok := m.selectWidgets[name]; ok {
+		return cfg.InitialValue // Mock current as initial for simplicity in tests unless we track more
+	}
+	if check, ok := m.checkWidgets[name]; ok {
+		return check.Checked
+	}
+	return nil
+}
+
+func (m *MockSettingsManager) SetValue(name string, val interface{}) {
+	if cfg, ok := m.selectWidgets[name]; ok {
+		cfg.InitialValue = val
+		m.refreshWidgetStates()
+		return
+	}
+	if check, ok := m.checkWidgets[name]; ok {
+		if b, ok := val.(bool); ok {
+			check.SetChecked(b)
+			m.refreshWidgetStates()
+		}
+	}
+}
+
+func (m *MockSettingsManager) Refresh() {
+	// No-op for mock
+}
+
+func (m *MockSettingsManager) refreshWidgetStates() {
+	for _, mw := range m.managedWidgets {
+		if mw.enabledIf() {
+			mw.widget.Enable()
+		} else {
+			mw.widget.Disable()
+		}
+	}
+}
 
 func TestSmartFitEnablesFaceOptions(t *testing.T) {
 	// Initialize Fyne test app
@@ -116,17 +196,10 @@ func TestSmartFitEnablesFaceOptions(t *testing.T) {
 
 	// Create Plugin and Mock Manager
 	wp := &Plugin{cfg: cfg}
-	// We mock the manager enough to pass CreatePrefsPanel
-	// We don't need full Plugin initialization for this UI logic test
-
 	sm := NewMockSettingsManager()
 
 	// Execute: Create Panel (this builds the UI and wires the logic)
 	wp.CreatePrefsPanel(sm)
-
-	// Verify Select Widget exists
-	smartFit := sm.selectWidgets["smartFitMode"]
-	assert.NotNil(t, smartFit, "Smart Fit Mode Select should be created")
 
 	// Verify Check Widgets exist
 	faceCrop := sm.checkWidgets["faceCrop"]
@@ -134,26 +207,22 @@ func TestSmartFitEnablesFaceOptions(t *testing.T) {
 	assert.NotNil(t, faceCrop, "Face Crop Check should be created")
 	assert.NotNil(t, faceBoost, "Face Boost Check should be created")
 
+	// Trigger initial state evaluation (in real SM this happens on create)
+	sm.refreshWidgetStates()
+
 	// Initial State: Should be Disabled
 	assert.True(t, faceCrop.Disabled(), "Face Crop should be disabled initially (SmartFitOff)")
 	assert.True(t, faceBoost.Disabled(), "Face Boost should be disabled initially (SmartFitOff)")
 
-	// Action: Change Smart Fit to Quality (Normal)
-	// We simulate the UI event "OnChanged", not "ApplyFunc" (which is deferred)
-	if smartFit.OnChanged != nil {
-		smartFit.OnChanged("Quality", int(SmartFitNormal))
-	} else {
-		t.Fatal("OnChanged handler not assigned for Smart Fit Mode")
-	}
+	// Action: Change Smart Fit to Quality (Normal) via SetValue (simulates UI change)
+	sm.SetValue("smartFitMode", int(SmartFitNormal))
 
 	// Assertions: Should be Enabled
 	assert.False(t, faceCrop.Disabled(), "Face Crop should be enabled after switching to Quality")
 	assert.False(t, faceBoost.Disabled(), "Face Boost should be enabled after switching to Quality")
 
 	// Action: Change back to Disabled
-	if smartFit.OnChanged != nil {
-		smartFit.OnChanged("Disabled", int(SmartFitOff))
-	}
+	sm.SetValue("smartFitMode", int(SmartFitOff))
 
 	// Assertions: Should be Disabled again
 	assert.True(t, faceCrop.Disabled(), "Face Crop should be disabled after switching to Disabled")

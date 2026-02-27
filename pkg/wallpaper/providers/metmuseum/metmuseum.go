@@ -541,18 +541,12 @@ func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl strin
 	for _, col := range collections {
 		col := col // capture
 		active, _ := getDetails(col.Key)
+		dirtyKey := fmt.Sprintf("met_%s", col.Key)
+		callbackKey := fmt.Sprintf("met_cb_%s", col.Key)
 
+		sm.SeedBaseline(dirtyKey, active)
 		chk := widget.NewCheck(col.Name, func(on bool) {
-			// Defer Save Logic (Standard Pattern)
-			// We verify against initial 'active' state captured at closure creation.
-			// This works because "Apply" triggers callbacks to commit changes.
-
-			isActive, _ := getDetails(col.Key)
-
-			dirtyKey := fmt.Sprintf("met_%s", col.Key)
-			callbackKey := fmt.Sprintf("met_cb_%s", col.Key)
-
-			if on != isActive {
+			if on != sm.GetBaseline(dirtyKey).(bool) {
 				sm.SetSettingChangedCallback(callbackKey, func() {
 					// Actual Save Logic (Deferred)
 					// Fetch fresh ID from config to ensure we target correctly
@@ -579,12 +573,10 @@ func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl strin
 				})
 				// Enable Apply Button
 				sm.SetRefreshFlag(dirtyKey)
-
 			} else {
 				// Reverted to original state
 				sm.RemoveSettingChangedCallback(callbackKey)
 				sm.UnsetRefreshFlag(dirtyKey)
-				// We don't unset "queries" (global), but without callback, no change occurs.
 			}
 			sm.GetCheckAndEnableApplyFunc()()
 		})

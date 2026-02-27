@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/dixieflatline76/Spice/v2/pkg/wallpaper/providers/pexels"
-	"github.com/dixieflatline76/Spice/v2/pkg/wallpaper/providers/unsplash"
 	"github.com/dixieflatline76/Spice/v2/pkg/wallpaper/providers/wallhaven"
 )
 
@@ -36,28 +35,6 @@ func TestValidationRegexes(t *testing.T) {
 				"http://wallhaven.cc/search",   // No HTTPS
 				"https://wallhaven.com/search", // Wrong domain
 				"random string",
-			},
-			shouldMatch: false,
-		},
-
-		// --- Unsplash URLs ---
-
-		{
-			name:     "Unsplash URL - Valid Collections",
-			regexStr: unsplash.UnsplashURLRegexp,
-			inputs: []string{
-				"https://unsplash.com/s/photos/nature",
-				"https://www.unsplash.com/s/photos/nature",
-			},
-			shouldMatch: true,
-		},
-		{
-			name:     "Unsplash URL - Invalid Single Photo",
-			regexStr: unsplash.UnsplashURLRegexp,
-			inputs: []string{
-				"https://unsplash.com/photos/xyz-123",
-				"https://unsplash.com/invalid",
-				"http://unsplash.com/s/photos/nature",
 			},
 			shouldMatch: false,
 		},

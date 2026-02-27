@@ -2,15 +2,7 @@
 
 This document tracks planned architectural refactors and feature enhancements to improve systemic stability and user experience.
 
-## 1. UI Framework: Clean State Registry (Closure Trap Prevention)
-**Problem**: The `SettingsManager` currently relies on static `InitialValue` benchmarks captured at window creation. If a user toggles a setting and clicks "Apply", the benchmark becomes stale. Subsequent toggles are incorrectly treated as "reverts" to the original (stale) state, preventing further saves in the same window session.
-
-**Refactor Plan**:
-- **Internal Registry**: Modify `SettingsManager` (in `ui/settings_manager.go`) to maintain a `map[string]interface{}` of baseline values.
-- **Automatic Hydration**: In `CreateBoolSetting`, `CreateSelectSetting`, and `CreateTextEntrySetting`, automatically seed the registry with the `InitialValue`.
-- **Live Comparison**: Update `OnChanged` handlers to compare the current widget state against the registry's baseline instead of the ephemeral `Config` struct.
-- **The "Commit" Phase**: In the `Apply` button callback, after successfully executing all queued `ApplyFunc` closures, iterate through the dirty settings and update the baseline registry to match the new "True" state.
-- **Benefit**: Completely eliminates the "Closure Trap" and removes the need for manual state management in the `ui.go` setup logic.
+## 1. UI Framework: Clean State Registry - [x] **Registry Pattern Implementation**: Successfully implemented in v2.5 to eliminate the "Closure Trap". The `SettingsManager` now maintains a baseline registry and uses a gift-like commit model for atomic saves.
 
 ## 2. Hotkey Engine: Targeted Shortcut Modifier Customization
 **Problem**: The default `Alt + Arrow` chord for targeted navigation (Display Specific) conflicts with browser "Back/Forward" history. While dynamic unregistration allows users to disable them to resolve conflicts, power users may want to keep the feature but move the conflict.

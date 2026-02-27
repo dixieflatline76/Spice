@@ -26,16 +26,16 @@ import (
 // Config struct to hold all configuration data
 type Config struct {
 	fyne.Preferences
-	WallhavenAPIKey string          `json:"wallhaven_api_key"`
-	Queries         []ImageQuery    `json:"queries"`          // Unified list of image queries
-	ImageQueries    []ImageQuery    `json:"query_urls"`       // Legacy: List of image queries (Wallhaven)
-	UnsplashQueries []ImageQuery    `json:"unsplash_queries"` // Legacy: List of Unsplash image queries
-	PexelsQueries   []ImageQuery    `json:"pexels_queries"`   // Legacy: List of Pexels image queries
-	assetMgr        *asset.Manager  // Asset manager
-	AvoidSet        map[string]bool `json:"avoid_set"` // Set of image URLs to avoid
-	avoidMap        sync.Map        // Thread-safe map for InAvoidSet checks
-	userid          string
-	mu              sync.RWMutex // Mutex for thread-safe access
+	WallhavenAPIKey   string          `json:"wallhaven_api_key"`
+	Queries           []ImageQuery    `json:"queries"`            // Unified list of image queries
+	ImageQueries      []ImageQuery    `json:"query_urls"`         // Legacy: List of image queries (Wallhaven)
+	PexelsQueries     []ImageQuery    `json:"pexels_queries"`     // Legacy: List of Pexels image queries
+	WallhavenUsername string          `json:"wallhaven_username"` // Wallhaven username for sync
+	assetMgr          *asset.Manager  // Asset manager
+	AvoidSet          map[string]bool `json:"avoid_set"` // Set of image URLs to avoid
+	avoidMap          sync.Map        // Thread-safe map for InAvoidSet checks
+	userid            string
+	mu                sync.RWMutex // Mutex for thread-safe access
 	// Advanced
 	LogLevel                string       `json:"logLevel"`
 	MaxConcurrentProcessors int          `json:"maxConcurrentProcessors"`
@@ -46,6 +46,7 @@ type Config struct {
 	QueryDisabledCallback    func(queryID string) `json:"-"`
 	FavoritesClearedCallback func()               `json:"-"`
 	ShortcutsDisabled        bool                 `json:"shortcuts_disabled"`
+	WallhavenSyncEnabled     bool                 `json:"wallhaven_sync_enabled"`
 }
 
 // ImageQuery struct to hold the URL of an image and whether it is active
@@ -55,6 +56,7 @@ type ImageQuery struct {
 	URL         string `json:"url"`
 	Active      bool   `json:"active"`
 	Provider    string `json:"provider"` // Provider name (e.g., "Wallhaven", "Unsplash", "Pexels")
+	Managed     bool   `json:"managed"`  // Whether this query is managed by sync
 }
 
 var (
@@ -115,15 +117,14 @@ func GetConfig(p fyne.Preferences) *Config {
 			log.Fatalf("failed to initialize %s: %s", config.AppName, e)
 		}
 		cfgInstance = &Config{
-			Preferences:     p,
-			Queries:         make([]ImageQuery, 0),
-			ImageQueries:    make([]ImageQuery, 0),
-			UnsplashQueries: make([]ImageQuery, 0),
-			PexelsQueries:   make([]ImageQuery, 0), // Initialize PexelsQueries
-			assetMgr:        asset.NewManager(),
-			AvoidSet:        make(map[string]bool),
-			userid:          u.Uid,
-			Tuning:          DefaultTuningConfig(),
+			Preferences:   p,
+			Queries:       make([]ImageQuery, 0),
+			ImageQueries:  make([]ImageQuery, 0),
+			PexelsQueries: make([]ImageQuery, 0), // Initialize PexelsQueries
+			assetMgr:      asset.NewManager(),
+			AvoidSet:      make(map[string]bool),
+			userid:        u.Uid,
+			Tuning:        DefaultTuningConfig(),
 		}
 		// Load config from file
 		if err := cfgInstance.loadFromPrefs(); err != nil {
@@ -208,11 +209,6 @@ func (c *Config) AddImageQuery(desc, url string, active bool) (string, error) {
 	return c.AddProviderQuery(desc, url, "Wallhaven", active)
 }
 
-// AddUnsplashQuery adds a new Unsplash query.
-func (c *Config) AddUnsplashQuery(description, url string, active bool) (string, error) {
-	return c.AddProviderQuery(description, url, "Unsplash", active)
-}
-
 // AddPexelsQuery adds a new Pexels query.
 func (c *Config) AddPexelsQuery(description, url string, active bool) (string, error) {
 	return c.AddProviderQuery(description, url, "Pexels", active)
@@ -261,7 +257,51 @@ func (c *Config) GetQuery(id string) (ImageQuery, bool) {
 	return c.Queries[idx], true
 }
 
-// RemoveImageQuery removes the image query with the specified ID
+// SyncManagedQueries reconciles managed queries for a specific provider.
+func (c *Config) SyncManagedQueries(provider string, remoteQueries []ImageQuery) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	log.Printf("[DEBUG] SyncManagedQueries starting for provider: %s. Remote count: %d", provider, len(remoteQueries))
+
+	remoteMap := make(map[string]ImageQuery)
+	for _, q := range remoteQueries {
+		remoteMap[q.ID] = q
+	}
+
+	newQueries := make([]ImageQuery, 0, len(c.Queries))
+	foundRemoteIDs := make(map[string]bool)
+
+	// Update existing managed queries or keep non-managed ones
+	for _, q := range c.Queries {
+		if q.Provider == provider && q.Managed {
+			if remoteQ, found := remoteMap[q.ID]; found {
+				// Keep existing activation state, but update metadata if needed
+				q.Description = remoteQ.Description
+				newQueries = append(newQueries, q)
+				foundRemoteIDs[q.ID] = true
+				log.Debugf("[DEBUG] SyncManagedQueries: Keeping existing managed query: %s", q.ID)
+			} else {
+				log.Debugf("[DEBUG] SyncManagedQueries: Removing managed query no longer on remote: %s", q.ID)
+			}
+		} else {
+			newQueries = append(newQueries, q)
+		}
+	}
+
+	// Add new managed queries
+	for _, remoteQ := range remoteQueries {
+		if !foundRemoteIDs[remoteQ.ID] {
+			log.Debugf("[DEBUG] SyncManagedQueries: Adding new managed query: %s (%s)", remoteQ.ID, remoteQ.Description)
+			newQueries = append(newQueries, remoteQ)
+		}
+	}
+
+	c.Queries = newQueries
+	log.Printf("[DEBUG] SyncManagedQueries finished. Total Queries now: %d", len(c.Queries))
+	c.save()
+}
+
 func (c *Config) RemoveImageQuery(id string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -830,19 +870,6 @@ func (c *Config) GetImageQueries() []ImageQuery {
 	return queries
 }
 
-// GetUnsplashQueries returns a copy of the Unsplash queries in a thread-safe manner.
-func (c *Config) GetUnsplashQueries() []ImageQuery {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	var queries []ImageQuery
-	for _, q := range c.Queries {
-		if q.Provider == "Unsplash" {
-			queries = append(queries, q)
-		}
-	}
-	return queries
-}
-
 // GetPexelsQueries returns a copy of the Pexels queries in a thread-safe manner.
 func (c *Config) GetPexelsQueries() []ImageQuery {
 	c.mu.RLock()
@@ -950,4 +977,36 @@ func (c *Config) GetArtInstituteChicagoQueries() []ImageQuery {
 		}
 	}
 	return queries
+}
+
+// SetWallhavenSyncEnabled sets whether Wallhaven sync is enabled.
+func (c *Config) SetWallhavenSyncEnabled(enabled bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	log.Printf("[DEBUG] Config: Setting WallhavenSyncEnabled to: %v", enabled)
+	c.WallhavenSyncEnabled = enabled
+	c.save()
+}
+
+// GetWallhavenSyncEnabled returns whether Wallhaven sync is enabled.
+func (c *Config) GetWallhavenSyncEnabled() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.WallhavenSyncEnabled
+}
+
+// SetWallhavenUsername sets the Wallhaven username for sync.
+func (c *Config) SetWallhavenUsername(username string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	log.Printf("[DEBUG] Config: Setting WallhavenUsername to: '%s'", username)
+	c.WallhavenUsername = username
+	c.save()
+}
+
+// GetWallhavenUsername returns the Wallhaven username for sync.
+func (c *Config) GetWallhavenUsername() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.WallhavenUsername
 }

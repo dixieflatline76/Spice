@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/dialog"
@@ -14,10 +15,19 @@ type SettingsManager struct {
 	chgPrefsCallbacks   map[string]func()
 	refreshFlags        map[string]bool
 	refreshFuncs        []func()
+	registry            map[string]interface{}
+	valueGetters        map[string]func() interface{}
 	checkAndEnableApply func()
 	applyButton         *widget.Button
 	prefsWindow         fyne.Window
 	onSettingsSaved     []func()
+	managedWidgets      []managedWidget // Track widgets with EnabledIf conditions
+	widgets             map[string]fyne.CanvasObject
+}
+
+type managedWidget struct {
+	widget    fyne.Disableable
+	enabledIf func() bool
 }
 
 // NewSettingsManager creates a new SettingsManager.
@@ -30,13 +40,20 @@ func NewSettingsManager(window fyne.Window) setting.SettingsManager {
 		chgPrefsCallbacks:   cpcs,
 		refreshFlags:        rns,
 		refreshFuncs:        rfs,
+		registry:            make(map[string]interface{}),
+		valueGetters:        make(map[string]func() interface{}),
 		checkAndEnableApply: nil,
 		applyButton:         nil,
 		prefsWindow:         window,
+		managedWidgets:      make([]managedWidget, 0),
+		widgets:             make(map[string]fyne.CanvasObject),
 	}
 
 	sm.applyButton = createApplyButton(sm)
 	sm.checkAndEnableApply = func() {
+		// Evaluate UI dependencies first
+		sm.refreshWidgetStates()
+
 		if len(sm.refreshFlags) > 0 || len(sm.chgPrefsCallbacks) > 0 {
 			sm.applyButton.Enable() // Enable if changes or refresh needed
 		} else {
@@ -46,6 +63,63 @@ func NewSettingsManager(window fyne.Window) setting.SettingsManager {
 	}
 
 	return sm
+}
+
+// SeedBaseline seeds the initial state for a setting to track changes.
+func (sm *SettingsManager) SeedBaseline(name string, val interface{}) {
+	sm.registry[name] = val
+}
+
+// refreshWidgetStates evaluates all EnabledIf conditions and updates widget states.
+func (sm *SettingsManager) refreshWidgetStates() {
+	for _, mw := range sm.managedWidgets {
+		if mw.enabledIf != nil {
+			if mw.enabledIf() {
+				mw.widget.Enable()
+			} else {
+				mw.widget.Disable()
+			}
+		}
+	}
+}
+
+// GetValue returns the live/current value for a setting from its valueGetter.
+func (sm *SettingsManager) GetValue(name string) interface{} {
+	val, ok := sm.valueGetters[name]
+	if !ok || val == nil {
+		return nil
+	}
+	return val()
+}
+
+// SetValue programmatically updates the live value of a setting.
+func (sm *SettingsManager) SetValue(name string, val interface{}) {
+	w, ok := sm.widgets[name]
+	if !ok {
+		return
+	}
+
+	switch v := w.(type) {
+	case *widget.Check:
+		if b, ok := val.(bool); ok {
+			v.SetChecked(b)
+		}
+	case *widget.Entry:
+		if s, ok := val.(string); ok {
+			v.SetText(s)
+		}
+	case *widget.Select:
+		if i, ok := val.(int); ok {
+			v.SetSelectedIndex(i)
+		}
+	}
+
+	sm.refreshWidgetStates()
+}
+
+// GetBaseline returns the initial state for a setting.
+func (sm *SettingsManager) GetBaseline(name string) interface{} {
+	return sm.registry[name]
 }
 
 // CreateApplyButton is a helper function that creates and sets up the Apply Changes button.
@@ -75,8 +149,12 @@ func createApplyButton(sm *SettingsManager) *widget.Button {
 			}()
 
 			if len(sm.chgPrefsCallbacks) > 0 {
-				for _, callback := range sm.chgPrefsCallbacks {
+				for name, callback := range sm.chgPrefsCallbacks {
 					callback()
+					// Update registry baseline so subsequent changes are compared to NEW state
+					if getter, ok := sm.valueGetters[name]; ok {
+						sm.registry[name] = getter()
+					}
 				}
 				sm.chgPrefsCallbacks = make(map[string]func())
 			}
@@ -102,6 +180,10 @@ func (sm *SettingsManager) GetApplySettingsButton() *widget.Button {
 func (sm *SettingsManager) CreateSelectSetting(cfg *setting.SelectConfig, header *fyne.Container) {
 	selectWidget := widget.NewSelect(cfg.Options, func(selected string) {})
 	selectWidget.SetSelectedIndex(cfg.InitialValue.(int))
+	sm.registry[cfg.Name] = cfg.InitialValue.(int)
+	sm.valueGetters[cfg.Name] = func() interface{} {
+		return selectWidget.SelectedIndex()
+	}
 
 	header.Add(NewSplitRow(cfg.Label, selectWidget, SplitProportion.OneThird))
 	if cfg.HelpContent != nil {
@@ -109,85 +191,152 @@ func (sm *SettingsManager) CreateSelectSetting(cfg *setting.SelectConfig, header
 	}
 
 	selectWidget.OnChanged = func(s string) {
-		selectedIndex := selectWidget.SelectedIndex()
-		if selectedIndex != cfg.InitialValue.(int) {
-			sm.SetSettingChangedCallback(cfg.Name, func() {
-				cfg.ApplyFunc(selectedIndex)
-				cfg.InitialValue = selectedIndex
-			})
-			if cfg.NeedsRefresh {
-				sm.SetRefreshFlag(cfg.Name)
-			}
-		} else {
-			sm.RemoveSettingChangedCallback(cfg.Name)
-			if cfg.NeedsRefresh {
-				sm.UnsetRefreshFlag(cfg.Name)
+		options := cfg.Options
+		selectedIndex := -1
+		for i, opt := range options {
+			if opt == s { // Assuming cfg.Options are strings
+				selectedIndex = i
+				break
 			}
 		}
+
+		if selectedIndex != sm.registry[cfg.Name].(int) {
+			sm.chgPrefsCallbacks[cfg.Name] = func() {
+				cfg.ApplyFunc(selectedIndex)
+				if cfg.NeedsRefresh {
+					sm.refreshFlags[cfg.Name] = true
+				}
+			}
+		} else {
+			delete(sm.chgPrefsCallbacks, cfg.Name)
+		}
+
 		if cfg.OnChanged != nil {
 			cfg.OnChanged(s, selectedIndex)
 		}
-		sm.GetCheckAndEnableApplyFunc()()
+
+		sm.checkAndEnableApply()
 	}
+
+	// Register value getter for dependency tracking
+	sm.valueGetters[cfg.Name] = func() interface{} {
+		s := selectWidget.Selected
+		options := cfg.Options
+		for i, opt := range options {
+			if opt == s { // Assuming cfg.Options are strings
+				return i
+			}
+		}
+		return -1
+	}
+
+	// Track if it has an EnabledIf condition
+	if cfg.EnabledIf != nil {
+		sm.managedWidgets = append(sm.managedWidgets, managedWidget{
+			widget:    selectWidget,
+			enabledIf: cfg.EnabledIf,
+		})
+	}
+
+	sm.widgets[cfg.Name] = selectWidget
 }
 
 // CreateBoolSetting creates a reusable boolean check setting.
 func (sm *SettingsManager) CreateBoolSetting(cfg *setting.BoolConfig, header *fyne.Container) *widget.Check {
-	check := widget.NewCheck("", func(b bool) {}) // Use empty string, label is CanvasObject
+	check := widget.NewCheck("", nil) // Use empty string, label is CanvasObject
 	check.SetChecked(cfg.InitialValue)
+	sm.registry[cfg.Name] = cfg.InitialValue
 
-	header.Add(NewSplitRow(cfg.Label, check, SplitProportion.OneThird))
+	label := cfg.Label
+	if label == nil {
+		label = widget.NewLabel("")
+	}
+
+	header.Add(NewSplitRow(label, check, SplitProportion.OneThird))
 	if cfg.HelpContent != nil {
 		header.Add(cfg.HelpContent)
 	}
 
 	check.OnChanged = func(b bool) {
-		if b != cfg.InitialValue {
-			sm.SetSettingChangedCallback(cfg.Name, func() {
+		if b != sm.registry[cfg.Name].(bool) {
+			sm.chgPrefsCallbacks[cfg.Name] = func() {
 				cfg.ApplyFunc(b)
-				cfg.InitialValue = b
-			})
-			if cfg.NeedsRefresh {
-				sm.SetRefreshFlag(cfg.Name)
+				if cfg.NeedsRefresh {
+					sm.refreshFlags[cfg.Name] = true
+				}
 			}
 		} else {
-			sm.RemoveSettingChangedCallback(cfg.Name)
-			if cfg.NeedsRefresh {
-				sm.UnsetRefreshFlag(cfg.Name)
-			}
+			delete(sm.chgPrefsCallbacks, cfg.Name)
 		}
+
 		if cfg.OnChanged != nil {
 			cfg.OnChanged(b)
 		}
-		sm.GetCheckAndEnableApplyFunc()()
+
+		sm.checkAndEnableApply()
 	}
+
+	// Register value getter for dependency tracking
+	sm.valueGetters[cfg.Name] = func() interface{} {
+		return check.Checked
+	}
+
+	// Track if it has an EnabledIf condition
+	if cfg.EnabledIf != nil {
+		sm.managedWidgets = append(sm.managedWidgets, managedWidget{
+			widget:    check,
+			enabledIf: cfg.EnabledIf,
+		})
+	}
+
+	sm.widgets[cfg.Name] = check
 	return check
 }
 
 // CreateTextEntrySetting creates a reusable text entry setting.
-func (sm *SettingsManager) CreateTextEntrySetting(cfg *setting.TextEntrySettingConfig, header *fyne.Container) {
+func (sm *SettingsManager) CreateTextEntrySetting(cfg *setting.TextEntrySettingConfig, header *fyne.Container) *widget.Entry {
 	entry := widget.NewEntry()
 	entry.SetPlaceHolder(cfg.PlaceHolder)
 	entry.SetText(cfg.InitialValue)
+	sm.registry[cfg.Name] = cfg.InitialValue
+	sm.valueGetters[cfg.Name] = func() interface{} {
+		return entry.Text
+	}
+	sm.widgets[cfg.Name] = entry
+
+	if cfg.IsPassword {
+		entry.Password = true
+	}
 
 	if cfg.Validator != nil {
 		entry.Validator = cfg.Validator
 	}
 
+	label := cfg.Label
+	if label == nil {
+		label = widget.NewLabel("")
+	}
+
 	statusLabel := widget.NewLabel("")
 
-	header.Add(NewSplitRow(cfg.Label, entry, SplitProportion.OneThird))
+	header.Add(NewSplitRow(label, entry, SplitProportion.OneThird))
 	if cfg.HelpContent != nil {
 		header.Add(NewSplitRowWithAlignment(cfg.HelpContent, statusLabel, SplitProportion.TwoThirds, SplitAlign.Opposed))
 	} else {
 		header.Add(NewSplitRow(widget.NewLabel(""), statusLabel, SplitProportion.TwoThirds))
 	}
 
+	var debounceTimer *time.Timer
 	entry.OnChanged = func(s string) {
+		if debounceTimer != nil {
+			debounceTimer.Stop()
+		}
+
 		var entryErr error
 		if cfg.Validator != nil {
 			entryErr = entry.Validate()
 		}
+
 		if entryErr != nil {
 			statusLabel.SetText(entryErr.Error())
 			statusLabel.Importance = widget.DangerImportance
@@ -195,42 +344,91 @@ func (sm *SettingsManager) CreateTextEntrySetting(cfg *setting.TextEntrySettingC
 			if cfg.NeedsRefresh {
 				sm.UnsetRefreshFlag(cfg.Name)
 			}
-		} else {
-			var postValidationCheckErr error
+			sm.GetCheckAndEnableApplyFunc()()
+			statusLabel.Refresh()
+			if cfg.OnChanged != nil {
+				cfg.OnChanged(s)
+			}
+			return
+		}
+
+		// Validation passed (or none), clear status and importance while waiting/running post-check
+		statusLabel.SetText("")
+		statusLabel.Importance = widget.LowImportance
+		statusLabel.Refresh()
+
+		runPostCheck := func(val string) {
+			var postErr error
 			if cfg.PostValidateCheck != nil {
-				postValidationCheckErr = cfg.PostValidateCheck(s) // Post validation check is provided, run it and handle errors.
+				postErr = cfg.PostValidateCheck(val)
 			}
 
-			if postValidationCheckErr != nil {
-				// Post validation check failed, handle the error.
-				statusLabel.SetText(postValidationCheckErr.Error())
-				statusLabel.Importance = widget.DangerImportance
-				sm.RemoveSettingChangedCallback(cfg.Name)
-				if cfg.NeedsRefresh {
-					sm.UnsetRefreshFlag(cfg.Name)
+			fyne.Do(func() {
+				// Ensure the value hasn't changed since we started this check
+				if entry.Text != val {
+					return
 				}
-			} else {
-				// Post validation check passed, update the status label and apply the function.
-				statusLabel.SetText(fmt.Sprintf("%s OK", cfg.Name))
-				statusLabel.Importance = widget.SuccessImportance
-				if s != cfg.InitialValue {
-					// Value has changed, set up the callback and refresh flag.
-					sm.SetSettingChangedCallback(cfg.Name, func() {
-						enteredTxt := entry.Text
-						if enteredTxt != cfg.InitialValue {
-							cfg.ApplyFunc(enteredTxt)     // Correctly use enteredTxt instead of s
-							cfg.InitialValue = enteredTxt // Update InitialValue with the new value
-						}
-					})
+
+				if postErr != nil {
+					statusLabel.SetText(postErr.Error())
+					statusLabel.Importance = widget.DangerImportance
+					sm.RemoveSettingChangedCallback(cfg.Name)
 					if cfg.NeedsRefresh {
-						sm.SetRefreshFlag(cfg.Name)
+						sm.UnsetRefreshFlag(cfg.Name)
+					}
+				} else {
+					if cfg.DisplayStatus && val != "" {
+						statusLabel.SetText(fmt.Sprintf("%s OK", cfg.Name))
+						statusLabel.Importance = widget.SuccessImportance
+					} else {
+						statusLabel.SetText("")
+						statusLabel.Importance = widget.LowImportance
+					}
+
+					if val != sm.registry[cfg.Name].(string) {
+						sm.SetSettingChangedCallback(cfg.Name, func() {
+							enteredTxt := entry.Text
+							if enteredTxt != sm.registry[cfg.Name].(string) {
+								cfg.ApplyFunc(enteredTxt)
+							}
+						})
+						if cfg.NeedsRefresh {
+							sm.SetRefreshFlag(cfg.Name)
+						}
+					} else {
+						sm.RemoveSettingChangedCallback(cfg.Name)
+						if cfg.NeedsRefresh {
+							sm.UnsetRefreshFlag(cfg.Name)
+						}
 					}
 				}
-			}
+				statusLabel.Refresh()
+				sm.GetCheckAndEnableApplyFunc()()
+			})
 		}
-		statusLabel.Refresh()             // Refresh the status label after processing all settings.
-		sm.GetCheckAndEnableApplyFunc()() // Check and enable the apply button if necessary.
+
+		if cfg.ValidationDebounce > 0 {
+			debounceTimer = time.AfterFunc(cfg.ValidationDebounce, func() {
+				runPostCheck(s)
+			})
+		} else {
+			runPostCheck(s)
+		}
+
+		if cfg.OnChanged != nil {
+			cfg.OnChanged(s)
+		}
 	}
+
+	// Track if it has an EnabledIf condition
+	if cfg.EnabledIf != nil {
+		sm.managedWidgets = append(sm.managedWidgets, managedWidget{
+			widget:    entry,
+			enabledIf: cfg.EnabledIf,
+		})
+	}
+
+	return entry
 }
 
 // CreateButtonWithConfirmationSetting creates a reusable button setting with confirmation dialog.
@@ -304,4 +502,20 @@ func (sm *SettingsManager) GetCheckAndEnableApplyFunc() func() {
 // RebuildTrayMenu rebuilds the tray menu list from scratch.
 func (sm *SettingsManager) RebuildTrayMenu() {
 	getInstance().RebuildTrayMenu()
+}
+
+// Refresh triggers all registered refresh functions immediately.
+func (sm *SettingsManager) Refresh() {
+	// 1. Evaluate all UI dependencies (EnabledIf)
+	sm.refreshWidgetStates()
+
+	// 2. Trigger registered manual refresh functions (e.g. table refreshes)
+	for _, rf := range sm.refreshFuncs {
+		rf()
+	}
+
+	// 3. Refresh all managed widget objects themselves
+	for _, w := range sm.widgets {
+		w.Refresh()
+	}
 }

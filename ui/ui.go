@@ -547,7 +547,7 @@ func (sa *SpiceApp) RebuildPreferencesContent(initialTab string) {
 			hotkey.StartListeners(GetPluginManager())
 		},
 	}
-	globalShortcutCheck := sm.CreateBoolSetting(&shortcutConfig, generalContainer)
+	sm.CreateBoolSetting(&shortcutConfig, generalContainer)
 
 	targetedInner := container.NewVBox()
 
@@ -560,8 +560,15 @@ func (sa *SpiceApp) RebuildPreferencesContent(initialTab string) {
 			wallpaper.GetInstance().SetTargetedShortcutsDisabled(!val)
 			hotkey.StartListeners(GetPluginManager())
 		},
+		EnabledIf: func() bool {
+			val := sm.GetValue("enableShortcuts")
+			if val == nil {
+				return true
+			}
+			return val.(bool)
+		},
 	}
-	targetedShortcutCheck := sm.CreateBoolSetting(&targetedShortcutConfig, targetedInner)
+	sm.CreateBoolSetting(&targetedShortcutConfig, targetedInner)
 
 	indentation := widget.NewLabel("      ")
 
@@ -574,22 +581,6 @@ func (sa *SpiceApp) RebuildPreferencesContent(initialTab string) {
 
 	indentedWrapper := container.NewBorder(nil, nil, indentation, nil, targetedAndLinkContainer)
 	generalContainer.Add(indentedWrapper)
-
-	oldGlobalOnChanged := globalShortcutCheck.OnChanged
-	globalShortcutCheck.OnChanged = func(val bool) {
-		if oldGlobalOnChanged != nil {
-			oldGlobalOnChanged(val)
-		}
-		if !val {
-			targetedShortcutCheck.SetChecked(false)
-			targetedShortcutCheck.Disable()
-		} else {
-			targetedShortcutCheck.Enable()
-		}
-	}
-	if !globalShortcutCheck.Checked {
-		targetedShortcutCheck.Disable()
-	}
 
 	// Theme Selection
 	themeOptions := []string{"System", "Dark", "Light"}
@@ -670,6 +661,7 @@ func (sa *SpiceApp) RebuildPreferencesContent(initialTab string) {
 	prefsWindowLayout := container.NewBorder(nil, container.NewVBox(sm.GetApplySettingsButton(), container.NewHBox(layout.NewSpacer(), closeButton)), nil, nil, tabs)
 
 	sa.prefsWindow.SetContent(prefsWindowLayout)
+	sm.GetCheckAndEnableApplyFunc()() // Trigger initial UI dependency refresh
 }
 
 // forcedVariantTheme is a theme that forces a specific variant (Dark or Light)

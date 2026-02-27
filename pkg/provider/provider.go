@@ -99,3 +99,8 @@ type HeaderProvider interface {
 type CustomClientProvider interface {
 	GetClient() *http.Client
 }
+
+// Syncer is an optional interface for providers that support automated synchronization of managed queries.
+type Syncer interface {
+	Sync(ctx context.Context) error
+}

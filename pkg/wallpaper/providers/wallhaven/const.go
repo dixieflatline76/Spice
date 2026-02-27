@@ -18,11 +18,13 @@ const (
 const (
 	WallhavenURLRegexp = `^https:\/\/wallhaven\.cc\/(?:latest|toplist|hot|random|search|api\/v1\/search|api\/v1\/collections\/[a-zA-Z0-9_]+\/[0-9]+|user\/[a-zA-Z0-9_]+\/favorites\/[0-9]+|favorites\/[0-9]+)(?:\?[a-zA-Z0-9_\-.~!$&'()*+,;=:@\/?%]*|)$` // WallhavenURLRegexp is the regular expression used to validate a wallhaven URL
 
-	WallhavenAPIKeyRegexp     = `^[a-zA-Z0-9]{32}$`                             // WallhavenAPIKeyRegexp is the regular expression used to validate a wallhaven API key
-	WallhavenDescRegexp       = `^[^\x00-\x1F\x7F]{5,150}$`                     // WallhavenDescRegexp is the regular expression used to validate an image query description
-	WallhavenTestAPIKeyURL    = "https://wallhaven.cc/api/v1/settings?apikey="  // WallhavenTestAPIKeyURL is the URL used to test a wallhaven API key
-	WallhavenAPISearchURL     = "https://wallhaven.cc/api/v1/search"            // WallhavenAPISearchURL is the URL used to search for images on wallhaven API
-	WallhavenAPICollectionURL = "https://wallhaven.cc/api/v1/collections/%s/%s" // WallhavenAPICollectionURL is the URL used to access a collection on wallhaven API
+	WallhavenAPIKeyRegexp          = `^[a-zA-Z0-9]{32}$`                             // WallhavenAPIKeyRegexp is the regular expression used to validate a wallhaven API key
+	WallhavenDescRegexp            = `^[^\x00-\x1F\x7F]{5,150}$`                     // WallhavenDescRegexp is the regular expression used to validate an image query description
+	WallhavenUsernameRegexp        = `^[a-zA-Z0-9_-]{3,20}$`                         // WallhavenUsernameRegexp is the regular expression used to validate a wallhaven username
+	WallhavenTestAPIKeyURL         = "https://wallhaven.cc/api/v1/settings?apikey="  // WallhavenTestAPIKeyURL is the URL used to test a wallhaven API key
+	WallhavenAPISearchURL          = "https://wallhaven.cc/api/v1/search"            // WallhavenAPISearchURL is the URL used to search for images on wallhaven API
+	WallhavenAPICollectionURL      = "https://wallhaven.cc/api/v1/collections/%s/%s" // WallhavenAPICollectionURL is the URL used to access a collection on wallhaven API
+	WallhavenAPICollectionsRootURL = "https://wallhaven.cc/api/v1/collections/%s"    // Root for discovering collections
 )
 
 // Compiled Regexps reused in transformation logic.
@@ -39,6 +41,9 @@ var (
 
 	// APICollectionRegex checks if a URL starts with the API collection path prefix.
 	APICollectionRegex = regexp.MustCompile(`^https:\/\/wallhaven\.cc\/api\/v1\/collections\/`)
+
+	// APICollectionIDRegex matches /api/v1/collections/{user}/{id} and captures user & id.
+	APICollectionIDRegex = regexp.MustCompile(`^https:\/\/wallhaven\.cc\/api\/v1\/collections\/([a-zA-Z0-9_]+)\/([0-9]+)\/?(?:\?.*)?$`)
 
 	// APISearchRegex checks if a URL starts with the API search path prefix.
 	APISearchRegex = regexp.MustCompile(`^https:\/\/wallhaven\.cc\/api\/v1\/search`)

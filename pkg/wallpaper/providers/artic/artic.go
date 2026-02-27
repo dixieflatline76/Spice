@@ -406,28 +406,33 @@ func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl strin
 		key := key // shadow for closure
 		active, _ := getDetails(key)
 
+		sm.SeedBaseline(ProviderName+"_"+key, active)
 		check := widget.NewCheck(tour.Name, func(b bool) {
-			// Deferred save logic
-			sm.SetSettingChangedCallback(ProviderName+"_"+key, func() {
-				_, cid := getDetails(key)
-				if b {
-					if cid != "" {
-						if err := p.cfg.EnableArtInstituteChicagoQuery(cid); err != nil {
-							log.Printf("AIC: Failed to enable query %s: %v", key, err)
+			if b != sm.GetBaseline(ProviderName+"_"+key).(bool) {
+				// Deferred save logic
+				sm.SetSettingChangedCallback(ProviderName+"_"+key, func() {
+					_, cid := getDetails(key)
+					if b {
+						if cid != "" {
+							if err := p.cfg.EnableArtInstituteChicagoQuery(cid); err != nil {
+								log.Printf("AIC: Failed to enable query %s: %v", key, err)
+							}
+						} else {
+							if _, err := p.cfg.AddArtInstituteChicagoQuery(tour.Name, key, true); err != nil {
+								log.Printf("AIC: Failed to add query %s: %v", tour.Name, err)
+							}
 						}
 					} else {
-						if _, err := p.cfg.AddArtInstituteChicagoQuery(tour.Name, key, true); err != nil {
-							log.Printf("AIC: Failed to add query %s: %v", tour.Name, err)
+						if cid != "" {
+							if err := p.cfg.DisableArtInstituteChicagoQuery(cid); err != nil {
+								log.Printf("AIC: Failed to disable query %s: %v", key, err)
+							}
 						}
 					}
-				} else {
-					if cid != "" {
-						if err := p.cfg.DisableArtInstituteChicagoQuery(cid); err != nil {
-							log.Printf("AIC: Failed to disable query %s: %v", key, err)
-						}
-					}
-				}
-			})
+				})
+			} else {
+				sm.RemoveSettingChangedCallback(ProviderName + "_" + key)
+			}
 			sm.GetCheckAndEnableApplyFunc()()
 		})
 		check.Checked = active

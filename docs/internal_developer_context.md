@@ -31,53 +31,34 @@ In `pkg/wallpaper/wallpaper.go`:
     *   **Atomic Flag**: `fetchingInProgress` (Atomic Bool) acts as a mutex for the *network trigger*, preventing 1000 clicks from spawning 1000 fetch threads.
     *   **Starvation Check**: If the provider returns 0 images (dry source), the system compares `currentTotal` vs `lastTriggerTotal`. If they haven't changed, it enforces a 60s cooldown to prevent API bans.
 
-## 2. The Settings UI: A Minefield of Closures
-
+### 2.1 The Registry Pattern (v2.5)
+ 
 The Settings UI (`pkg/ui/setting`) uses a **Deferred Save / Git-like Commit** model. Changes are staged, not saved, until "Apply" is clicked.
 
-### 2.1 The "Closure Trap" (Common Bug)
-When creating dynamic UI lists (like `CreateQueryPanel`), **NEVER** compare the new value against a variable captured at widget creation time.
+#### ❌ The Legacy "Closure Trap" (Resolved)
+Previously, dynamic UI lists often captured stale state in closures, leading to "Apply" actions that did nothing.
 
-#### ❌ The Buggy Way (Stale State)
-```go
-// check.Checked is set to 'true' initially
-check.OnChanged = func(nowActive bool) {
-   // BUG: This 'true' is captured forever.
-   // If user clicks OFF -> Apply -> ON ... 'nowActive' is TRUE, 'capturedInitial' is TRUE.
-   // The logic thinks nothing changed!
-   if nowActive != capturedInitial {
-       sm.SetRefreshFlag(...) 
-   }
-}
-```
+#### ✅ The Registry Solution
+`SettingsManager` now maintains a **Registry** (`map[string]interface{}`) of the last-known "Baseline" values.
+1. **Baseline Seeding**: When a widget is created, its initial persisted value is mirrored into the registry.
+2. **Live Comparison**: `OnChanged` handlers now compare the widget's current state directly against the registry's baseline.
+3. **Advanced Props**:
+   - `IsPassword`: Setting this to `true` on a `TextEntrySettingConfig` masks the UI and enables secure keychain storage.
+   - `EnabledIf`: A dynamic function that determines if a widget is interactive (e.g., locking an API key field until it's cleared).
+4. **Programmatic Updates**: `SetValue(name, val)` allows for cross-widget state updates (e.g., the "Clear" button resetting the API key text field).
+5. **Atomic Commit**: On "Apply", the engine executes all queued changes and then synchronously promotes all "Live" values to "Baseline".
 
-#### ✅ The Correct Way (Live State)
-```go
-check.OnChanged = func(nowActive bool) {
-   // 1. Always look up the CURRENT configuration source of truth
-   liveState := config.GetImageQuery(id).Active
-   
-   // 2. Define unique dirty keys
-   dirtyKey := fmt.Sprintf("provider_query_%s", id)
-   callbackKey := fmt.Sprintf("cb_%s", id)
+#### 2.2 The Transactional UI Pattern (v2.6)
 
-   if nowActive != liveState {
-       // 3. Queue the Save Action (Closure runs ONLY on Apply)
-       sm.SetSettingChangedCallback(callbackKey, func() {
-           config.SetQueryActive(id, nowActive)
-       })
-       // 4. Mark Dirty
-       sm.SetRefreshFlag(dirtyKey)
-   } else {
-       // 5. Reverted? Clean up
-       sm.RemoveSettingChangedCallback(callbackKey)
-       sm.UnsetRefreshFlag(dirtyKey)
-   }
-   
-   // 6. Update the "Apply" button state
-   sm.GetCheckAndEnableApplyFunc()()
-}
-```
+For sensitive credentials (API Keys, Usernames), Spice bypasses the strictly deferred model in favor of **Intentional Transactions**.
+
+*   **Rationale**: We never want to send an API key silently in the background while the user is typing (Auto-Validation), nor do we want to save a potentially invalid key that could break the background worker.
+*   **The Flow**:
+    1.  **Direct Interaction**: The user enters a key. The "Clear" button transforms into **"Verify & Connect"**.
+    2.  **Explicit Action**: Verification only occurs when the button is clicked.
+    3.  **Immediate Persistence**: If verification succeeds, the key is saved to the config AND the baseline is seeded **immediately**. The field locks (via `EnabledIf`) and the button becomes **"Clear API Key"**.
+    4.  **Hanging Prevention**: All verification transactions MUST include a timeout (standard: 10s) via `context.WithTimeout` to prevent UI "stuckness".
+*   **Implementation**: This is handled manually in the provider's `CreateSettingsPanel` by wiring the action button to `p.cfg.SetKey()`, `sm.SeedBaseline()`, and `sm.Refresh()`.
 
 ## 3. Deep Dive: Provider Implementations
 
@@ -87,7 +68,7 @@ Key logic patterns for the major providers in `pkg/wallpaper/providers/`.
 *   **Regex Router**: It parses user-pasted URLs using rigorous Regex:
     *   `UserFavoritesRegex`: `wallhaven.cc/user/([^/]+)/favorites/(\d+)` -> Converts to API Collection Endpoint.
     *   `SearchRegex`: Extracts `?q=...` or `?categories=...`.
-*   **API Key Hygiene**: The `ParseURL` function explicitly *strips* `apikey` params from saved URLs to preventing leaking keys in shared configs. Keys are injected *only* at request time from the secure config.
+*   **API Key Hygiene**: The `ParseURL` function explicitly *strips* `apikey` params from saved URLs to prevent leaking keys in shared configs. Keys are stored in the secure OS keychain and are **masked** in the UI via the `IsPassword` property.
 
 ### 3.2 The Met Museum (`metmuseum.go`)
 *   **The Template**: Uses `wallpaper.CreateMuseumHeader` for a standardized "Institution" look.

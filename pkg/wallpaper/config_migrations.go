@@ -21,7 +21,6 @@ func NewMigrationChain() *MigrationChain {
 			EnsureFavoritesStep,
 			LoadAvoidSetStep,
 			BackfillWallhavenStep,
-			BackfillUnsplashStep,
 			BackfillPexelsStep,
 			UnifyQueriesStep,
 			BackfillUnifiedStep,
@@ -109,18 +108,6 @@ func BackfillWallhavenStep(cfg *Config) (bool, error) {
 	return changed, nil
 }
 
-// BackfillUnsplashStep generates IDs for legacy Unsplash queries.
-func BackfillUnsplashStep(cfg *Config) (bool, error) {
-	changed := false
-	for i, q := range cfg.UnsplashQueries {
-		if q.ID == "" {
-			cfg.UnsplashQueries[i].ID = GenerateQueryID(q.URL)
-			changed = true
-		}
-	}
-	return changed, nil
-}
-
 // BackfillPexelsStep generates IDs for legacy Pexels queries.
 func BackfillPexelsStep(cfg *Config) (bool, error) {
 	changed := false
@@ -135,14 +122,10 @@ func BackfillPexelsStep(cfg *Config) (bool, error) {
 
 // UnifyQueriesStep merges legacy query lists into the main Queries list.
 func UnifyQueriesStep(cfg *Config) (bool, error) {
-	if len(cfg.ImageQueries) > 0 || len(cfg.UnsplashQueries) > 0 || len(cfg.PexelsQueries) > 0 {
+	if len(cfg.ImageQueries) > 0 || len(cfg.PexelsQueries) > 0 {
 		log.Print("Migrating legacy queries to unified list...")
 		for _, q := range cfg.ImageQueries {
 			q.Provider = "Wallhaven"
-			cfg.Queries = append(cfg.Queries, q)
-		}
-		for _, q := range cfg.UnsplashQueries {
-			q.Provider = "Unsplash"
 			cfg.Queries = append(cfg.Queries, q)
 		}
 		for _, q := range cfg.PexelsQueries {
@@ -152,7 +135,6 @@ func UnifyQueriesStep(cfg *Config) (bool, error) {
 
 		// Clear legacy lists
 		cfg.ImageQueries = make([]ImageQuery, 0)
-		cfg.UnsplashQueries = make([]ImageQuery, 0)
 		cfg.PexelsQueries = make([]ImageQuery, 0)
 		return true, nil
 	}
