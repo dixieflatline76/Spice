@@ -498,16 +498,16 @@ func (wp *Plugin) SetNextWallpaper(monitorID int, forceImmediate bool) {
 			pct := 0.1 + (rand.Float64() * 0.2) //nolint:gosec // Random delay for UI stagger effect, non-cryptographic
 			delay := time.Duration(float64(duration) * pct)
 
-			log.Printf("[Stagger] Scheduling AUTOMATIC monitor %d update in %v", id, delay)
+			log.Debugf("[Stagger] Scheduling AUTOMATIC monitor %d update in %v", id, delay)
 
 			// Capture ID for closure
 			mID := id
 			time.AfterFunc(delay, func() {
-				log.Printf("[Stagger] Executing staggered update for monitor %d", mID)
+				log.Debugf("[Stagger] Executing staggered update for monitor %d", mID)
 				wp.dispatch(mID, CmdNextAuto)
 			})
 		} else {
-			log.Printf("[Stagger] Executing IMMEDIATE update for monitor %d (Force: %v, StaggerCfg: %v)", id, forceImmediate, stagger)
+			log.Debugf("[Stagger] Executing IMMEDIATE update for monitor %d (Force: %v, StaggerCfg: %v)", id, forceImmediate, stagger)
 			wp.dispatch(id, CmdNextAuto)
 		}
 	}
@@ -754,19 +754,19 @@ func (wp *Plugin) reconcileFavorites() {
 
 		if img.Provider == "Favorites" && !actual {
 			// Source file was deleted from favorites folder — remove dead entry entirely.
-			log.Printf("[Reconcile] %s: Provider=Favorites but no longer in favMap. Removing from store.", img.ID)
+			log.Debugf("[Reconcile] %s: Provider=Favorites but no longer in favMap. Removing from store.", img.ID)
 			wp.store.Remove(img.ID)
 			removed++
 		} else {
 			// Non-Favorites image with stale IsFavorited flag — correct it.
-			log.Printf("[Reconcile] %s: IsFavorited %v→%v", img.ID, img.IsFavorited, actual)
+			log.Debugf("[Reconcile] %s: IsFavorited %v→%v", img.ID, img.IsFavorited, actual)
 			img.IsFavorited = actual
 			wp.store.Update(img)
 			corrected++
 		}
 	}
 	if corrected > 0 || removed > 0 {
-		log.Printf("[Reconcile] Fixed %d stale flags, removed %d dead favorites entries", corrected, removed)
+		log.Debugf("[Reconcile] Fixed %d stale flags, removed %d dead favorites entries", corrected, removed)
 	}
 }
 
@@ -991,7 +991,7 @@ func (wp *Plugin) updateTrayMenuUI(img provider.Image, monitorID int) {
 }
 
 func (wp *Plugin) onQueryRemoved(queryID string) {
-	log.Printf("Plugin: Query %s removed. Clearing...", queryID)
+	log.Debugf("Plugin: Query %s removed. Clearing...", queryID)
 	wp.store.RemoveByQueryID(queryID)
 	wp.downloadMutex.Lock()
 	delete(wp.queryPages, queryID)
@@ -999,7 +999,7 @@ func (wp *Plugin) onQueryRemoved(queryID string) {
 }
 
 func (wp *Plugin) onQueryDisabled(queryID string) {
-	log.Printf("[Plugin] Query %s disabled. Clearing from cache/rotation...", queryID)
+	log.Debugf("[Plugin] Query %s disabled. Clearing from cache/rotation...", queryID)
 	wp.store.RemoveByQueryID(queryID)
 	wp.downloadMutex.Lock()
 	delete(wp.queryPages, queryID)
@@ -1010,7 +1010,7 @@ func (wp *Plugin) onQueryDisabled(queryID string) {
 }
 
 func (wp *Plugin) ResetFavorites() {
-	log.Printf("[Plugin] Resetting all favorites in store...")
+	log.Debugf("[Plugin] Resetting all favorites in store...")
 	wp.store.ResetFavorites()
 
 	// Ghost entries removal: Prune images from the store that belong to the Favorites provider

@@ -141,7 +141,7 @@ func (wp *Plugin) enrichImage(ctx context.Context, img provider.Image, p provide
 	enrichedImg, err := p.EnrichImage(ctx, img)
 	if err != nil {
 		// SOFT FAIL: Log warning but proceed.
-		log.Printf("Warning: Lazy enrichment failed for %s (will try later): %v", originalID, err)
+		log.Debugf("Lazy enrichment failed for %s (will try later): %v", originalID, err)
 		// Restore ID if we stripped it, just in case
 		if namespaced {
 			img.ID = originalID

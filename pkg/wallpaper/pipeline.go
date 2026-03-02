@@ -132,6 +132,10 @@ func (p *Pipeline) stateManagerLoop() {
 					log.Debugf("Pipeline: %v", res.Error)
 				} else if strings.Contains(res.Error.Error(), "smart fit") || strings.Contains(res.Error.Error(), "aspect ratio") || strings.Contains(res.Error.Error(), "image resolution too low") {
 					log.Debugf("Pipeline: %v", res.Error)
+				} else if strings.Contains(res.Error.Error(), "status 429") || strings.Contains(res.Error.Error(), "enrichment") {
+					log.Debugf("Pipeline: %v", res.Error)
+				} else if strings.Contains(res.Error.Error(), "incompatible") {
+					log.Debugf("Pipeline: %v", res.Error)
 				} else {
 					log.Printf("Pipeline Error: %v", res.Error)
 				}

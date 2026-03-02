@@ -391,7 +391,7 @@ func (p *WallhavenProvider) EnrichImage(ctx context.Context, img provider.Image)
 
 	if resp.StatusCode != http.StatusOK {
 		// Log but don't fail hard, just return original image
-		log.Printf("Wallhaven enrichment failed for %s: status %d", img.ID, resp.StatusCode)
+		log.Debugf("Wallhaven enrichment failed for %s: status %d", img.ID, resp.StatusCode)
 		return img, nil
 	}
 

@@ -61,13 +61,3 @@ func Fatalln(v ...interface{}) {
 	log.Output(2, fmt.Sprintln(v...))
 	os.Exit(1)
 }
-
-// Debug calls the standard log.Print() with a [DEBUG] prefix
-func Debug(v ...interface{}) {
-	// No-op in release builds
-}
-
-// Debugf calls the standard log.Printf() with a [DEBUG] prefix
-func Debugf(format string, v ...interface{}) {
-	// No-op in release builds
-}

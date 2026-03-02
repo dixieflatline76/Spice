@@ -242,7 +242,7 @@ func (mc *MonitorController) next(manual bool) {
 	// Optimization: We no longer reshuffle on every content change (pendingUpdate).
 	// We only reshuffle if the deck is exhausted (below) or if the current IDs have shifted length (safety).
 	if len(mc.State.ShuffleIDs) != len(bucketIDs) {
-		log.Printf("[Monitor %d] Shuffle list length mismatch (Bucket: %d, Current: %d). Rebuilding.", mc.ID, len(bucketIDs), len(mc.State.ShuffleIDs))
+		log.Debugf("[Monitor %d] Shuffle list length mismatch (Bucket: %d, Current: %d). Rebuilding.", mc.ID, len(bucketIDs), len(mc.State.ShuffleIDs))
 		mc.rebuildShuffle(bucketIDs)
 	}
 	mc.pendingUpdate = false // Always consume the pending update

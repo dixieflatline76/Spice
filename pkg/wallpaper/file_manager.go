@@ -157,7 +157,7 @@ func (fm *FileManager) DeepDeleteBatch(ids []string) error {
 		log.Printf("DeepDeleteBatch: Error walking fitted dir: %v", err)
 	}
 
-	log.Printf("DeepDeleteBatch: Total files to delete: %d", len(filesToDelete))
+	log.Debugf("DeepDeleteBatch: Total files to delete: %d", len(filesToDelete))
 
 	for _, f := range filesToDelete {
 		if err := os.Remove(f); err != nil {

@@ -147,6 +147,11 @@ func getInstance() *SpiceApp {
 			}
 			saInstance.appConfig = config.NewAppConfig(saInstance.Preferences())
 
+			// Apply saved debug logging preference
+			if saInstance.appConfig.GetDebugLoggingEnabled() {
+				utilLog.SetDebugEnabled(true)
+			}
+
 			// Apply saved theme
 			currentTheme := saInstance.appConfig.GetTheme()
 			switch currentTheme {
@@ -617,6 +622,21 @@ func (sa *SpiceApp) RebuildPreferencesContent(initialTab string) {
 		}
 	}
 	sm.CreateSelectSetting(&themeConfig, generalContainer)
+
+	// Enable Debug Logging
+	var debugLogConfig setting.BoolConfig
+	debugLogConfig = setting.BoolConfig{
+		Name:         "enableDebugLogging",
+		InitialValue: sa.appConfig.GetDebugLoggingEnabled(),
+		Label:        sm.CreateSettingTitleLabel("Enable Debug Logging:"),
+		HelpContent:  sm.CreateSettingDescriptionLabel("Write verbose debug entries to the log file. Useful for troubleshooting."),
+		ApplyFunc: func(b bool) {
+			sa.appConfig.SetDebugLoggingEnabled(b)
+			utilLog.SetDebugEnabled(b)
+			debugLogConfig.InitialValue = b
+		},
+	}
+	sm.CreateBoolSetting(&debugLogConfig, generalContainer)
 
 	generalTabItem := container.NewTabItem("App", container.NewVScroll(generalContainer))
 
