@@ -262,7 +262,7 @@ func (c *Config) SyncManagedQueries(provider string, remoteQueries []ImageQuery)
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	log.Printf("[DEBUG] SyncManagedQueries starting for provider: %s. Remote count: %d", provider, len(remoteQueries))
+	log.Debugf("SyncManagedQueries starting for provider: %s. Remote count: %d", provider, len(remoteQueries))
 
 	remoteMap := make(map[string]ImageQuery)
 	for _, q := range remoteQueries {
@@ -280,9 +280,9 @@ func (c *Config) SyncManagedQueries(provider string, remoteQueries []ImageQuery)
 				q.Description = remoteQ.Description
 				newQueries = append(newQueries, q)
 				foundRemoteIDs[q.ID] = true
-				log.Debugf("[DEBUG] SyncManagedQueries: Keeping existing managed query: %s", q.ID)
+				log.Debugf("SyncManagedQueries: Keeping existing managed query: %s", q.ID)
 			} else {
-				log.Debugf("[DEBUG] SyncManagedQueries: Removing managed query no longer on remote: %s", q.ID)
+				log.Debugf("SyncManagedQueries: Removing managed query no longer on remote: %s", q.ID)
 			}
 		} else {
 			newQueries = append(newQueries, q)
@@ -292,13 +292,13 @@ func (c *Config) SyncManagedQueries(provider string, remoteQueries []ImageQuery)
 	// Add new managed queries
 	for _, remoteQ := range remoteQueries {
 		if !foundRemoteIDs[remoteQ.ID] {
-			log.Debugf("[DEBUG] SyncManagedQueries: Adding new managed query: %s (%s)", remoteQ.ID, remoteQ.Description)
+			log.Debugf("SyncManagedQueries: Adding new managed query: %s (%s)", remoteQ.ID, remoteQ.Description)
 			newQueries = append(newQueries, remoteQ)
 		}
 	}
 
 	c.Queries = newQueries
-	log.Printf("[DEBUG] SyncManagedQueries finished. Total Queries now: %d", len(c.Queries))
+	log.Debugf("SyncManagedQueries finished. Total Queries now: %d", len(c.Queries))
 	c.save()
 }
 
@@ -983,7 +983,7 @@ func (c *Config) GetArtInstituteChicagoQueries() []ImageQuery {
 func (c *Config) SetWallhavenSyncEnabled(enabled bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	log.Printf("[DEBUG] Config: Setting WallhavenSyncEnabled to: %v", enabled)
+	log.Debugf("Config: Setting WallhavenSyncEnabled to: %v", enabled)
 	c.WallhavenSyncEnabled = enabled
 	c.save()
 }
@@ -999,7 +999,7 @@ func (c *Config) GetWallhavenSyncEnabled() bool {
 func (c *Config) SetWallhavenUsername(username string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	log.Printf("[DEBUG] Config: Setting WallhavenUsername to: '%s'", username)
+	log.Debugf("Config: Setting WallhavenUsername to: '%s'", username)
 	c.WallhavenUsername = username
 	c.save()
 }

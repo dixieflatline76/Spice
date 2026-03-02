@@ -404,26 +404,23 @@ func (sa *SpiceApp) CreateSplashScreen(seconds int) {
 	}()
 }
 
-// CreatePreferencesWindow creates and displays a new window for the application's preferences.
-// The window is titled "Preferences" and is sized to 800x600 pixels, centered on the screen.
-// It contains a main container for wallpaper plugin preferences and a close button at the bottom.
-// The close button closes the preferences window when clicked.
-// CreatePreferencesWindow creates and displays a new window for the application's preferences.
-// The window is titled "Preferences" and is sized to 800x600 pixels, centered on the screen.
-// It contains a main container for wallpaper plugin preferences and a close button at the bottom.
-// The close button closes the preferences window when clicked.
-// CreatePreferencesWindow creates and displays a new window for the application's preferences.
-// The window is titled "Preferences" and is sized to 800x600 pixels, centered on the screen.
-// It contains a main container for wallpaper plugin preferences and a close button at the bottom.
-// The close button closes the preferences window when clicked.
+// CreatePreferencesWindow creates and displays the preferences window.
+// If the window is already open, it brings it to the front.
 func (sa *SpiceApp) CreatePreferencesWindow(initialTab string) {
 	sa.os.TransformToForeground()
 
-	// If window already exists, focus it and REBUILD it to update state (e.g. Add Query)
+	// If window already exists, just show it and switch tab if requested
 	if sa.prefsWindow != nil {
+		if initialTab != "" && sa.prefsTabs != nil {
+			for _, item := range sa.prefsTabs.Items {
+				if item.Text == initialTab {
+					sa.prefsTabs.Select(item)
+					break
+				}
+			}
+		}
 		sa.prefsWindow.Show()
 		sa.prefsWindow.RequestFocus()
-		sa.RebuildPreferencesContent(initialTab)
 		return
 	}
 
@@ -929,6 +926,11 @@ func decodeGifToFrames(data []byte) ([]image.Image, []time.Duration, error) {
 
 // CreateAboutSplash creates an animated splash screen for the "About" dialog.
 func (sa *SpiceApp) CreateAboutSplash() {
+	defer func() {
+		if r := recover(); r != nil {
+			utilLog.Printf("ERROR: PANIC in CreateAboutSplash (likely stale GLFW context): %v", r)
+		}
+	}()
 	if sa.splash != nil {
 		return // Already showing
 	}

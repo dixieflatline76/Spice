@@ -173,7 +173,7 @@ func (p *WallhavenProvider) DiscoverCollections(ctx context.Context, username st
 		apiKey = p.testAPIKey
 	}
 
-	log.Printf("[DEBUG] Wallhaven: Discovering collections for user: %s (using API Key: %v)", username, apiKey != "")
+	log.Debugf("Wallhaven: Discovering collections for user: %s (using API Key: %v)", username, apiKey != "")
 
 	url := fmt.Sprintf(WallhavenAPICollectionsRootURL, username)
 	if apiKey != "" {
@@ -192,7 +192,7 @@ func (p *WallhavenProvider) DiscoverCollections(ctx context.Context, username st
 	}
 	defer resp.Body.Close()
 
-	log.Printf("[DEBUG] Wallhaven: API response status: %d", resp.StatusCode)
+	log.Debugf("Wallhaven: API response status: %d", resp.StatusCode)
 
 	if resp.StatusCode != http.StatusOK {
 		if resp.StatusCode == http.StatusForbidden {
@@ -210,7 +210,7 @@ func (p *WallhavenProvider) DiscoverCollections(ctx context.Context, username st
 		return nil, err
 	}
 
-	log.Printf("[DEBUG] Wallhaven: Found %d remote collections", len(result.Data))
+	log.Debugf("Wallhaven: Found %d remote collections", len(result.Data))
 
 	queries := make([]wallpaper.ImageQuery, 0, len(result.Data))
 	for _, col := range result.Data {
@@ -235,19 +235,19 @@ func (p *WallhavenProvider) DiscoverCollections(ctx context.Context, username st
 // Sync performs the actual sync of collections into the config.
 func (p *WallhavenProvider) Sync(ctx context.Context) error {
 	syncEnabled := p.cfg.GetWallhavenSyncEnabled()
-	log.Printf("[DEBUG] Wallhaven: Sync starting. Enabled: %v", syncEnabled)
+	log.Debugf("Wallhaven: Sync starting. Enabled: %v", syncEnabled)
 
 	if !syncEnabled {
-		log.Printf("[DEBUG] Wallhaven: Sync disabled, clearing managed queries.")
+		log.Debugf("Wallhaven: Sync disabled, clearing managed queries.")
 		p.cfg.SyncManagedQueries("Wallhaven", nil)
 		return nil
 	}
 
 	username := p.cfg.GetWallhavenUsername()
-	log.Printf("[DEBUG] Wallhaven: Sync using username: '%s'", username)
+	log.Debugf("Wallhaven: Sync using username: '%s'", username)
 
 	if username == "" {
-		log.Printf("[DEBUG] Wallhaven: Sync skipped due to empty username.")
+		log.Debugf("Wallhaven: Sync skipped due to empty username.")
 		return nil
 	}
 	remoteQueries, err := p.DiscoverCollections(ctx, username)

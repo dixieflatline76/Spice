@@ -466,7 +466,7 @@ func (wp *Plugin) Deactivate() {
 
 // SetNextWallpaper advances the wallpaper.
 func (wp *Plugin) SetNextWallpaper(monitorID int, forceImmediate bool) {
-	log.Printf("[DEBUG] SetNextWallpaper called for monitor %d (Force immediate: %v)", monitorID, forceImmediate)
+	log.Debugf("SetNextWallpaper called for monitor %d (Force immediate: %v)", monitorID, forceImmediate)
 
 	if monitorID != -1 {
 		wp.dispatch(monitorID, CmdNext)
@@ -515,13 +515,13 @@ func (wp *Plugin) SetNextWallpaper(monitorID int, forceImmediate bool) {
 
 // SetPreviousWallpaper goes back.
 func (wp *Plugin) SetPreviousWallpaper(monitorID int, forceImmediate bool) {
-	log.Printf("[DEBUG] SetPreviousWallpaper called for monitor %d (Force immediate: %v)", monitorID, forceImmediate)
+	log.Debugf("SetPreviousWallpaper called for monitor %d (Force immediate: %v)", monitorID, forceImmediate)
 	wp.dispatch(monitorID, CmdPrev)
 }
 
 // DeleteCurrentImage deletes the current image on the specified monitor.
 func (wp *Plugin) DeleteCurrentImage(monitorID int) {
-	log.Printf("[DEBUG] DeleteCurrentImage called for monitor %d", monitorID)
+	log.Debugf("DeleteCurrentImage called for monitor %d", monitorID)
 	wp.dispatch(monitorID, CmdDelete)
 }
 
@@ -628,7 +628,7 @@ func (wp *Plugin) GetOS() OS {
 
 // TriggerFavorite adds/removes the current image of a specific monitor from favorites.
 func (wp *Plugin) TriggerFavorite(monitorID int) {
-	log.Printf("[DEBUG] TriggerFavorite called for monitor %d", monitorID)
+	log.Debugf("TriggerFavorite called for monitor %d", monitorID)
 	wp.dispatch(monitorID, CmdFavorite)
 }
 
@@ -803,14 +803,14 @@ func (wp *Plugin) dispatch(monitorID int, cmd Command) {
 	wp.monMu.RLock()
 	defer wp.monMu.RUnlock()
 
-	log.Printf("[DEBUG] Dispatching command %v to monitor %d", cmd, monitorID)
+	log.Debugf("Dispatching command %v to monitor %d", cmd, monitorID)
 
 	if monitorID == -1 {
 		// ALL Monitors
 		for _, mc := range wp.Monitors {
 			select {
 			case mc.Commands <- cmd:
-				log.Printf("[DEBUG] Command %v sent to monitor %d buffer", cmd, mc.ID)
+				log.Debugf("Command %v sent to monitor %d buffer", cmd, mc.ID)
 			default:
 				log.Printf("[WARN] [Monitor %d] Command buffer full, dropping command", mc.ID)
 			}
@@ -819,7 +819,7 @@ func (wp *Plugin) dispatch(monitorID int, cmd Command) {
 		if mc, ok := wp.Monitors[monitorID]; ok {
 			select {
 			case mc.Commands <- cmd:
-				log.Printf("[DEBUG] Command %v sent to monitor %d buffer", cmd, monitorID)
+				log.Debugf("Command %v sent to monitor %d buffer", cmd, monitorID)
 			default:
 				log.Printf("[WARN] [Monitor %d] Command buffer full, dropping command", monitorID)
 			}
