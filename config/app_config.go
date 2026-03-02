@@ -50,3 +50,16 @@ func (c *AppConfig) GetTheme() string {
 func (c *AppConfig) SetTheme(theme string) {
 	c.prefs.SetString(AppThemeKey, theme)
 }
+
+// DebugLoggingEnabledKey is the key for the debug logging preference
+const DebugLoggingEnabledKey = "debug_logging_enabled"
+
+// GetDebugLoggingEnabled returns whether debug logging is enabled
+func (c *AppConfig) GetDebugLoggingEnabled() bool {
+	return c.prefs.BoolWithFallback(DebugLoggingEnabledKey, false)
+}
+
+// SetDebugLoggingEnabled sets whether debug logging is enabled
+func (c *AppConfig) SetDebugLoggingEnabled(enabled bool) {
+	c.prefs.SetBool(DebugLoggingEnabledKey, enabled)
+}

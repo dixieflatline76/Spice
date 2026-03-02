@@ -28,7 +28,7 @@ func (wp *Plugin) FetchNewImages(providerID ...string) {
 			if !isFavRequest {
 				defer wp.fetchingInProgress.Set(false)
 			}
-			log.Printf("Starting image fetch (Target: %s)...", func() string {
+			log.Debugf("Starting image fetch (Target: %s)...", func() string {
 				if targetProvider == "" {
 					return "ALL"
 				}
@@ -85,7 +85,7 @@ func (wp *Plugin) FetchNewImages(providerID ...string) {
 			// Batch Reshuffle Optimization (User Approach):
 			// Signal monitors to update their shuffle lists only after the entire batch is processed.
 			if totalQueued.Value() > 0 {
-				log.Printf("[Fetch] Processed %d new images. Broadcasting shuffle update to monitors...", totalQueued.Value())
+				log.Debugf("[Fetch] Processed %d new images. Broadcasting shuffle update to monitors...", totalQueued.Value())
 				wp.dispatch(-1, CmdUpdateShuffle)
 
 				sources := []string{}
@@ -129,9 +129,9 @@ func (wp *Plugin) RefreshImagesAndPulse() {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 
-		log.Println("[Init] Waiting for images before initial pulse...")
+		log.Debugf("[Init] Waiting for images before initial pulse...")
 		if err := wp.store.WaitForImages(ctx); err == nil {
-			log.Println("[Init] Images available. Triggering initial pulse.")
+			log.Debugf("[Init] Images available. Triggering initial pulse.")
 			// Use dispatch directly to bypass Stagger logic (Force Immediate)
 			wp.dispatch(-1, CmdNext)
 		} else {
@@ -152,7 +152,7 @@ func (wp *Plugin) fetchFromProvider(q ImageQuery, p provider.ImageProvider, isFa
 	wp.downloadMutex.Unlock()
 
 	page := pg.Value()
-	log.Printf("Fetching from provider: %s (Query: %s, Page: %d)", q.Provider, q.Description, page)
+	log.Debugf("Fetching from provider: %s (Query: %s, Page: %d)", q.Provider, q.Description, page)
 
 	// Add timeout to prevent hangs
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -168,7 +168,7 @@ func (wp *Plugin) fetchFromProvider(q ImageQuery, p provider.ImageProvider, isFa
 		return
 	}
 
-	log.Printf("[Fetch] Provider %s returned %d images. Submitting to pipeline.", q.Provider, len(images))
+	log.Debugf("[Fetch] Provider %s returned %d images. Submitting to pipeline.", q.Provider, len(images))
 
 	// Track source
 	sourcesMutex.Lock()
@@ -209,6 +209,6 @@ func (wp *Plugin) fetchFromProvider(q ImageQuery, p provider.ImageProvider, isFa
 
 	if queuedForThisQuery > 0 {
 		pg.Increment()
-		log.Printf("Query %s: Successfully queued %d images. Incrementing to page %d", q.ID, queuedForThisQuery, pg.Value())
+		log.Debugf("Query %s: Successfully queued %d images. Incrementing to page %d", q.ID, queuedForThisQuery, pg.Value())
 	}
 }

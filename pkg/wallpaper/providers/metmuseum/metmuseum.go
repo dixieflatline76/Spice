@@ -201,7 +201,7 @@ func (p *Provider) FetchImages(ctx context.Context, query string, page int) ([]p
 		time.Sleep(200 * time.Millisecond)
 	}
 
-	log.Printf("MET: FetchImages Page %d: Stride %d (Index %d). Scanning up to %d candidates. Yield: %d images.", page, stride, startIndex, maxBatches*batchSize, len(images))
+	log.Debugf("MET: FetchImages Page %d: Stride %d (Index %d). Scanning up to %d candidates. Yield: %d images.", page, stride, startIndex, maxBatches*batchSize, len(images))
 	return images, nil
 }
 
@@ -225,7 +225,7 @@ func (p *Provider) resolveQueryToIDs(ctx context.Context, query string) ([]int, 
 	}
 	p.idCacheMu.RUnlock()
 
-	log.Printf("MET: ID Cache MISS for %s. Fetching...", query)
+	log.Debugf("MET: ID Cache MISS for %s. Fetching...", query)
 
 	var ids []int
 	var err error

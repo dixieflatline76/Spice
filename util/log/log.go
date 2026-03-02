@@ -33,6 +33,9 @@ func init() {
 	safeStdout := &safeWriter{w: os.Stdout}
 	log.SetOutput(io.MultiWriter(safeStdout, fileLogger))
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
+
+	// Dev builds: enable debug logging by default
+	SetDebugEnabled(true)
 }
 
 // safeWriter wraps an io.Writer and ignores errors, returning success.
@@ -78,14 +81,4 @@ func Fatalf(format string, v ...interface{}) {
 func Fatalln(v ...interface{}) {
 	_ = log.Output(2, fmt.Sprintln(v...))
 	os.Exit(1)
-}
-
-// Debug calls the standard log.Print() with a [DEBUG] prefix
-func Debug(v ...interface{}) {
-	_ = log.Output(2, "[DEBUG] "+fmt.Sprint(v...))
-}
-
-// Debugf calls the standard log.Printf() with a [DEBUG] prefix
-func Debugf(format string, v ...interface{}) {
-	_ = log.Output(2, fmt.Sprintf("[DEBUG] "+format, v...))
 }

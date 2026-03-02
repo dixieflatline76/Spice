@@ -17,7 +17,7 @@ func (wp *Plugin) StartNightlyRefresh() {
 	}
 	wp.downloadMutex.Unlock()
 
-	log.Print("Starting nightly refresh checker...")
+	log.Debugf("Starting nightly refresh checker...")
 
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
@@ -65,14 +65,14 @@ func (wp *Plugin) checkAndRunRefresh(now time.Time, lastRefreshDay int, isInitia
 	reason := "" // For logging clarity
 
 	if isInitialCheck {
-		log.Printf("Initial refresh check at %s", now.Format(time.RFC3339))
+		log.Debugf("Initial refresh check at %s", now.Format(time.RFC3339))
 
 		if lastRefreshDay == -1 && now.Hour() == 0 && now.Minute() < 6 {
 			shouldRun = true
 			reason = "Initial check detected start/wake-up shortly after midnight."
 		} else if lastRefreshDay == -1 {
 			reason = fmt.Sprintf("Initial check: Current time (%s) is not post-midnight. Setting last refresh day to %d.", now.Format(time.Kitchen), today)
-			log.Print(reason)
+			log.Debugf("%s", reason)
 			lastRefreshDay = today // IMPORTANT: Set lastRefreshDay here for non-midnight starts
 		}
 	}
@@ -85,7 +85,7 @@ func (wp *Plugin) checkAndRunRefresh(now time.Time, lastRefreshDay int, isInitia
 	}
 
 	if shouldRun {
-		log.Printf("Decision: Refresh needed. Reason: %s", reason) // Log why it's running
+		log.Debugf("Decision: Refresh needed. Reason: %s", reason)
 
 		// Network Check
 		if !wp.isNetworkAvailable() {
@@ -143,7 +143,7 @@ func (wp *Plugin) isNetworkAvailable() bool {
 
 	resp, err := wp.httpClient.Do(req)
 	if err != nil {
-		log.Printf("isNetworkAvailable: Network check failed: %v", err)
+		log.Debugf("isNetworkAvailable: Network check failed: %v", err)
 		return false
 	}
 	defer resp.Body.Close()
@@ -152,6 +152,6 @@ func (wp *Plugin) isNetworkAvailable() bool {
 		return true
 	}
 
-	log.Printf("isNetworkAvailable: Network check returned non-success status: %d", resp.StatusCode)
+	log.Debugf("isNetworkAvailable: Network check returned non-success status: %d", resp.StatusCode)
 	return false
 }

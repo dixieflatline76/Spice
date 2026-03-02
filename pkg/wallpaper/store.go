@@ -361,7 +361,7 @@ func (s *ImageStore) RemoveByQueryID(queryID string) {
 		if img.SourceQueryID == queryID {
 			toDelete = append(toDelete, img)
 			delete(s.idSet, img.ID)
-			log.Printf("[RemoveByQueryID] Matched %s (Source: %s). Queueing for deletion.", img.ID, img.SourceQueryID)
+			log.Debugf("[RemoveByQueryID] Matched %s (Source: %s). Queueing for deletion.", img.ID, img.SourceQueryID)
 			if img.FilePath != "" {
 				delete(s.pathSet, img.FilePath)
 			}
@@ -661,9 +661,9 @@ func (s *ImageStore) Sync(limit int, targetFlags map[string]bool, activeQueryIDs
 	s.mu.Unlock()
 
 	// 5. Async Cleanup
-	log.Printf("[Sync] Completed. Final Count: %d. Deleting: %d. Invalidating: %d.", len(finalImages), len(idsToDelete), len(idsToInvalidate))
+	log.Debugf("[Sync] Completed. Final Count: %d. Deleting: %d. Invalidating: %d.", len(finalImages), len(idsToDelete), len(idsToInvalidate))
 	if len(idsToDelete) > 0 {
-		log.Printf("[Sync] Deleting IDs: %v", idsToDelete)
+		log.Debugf("[Sync] Deleting IDs: %v", idsToDelete)
 	}
 	s.performAsyncCleanup(idsToDelete, idsToInvalidate)
 }
@@ -675,7 +675,7 @@ func (s *ImageStore) determineSyncAction(img provider.Image, activeQueryIDs map[
 		isActive := img.SourceQueryID != "" && activeQueryIDs[img.SourceQueryID]
 		isOrphan := img.SourceQueryID == ""
 		if isOrphan || !isActive {
-			log.Printf("[Sync] Marking %s for deletion. Orphan: %v, ActiveSource: %v (SourceID: '%s')", img.ID, isOrphan, isActive, img.SourceQueryID)
+			log.Debugf("[Sync] Marking %s for deletion. Orphan: %v, ActiveSource: %v (SourceID: '%s')", img.ID, isOrphan, isActive, img.SourceQueryID)
 			return ImageActionDelete
 		}
 	}
