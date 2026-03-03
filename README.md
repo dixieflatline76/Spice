@@ -5,7 +5,7 @@
 
 <p align="center">
   <a href="https://github.com/dixieflatline76/Spice/actions/workflows/ci.yml"><img src="https://github.com/dixieflatline76/Spice/actions/workflows/ci.yml/badge.svg" alt="Build Status"></a>
-  <a href="https://goreportcard.com/report/github.com/dixieflatline76/Spice"><img src="https://goreportcard.com/badge/github.com/dixieflatline76/Spice" alt="Go Report Card"></a>
+  <a href="https://goreportcard.com/report/github.com/dixieflatline76/Spice/v2"><img src="https://goreportcard.com/badge/github.com/dixieflatline76/Spice/v2" alt="Go Report Card"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Source--Available-blue.svg" alt="License"></a>
   <a href="https://github.com/dixieflatline76/Spice/releases/latest"><img src="https://img.shields.io/github/v/release/dixieflatline76/Spice?include_prereleases&color=blue" alt="Latest Release"></a>
   <a href="https://chromewebstore.google.com/detail/ekodikedjmhnganfcfleabcfohdjkoeb"><img src="https://img.shields.io/chrome-web-store/v/ekodikedjmhnganfcfleabcfohdjkoeb?style=flat&color=blue&label=Chrome%20Web%20Store" alt="Chrome Web Store"></a>
