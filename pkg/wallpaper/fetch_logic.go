@@ -112,7 +112,7 @@ func (wp *Plugin) FetchNewImages(providerID ...string) {
 func (wp *Plugin) RefreshImagesAndPulse() {
 	go func() {
 		// Optimization: Removed Master Reset (Page 1) to prevent cache churn on Settings Apply.
-		// Pages are now persistent per session or untill Nightly Refresh.
+		// Pages are now persistent per session or until Nightly Refresh.
 
 		// Robust Sync: Reconcile store and invalidate stale derivatives
 		wp.syncStoreWithConfig()
