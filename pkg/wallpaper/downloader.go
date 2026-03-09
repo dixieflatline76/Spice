@@ -197,6 +197,10 @@ func (wp *Plugin) ensureMaster(ctx context.Context, img provider.Image, imgProvi
 		}
 	}
 
+	return wp.downloadMasterFile(ctx, client, reqUrl, masterPath, imgProvider)
+}
+
+func (wp *Plugin) downloadMasterFile(ctx context.Context, client *http.Client, reqUrl, masterPath string, imgProvider provider.ImageProvider) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqUrl, nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to create request: %w", err)

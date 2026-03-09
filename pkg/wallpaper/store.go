@@ -435,47 +435,7 @@ func (s *ImageStore) LoadCache() error {
 	}
 
 	// Namespacing Migration: Upgrade legacy IDs to namespaced format
-	migrationOccurred := false
-	for i, img := range s.images {
-		// Rule: Only online providers had raw numeric/string IDs.
-		// Skip Favorites (already namespaced via filenames) and already-namespaced IDs.
-		if img.Provider != "" && img.Provider != "Favorites" {
-			prefix := img.Provider + "_"
-			if !strings.HasPrefix(img.ID, prefix) {
-				oldID := img.ID
-				newID := prefix + oldID
-				log.Printf("Migration: Upgrading legacy image ID %s -> %s for provider %s", oldID, newID, img.Provider)
-
-				// 1. Rename files on disk (Master and Derivatives)
-				if s.fm != nil {
-					if err := s.fm.RenameAllAssets(oldID, newID); err != nil {
-						log.Printf("Migration: Failed to rename assets for %s: %v", oldID, err)
-					}
-				}
-
-				// 2. Update Image Metadata
-				s.images[i].ID = newID
-
-				// 3. Update Derivative Paths
-				if img.DerivativePaths != nil {
-					newPaths := make(map[string]string)
-					for res, oldPath := range img.DerivativePaths {
-						// Derivative paths include the ID in the filename
-						newPath := strings.Replace(oldPath, oldID, newID, 1)
-						newPaths[res] = newPath
-					}
-					s.images[i].DerivativePaths = newPaths
-				}
-
-				// 4. Update FilePath
-				if img.FilePath != "" {
-					s.images[i].FilePath = strings.Replace(img.FilePath, oldID, newID, 1)
-				}
-
-				migrationOccurred = true
-			}
-		}
-	}
+	migrationOccurred := s.migrateLegacyIDsLocked()
 
 	if migrationOccurred {
 		log.Printf("Migration: Namespacing upgrade complete. Saving updated cache.")
@@ -772,4 +732,51 @@ func (s *ImageStore) performAsyncCleanup(idsToDelete, idsToInvalidate []string) 
 			}
 		}(idsToInvalidate)
 	}
+}
+
+// migrateLegacyIDsLocked upgrades legacy image IDs to the namespaced format (Provider_ID).
+// CALLER MUST HOLD s.mu.Lock()
+func (s *ImageStore) migrateLegacyIDsLocked() bool {
+	migrationOccurred := false
+	for i, img := range s.images {
+		// Rule: Only online providers had raw numeric/string IDs.
+		// Skip Favorites (already namespaced via filenames) and already-namespaced IDs.
+		if img.Provider != "" && img.Provider != "Favorites" {
+			prefix := img.Provider + "_"
+			if !strings.HasPrefix(img.ID, prefix) {
+				oldID := img.ID
+				newID := prefix + oldID
+				log.Printf("Migration: Upgrading legacy image ID %s -> %s for provider %s", oldID, newID, img.Provider)
+
+				// 1. Rename files on disk (Master and Derivatives)
+				if s.fm != nil {
+					if err := s.fm.RenameAllAssets(oldID, newID); err != nil {
+						log.Printf("Migration: Failed to rename assets for %s: %v", oldID, err)
+					}
+				}
+
+				// 2. Update Image Metadata
+				s.images[i].ID = newID
+
+				// 3. Update Derivative Paths
+				if img.DerivativePaths != nil {
+					newPaths := make(map[string]string)
+					for res, oldPath := range img.DerivativePaths {
+						// Derivative paths include the ID in the filename
+						newPath := strings.Replace(oldPath, oldID, newID, 1)
+						newPaths[res] = newPath
+					}
+					s.images[i].DerivativePaths = newPaths
+				}
+
+				// 4. Update FilePath
+				if img.FilePath != "" {
+					s.images[i].FilePath = strings.Replace(img.FilePath, oldID, newID, 1)
+				}
+
+				migrationOccurred = true
+			}
+		}
+	}
+	return migrationOccurred
 }
