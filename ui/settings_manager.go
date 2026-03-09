@@ -122,6 +122,12 @@ func (sm *SettingsManager) GetBaseline(name string) interface{} {
 	return sm.registry[name]
 }
 
+// HasPendingChange returns true if the user has toggled a setting but not yet applied.
+func (sm *SettingsManager) HasPendingChange(name string) bool {
+	_, exists := sm.chgPrefsCallbacks[name]
+	return exists
+}
+
 // CreateApplyButton is a helper function that creates and sets up the Apply Changes button.
 func createApplyButton(sm *SettingsManager) *widget.Button {
 	var applyButton *widget.Button

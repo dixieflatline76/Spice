@@ -2,16 +2,155 @@ package wallpaper
 
 import (
 	"fmt"
+	"net/url"
 	"sort"
 	"strings"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
 	utilLog "github.com/dixieflatline76/Spice/v2/util/log"
 )
+
+// QueryListConfig defines the provider-specific callbacks for a scrollable query list.
+// Providers pass this to CreateQueryList to get a scroll-safe widget.List that
+// correctly handles Fyne's cell recycling without losing pending user toggles.
+type QueryListConfig struct {
+	// GetQueries returns the current list of queries from config.
+	GetQueries func() []ImageQuery
+	// EnableQuery is called on Apply when the user enables a query.
+	EnableQuery func(id string) error
+	// DisableQuery is called on Apply when the user disables a query.
+	DisableQuery func(id string) error
+	// RemoveQuery is called when the user confirms deletion.
+	RemoveQuery func(id string) error
+	// GetDisplayURL converts an API URL to a clickable web URL. Optional.
+	GetDisplayURL func(apiURL string) *url.URL
+}
+
+// CreateQueryList builds a scroll-safe widget.List for query management.
+// It handles baseline seeding, pending state preservation across Fyne cell recycling,
+// and wires up the enable/disable/delete interactions with the SettingsManager.
+func CreateQueryList(sm setting.SettingsManager, cfg QueryListConfig) *widget.List {
+	var queryList *widget.List
+	queryList = widget.NewList(
+		// Length
+		func() int {
+			return len(cfg.GetQueries())
+		},
+		// CreateItem — builds the cell template (no data binding here)
+		func() fyne.CanvasObject {
+			urlLink := widget.NewHyperlink("Placeholder", nil)
+			activeCheck := widget.NewCheck("Active", nil)
+			deleteButton := widget.NewButton("Delete", nil)
+			return container.NewHBox(urlLink, layout.NewSpacer(), activeCheck, deleteButton)
+		},
+		// UpdateItem — binds data to a recycled cell (scroll-safe)
+		func(i int, o fyne.CanvasObject) {
+			queries := cfg.GetQueries()
+			if i >= len(queries) {
+				return
+			}
+			query := queries[i]
+			queryKey := query.ID
+
+			c := o.(*fyne.Container)
+			urlLink := c.Objects[0].(*widget.Hyperlink)
+			activeCheck := c.Objects[2].(*widget.Check)
+			deleteButton := c.Objects[3].(*widget.Button)
+
+			// Set display text and URL
+			urlLink.SetText(query.Description)
+			if cfg.GetDisplayURL != nil {
+				if u := cfg.GetDisplayURL(query.URL); u != nil {
+					urlLink.SetURL(u)
+				}
+			} else {
+				if u, err := url.Parse(query.URL); err == nil {
+					urlLink.SetURL(u)
+				}
+			}
+
+			// --- Scroll-Safe State Management ---
+			// Only seed baseline on first encounter to avoid overwriting pending toggles.
+			if sm.GetBaseline(queryKey) == nil {
+				sm.SeedBaseline(queryKey, query.Active)
+			}
+
+			// MUST clear OnChanged before SetChecked, otherwise recycling a cell
+			// will trigger the previous query's OnChanged callback!
+			activeCheck.OnChanged = nil
+
+			// Restore pending state if user has toggled, otherwise use persisted state.
+			if sm.HasPendingChange(queryKey) {
+				activeCheck.SetChecked(!sm.GetBaseline(queryKey).(bool))
+			} else {
+				activeCheck.SetChecked(query.Active)
+			}
+
+			// Wire checkbox toggle
+			activeCheck.OnChanged = func(b bool) {
+				if b != sm.GetBaseline(queryKey).(bool) {
+					sm.SetSettingChangedCallback(queryKey, func() {
+						var err error
+						if b {
+							err = cfg.EnableQuery(query.ID)
+						} else {
+							err = cfg.DisableQuery(query.ID)
+						}
+
+						if err != nil {
+							utilLog.Printf("Failed to update query status: %v", err)
+						} else {
+							// Update the baseline IF the change was successfully applied.
+							// This prevents the "logic flip" bug if the user interacts
+							// with the list again before reloading the panel.
+							sm.SeedBaseline(queryKey, b)
+
+							// Also update the underlying query data object in the local slice for this cell recycle loop,
+							// just in case, though the config slice is usually re-fetched.
+							query.Active = b
+						}
+					})
+					sm.SetRefreshFlag(queryKey)
+				} else {
+					sm.RemoveSettingChangedCallback(queryKey)
+					sm.UnsetRefreshFlag(queryKey)
+				}
+				sm.GetCheckAndEnableApplyFunc()()
+			}
+
+			// Wire delete button
+			deleteButton.OnTapped = func() {
+				d := dialog.NewConfirm("Please Confirm", fmt.Sprintf("Are you sure you want to delete %s?", query.Description), func(b bool) {
+					if b {
+						if query.Active {
+							sm.SetRefreshFlag(queryKey)
+							sm.GetCheckAndEnableApplyFunc()()
+						}
+						if err := cfg.RemoveQuery(query.ID); err != nil {
+							utilLog.Printf("Failed to remove query: %v", err)
+						}
+						queryList.Refresh()
+					}
+				}, sm.GetSettingsWindow())
+				d.Show()
+			}
+
+			// Managed queries cannot be deleted
+			if query.Managed {
+				deleteButton.Disable()
+			} else {
+				deleteButton.Enable()
+			}
+		},
+	)
+	return queryList
+}
 
 // CreateTrayMenuItems creates the menu items for the tray menu
 func (wp *Plugin) CreateTrayMenuItems() []*fyne.MenuItem {
