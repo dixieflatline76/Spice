@@ -5,12 +5,12 @@ title: Architecture
 
 # Spice Architecture Documentation (Wallpaper Plugin)
 
-> **Status**: Current as of v2.5.0 (Settings Registry Refactor)
+> **Status**: Current as of v2.5.1 (Concurrency Model Audit)
 > **Focus**: Concurrency Model, Image Pipeline, and Actor-based Display Management
 
 ## 1. Executive Summary
 
-Spice employs a **Single-Writer, Multiple-Reader (SWMR)** concurrency architecture to separate resource-intensive operations (image processing, I/O) from the user interface. This design eliminates UI main-thread blocking ("jank") and lock contention, ensuring a buttery-smooth user experience even during heavy background downloads.
+Spice employs a **hybrid concurrency architecture** to separate resource-intensive operations (image processing, I/O) from the user interface. The performance-critical **hot path** (image download, processing, and ingestion) is serialized through a **single-writer pipeline**, while infrequent **administrative operations** (favorites, cache clearing, reconciliation) use direct **mutex-protected** store access. This design eliminates UI main-thread blocking ("jank") and ensures a responsive user experience even during heavy background downloads.
 
 ## 2. System Architecture (Plugin System)
 
@@ -40,11 +40,15 @@ graph TD
 
 ### 3.1 Core Concepts
 
-#### 3.1.1 The Single-Writer Principle
+#### 3.1.1 The Pipeline-Serialized Hot Path
 
-To prevent race conditions and lock contention, **only one** goroutine is allowed to mutate the global state (Image Store). All other components, including the UI, are **Readers** or **Command Senders**.
+On the performance-critical hot path (image ingestion from workers), mutations are serialized through a **single pipeline goroutine** (`stateManagerLoop`). This eliminates lock contention during high-throughput operations like bulk downloading.
 
-#### 3.1.2 Decoupled UI Session
+#### 3.1.2 Mutex-Protected Admin Operations
+
+Infrequent administrative operations (toggling favorites, cache clearing, startup reconciliation, query removal) mutate the store directly under `sync.RWMutex`. These operations are inherently synchronous — a user clicks "Clear Cache" and the store must be updated before the UI refreshes.
+
+#### 3.1.3 Decoupled UI Session
 
 The User Interface maintains its own **local session state** (which image am I looking at right now?). It strictly reads from the shared store and sends asynchronous commands to request changes.
 
@@ -119,16 +123,20 @@ A thread-safe, stateless container.
   - **Writes (Download/MarkSeen)**: Uses `Lock()` (Exclusive).
   - **Persistence**: Debounced (2s) and uses `RLock()` to save to disk without blocking readers.
 - **Constraints**: Contains no iteration logic (no `currentIndex`).
+- **Writers**: The store is written to by two categories of caller:
+  - **Pipeline (hot path)**: `Add`, `MarkSeen`, `Remove`, `Clear` — serialized through `stateManagerLoop`.
+  - **Plugin (admin ops)**: `Update`, `Remove`, `RemoveByQueryID`, `ResetFavorites`, `Wipe`, `Sync` — called directly under mutex from the Plugin for user-initiated or startup operations.
 
 ### 4.2 Pipeline State Manager (`pkg/wallpaper/pipeline.go`)
 
-The "Brain" of the backend.
+The serialized writer for the **hot path**.
 
 - **Role**: Consumes results from workers and commands from the UI.
 - **Behavior**:
   - Loops continuously selecting on `resultChan` and `cmdChan`.
   - Acquires Write Lock -> Mutates Store -> Releases Lock.
   - **Yields**: Calls `runtime.Gosched()` after every operation to prevent starving readers.
+- **Scope**: Handles `Add` (from workers), `MarkSeen`, `Remove`, and `Clear` (from command channel). Does **not** handle admin operations like favorites management or query cleanup, which are performed directly by the Plugin.
 
 ### 4.3 UI Plugin (`pkg/wallpaper/wallpaper.go`)
 
@@ -260,8 +268,9 @@ To manage the growing number of providers, Spice categorizes them into three dis
 
 To maintain responsiveness under load, the following optimizations are employed:
 
-1. **O(1) Image Store**: The store uses a secondary `idSet map[string]bool` to perform existence checks in constant time (45ns) rather than linear scans (470ns+), ensuring that the Writer Loop never lags even with thousands of images.
+1. **O(1) Image Store**: The store uses a secondary `idSet map[string]bool` to perform existence checks in constant time (45ns) rather than linear scans (470ns+), ensuring that the pipeline writer never lags even with thousands of images.
 2. **Synchronous Race Prevention**: The Controller synchronously anticipates background work (setting `isDownloading = true` under lock) *before* spawning goroutines. This prevents "job storms" and CPU saturation during rapid UI interactions.
+3. **Hot/Cold Path Separation**: Performance-critical writes (image ingestion from workers) are serialized through the pipeline to minimize lock contention. Administrative writes (favorites, cache clearing) go directly through the mutex — these are infrequent and benefit from synchronous completion rather than async queueing.
 
 ## 3.8 Smart Fit Algorithm (Strategy Pattern)
 Spice's imaging engine (`pkg/wallpaper/smart_image_processor.go`) implements the **Strategy Pattern** to dynamically select the best cropping method based on image content and user settings.

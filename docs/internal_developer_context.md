@@ -2,27 +2,34 @@
 
 > **Purpose**: This document serves as the authoritative "Mental Model" of the Spice codebase. It contains deep-dive technical details required to understand the system's constraints, concurrency model, and extension patterns. **Read this before making changes.**
 
-## 1. Core Architecture: The Single-Writer, Multiple-Reader (SWMR) Model
+## 1. Core Architecture: Hybrid Concurrency Model
 
 Spice is designed to remain responsive (60fps UI) even while downloading 50MB 8K images or performing CPU-intensive face detection.
 
-### 1.1 The Golden Rule of Concurrency
-**Only ONE goroutine is allowed to write to the global state.**
+### 1.1 The Concurrency Model
+**The hot path (image ingestion) is serialized through one goroutine. Admin operations use direct mutex access.**
 
 *   **The Store (`pkg/wallpaper/store.go`)**: The source of truth.
     *   **Data Structure**: Uses `[]provider.Image` for sequential access (history) and `map[string]bool` (`idSet`) for O(1) lookups.
     *   **Locking**:
         *   `RLock()`: Used by the UI (Reader) for instant "Next/Prev" actions.
-        *   `Lock()`: Used **ONLY** by the Pipeline's StateManager.
+        *   `Lock()`: Used by the Pipeline's StateManager (hot path) and the Plugin (admin operations).
     *   **Persistence**: Uses a "Debounced Save" mechanism. Calling `scheduleSaveLocked()` starts a timer (2s). If called again, the timer resets. This batches 100+ rapid updates (bulk imports) into a single JSON write.
     *   **Synchronization Model**: The `Sync` method uses a **Policy Pattern** via `ImageSyncAction` (Keep, Delete, Invalidate). This ensures deterministic state transitions for every image based on active queries, avoid sets, and file availability, replacing complex ad-hoc logic.
 
 *   **The Pipeline (`pkg/wallpaper/pipeline.go`)**: The workhorse.
     *   **Worker Pool**: N goroutines (default: NumCPU) that fetch and process images. They communicate results via `resultChan`.
-    *   **State Manager Loop**: The **sole writer**. It `select`s on:
+    *   **State Manager Loop**: The serialized writer for the **hot path**. It `select`s on:
         1.  `resultChan`: New images from workers -> Calls `store.Add()`.
         2.  `cmdChan`: Commands from UI (`CmdMarkSeen`, `CmdRemove`) -> Calls `store.MarkSeen()`.
     *   **Yielding**: The loop calls `runtime.Gosched()` after every operation to ensure the UI reader thread is never starved during heavy batch processing.
+
+*   **Admin Operations (Plugin / `wallpaper.go`)**: Infrequent, user-initiated mutations.
+    *   `ToggleFavorite`: Calls `store.Remove()` or `store.Update()` directly.
+    *   `reconcileFavorites`: Calls `store.Remove()` / `store.Update()` at startup.
+    *   `onQueryRemoved` / `onQueryDisabled`: Calls `store.RemoveByQueryID()`.
+    *   `ClearCache`: Calls `store.Wipe()`.
+    *   These are all protected by the store's `sync.RWMutex` and do not contend with the hot path in practice.
 
 ### 1.2 pagination & Anti-Thrashing Logic
 In `pkg/wallpaper/wallpaper.go`:

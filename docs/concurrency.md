@@ -5,8 +5,10 @@ title: Concurrency & Favorites Lifecycle
 
 # Concurrency Model & Favorites Lifecycle
 
-> **Status**: Current as of v2.3.0
+> **Status**: Current as of v2.5.1 (Concurrency Model Audit)
 > **Scope**: Non-UI concurrency patterns, lock hierarchy, and favorites data lifecycle
+>
+> **Model**: Spice uses a **hybrid concurrency model**. The hot path (image ingestion from download workers) is serialized through a single pipeline goroutine (`stateManagerLoop`). Administrative operations (favorites toggling, cache clearing, startup reconciliation, query removal) mutate the store directly under `sync.RWMutex`.
 
 ## 1. Concurrent Actors
 
@@ -20,6 +22,8 @@ title: Concurrency & Favorites Lifecycle
 | Ticker goroutine | 1 per frequency change | None | Until replaced |
 | Fetch goroutines | Up to 5 (semaphore) | `downloadMutex`, `sourcesMutex` | Per fetch cycle |
 | Favorites worker | 1 | `favProvider.mu` via favMap | Provider lifetime |
+
+> **Note**: The Pipeline stateManager is the serialized writer for the hot path (`Add`, `MarkSeen`, `Remove`, `Clear`). The Plugin itself also writes to the store directly for admin operations (`Update`, `RemoveByQueryID`, `ResetFavorites`, `Wipe`, `Sync`) under the store's `RWMutex`.
 
 ## 2. Lock Hierarchy
 
