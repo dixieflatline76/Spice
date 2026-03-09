@@ -472,49 +472,13 @@ func (p *WallhavenProvider) Title() string {
 func (p *WallhavenProvider) CreateSettingsPanel(sm setting.SettingsManager) fyne.CanvasObject {
 	whHeader := container.NewVBox()
 
-	p.buildAPIKeySection(sm, whHeader)
-	p.buildUsernameSection(sm, whHeader)
+	// Forward declarations for dynamic button control
+	var (
+		apiKeyBtn   *widget.Button
+		usernameBtn *widget.Button
+	)
 
-	// Keep Synced Checkbox
-	syncConfig := setting.BoolConfig{
-		Name:         "WallhavenSyncEnabled",
-		InitialValue: p.cfg.GetWallhavenSyncEnabled(),
-		Label:        sm.CreateSettingTitleLabel("Keep Favorites (collections) Synced:"),
-		HelpContent:  sm.CreateSettingDescriptionLabel("Automatically synchronize your Wallhaven collections with Spice. New collections will be added as inactive queries."),
-		EnabledIf: func() bool {
-			currentUsername := sm.GetValue("Wallhaven Username")
-			if currentUsername == nil {
-				return false
-			}
-			// Only enable if the current text matches our successfully validated username
-			return p.validatedUsername == currentUsername.(string) && p.validatedUsername != ""
-		},
-		ApplyFunc: func(b bool) {
-			p.cfg.SetWallhavenSyncEnabled(b)
-
-			// Perform sync/cleanup on Apply
-			if b && p.cfg.GetWallhavenUsername() == "" {
-				dialog.ShowError(errors.New("Please enter your wallhaven.cc username"), sm.GetSettingsWindow())
-				// we don't return here so the setting is still saved, but sync is skipped
-			}
-
-			// Trigger sync in background
-			go func() {
-				_ = p.Sync(context.Background())
-				fyne.Do(func() {
-					sm.SetRefreshFlag("queries") // This will trigger refresh of all registered refresh funcs
-				})
-			}()
-		},
-	}
-	sm.CreateBoolSetting(&syncConfig, whHeader)
-
-	return whHeader
-}
-
-func (p *WallhavenProvider) buildAPIKeySection(sm setting.SettingsManager, whHeader *fyne.Container) {
-	var apiKeyBtn *widget.Button
-
+	// Wallhaven API Key
 	whURL, _ := url.Parse("https://wallhaven.cc/settings/account")
 	wallhavenAPIKeyConfig := setting.TextEntrySettingConfig{
 		Name:          "wallhavenAPIKey",
@@ -539,6 +503,7 @@ func (p *WallhavenProvider) buildAPIKeySection(sm setting.SettingsManager, whHea
 			curr := currentValue.(string)
 			base := baselineValue.(string)
 
+			// Enabled if empty OR if we're currently editing/clearing (diff from baseline)
 			return curr == "" || curr != base
 		},
 		OnChanged: func(s string) {
@@ -567,18 +532,22 @@ func (p *WallhavenProvider) buildAPIKeySection(sm setting.SettingsManager, whHea
 		},
 	}
 
+	// Dynamic update helper for API key button
 	refreshAPIKeyUI := func() {
 		curr := sm.GetValue("wallhavenAPIKey").(string)
 		wallhavenAPIKeyConfig.OnChanged(curr)
 	}
 
+	// We don't use the standard ApplyFunc here because we want the button to handle it
 	sm.CreateTextEntrySetting(&wallhavenAPIKeyConfig, whHeader)
 
+	// API Key Action Button (Verify or Clear)
 	apiKeyBtn = widget.NewButton("Verify & Connect", func() {
 		currKey := sm.GetValue("wallhavenAPIKey").(string)
 		baseKey := sm.GetBaseline("wallhavenAPIKey").(string)
 
 		if currKey == baseKey && currKey != "" {
+			// State: Clear
 			dialog.NewConfirm("Clear API Key", "Are you sure you want to clear the Wallhaven API Key, Username, and all synced collections?", func(b bool) {
 				if b {
 					p.validatedUsername = ""
@@ -599,6 +568,7 @@ func (p *WallhavenProvider) buildAPIKeySection(sm setting.SettingsManager, whHea
 			return
 		}
 
+		// State: Verify & Connect
 		apiKeyBtn.Disable()
 		apiKeyBtn.SetText("Verifying...")
 		go func() {
@@ -612,14 +582,16 @@ func (p *WallhavenProvider) buildAPIKeySection(sm setting.SettingsManager, whHea
 					apiKeyBtn.SetText("Verify & Connect")
 					return
 				}
+				// Success! Save immediately and lock
 				p.cfg.SetWallhavenAPIKey(currKey)
 				sm.SeedBaseline("wallhavenAPIKey", currKey)
-				sm.Refresh()
+				sm.Refresh() // This locks the entry
 				refreshAPIKeyUI()
 			})
 		}()
 	})
 	apiKeyBtn.Importance = widget.HighImportance
+	// Initial visibility
 	initialKey := p.cfg.GetWallhavenAPIKey()
 	if initialKey == "" {
 		apiKeyBtn.Hide()
@@ -628,11 +600,8 @@ func (p *WallhavenProvider) buildAPIKeySection(sm setting.SettingsManager, whHea
 		apiKeyBtn.Importance = widget.DangerImportance
 	}
 	whHeader.Add(apiKeyBtn)
-}
 
-func (p *WallhavenProvider) buildUsernameSection(sm setting.SettingsManager, whHeader *fyne.Container) {
-	var usernameBtn *widget.Button
-
+	// Wallhaven Username for Sync
 	whUsernameConfig := setting.TextEntrySettingConfig{
 		Name:          "Wallhaven Username",
 		InitialValue:  p.cfg.GetWallhavenUsername(),
@@ -690,6 +659,7 @@ func (p *WallhavenProvider) buildUsernameSection(sm setting.SettingsManager, whH
 					sm.Refresh()
 					return
 				}
+				// Success!
 				p.validatedUsername = currUser
 				p.cfg.SetWallhavenUsername(currUser)
 				sm.SeedBaseline("Wallhaven Username", currUser)
@@ -699,10 +669,47 @@ func (p *WallhavenProvider) buildUsernameSection(sm setting.SettingsManager, whH
 		}()
 	})
 	usernameBtn.Importance = widget.HighImportance
+	// Initial visibility
 	if p.cfg.GetWallhavenUsername() == "" || p.validatedUsername == p.cfg.GetWallhavenUsername() {
 		usernameBtn.Hide()
 	}
 	whHeader.Add(usernameBtn)
+
+	// Keep Synced Checkbox
+	syncConfig := setting.BoolConfig{
+		Name:         "WallhavenSyncEnabled",
+		InitialValue: p.cfg.GetWallhavenSyncEnabled(),
+		Label:        sm.CreateSettingTitleLabel("Keep Favorites (collections) Synced:"),
+		HelpContent:  sm.CreateSettingDescriptionLabel("Automatically synchronize your Wallhaven collections with Spice. New collections will be added as inactive queries."),
+		EnabledIf: func() bool {
+			currentUsername := sm.GetValue("Wallhaven Username")
+			if currentUsername == nil {
+				return false
+			}
+			// Only enable if the current text matches our successfully validated username
+			return p.validatedUsername == currentUsername.(string) && p.validatedUsername != ""
+		},
+		ApplyFunc: func(b bool) {
+			p.cfg.SetWallhavenSyncEnabled(b)
+
+			// Perform sync/cleanup on Apply
+			if b && p.cfg.GetWallhavenUsername() == "" {
+				dialog.ShowError(errors.New("Please enter your wallhaven.cc username"), sm.GetSettingsWindow())
+				// we don't return here so the setting is still saved, but sync is skipped
+			}
+
+			// Trigger sync in background
+			go func() {
+				_ = p.Sync(context.Background())
+				fyne.Do(func() {
+					sm.SetRefreshFlag("queries") // This will trigger refresh of all registered refresh funcs
+				})
+			}()
+		},
+	}
+	sm.CreateBoolSetting(&syncConfig, whHeader)
+
+	return whHeader
 }
 
 func (p *WallhavenProvider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl string) fyne.CanvasObject {

@@ -128,70 +128,68 @@ func (c *SmartImageProcessor) CheckCompatibility(imgWidth, imgHeight, systemWidt
 
 	// "Quality" Mode (SmartFitNormal)
 	if mode == SmartFitNormal {
-		return c.checkQualityModeCompatibility(imgWidth, imgHeight, systemWidth, systemHeight, aspectDiff)
+		// Gate limit (1.5) in pre-check to allow potential "Face Rescue" for non-native fits.
+		// However, for Quality mode, we want to avoid drastic orientation swaps (e.g. Landscape to Portrait)
+		// unless the image is reasonably square.
+
+		isSquare := imgWidth == imgHeight
+		if !isSquare {
+			srcLand := imgWidth > imgHeight
+			tgtLand := systemWidth > systemHeight
+			if srcLand != tgtLand {
+				// Orientation Mismatch (e.g. Wide Image on Tall Monitor)
+				// 0.5 Diff Threshold prevents 3:2 Landscape (1.5) on 10:16 Portrait (0.625) -> Diff 0.875
+				// But allows Square (1.0) on Portrait (0.625) -> Diff 0.375
+				if aspectDiff > 0.5 {
+					return fmt.Errorf("incompatible orientation for Quality mode (Diff %.2f > 0.5)", aspectDiff)
+				}
+			}
+		}
+
+		if aspectDiff > 1.5 {
+			return fmt.Errorf("aspect ratio diff too large for Quality mode (%.2f > 1.5)", aspectDiff)
+		}
+		return nil
 	}
 
 	// "Flexibility" Mode (SmartFitAggressive)
 	if mode == SmartFitAggressive {
-		return c.checkFlexibilityModeCompatibility(imgWidth, imgHeight, systemWidth, systemHeight, aspectDiff)
-	}
+		scaleX := float64(imgWidth) / float64(systemWidth)
+		scaleY := float64(imgHeight) / float64(systemHeight)
+		surplus := math.Min(scaleX, scaleY)
 
-	return nil
-}
+		// Dynamic Formula: Base * Surplus * AggressiveMultiplier (1.9)
+		effectiveThreshold := c.config.Tuning.AspectThreshold * surplus * c.config.Tuning.AggressiveMultiplier
 
-func (c *SmartImageProcessor) checkQualityModeCompatibility(imgWidth, imgHeight, systemWidth, systemHeight int, aspectDiff float64) error {
-	isSquare := imgWidth == imgHeight
-	if !isSquare {
-		srcLand := imgWidth > imgHeight
-		tgtLand := systemWidth > systemHeight
-		if srcLand != tgtLand {
-			if aspectDiff > 0.5 {
-				return fmt.Errorf("incompatible orientation for Quality mode (Diff %.2f > 0.5)", aspectDiff)
+		// SAFETY CAP: Even with high resolution, don't allow insane crops.
+		// 1.5 is the absolute limit for Flexibility. Anything beyond this regardless of resolution is a "sliver".
+		if effectiveThreshold > 1.5 {
+			effectiveThreshold = 1.5
+		}
+
+		// Orientation Safety: Block drastic mismatches (e.g. Landscape on Portrait)
+		// Square images (imgWidth == imgHeight) are exempted to allow safe cropping.
+		isSquare := imgWidth == imgHeight
+		if !isSquare {
+			srcLand := imgWidth > imgHeight
+			tgtLand := systemWidth > systemHeight
+			if srcLand != tgtLand {
+				// Orientation Mismatch: Cap threshold to block bad crops (e.g. 16:9 on 9:16)
+				// Limit of 0.8 allows 4:3 on Portrait (Diff ~0.7) but blocks 16:9 on Portrait (Diff ~1.15)
+				if effectiveThreshold > 0.8 {
+					effectiveThreshold = 0.8
+				}
 			}
+		}
+
+		log.Debugf("SmartFit [Flexibility]: Check (Src: %dx%d, Tgt: %dx%d, Surplus: %.2f, DynamicThreshold: %.2f, Diff: %.2f)",
+			imgWidth, imgHeight, systemWidth, systemHeight, surplus, effectiveThreshold, aspectDiff)
+
+		if aspectDiff > effectiveThreshold {
+			return fmt.Errorf("image aspect ratio not compatible (Diff: %.2f > Limit: %.2f)", aspectDiff, effectiveThreshold)
 		}
 	}
 
-	if aspectDiff > 1.5 {
-		return fmt.Errorf("aspect ratio diff too large for Quality mode (%.2f > 1.5)", aspectDiff)
-	}
-	return nil
-}
-
-func (c *SmartImageProcessor) checkFlexibilityModeCompatibility(imgWidth, imgHeight, systemWidth, systemHeight int, aspectDiff float64) error {
-	scaleX := float64(imgWidth) / float64(systemWidth)
-	scaleY := float64(imgHeight) / float64(systemHeight)
-	surplus := math.Min(scaleX, scaleY)
-
-	// Dynamic Formula: Base * Surplus * AggressiveMultiplier (1.9)
-	effectiveThreshold := c.config.Tuning.AspectThreshold * surplus * c.config.Tuning.AggressiveMultiplier
-
-	// SAFETY CAP: Even with high resolution, don't allow insane crops.
-	// 1.5 is the absolute limit for Flexibility. Anything beyond this regardless of resolution is a "sliver".
-	if effectiveThreshold > 1.5 {
-		effectiveThreshold = 1.5
-	}
-
-	// Orientation Safety: Block drastic mismatches (e.g. Landscape on Portrait)
-	// Square images (imgWidth == imgHeight) are exempted to allow safe cropping.
-	isSquare := imgWidth == imgHeight
-	if !isSquare {
-		srcLand := imgWidth > imgHeight
-		tgtLand := systemWidth > systemHeight
-		if srcLand != tgtLand {
-			// Orientation Mismatch: Cap threshold to block bad crops (e.g. 16:9 on 9:16)
-			// Limit of 0.8 allows 4:3 on Portrait (Diff ~0.7) but blocks 16:9 on Portrait (Diff ~1.15)
-			if effectiveThreshold > 0.8 {
-				effectiveThreshold = 0.8
-			}
-		}
-	}
-
-	log.Debugf("SmartFit [Flexibility]: Check (Src: %dx%d, Tgt: %dx%d, Surplus: %.2f, DynamicThreshold: %.2f, Diff: %.2f)",
-		imgWidth, imgHeight, systemWidth, systemHeight, surplus, effectiveThreshold, aspectDiff)
-
-	if aspectDiff > effectiveThreshold {
-		return fmt.Errorf("image aspect ratio not compatible (Diff: %.2f > Limit: %.2f)", aspectDiff, effectiveThreshold)
-	}
 	return nil
 }
 

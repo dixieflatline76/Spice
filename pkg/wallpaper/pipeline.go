@@ -128,7 +128,17 @@ func (p *Pipeline) stateManagerLoop() {
 				return
 			}
 			if res.Error != nil {
-				p.logPipelineError(res.Error)
+				if strings.Contains(res.Error.Error(), "avoid set") {
+					log.Debugf("Pipeline: %v", res.Error)
+				} else if strings.Contains(res.Error.Error(), "smart fit") || strings.Contains(res.Error.Error(), "aspect ratio") || strings.Contains(res.Error.Error(), "image resolution too low") {
+					log.Debugf("Pipeline: %v", res.Error)
+				} else if strings.Contains(res.Error.Error(), "status 429") || strings.Contains(res.Error.Error(), "enrichment") {
+					log.Debugf("Pipeline: %v", res.Error)
+				} else if strings.Contains(res.Error.Error(), "incompatible") {
+					log.Debugf("Pipeline: %v", res.Error)
+				} else {
+					log.Printf("Pipeline Error: %v", res.Error)
+				}
 				continue
 			}
 			p.store.Add(res.Image)
@@ -158,21 +168,5 @@ func (p *Pipeline) SendCommand(cmd StateCmd) {
 	select {
 	case p.cmdChan <- cmd:
 	case <-p.ctx.Done():
-	}
-}
-
-// logPipelineError categorizes and logs errors, ignoring expected ones.
-func (p *Pipeline) logPipelineError(err error) {
-	errMsg := err.Error()
-	if strings.Contains(errMsg, "avoid set") {
-		log.Debugf("Pipeline: %v", err)
-	} else if strings.Contains(errMsg, "smart fit") || strings.Contains(errMsg, "aspect ratio") || strings.Contains(errMsg, "image resolution too low") {
-		log.Debugf("Pipeline: %v", err)
-	} else if strings.Contains(errMsg, "status 429") || strings.Contains(errMsg, "enrichment") {
-		log.Debugf("Pipeline: %v", err)
-	} else if strings.Contains(errMsg, "incompatible") {
-		log.Debugf("Pipeline: %v", err)
-	} else {
-		log.Printf("Pipeline Error: %v", err)
 	}
 }

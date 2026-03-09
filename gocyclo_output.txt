@@ -1,7 +1,0 @@
-26 wallhaven (*WallhavenProvider).CreateSettingsPanel pkg\wallpaper\providers\wallhaven\wallhaven.go:472:1
-23 ui (*SettingsManager).CreateTextEntrySetting ui\settings_manager.go:303:1
-18 main main cmd\util\smart_fit_report\main.go:117:1
-18 main main cmd\util\face_detect_tuning_report\main.go:117:1
-17 main main cmd\util\cleanup_report_images\main.go:12:1
-16 googlephotos (*Provider).CreateQueryPanel pkg\wallpaper\providers\googlephotos\provider.go:241:1
-16 main TestAdaptManifestForFirefox cmd\util\pack_extension\main_test.go:12:1

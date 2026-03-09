@@ -214,10 +214,6 @@ func (p *Provider) loadInitialMetadata() {
 		}
 	}
 
-	p.cleanOrphanMetadata(favDir, meta, metaFile)
-}
-
-func (p *Provider) cleanOrphanMetadata(favDir string, meta map[string]interface{}, metaFile string) {
 	// Validate favMap against actual files on disk.
 	// If metadata says a file is favorited but the image doesn't exist, clean it up.
 	orphans := []string{}
@@ -309,10 +305,10 @@ func (p *Provider) addFavoriteInternal(img provider.Image) {
 	}
 }
 
-func (p *Provider) findOldestFavorite(favDir string) string {
+func (p *Provider) pruneOldestFavorite(favDir string) error {
 	entries, err := os.ReadDir(favDir)
 	if err != nil {
-		return ""
+		return err
 	}
 
 	var images []os.DirEntry
@@ -323,7 +319,7 @@ func (p *Provider) findOldestFavorite(favDir string) string {
 	}
 
 	if len(images) < wallpaper.MaxFavoritesLimit {
-		return ""
+		return nil
 	}
 
 	var oldest string
@@ -338,45 +334,37 @@ func (p *Provider) findOldestFavorite(favDir string) string {
 			}
 		}
 	}
-	return oldest
-}
 
-func (p *Provider) pruneOldestFavorite(favDir string) error {
-	oldest := p.findOldestFavorite(favDir)
-	if oldest == "" {
-		return nil
-	}
+	if oldest != "" {
+		if err := os.Remove(filepath.Join(favDir, oldest)); err != nil {
+			return err
+		}
 
-	if err := os.Remove(filepath.Join(favDir, oldest)); err != nil {
-		return err
-	}
+		// Also remove from favMap
+		oldestID := strings.TrimSuffix(oldest, filepath.Ext(oldest))
+		p.mu.Lock()
+		delete(p.favMap, oldestID)
+		p.mu.Unlock()
 
-	// Also remove from favMap
-	oldestID := strings.TrimSuffix(oldest, filepath.Ext(oldest))
-	p.mu.Lock()
-	delete(p.favMap, oldestID)
-	p.mu.Unlock()
-
-	p.removeMetadataEntry(favDir, oldest)
-	log.Printf("FIFO: Removed oldest favorite %s", oldest)
-	return nil
-}
-
-func (p *Provider) removeMetadataEntry(favDir, filename string) {
-	metaFile := filepath.Join(favDir, "metadata.json")
-	if f, err := os.ReadFile(metaFile); err == nil {
-		var meta map[string]interface{}
-		if err := json.Unmarshal(f, &meta); err == nil {
-			if filesMeta, ok := meta["files"].(map[string]interface{}); ok {
-				if _, exists := filesMeta[filename]; exists {
-					delete(filesMeta, filename)
-					if data, err := json.MarshalIndent(meta, "", "  "); err == nil {
-						_ = os.WriteFile(metaFile, data, 0600)
+		// Cleanup Metadata Entry
+		metaFile := filepath.Join(favDir, "metadata.json")
+		if f, err := os.ReadFile(metaFile); err == nil {
+			var meta map[string]interface{}
+			if err := json.Unmarshal(f, &meta); err == nil {
+				if filesMeta, ok := meta["files"].(map[string]interface{}); ok {
+					if _, exists := filesMeta[oldest]; exists {
+						delete(filesMeta, oldest)
+						if data, err := json.MarshalIndent(meta, "", "  "); err == nil {
+							_ = os.WriteFile(metaFile, data, 0600)
+						}
 					}
 				}
 			}
 		}
+
+		log.Printf("FIFO: Removed oldest favorite %s", oldest)
 	}
+	return nil
 }
 
 func (p *Provider) copyFile(src, dest string) error {
@@ -443,7 +431,17 @@ func (p *Provider) RemoveFavorite(img provider.Image) error {
 	return nil
 }
 
-func (p *Provider) findFavoriteFilename(favDir, imgID, fallbackFilePath string) string {
+func (p *Provider) removeFavoriteInternal(img provider.Image) {
+	favDir := p.rootDir
+
+	// We cannot rely on filepath.Base(img.FilePath) because img.FilePath might point to a
+	// processed/cached copy (e.g. .jpeg) while the original favorite is .png or .jpg.
+	// We use img.ID to find the file.
+
+	// Strategy:
+	// 1. Check metadata (authoritative source of filenames)
+	// 2. Glob search (fallback)
+
 	var filename string
 	metaFile := filepath.Join(favDir, "metadata.json")
 	var meta map[string]interface{}
@@ -453,7 +451,7 @@ func (p *Provider) findFavoriteFilename(favDir, imgID, fallbackFilePath string) 
 			if filesMeta, ok := meta["files"].(map[string]interface{}); ok {
 				// Search for filename matching ID
 				for k := range filesMeta {
-					if strings.TrimSuffix(k, filepath.Ext(k)) == imgID {
+					if strings.TrimSuffix(k, filepath.Ext(k)) == img.ID {
 						filename = k
 						break
 					}
@@ -464,7 +462,7 @@ func (p *Provider) findFavoriteFilename(favDir, imgID, fallbackFilePath string) 
 
 	// Fallback if not found in metadata (or metadata missing)
 	if filename == "" {
-		matches, err := filepath.Glob(filepath.Join(favDir, imgID+".*"))
+		matches, err := filepath.Glob(filepath.Join(favDir, img.ID+".*"))
 		if err == nil && len(matches) > 0 {
 			filename = filepath.Base(matches[0])
 		}
@@ -472,43 +470,29 @@ func (p *Provider) findFavoriteFilename(favDir, imgID, fallbackFilePath string) 
 
 	if filename == "" {
 		// Last resort: use the cached filename (likely wrong extension, but worth a try)
-		filename = filepath.Base(fallbackFilePath)
+		filename = filepath.Base(img.FilePath)
 	}
-	return filename
-}
-
-func (p *Provider) removeFavoriteInternal(img provider.Image) {
-	favDir := p.rootDir
-	filename := p.findFavoriteFilename(favDir, img.ID, img.FilePath)
 
 	destPath := filepath.Join(favDir, filename)
-	if err := os.Remove(destPath); err != nil && !os.IsNotExist(err) {
-		log.Printf("failed to remove favorite file %s: %v", destPath, err)
+	if err := os.Remove(destPath); err != nil {
+		if !os.IsNotExist(err) {
+			log.Printf("failed to remove favorite file %s: %v", destPath, err)
+		}
 	}
 
-	p.removeMetadataEntry(favDir, filename)
-}
-
-func (p *Provider) hasLocalImages() bool {
-	entries, err := os.ReadDir(p.rootDir)
-	if err != nil {
-		return true // Default to true on error to let HTTP request handle it
-	}
-	for _, e := range entries {
-		if e.IsDir() {
-			continue
-		}
-		name := strings.ToLower(e.Name())
-		if name == "metadata.json" || name == ".ds_store" {
-			continue
-		}
-		// Check for common image extensions
-		if strings.HasSuffix(name, ".jpg") || strings.HasSuffix(name, ".jpeg") ||
-			strings.HasSuffix(name, ".png") || strings.HasSuffix(name, ".webp") {
-			return true
+	// Cleanup Metadata Entry
+	if meta != nil {
+		if filesMeta, ok := meta["files"].(map[string]interface{}); ok {
+			if _, exists := filesMeta[filename]; exists {
+				delete(filesMeta, filename)
+				if data, err := json.MarshalIndent(meta, "", "  "); err == nil {
+					if err := os.WriteFile(metaFile, data, 0600); err != nil {
+						log.Printf("Failed to update favorites metadata: %v", err)
+					}
+				}
+			}
 		}
 	}
-	return false
 }
 
 func (p *Provider) FetchImages(ctx context.Context, apiURL string, page int) ([]provider.Image, error) {
@@ -517,8 +501,27 @@ func (p *Provider) FetchImages(ctx context.Context, apiURL string, page int) ([]
 
 	// Optimization: Short-circuit if local folder is empty (or only has metadata)
 	// This prevents "micro pauses" from unnecessary HTTP requests to the local server
-	if !p.hasLocalImages() {
-		return []provider.Image{}, nil
+	entries, err := os.ReadDir(p.rootDir)
+	if err == nil {
+		hasImages := false
+		for _, e := range entries {
+			if e.IsDir() {
+				continue
+			}
+			name := strings.ToLower(e.Name())
+			if name == "metadata.json" || name == ".ds_store" {
+				continue
+			}
+			// Check for common image extensions
+			if strings.HasSuffix(name, ".jpg") || strings.HasSuffix(name, ".jpeg") ||
+				strings.HasSuffix(name, ".png") || strings.HasSuffix(name, ".webp") {
+				hasImages = true
+				break
+			}
+		}
+		if !hasImages {
+			return []provider.Image{}, nil
+		}
 	}
 
 	// Construct the local API URL
