@@ -334,96 +334,7 @@ func (sm *SettingsManager) CreateTextEntrySetting(cfg *setting.TextEntrySettingC
 
 	var debounceTimer *time.Timer
 	entry.OnChanged = func(s string) {
-		if debounceTimer != nil {
-			debounceTimer.Stop()
-		}
-
-		var entryErr error
-		if cfg.Validator != nil {
-			entryErr = entry.Validate()
-		}
-
-		if entryErr != nil {
-			statusLabel.SetText(entryErr.Error())
-			statusLabel.Importance = widget.DangerImportance
-			sm.RemoveSettingChangedCallback(cfg.Name)
-			if cfg.NeedsRefresh {
-				sm.UnsetRefreshFlag(cfg.Name)
-			}
-			sm.GetCheckAndEnableApplyFunc()()
-			statusLabel.Refresh()
-			if cfg.OnChanged != nil {
-				cfg.OnChanged(s)
-			}
-			return
-		}
-
-		// Validation passed (or none), clear status and importance while waiting/running post-check
-		statusLabel.SetText("")
-		statusLabel.Importance = widget.LowImportance
-		statusLabel.Refresh()
-
-		runPostCheck := func(val string) {
-			var postErr error
-			if cfg.PostValidateCheck != nil {
-				postErr = cfg.PostValidateCheck(val)
-			}
-
-			fyne.Do(func() {
-				// Ensure the value hasn't changed since we started this check
-				if entry.Text != val {
-					return
-				}
-
-				if postErr != nil {
-					statusLabel.SetText(postErr.Error())
-					statusLabel.Importance = widget.DangerImportance
-					sm.RemoveSettingChangedCallback(cfg.Name)
-					if cfg.NeedsRefresh {
-						sm.UnsetRefreshFlag(cfg.Name)
-					}
-				} else {
-					if cfg.DisplayStatus && val != "" {
-						statusLabel.SetText(fmt.Sprintf("%s OK", cfg.Name))
-						statusLabel.Importance = widget.SuccessImportance
-					} else {
-						statusLabel.SetText("")
-						statusLabel.Importance = widget.LowImportance
-					}
-
-					if val != sm.registry[cfg.Name].(string) {
-						sm.SetSettingChangedCallback(cfg.Name, func() {
-							enteredTxt := entry.Text
-							if enteredTxt != sm.registry[cfg.Name].(string) {
-								cfg.ApplyFunc(enteredTxt)
-							}
-						})
-						if cfg.NeedsRefresh {
-							sm.SetRefreshFlag(cfg.Name)
-						}
-					} else {
-						sm.RemoveSettingChangedCallback(cfg.Name)
-						if cfg.NeedsRefresh {
-							sm.UnsetRefreshFlag(cfg.Name)
-						}
-					}
-				}
-				statusLabel.Refresh()
-				sm.GetCheckAndEnableApplyFunc()()
-			})
-		}
-
-		if cfg.ValidationDebounce > 0 {
-			debounceTimer = time.AfterFunc(cfg.ValidationDebounce, func() {
-				runPostCheck(s)
-			})
-		} else {
-			runPostCheck(s)
-		}
-
-		if cfg.OnChanged != nil {
-			cfg.OnChanged(s)
-		}
+		sm.handleTextEntryChanged(s, cfg, entry, statusLabel, &debounceTimer)
 	}
 
 	// Track if it has an EnabledIf condition
@@ -435,6 +346,103 @@ func (sm *SettingsManager) CreateTextEntrySetting(cfg *setting.TextEntrySettingC
 	}
 
 	return entry
+}
+
+func (sm *SettingsManager) handleTextEntryChanged(s string, cfg *setting.TextEntrySettingConfig, entry *widget.Entry, statusLabel *widget.Label, debounceTimer **time.Timer) {
+	if *debounceTimer != nil {
+		(*debounceTimer).Stop()
+	}
+
+	var entryErr error
+	if cfg.Validator != nil {
+		entryErr = entry.Validate()
+	}
+
+	if entryErr != nil {
+		statusLabel.SetText(entryErr.Error())
+		statusLabel.Importance = widget.DangerImportance
+		sm.RemoveSettingChangedCallback(cfg.Name)
+		if cfg.NeedsRefresh {
+			sm.UnsetRefreshFlag(cfg.Name)
+		}
+		sm.GetCheckAndEnableApplyFunc()()
+		statusLabel.Refresh()
+		if cfg.OnChanged != nil {
+			cfg.OnChanged(s)
+		}
+		return
+	}
+
+	// Validation passed (or none), clear status and importance while waiting/running post-check
+	statusLabel.SetText("")
+	statusLabel.Importance = widget.LowImportance
+	statusLabel.Refresh()
+
+	runPostCheck := func(val string) {
+		sm.runTextEntryPostCheck(val, cfg, entry, statusLabel)
+	}
+
+	if cfg.ValidationDebounce > 0 {
+		*debounceTimer = time.AfterFunc(cfg.ValidationDebounce, func() {
+			runPostCheck(s)
+		})
+	} else {
+		runPostCheck(s)
+	}
+
+	if cfg.OnChanged != nil {
+		cfg.OnChanged(s)
+	}
+}
+
+func (sm *SettingsManager) runTextEntryPostCheck(val string, cfg *setting.TextEntrySettingConfig, entry *widget.Entry, statusLabel *widget.Label) {
+	var postErr error
+	if cfg.PostValidateCheck != nil {
+		postErr = cfg.PostValidateCheck(val)
+	}
+
+	fyne.Do(func() {
+		// Ensure the value hasn't changed since we started this check
+		if entry.Text != val {
+			return
+		}
+
+		if postErr != nil {
+			statusLabel.SetText(postErr.Error())
+			statusLabel.Importance = widget.DangerImportance
+			sm.RemoveSettingChangedCallback(cfg.Name)
+			if cfg.NeedsRefresh {
+				sm.UnsetRefreshFlag(cfg.Name)
+			}
+		} else {
+			if cfg.DisplayStatus && val != "" {
+				statusLabel.SetText(fmt.Sprintf("%s OK", cfg.Name))
+				statusLabel.Importance = widget.SuccessImportance
+			} else {
+				statusLabel.SetText("")
+				statusLabel.Importance = widget.LowImportance
+			}
+
+			if val != sm.registry[cfg.Name].(string) {
+				sm.SetSettingChangedCallback(cfg.Name, func() {
+					enteredTxt := entry.Text
+					if enteredTxt != sm.registry[cfg.Name].(string) {
+						cfg.ApplyFunc(enteredTxt)
+					}
+				})
+				if cfg.NeedsRefresh {
+					sm.SetRefreshFlag(cfg.Name)
+				}
+			} else {
+				sm.RemoveSettingChangedCallback(cfg.Name)
+				if cfg.NeedsRefresh {
+					sm.UnsetRefreshFlag(cfg.Name)
+				}
+			}
+		}
+		statusLabel.Refresh()
+		sm.GetCheckAndEnableApplyFunc()()
+	})
 }
 
 // CreateButtonWithConfirmationSetting creates a reusable button setting with confirmation dialog.

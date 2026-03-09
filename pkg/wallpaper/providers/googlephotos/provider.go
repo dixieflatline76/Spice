@@ -307,103 +307,7 @@ func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl strin
 		ctx, cancel := context.WithCancel(context.Background())
 		cancelFunc = cancel
 
-		go func() {
-			defer func() {
-				// Cleanup context on exit if not cancelled manually
-				// But wait, if we defer cancel(), it's fine.
-				// We just need to make sure UI reset happens.
-			}()
-
-			// 1. Create Session
-			session, err := p.CreatePickerSession(ctx)
-			if err != nil {
-				if ctx.Err() == context.Canceled {
-					return
-				} // Silent exit
-				p.uiError(sm, "Session Error", err, addBtn, progressBar, statusLabel, cancelBtn)
-				return
-			}
-
-			// 2. Open Browser
-			fyne.Do(func() {
-				statusLabel.SetText("Please select photos in your browser...")
-			})
-			if err := p.OpenBrowser(session.PickerURI); err != nil {
-				if ctx.Err() == context.Canceled {
-					return
-				}
-				p.uiError(sm, "Browser Error", err, addBtn, progressBar, statusLabel, cancelBtn)
-				return
-			}
-
-			// 3. Poll
-			fyne.Do(func() {
-				statusLabel.SetText("Waiting for selection (check browser)...")
-			})
-			finalSession, err := p.PollSession(ctx, session.ID, session.PollingConfig.PollInterval)
-			if err != nil {
-				if ctx.Err() == context.Canceled {
-					return
-				}
-				p.uiError(sm, "Polling Error (Timed out?)", err, addBtn, progressBar, statusLabel, cancelBtn)
-				return
-			}
-
-			// 4. Get Items
-			fyne.Do(func() {
-				statusLabel.SetText("Retrieving items...")
-			})
-			items, err := p.GetSessionItems(ctx, finalSession.ID)
-			if err != nil {
-				if ctx.Err() == context.Canceled {
-					return
-				}
-				p.uiError(sm, "Retrieval Error", err, addBtn, progressBar, statusLabel, cancelBtn)
-				return
-			}
-
-			if len(items) == 0 {
-				p.uiError(sm, "No Items", fmt.Errorf("no photos selected"), addBtn, progressBar, statusLabel, cancelBtn)
-				return
-			}
-
-			// 5. Download
-			fyne.Do(func() {
-				statusLabel.SetText(fmt.Sprintf("Downloading %d items...", len(items)))
-			})
-
-			guid := uuid.New().String()
-			storageBase := p.rootDir
-			targetDir := filepath.Join(storageBase, guid)
-
-			// Download and get file links
-			urlMap, err := p.DownloadItems(ctx, items, targetDir)
-			if err != nil {
-				if ctx.Err() == context.Canceled {
-					return
-				}
-				p.uiError(sm, "Download Error", err, addBtn, progressBar, statusLabel, cancelBtn)
-				return
-			}
-
-			// Pre-save metadata with links
-			if err := p.saveInitialMetadata(guid, urlMap); err != nil {
-				log.Printf("Failed to save initial metadata: %v", err)
-			}
-
-			// 6. Spawn Add Dialog (Main Thread)
-			fyne.Do(func() {
-				p.openAddGooglePhotosDialog(sm, guid, len(items), imgQueryList)
-
-				// Reset UI
-				cancelBtn.Hide()
-				addBtn.Show()
-				addBtn.Enable()
-				progressBar.Hide()
-				statusLabel.SetText("")
-				cancelFunc = nil
-			})
-		}()
+		go p.runPickerFlow(ctx, sm, addBtn, cancelBtn, progressBar, statusLabel, imgQueryList, &cancelFunc)
 	}
 
 	return container.NewBorder(
@@ -411,6 +315,104 @@ func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl strin
 		nil, nil, nil,
 		imgQueryList,
 	)
+}
+
+func (p *Provider) runPickerFlow(ctx context.Context, sm setting.SettingsManager, addBtn, cancelBtn *widget.Button, progressBar *widget.ProgressBarInfinite, statusLabel *widget.Label, imgQueryList *widget.List, cancelFunc *context.CancelFunc) {
+	defer func() {
+		// Cleanup context on exit if not cancelled manually
+		// But wait, if we defer cancel(), it's fine.
+		// We just need to make sure UI reset happens.
+	}()
+
+	// 1. Create Session
+	session, err := p.CreatePickerSession(ctx)
+	if err != nil {
+		if ctx.Err() == context.Canceled {
+			return
+		} // Silent exit
+		p.uiError(sm, "Session Error", err, addBtn, progressBar, statusLabel, cancelBtn)
+		return
+	}
+
+	// 2. Open Browser
+	fyne.Do(func() {
+		statusLabel.SetText("Please select photos in your browser...")
+	})
+	if err := p.OpenBrowser(session.PickerURI); err != nil {
+		if ctx.Err() == context.Canceled {
+			return
+		}
+		p.uiError(sm, "Browser Error", err, addBtn, progressBar, statusLabel, cancelBtn)
+		return
+	}
+
+	// 3. Poll
+	fyne.Do(func() {
+		statusLabel.SetText("Waiting for selection (check browser)...")
+	})
+	finalSession, err := p.PollSession(ctx, session.ID, session.PollingConfig.PollInterval)
+	if err != nil {
+		if ctx.Err() == context.Canceled {
+			return
+		}
+		p.uiError(sm, "Polling Error (Timed out?)", err, addBtn, progressBar, statusLabel, cancelBtn)
+		return
+	}
+
+	// 4. Get Items
+	fyne.Do(func() {
+		statusLabel.SetText("Retrieving items...")
+	})
+	items, err := p.GetSessionItems(ctx, finalSession.ID)
+	if err != nil {
+		if ctx.Err() == context.Canceled {
+			return
+		}
+		p.uiError(sm, "Retrieval Error", err, addBtn, progressBar, statusLabel, cancelBtn)
+		return
+	}
+
+	if len(items) == 0 {
+		p.uiError(sm, "No Items", fmt.Errorf("no photos selected"), addBtn, progressBar, statusLabel, cancelBtn)
+		return
+	}
+
+	// 5. Download
+	fyne.Do(func() {
+		statusLabel.SetText(fmt.Sprintf("Downloading %d items...", len(items)))
+	})
+
+	guid := uuid.New().String()
+	storageBase := p.rootDir
+	targetDir := filepath.Join(storageBase, guid)
+
+	// Download and get file links
+	urlMap, err := p.DownloadItems(ctx, items, targetDir)
+	if err != nil {
+		if ctx.Err() == context.Canceled {
+			return
+		}
+		p.uiError(sm, "Download Error", err, addBtn, progressBar, statusLabel, cancelBtn)
+		return
+	}
+
+	// Pre-save metadata with links
+	if err := p.saveInitialMetadata(guid, urlMap); err != nil {
+		log.Printf("Failed to save initial metadata: %v", err)
+	}
+
+	// 6. Spawn Add Dialog (Main Thread)
+	fyne.Do(func() {
+		p.openAddGooglePhotosDialog(sm, guid, len(items), imgQueryList)
+
+		// Reset UI
+		cancelBtn.Hide()
+		addBtn.Show()
+		addBtn.Enable()
+		progressBar.Hide()
+		statusLabel.SetText("")
+		*cancelFunc = nil
+	})
 }
 
 func (p *Provider) uiError(sm setting.SettingsManager, title string, err error, addBtn *widget.Button, bar *widget.ProgressBarInfinite, label *widget.Label, cancelBtn *widget.Button) {
