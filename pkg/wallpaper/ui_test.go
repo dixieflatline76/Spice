@@ -166,6 +166,10 @@ func (m *MockSettingsManager) SetValue(name string, val interface{}) {
 	}
 }
 
+func (m *MockSettingsManager) HasPendingChange(name string) bool {
+	return false
+}
+
 func (m *MockSettingsManager) Refresh() {
 	// No-op for mock
 }

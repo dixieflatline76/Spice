@@ -17,7 +17,6 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/data/validation"
 	"fyne.io/fyne/v2/dialog"
-	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
@@ -781,95 +780,13 @@ func (p *WallhavenProvider) CreateQueryPanel(sm setting.SettingsManager, pending
 }
 
 func (p *WallhavenProvider) createImgQueryList(sm setting.SettingsManager) *widget.List {
-	var queryList *widget.List
-	queryList = widget.NewList(
-		func() int {
-			return len(p.cfg.GetImageQueries())
-		},
-		func() fyne.CanvasObject {
-			urlLink := widget.NewHyperlink("Placeholder", nil)
-			activeCheck := widget.NewCheck("Active", nil)
-			deleteButton := widget.NewButton("Delete", nil)
-
-			return container.NewHBox(urlLink, layout.NewSpacer(), activeCheck, deleteButton)
-		},
-		func(i int, o fyne.CanvasObject) {
-			queries := p.cfg.GetImageQueries()
-			if i >= len(queries) {
-				return
-			}
-			query := queries[i]
-			queryKey := query.ID
-
-			c := o.(*fyne.Container)
-
-			urlLink := c.Objects[0].(*widget.Hyperlink)
-			urlLink.SetText(query.Description)
-
-			siteURL := p.getWebURL(query.URL)
-			if siteURL != nil {
-				urlLink.SetURL(siteURL)
-			} else {
-				if err := urlLink.SetURLFromString(query.URL); err != nil {
-					log.Printf("Failed to set URL from string: %v", err)
-				}
-			}
-
-			activeCheck := c.Objects[2].(*widget.Check)
-			deleteButton := c.Objects[3].(*widget.Button)
-
-			sm.SeedBaseline(queryKey, query.Active)
-			activeCheck.SetChecked(query.Active)
-
-			activeCheck.OnChanged = func(b bool) {
-				if b != sm.GetBaseline(queryKey).(bool) {
-					sm.SetSettingChangedCallback(queryKey, func() {
-						var err error
-						if b {
-							err = p.cfg.EnableImageQuery(query.ID)
-						} else {
-							err = p.cfg.DisableImageQuery(query.ID)
-						}
-						if err != nil {
-							log.Printf("Failed to update query status: %v", err)
-						}
-					})
-					sm.SetRefreshFlag(queryKey)
-				} else {
-					sm.RemoveSettingChangedCallback(queryKey)
-					sm.UnsetRefreshFlag(queryKey)
-				}
-				sm.GetCheckAndEnableApplyFunc()()
-			}
-
-			deleteButton.OnTapped = func() {
-				if query.Managed {
-					return // Should be disabled/hidden anyway
-				}
-				d := dialog.NewConfirm("Please Confirm", fmt.Sprintf("Are you sure you want to delete %s?", query.Description), func(b bool) {
-					if b {
-						if query.Active {
-							sm.SetRefreshFlag(queryKey)
-							// Trigger apply check if needed
-							sm.GetCheckAndEnableApplyFunc()()
-						}
-						if err := p.cfg.RemoveImageQuery(query.ID); err != nil {
-							log.Printf("Failed to remove image query: %v", err)
-						}
-						queryList.Refresh()
-					}
-				}, sm.GetSettingsWindow())
-				d.Show()
-			}
-
-			if query.Managed {
-				deleteButton.Disable()
-			} else {
-				deleteButton.Enable()
-			}
-		},
-	)
-	return queryList
+	return wallpaper.CreateQueryList(sm, wallpaper.QueryListConfig{
+		GetQueries:    p.cfg.GetImageQueries,
+		EnableQuery:   p.cfg.EnableImageQuery,
+		DisableQuery:  p.cfg.DisableImageQuery,
+		RemoveQuery:   p.cfg.RemoveImageQuery,
+		GetDisplayURL: p.getWebURL,
+	})
 }
 
 // GetProviderIcon returns the provider's icon for the tray menu.

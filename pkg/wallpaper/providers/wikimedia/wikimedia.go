@@ -15,8 +15,6 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/dialog"
-	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
@@ -443,107 +441,30 @@ func (p *WikimediaProvider) CreateQueryPanel(sm setting.SettingsManager, pending
 }
 
 func (p *WikimediaProvider) createImgQueryList(sm setting.SettingsManager) *widget.List {
-	var queryList *widget.List
-	queryList = widget.NewList(
-		func() int {
-			return len(p.cfg.GetWikimediaQueries())
-		},
-		func() fyne.CanvasObject {
-			urlLink := widget.NewHyperlink("Placeholder", nil)
-			queryLabel := widget.NewLabel("Query")
-			activeCheck := widget.NewCheck("Active", nil)
-			deleteButton := widget.NewButton("Delete", nil)
-			// Match Unsplash: Link -> Label -> Spacer -> Check -> Delete
-			return container.NewHBox(urlLink, queryLabel, layout.NewSpacer(), activeCheck, deleteButton)
-		},
-		func(id widget.ListItemID, obj fyne.CanvasObject) {
-			queries := p.cfg.GetWikimediaQueries()
-			if id >= len(queries) {
-				return
-			}
-			q := queries[id]
-			queryKey := q.ID
+	return wallpaper.CreateQueryList(sm, wallpaper.QueryListConfig{
+		GetQueries:    p.cfg.GetWikimediaQueries,
+		EnableQuery:   p.cfg.EnableImageQuery,
+		DisableQuery:  p.cfg.DisableImageQuery,
+		RemoveQuery:   p.cfg.RemoveImageQuery,
+		GetDisplayURL: p.getDisplayURL,
+	})
+}
 
-			c := obj.(*fyne.Container)
-			urlLink := c.Objects[0].(*widget.Hyperlink)
-			queryLabel := c.Objects[1].(*widget.Label)
-			activeCheck := c.Objects[3].(*widget.Check)
-			deleteButton := c.Objects[4].(*widget.Button)
-
-			urlLink.SetText(q.Description)
-			queryLabel.SetText(q.URL) // Show the raw query term (e.g. "category:Space")
-
-			// Construct a valid URL for the hyperlink if possible
-			// The Query URL might be "Category:Foo" or "search:Bar" or a full URL if user entered one?
-			// ParseURL normalizes to "category:..." or "search:...".
-			// We try to make it clickable if it looks like a URL, or construct one.
-			// Wikimedia URLs: https://commons.wikimedia.org/wiki/Category:Nature
-			displayURL := q.URL
-			lowerURL := strings.ToLower(q.URL)
-
-			if strings.HasPrefix(lowerURL, "category:") {
-				// We must escape the category name to handle spaces (e.g. "Deep Space" -> "Deep%20Space")
-				// url.Parse will fail on spaces.
-				// Note: We strip from original q.URL to preserve casing of the category name if needed?
-				// Actually wikimedia categories are case sensitive for the first char usually capitalized, but spaces need encoding.
-				// We need to strip the prefix length carefully.
-				catName := q.URL[9:] // "category:" is 9 chars. Assuming normalized length from lowerURL check matches?
-				// BE CAREFUL: If prefix was "Category:", length is same.
-
-				displayURL = "https://commons.wikimedia.org/wiki/Category:" + url.PathEscape(catName)
-			} else if strings.HasPrefix(lowerURL, "search:") {
-				displayURL = "https://commons.wikimedia.org/w/index.php?search=" + url.QueryEscape(q.URL[7:])
-			}
-
-			if u, err := url.Parse(displayURL); err == nil && u.Scheme != "" {
-				urlLink.SetURL(u)
-			} else {
-				// Fallback if parsing fails or no scheme
-				_ = urlLink.SetURLFromString(displayURL)
-			}
-
-			sm.SeedBaseline(queryKey, q.Active)
-			activeCheck.SetChecked(q.Active)
-
-			activeCheck.OnChanged = func(b bool) {
-				if b != sm.GetBaseline(queryKey).(bool) {
-					sm.SetSettingChangedCallback(queryKey, func() {
-						var err error
-						if b {
-							err = p.cfg.EnableImageQuery(q.ID)
-						} else {
-							err = p.cfg.DisableImageQuery(q.ID)
-						}
-						if err != nil {
-							log.Printf("Failed to update query status: %v", err)
-						}
-					})
-					sm.SetRefreshFlag(queryKey)
-				} else {
-					sm.RemoveSettingChangedCallback(queryKey)
-					sm.UnsetRefreshFlag(queryKey)
-				}
-				sm.GetCheckAndEnableApplyFunc()()
-			}
-
-			deleteButton.OnTapped = func() {
-				dialog.NewConfirm("Delete Query", "Are you sure you want to delete this query?", func(b bool) {
-					if b {
-						if q.Active {
-							sm.SetRefreshFlag(queryKey)
-							sm.GetCheckAndEnableApplyFunc()()
-						}
-						if err := p.cfg.RemoveImageQuery(q.ID); err != nil {
-							dialog.ShowError(err, sm.GetSettingsWindow())
-						}
-						sm.SetRefreshFlag("queries") // Refresh global query list tag
-						queryList.Refresh()
-					}
-				}, sm.GetSettingsWindow()).Show()
-			}
-		},
-	)
-	return queryList
+func (p *WikimediaProvider) getDisplayURL(queryURL string) *url.URL {
+	lowerURL := strings.ToLower(queryURL)
+	var displayURL string
+	if strings.HasPrefix(lowerURL, "category:") {
+		catName := queryURL[9:]
+		displayURL = "https://commons.wikimedia.org/wiki/Category:" + url.PathEscape(catName)
+	} else if strings.HasPrefix(lowerURL, "search:") {
+		displayURL = "https://commons.wikimedia.org/w/index.php?search=" + url.QueryEscape(queryURL[7:])
+	} else {
+		displayURL = queryURL
+	}
+	if u, err := url.Parse(displayURL); err == nil && u.Scheme != "" {
+		return u
+	}
+	return nil
 }
 
 func init() {

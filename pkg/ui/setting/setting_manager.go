@@ -106,6 +106,8 @@ type SettingsManager interface {
 	GetValue(name string) interface{}
 	// SetValue programmatically updates the live value of a setting.
 	SetValue(name string, val interface{})
+	// HasPendingChange returns true if the user has toggled a setting but not yet applied.
+	HasPendingChange(name string) bool
 	// Refresh triggers all registered refresh functions immediately.
 	Refresh()
 }
