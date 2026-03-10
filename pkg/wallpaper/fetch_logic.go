@@ -178,7 +178,7 @@ func (wp *Plugin) fetchFromProvider(q ImageQuery, p provider.ImageProvider, isFa
 	queuedForThisQuery := 0
 
 	// Instantiate the background cancellation context for this specific query
-	queryCtx := wp.StartQueryContext(q.ID)
+	queryCtx := wp.GetOrCreateQueryContext(q.ID)
 
 	for _, img := range images {
 		// Critical Fix: Tag image with its source query ID so Sync knows it's active.

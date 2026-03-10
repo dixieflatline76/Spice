@@ -19,7 +19,7 @@ import (
 // It implements the Source + Derivative architecture:
 // 1. Ensure Master (Raw) exists.
 // 2. Ensure Derivative (Processed) exists (generating from Master if needed).
-func (wp *Plugin) ProcessImageJob(ctx context.Context, job DownloadJob) (provider.Image, error) {
+func (wp *Plugin) ProcessImageJob(ctx context.Context, job DownloadJob) (resultImg provider.Image, finalErr error) {
 	img := job.Image
 	downloadProvider := job.Provider
 
@@ -27,7 +27,7 @@ func (wp *Plugin) ProcessImageJob(ctx context.Context, job DownloadJob) (provide
 	// If context is cancelled midway through downloading/processing, we aggressively clean up
 	// any master or derivative files we just wrote instead of waiting for the nightly sweep.
 	defer func() {
-		if ctx.Err() != nil {
+		if finalErr != nil && ctx.Err() != nil {
 			log.Debugf("Context cancelled for job %s, running cleanup...", img.ID)
 			_ = wp.fm.DeepDelete(img.ID)
 		}

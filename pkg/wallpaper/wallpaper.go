@@ -99,6 +99,7 @@ type Plugin struct {
 	settingsTabs      *container.AppTabs // Reference to the settings tabs for dynamic switching
 
 	// Context tracking for active queries
+	queryContexts    map[string]context.Context
 	queryCancelFuncs map[string]context.CancelFunc
 	queryCancelMu    sync.Mutex
 }
@@ -1093,20 +1094,24 @@ func (wp *Plugin) OpenAddCollectionUI(testURL string) error {
 	return fmt.Errorf("no provider found that can handle this URL")
 }
 
-// StartQueryContext allocates a new cancellable context for a specific query.
-func (wp *Plugin) StartQueryContext(queryID string) context.Context {
+// GetOrCreateQueryContext allocates or returns an existing active context for a specific query.
+func (wp *Plugin) GetOrCreateQueryContext(queryID string) context.Context {
 	wp.queryCancelMu.Lock()
 	defer wp.queryCancelMu.Unlock()
 
-	// Cancel any existing context for this query to prevent leaks
+	// Check for a currently active context to prevent pagination fetches from aborting in-flight downloads
 	if wp.queryCancelFuncs == nil {
 		wp.queryCancelFuncs = make(map[string]context.CancelFunc)
-	} else if cancel, exists := wp.queryCancelFuncs[queryID]; exists {
-		cancel()
+		wp.queryContexts = make(map[string]context.Context)
+	} else if ctx, exists := wp.queryContexts[queryID]; exists {
+		if ctx.Err() == nil {
+			return ctx
+		}
 	}
 
 	// Tie to application background context so global stopping still works
 	ctx, cancel := context.WithCancel(context.Background())
+	wp.queryContexts[queryID] = ctx
 	wp.queryCancelFuncs[queryID] = cancel
 	return ctx
 }
@@ -1120,5 +1125,8 @@ func (wp *Plugin) CancelQueryContext(queryID string) {
 		log.Debugf("[Context] Cancelling inflight tasks for query %s", queryID)
 		cancel()
 		delete(wp.queryCancelFuncs, queryID)
+		if wp.queryContexts != nil {
+			delete(wp.queryContexts, queryID)
+		}
 	}
 }
