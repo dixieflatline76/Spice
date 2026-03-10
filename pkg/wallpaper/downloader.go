@@ -23,6 +23,16 @@ func (wp *Plugin) ProcessImageJob(ctx context.Context, job DownloadJob) (provide
 	img := job.Image
 	downloadProvider := job.Provider
 
+	// Prevent orphaned files from leaking by ensuring partial processing artifacts are scrubbed.
+	// If context is cancelled midway through downloading/processing, we aggressively clean up
+	// any master or derivative files we just wrote instead of waiting for the nightly sweep.
+	defer func() {
+		if ctx.Err() != nil {
+			log.Debugf("Context cancelled for job %s, running cleanup...", img.ID)
+			_ = wp.fm.DeepDelete(img.ID)
+		}
+	}()
+
 	if wp.cfg.InAvoidSet(img.ID) {
 		return provider.Image{}, fmt.Errorf("image %s is in avoid set", img.ID)
 	}
@@ -350,6 +360,9 @@ func (wp *Plugin) generateMissingDerivatives(ctx context.Context, img provider.I
 	}
 
 	for _, res := range resolutions {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		resDir := fmt.Sprintf("%dx%d", res.Width, res.Height)
 
 		// Skip if we already found it in the check phase?
