@@ -237,6 +237,10 @@ func (wp *Plugin) downloadMasterFile(ctx context.Context, client *http.Client, r
 	defer file.Close()
 
 	if _, err := io.Copy(file, resp.Body); err != nil {
+		file.Close() // Close before attempting removal
+		if err := os.Remove(masterPath); err != nil && !os.IsNotExist(err) {
+			log.Printf("Failed to clean up aborted download %s: %v", masterPath, err)
+		}
 		return "", err
 	}
 

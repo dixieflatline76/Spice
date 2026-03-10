@@ -49,6 +49,7 @@ type StoreInterface interface {
 	SetFileManager(fm *FileManager, cacheFile string)
 	SetAsyncSave(enabled bool)
 	SetDebounceDuration(d time.Duration)
+	SetQueryActiveFunc(fn func(string) bool)
 	LoadCache() error
 	LoadAvoidSet(avoidSet map[string]bool)
 	Wipe()

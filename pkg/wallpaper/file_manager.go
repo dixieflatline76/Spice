@@ -192,11 +192,18 @@ func (fm *FileManager) CleanupOrphans(knownIDs map[string]bool) {
 			if entry.IsDir() {
 				continue
 			}
-			ext := filepath.Ext(entry.Name())
-			id := strings.TrimSuffix(entry.Name(), ext)
+			name := entry.Name()
+			ext := filepath.Ext(name)
+			lowerExt := strings.ToLower(ext)
+
+			if lowerExt != ".jpg" && lowerExt != ".jpeg" && lowerExt != ".png" {
+				continue
+			}
+
+			id := strings.TrimSuffix(name, ext)
 
 			if !knownIDs[id] {
-				fullPath := filepath.Join(fm.rootDir, entry.Name())
+				fullPath := filepath.Join(fm.rootDir, name)
 				time.Sleep(50 * time.Millisecond) // Pacer
 				if err := os.Remove(fullPath); err == nil {
 					deletedCount++
@@ -214,6 +221,12 @@ func (fm *FileManager) CleanupOrphans(knownIDs map[string]bool) {
 		if !info.IsDir() {
 			name := info.Name()
 			ext := filepath.Ext(name)
+			lowerExt := strings.ToLower(ext)
+
+			if lowerExt != ".jpg" && lowerExt != ".jpeg" && lowerExt != ".png" {
+				return nil
+			}
+
 			id := strings.TrimSuffix(name, ext)
 
 			if !knownIDs[id] {

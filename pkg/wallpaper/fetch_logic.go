@@ -177,6 +177,9 @@ func (wp *Plugin) fetchFromProvider(q ImageQuery, p provider.ImageProvider, isFa
 
 	queuedForThisQuery := 0
 
+	// Instantiate the background cancellation context for this specific query
+	queryCtx := wp.StartQueryContext(q.ID)
+
 	for _, img := range images {
 		// Critical Fix: Tag image with its source query ID so Sync knows it's active.
 		img.SourceQueryID = q.ID
@@ -195,6 +198,7 @@ func (wp *Plugin) fetchFromProvider(q ImageQuery, p provider.ImageProvider, isFa
 			continue
 		}
 		job := DownloadJob{
+			Ctx:      queryCtx,
 			Image:    img,
 			Provider: p,
 		}

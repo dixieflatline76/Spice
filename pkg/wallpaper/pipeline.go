@@ -25,6 +25,7 @@ type Pipeline struct {
 
 // DownloadJob represents a task to download and process an image.
 type DownloadJob struct {
+	Ctx      context.Context
 	Image    provider.Image
 	Provider provider.ImageProvider
 }
@@ -110,8 +111,13 @@ func (p *Pipeline) workerLoop(id int) {
 			log.Debugf("Worker %d stopping", id)
 			return
 		case job := <-p.jobChan:
-			// Process the job
-			processedImg, err := p.processor(p.ctx, job)
+			// Ensure context exists (Testing safety net)
+			if job.Ctx == nil {
+				job.Ctx = p.ctx
+			}
+			
+			// Process the job using the job's context rather than the global pipeline context
+			processedImg, err := p.processor(job.Ctx, job)
 			p.resultChan <- ProcessResult{Image: processedImg, Error: err}
 		}
 	}
