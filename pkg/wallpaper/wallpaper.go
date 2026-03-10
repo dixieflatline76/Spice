@@ -102,6 +102,11 @@ type Plugin struct {
 	queryContexts    map[string]context.Context
 	queryCancelFuncs map[string]context.CancelFunc
 	queryCancelMu    sync.Mutex
+
+	// Context tracking for the overarching fetch loop
+	globalFetchCtx    context.Context
+	globalFetchCancel context.CancelFunc
+	globalFetchMu     sync.Mutex
 }
 
 var (
@@ -1027,6 +1032,9 @@ func (wp *Plugin) onQueryDisabled(queryID string) {
 	delete(wp.queryPages, queryID)
 	wp.downloadMutex.Unlock()
 
+	// Abort any currently blocked fetch loops so they don't stall new queries
+	wp.CancelFetchContext()
+
 	// Trigger fetch to ensure store is replenished from other active sources (including Favorites)
 	go wp.RequestFetch()
 }
@@ -1128,5 +1136,31 @@ func (wp *Plugin) CancelQueryContext(queryID string) {
 		if wp.queryContexts != nil {
 			delete(wp.queryContexts, queryID)
 		}
+	}
+}
+
+// StartFetchContext allocates a new cancellable context for the overarching FetchNewImages cycle.
+// It explicitly cancels any previous stalled fetch loops.
+func (wp *Plugin) StartFetchContext() context.Context {
+	wp.globalFetchMu.Lock()
+	defer wp.globalFetchMu.Unlock()
+
+	if wp.globalFetchCancel != nil {
+		wp.globalFetchCancel()
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	wp.globalFetchCtx = ctx
+	wp.globalFetchCancel = cancel
+	return ctx
+}
+
+// CancelFetchContext triggers an abort for the overarching FetchNewImages loop, freeing it.
+func (wp *Plugin) CancelFetchContext() {
+	wp.globalFetchMu.Lock()
+	defer wp.globalFetchMu.Unlock()
+
+	if wp.globalFetchCancel != nil {
+		wp.globalFetchCancel()
 	}
 }

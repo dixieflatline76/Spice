@@ -90,11 +90,13 @@ func (p *Pipeline) Stop() {
 }
 
 // Submit submits a job to the pipeline.
-// Returns false if pipeline is stopped or full (though buffer is large).
-func (p *Pipeline) Submit(job DownloadJob) bool {
+// Returns false if pipeline is stopped or if the provided context is cancelled.
+func (p *Pipeline) Submit(ctx context.Context, job DownloadJob) bool {
 	select {
 	case p.jobChan <- job:
 		return true
+	case <-ctx.Done():
+		return false
 	case <-p.ctx.Done():
 		return false
 	}

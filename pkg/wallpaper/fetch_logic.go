@@ -50,6 +50,9 @@ func (wp *Plugin) FetchNewImages(providerID ...string) {
 			activeSources := make(map[string]bool)
 			var sourcesMutex sync.Mutex
 
+			// Initialize the global fetch context to allow remote aborts
+			fetchCtx := wp.StartFetchContext()
+
 			// Semaphore to limit concurrent fetches
 			sem := make(chan struct{}, 5)
 			var wg sync.WaitGroup
@@ -76,7 +79,7 @@ func (wp *Plugin) FetchNewImages(providerID ...string) {
 					sem <- struct{}{}        // Acquire
 					defer func() { <-sem }() // Release
 
-					wp.fetchFromProvider(q, p, isFavRequest, &sourcesMutex, activeSources, totalQueued)
+					wp.fetchFromProvider(fetchCtx, q, p, isFavRequest, &sourcesMutex, activeSources, totalQueued)
 				}(q, p)
 			}
 
@@ -114,6 +117,9 @@ func (wp *Plugin) RefreshImagesAndPulse() {
 		// Optimization: Removed Master Reset (Page 1) to prevent cache churn on Settings Apply.
 		// Pages are now persistent per session or until Nightly Refresh.
 
+		// Ensure any blocked fetches are aborted so the new cycle can begin
+		wp.CancelFetchContext()
+
 		// Robust Sync: Reconcile store and invalidate stale derivatives
 		wp.syncStoreWithConfig()
 
@@ -141,7 +147,7 @@ func (wp *Plugin) RefreshImagesAndPulse() {
 	}()
 }
 
-func (wp *Plugin) fetchFromProvider(q ImageQuery, p provider.ImageProvider, isFavRequest bool, sourcesMutex *sync.Mutex, activeSources map[string]bool, totalQueued *util.SafeCounter) {
+func (wp *Plugin) fetchFromProvider(fetchCtx context.Context, q ImageQuery, p provider.ImageProvider, isFavRequest bool, sourcesMutex *sync.Mutex, activeSources map[string]bool, totalQueued *util.SafeCounter) {
 	// Get or create per-query page counter
 	wp.downloadMutex.Lock()
 	pg, ok := wp.queryPages[q.ID]
@@ -202,12 +208,15 @@ func (wp *Plugin) fetchFromProvider(q ImageQuery, p provider.ImageProvider, isFa
 			Image:    img,
 			Provider: p,
 		}
-		// Submit non-blocking
-		if wp.jobSubmitter.Submit(job) {
+		// Submit blocking (until buffer clears or fetchCtx aborts)
+		if wp.jobSubmitter.Submit(fetchCtx, job) {
 			totalQueued.Increment()
 			queuedForThisQuery++
 		} else {
-			log.Printf("WARN: Pipeline full or stopped. Dropping job.")
+			// If submit returns false, the pipeline stopped or the fetch cycle was aborted via fetchCtx.
+			// Do not attempt to process the rest of the images, and do NOT advance the pagination!
+			log.Printf("Fetch aborted or pipeline full. Dropping job and pausing fetch for query %s.", q.ID)
+			break
 		}
 	}
 
