@@ -15,8 +15,8 @@ title: Concurrency & Favorites Lifecycle
 | Actor | Goroutines | Lock(s) Held | Lifetime |
 | :--- | :--- | :--- | :--- |
 | MonitorController | 1 per monitor | `mc.mu` (RWMutex) | `Activate()` → `Deactivate()` |
-| Pipeline workers | N (NumCPU) | None (channel-only) | Per fetch cycle |
-| Pipeline stateManager | 1 | `store.mu` via Store API | Per fetch cycle |
+| Pipeline workers | N (NumCPU) | None (channel-only) | `Activate()` → `Deactivate()` |
+| Pipeline stateManager | 1 | `store.mu` via Store API | `Activate()` → `Deactivate()` |
 | Nightly scheduler | 1 | `downloadMutex` | `Activate()` → `Deactivate()` |
 | Monitor watcher | 1 | `monMu` (via SyncMonitors) | `Activate()` → context cancel |
 | Ticker goroutine | 1 per frequency change | None | Until replaced |
@@ -32,6 +32,7 @@ Locks must always be acquired in this order to prevent deadlocks:
 ```
 wp.monMu → mc.mu → store.mu → saveMu
 wp.downloadMutex (independent — never held with monMu/mc.mu)
+wp.globalFetchMu (independent — protects global fetch cancellation context)
 favProvider.mu (independent — accessed via Favoriter interface)
 ```
 
