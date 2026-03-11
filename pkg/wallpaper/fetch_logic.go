@@ -222,6 +222,7 @@ func (wp *Plugin) fetchFromProvider(fetchCtx context.Context, q ImageQuery, p pr
 
 	if queuedForThisQuery > 0 {
 		pg.Increment()
+		wp.saveQueryPages() // Persist pagination state
 		log.Debugf("Query %s: Successfully queued %d images. Incrementing to page %d", q.ID, queuedForThisQuery, pg.Value())
 	}
 }

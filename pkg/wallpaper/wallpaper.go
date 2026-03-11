@@ -2,6 +2,7 @@ package wallpaper
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"image"
 	_ "image/jpeg"
@@ -164,10 +165,11 @@ func getPlugin() *Plugin {
 			cfg:        nil,
 			httpClient: robustClient,
 
-			downloadMutex: sync.RWMutex{},
-			queryPages:    make(map[string]*util.SafeCounter),
-			downloadedDir: "",
-			interrupt:     util.NewSafeBoolWithValue(false),
+			downloadMutex:    sync.RWMutex{},
+			queryPages:       make(map[string]*util.SafeCounter),
+			downloadedDir:    "",
+			interrupt:        util.NewSafeBoolWithValue(false),
+			queryContexts:    make(map[string]context.Context),
 			queryCancelFuncs: make(map[string]context.CancelFunc),
 
 			imgPulseOp:         nil,
@@ -291,6 +293,8 @@ func (wp *Plugin) Init(manager ui.PluginManager) {
 		return activeQs[queryID]
 	})
 
+	wp.loadQueryPages()
+
 	wp.Monitors = make(map[int]*MonitorController)
 
 	wp.pipeline = NewPipeline(wp.cfg, wp.store, wp.ProcessImageJob)
@@ -350,7 +354,7 @@ func (wp *Plugin) Activate() {
 	// Reconcile favorite flags against live data to prevent ghost favorites
 	wp.reconcileFavorites()
 
-	// Perform an initial scan to catch and delete any stranded/orphaned files 
+	// Perform an initial scan to catch and delete any stranded/orphaned files
 	// caused by file-locking errors or crashes during the previous session.
 	if wp.fm != nil {
 		go wp.fm.CleanupOrphans(wp.store.GetKnownIDs())
@@ -1015,6 +1019,52 @@ func (wp *Plugin) updateTrayMenuUI(img provider.Image, monitorID int) {
 	})
 }
 
+// loadQueryPages reads the persistent query pagination state from disk.
+func (wp *Plugin) loadQueryPages() {
+	pagesPath := filepath.Join(config.GetWorkingDir(), strings.ToLower(pluginName)+"_downloads", "query_pages.json")
+	data, err := os.ReadFile(pagesPath)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			log.Printf("[ERROR] Failed to read query pages: %v", err)
+		}
+		return
+	}
+
+	var savedPages map[string]int
+	if err := json.Unmarshal(data, &savedPages); err != nil {
+		log.Printf("[ERROR] Failed to parse query pages JSON: %v", err)
+		return
+	}
+
+	wp.downloadMutex.Lock()
+	defer wp.downloadMutex.Unlock()
+	for qID, val := range savedPages {
+		wp.queryPages[qID] = util.NewSafeIntWithValue(val)
+	}
+	log.Debugf("Loaded %d query page states from disk", len(savedPages))
+}
+
+// saveQueryPages synchronizes the memory map to the disk cache.
+func (wp *Plugin) saveQueryPages() {
+	wp.downloadMutex.RLock()
+	snap := make(map[string]int, len(wp.queryPages))
+	for k, v := range wp.queryPages {
+		snap[k] = v.Value()
+	}
+	wp.downloadMutex.RUnlock()
+
+	data, err := json.MarshalIndent(snap, "", "  ")
+	if err != nil {
+		log.Printf("[ERROR] Failed to marshal query pages: %v", err)
+		return
+	}
+
+	pagesPath := filepath.Join(config.GetWorkingDir(), strings.ToLower(pluginName)+"_downloads", "query_pages.json")
+	if err := os.WriteFile(pagesPath, data, 0600); err != nil {
+		log.Printf("[ERROR] Failed to write query_pages.json: %v", err)
+	}
+}
+
 func (wp *Plugin) onQueryRemoved(queryID string) {
 	log.Debugf("Plugin: Query %s removed. Clearing...", queryID)
 	wp.CancelQueryContext(queryID)
@@ -1028,9 +1078,9 @@ func (wp *Plugin) onQueryDisabled(queryID string) {
 	log.Debugf("[Plugin] Query %s disabled. Clearing from cache/rotation...", queryID)
 	wp.CancelQueryContext(queryID)
 	wp.store.RemoveByQueryID(queryID)
-	wp.downloadMutex.Lock()
-	delete(wp.queryPages, queryID)
-	wp.downloadMutex.Unlock()
+
+	// DO NOT delete wp.queryPages[queryID] here so that if the query is re-enabled,
+	// it resumes from the next page instead of restarting at Page 1 forever.
 
 	// Abort any currently blocked fetch loops so they don't stall new queries
 	wp.CancelFetchContext()

@@ -117,7 +117,7 @@ func (p *Pipeline) workerLoop(id int) {
 			if job.Ctx == nil {
 				job.Ctx = p.ctx
 			}
-			
+
 			// Process the job using the job's context rather than the global pipeline context
 			processedImg, err := p.processor(job.Ctx, job)
 			p.resultChan <- ProcessResult{Image: processedImg, Error: err}
