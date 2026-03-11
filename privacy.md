@@ -60,4 +60,4 @@ Spice is an open-source project. We believe in transparency and security by desi
 We may update our Privacy Policy from time to time. We will notify you of any changes by posting the new Privacy Policy on this page.
 
 ## Contact Us
-If you have any questions about this Privacy Policy, please contact us via our GitHub repository issues page: [https://github.com/dixieflatline76/Spice/issues](https://github.com/dixieflatline76/Spice/issues)
+If you have any questions about this Privacy Policy, please contact us at: karl.kwong@gmail.com
