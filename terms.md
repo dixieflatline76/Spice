@@ -7,7 +7,7 @@ title: Terms of Service
 **Last Updated:** March 2026
 
 ## 1. Description of Service
-Spicebox (the "Site") provides information and distribution for Spice (the "Software"), a suite of open-source Windows utilities. This includes a wallpaper manager that integrates with the Google Photos Picker API.
+Spicebox (the "Site") provides information and distribution for Spice (the "Software"), a suite of open-source cross-platform applications and utilities. This includes a wallpaper manager that integrates with the Google Photos Picker API.
 
 ## 2. Acceptable Use
 By using the Site or the Software, you agree to comply with these terms. You must also comply with the Google APIs Terms of Service when utilizing our Google Photos integration features.
