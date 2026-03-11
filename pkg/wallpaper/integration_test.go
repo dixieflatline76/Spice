@@ -179,12 +179,13 @@ func TestLifecycle_BlockPersistence(t *testing.T) {
 
 		// Setup a dummy job for the blocked image
 		badJob := DownloadJob{
+			Ctx:   context.Background(),
 			Image: provider.Image{ID: blockedID, Path: "http://bad.com/1.jpg"},
 		}
 
 		// Submit directly to pipeline (bypassing download logic, testing Store/Pipeline filter)
 		// Note: Pipeline calls Store.Add(), so if Store rejects it, it won't be in Store.
-		success := wp3.pipeline.Submit(badJob)
+		success := wp3.pipeline.Submit(context.Background(), badJob)
 		assert.True(t, success, "Pipeline acceptance just means 'queued'")
 
 		// Wait for processing
@@ -198,9 +199,10 @@ func TestLifecycle_BlockPersistence(t *testing.T) {
 		// Control Test: Clean Image
 		goodID := "good_image"
 		goodJob := DownloadJob{
+			Ctx:   context.Background(),
 			Image: provider.Image{ID: goodID, Path: "http://good.com/1.jpg"},
 		}
-		wp3.pipeline.Submit(goodJob)
+		wp3.pipeline.Submit(context.Background(), goodJob)
 
 		// Wait
 		assert.Eventually(t, func() bool {
@@ -225,9 +227,10 @@ func TestLifecycle_BlockPersistence(t *testing.T) {
 
 		// 2. Submit Blocked Image immediately after Clear
 		badJob := DownloadJob{
+			Ctx:   context.Background(),
 			Image: provider.Image{ID: blockedID, Path: "http://bad.com/1.jpg"},
 		}
-		wp4.pipeline.Submit(badJob)
+		wp4.pipeline.Submit(context.Background(), badJob)
 
 		// Wait
 		time.Sleep(100 * time.Millisecond)
@@ -238,9 +241,10 @@ func TestLifecycle_BlockPersistence(t *testing.T) {
 
 		// 4. Verify Store is still functional
 		goodJob := DownloadJob{
+			Ctx:   context.Background(),
 			Image: provider.Image{ID: "good_image_phase4", Path: "http://good.com/4.jpg"},
 		}
-		wp4.pipeline.Submit(goodJob)
+		wp4.pipeline.Submit(context.Background(), goodJob)
 
 		assert.Eventually(t, func() bool {
 			return wp4.store.Count() == 1

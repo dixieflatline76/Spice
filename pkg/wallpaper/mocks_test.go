@@ -211,6 +211,10 @@ func (m *MockImageStore) SetDebounceDuration(d time.Duration) {
 	m.Called(d)
 }
 
+func (m *MockImageStore) SetQueryActiveFunc(fn func(string) bool) {
+	m.Called(fn)
+}
+
 func (m *MockImageStore) LoadCache() error {
 	args := m.Called()
 	return args.Error(0)

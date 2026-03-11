@@ -514,6 +514,7 @@ func TestBlockFlow_PreventsReDownload(t *testing.T) {
 
 	// 2. Create a Job for this image
 	job := DownloadJob{
+		Ctx:   context.Background(),
 		Image: provider.Image{ID: blockedID, Path: "http://example.com/blocked.jpg"},
 	}
 

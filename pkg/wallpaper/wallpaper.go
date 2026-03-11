@@ -2,6 +2,7 @@ package wallpaper
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"image"
 	_ "image/jpeg"
@@ -97,6 +98,16 @@ type Plugin struct {
 	pendingAddUrl     string
 	focusProviderName string             // State to focus specific provider settings
 	settingsTabs      *container.AppTabs // Reference to the settings tabs for dynamic switching
+
+	// Context tracking for active queries
+	queryContexts    map[string]context.Context
+	queryCancelFuncs map[string]context.CancelFunc
+	queryCancelMu    sync.Mutex
+
+	// Context tracking for the overarching fetch loop
+	globalFetchCtx    context.Context
+	globalFetchCancel context.CancelFunc
+	globalFetchMu     sync.Mutex
 }
 
 var (
@@ -154,10 +165,12 @@ func getPlugin() *Plugin {
 			cfg:        nil,
 			httpClient: robustClient,
 
-			downloadMutex: sync.RWMutex{},
-			queryPages:    make(map[string]*util.SafeCounter),
-			downloadedDir: "",
-			interrupt:     util.NewSafeBoolWithValue(false),
+			downloadMutex:    sync.RWMutex{},
+			queryPages:       make(map[string]*util.SafeCounter),
+			downloadedDir:    "",
+			interrupt:        util.NewSafeBoolWithValue(false),
+			queryContexts:    make(map[string]context.Context),
+			queryCancelFuncs: make(map[string]context.CancelFunc),
 
 			imgPulseOp:         nil,
 			fitImageFlag:       util.NewSafeBoolWithValue(false),
@@ -272,6 +285,16 @@ func (wp *Plugin) Init(manager ui.PluginManager) {
 	wp.store.SetAsyncSave(true)
 	wp.store.SetDebounceDuration(1 * time.Second)
 
+	wp.store.SetQueryActiveFunc(func(queryID string) bool {
+		if queryID == "Favorites" {
+			return true // Favorites are always considered active
+		}
+		activeQs := wp.cfg.GetActiveQueryIDs()
+		return activeQs[queryID]
+	})
+
+	wp.loadQueryPages()
+
 	wp.Monitors = make(map[int]*MonitorController)
 
 	wp.pipeline = NewPipeline(wp.cfg, wp.store, wp.ProcessImageJob)
@@ -330,6 +353,12 @@ func (wp *Plugin) Activate() {
 
 	// Reconcile favorite flags against live data to prevent ghost favorites
 	wp.reconcileFavorites()
+
+	// Perform an initial scan to catch and delete any stranded/orphaned files
+	// caused by file-locking errors or crashes during the previous session.
+	if wp.fm != nil {
+		go wp.fm.CleanupOrphans(wp.store.GetKnownIDs())
+	}
 
 	// Initialize Monitors (Actors)
 	monitors, err := wp.os.GetMonitors()
@@ -990,8 +1019,55 @@ func (wp *Plugin) updateTrayMenuUI(img provider.Image, monitorID int) {
 	})
 }
 
+// loadQueryPages reads the persistent query pagination state from disk.
+func (wp *Plugin) loadQueryPages() {
+	pagesPath := filepath.Join(config.GetWorkingDir(), strings.ToLower(pluginName)+"_downloads", "query_pages.json")
+	data, err := os.ReadFile(pagesPath)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			log.Printf("[ERROR] Failed to read query pages: %v", err)
+		}
+		return
+	}
+
+	var savedPages map[string]int
+	if err := json.Unmarshal(data, &savedPages); err != nil {
+		log.Printf("[ERROR] Failed to parse query pages JSON: %v", err)
+		return
+	}
+
+	wp.downloadMutex.Lock()
+	defer wp.downloadMutex.Unlock()
+	for qID, val := range savedPages {
+		wp.queryPages[qID] = util.NewSafeIntWithValue(val)
+	}
+	log.Debugf("Loaded %d query page states from disk", len(savedPages))
+}
+
+// saveQueryPages synchronizes the memory map to the disk cache.
+func (wp *Plugin) saveQueryPages() {
+	wp.downloadMutex.RLock()
+	snap := make(map[string]int, len(wp.queryPages))
+	for k, v := range wp.queryPages {
+		snap[k] = v.Value()
+	}
+	wp.downloadMutex.RUnlock()
+
+	data, err := json.MarshalIndent(snap, "", "  ")
+	if err != nil {
+		log.Printf("[ERROR] Failed to marshal query pages: %v", err)
+		return
+	}
+
+	pagesPath := filepath.Join(config.GetWorkingDir(), strings.ToLower(pluginName)+"_downloads", "query_pages.json")
+	if err := os.WriteFile(pagesPath, data, 0600); err != nil {
+		log.Printf("[ERROR] Failed to write query_pages.json: %v", err)
+	}
+}
+
 func (wp *Plugin) onQueryRemoved(queryID string) {
 	log.Debugf("Plugin: Query %s removed. Clearing...", queryID)
+	wp.CancelQueryContext(queryID)
 	wp.store.RemoveByQueryID(queryID)
 	wp.downloadMutex.Lock()
 	delete(wp.queryPages, queryID)
@@ -1000,10 +1076,14 @@ func (wp *Plugin) onQueryRemoved(queryID string) {
 
 func (wp *Plugin) onQueryDisabled(queryID string) {
 	log.Debugf("[Plugin] Query %s disabled. Clearing from cache/rotation...", queryID)
+	wp.CancelQueryContext(queryID)
 	wp.store.RemoveByQueryID(queryID)
-	wp.downloadMutex.Lock()
-	delete(wp.queryPages, queryID)
-	wp.downloadMutex.Unlock()
+
+	// DO NOT delete wp.queryPages[queryID] here so that if the query is re-enabled,
+	// it resumes from the next page instead of restarting at Page 1 forever.
+
+	// Abort any currently blocked fetch loops so they don't stall new queries
+	wp.CancelFetchContext()
 
 	// Trigger fetch to ensure store is replenished from other active sources (including Favorites)
 	go wp.RequestFetch()
@@ -1070,4 +1150,67 @@ func (wp *Plugin) OpenAddCollectionUI(testURL string) error {
 		}
 	}
 	return fmt.Errorf("no provider found that can handle this URL")
+}
+
+// GetOrCreateQueryContext allocates or returns an existing active context for a specific query.
+func (wp *Plugin) GetOrCreateQueryContext(queryID string) context.Context {
+	wp.queryCancelMu.Lock()
+	defer wp.queryCancelMu.Unlock()
+
+	// Check for a currently active context to prevent pagination fetches from aborting in-flight downloads
+	if wp.queryCancelFuncs == nil {
+		wp.queryCancelFuncs = make(map[string]context.CancelFunc)
+		wp.queryContexts = make(map[string]context.Context)
+	} else if ctx, exists := wp.queryContexts[queryID]; exists {
+		if ctx.Err() == nil {
+			return ctx
+		}
+	}
+
+	// Tie to application background context so global stopping still works
+	ctx, cancel := context.WithCancel(context.Background())
+	wp.queryContexts[queryID] = ctx
+	wp.queryCancelFuncs[queryID] = cancel
+	return ctx
+}
+
+// CancelQueryContext fires the cancellation function for a specific query, aborting in-flight fetches.
+func (wp *Plugin) CancelQueryContext(queryID string) {
+	wp.queryCancelMu.Lock()
+	defer wp.queryCancelMu.Unlock()
+
+	if cancel, exists := wp.queryCancelFuncs[queryID]; exists {
+		log.Debugf("[Context] Cancelling inflight tasks for query %s", queryID)
+		cancel()
+		delete(wp.queryCancelFuncs, queryID)
+		if wp.queryContexts != nil {
+			delete(wp.queryContexts, queryID)
+		}
+	}
+}
+
+// StartFetchContext allocates a new cancellable context for the overarching FetchNewImages cycle.
+// It explicitly cancels any previous stalled fetch loops.
+func (wp *Plugin) StartFetchContext() context.Context {
+	wp.globalFetchMu.Lock()
+	defer wp.globalFetchMu.Unlock()
+
+	if wp.globalFetchCancel != nil {
+		wp.globalFetchCancel()
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	wp.globalFetchCtx = ctx
+	wp.globalFetchCancel = cancel
+	return ctx
+}
+
+// CancelFetchContext triggers an abort for the overarching FetchNewImages loop, freeing it.
+func (wp *Plugin) CancelFetchContext() {
+	wp.globalFetchMu.Lock()
+	defer wp.globalFetchMu.Unlock()
+
+	if wp.globalFetchCancel != nil {
+		wp.globalFetchCancel()
+	}
 }

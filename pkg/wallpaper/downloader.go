@@ -19,9 +19,19 @@ import (
 // It implements the Source + Derivative architecture:
 // 1. Ensure Master (Raw) exists.
 // 2. Ensure Derivative (Processed) exists (generating from Master if needed).
-func (wp *Plugin) ProcessImageJob(ctx context.Context, job DownloadJob) (provider.Image, error) {
+func (wp *Plugin) ProcessImageJob(ctx context.Context, job DownloadJob) (resultImg provider.Image, finalErr error) {
 	img := job.Image
 	downloadProvider := job.Provider
+
+	// Prevent orphaned files from leaking by ensuring partial processing artifacts are scrubbed.
+	// If context is cancelled midway through downloading/processing, we aggressively clean up
+	// any master or derivative files we just wrote instead of waiting for the nightly sweep.
+	defer func() {
+		if finalErr != nil && ctx.Err() != nil {
+			log.Debugf("Context cancelled for job %s, running cleanup...", img.ID)
+			_ = wp.fm.DeepDelete(img.ID)
+		}
+	}()
 
 	if wp.cfg.InAvoidSet(img.ID) {
 		return provider.Image{}, fmt.Errorf("image %s is in avoid set", img.ID)
@@ -237,6 +247,10 @@ func (wp *Plugin) downloadMasterFile(ctx context.Context, client *http.Client, r
 	defer file.Close()
 
 	if _, err := io.Copy(file, resp.Body); err != nil {
+		file.Close() // Close before attempting removal
+		if err := os.Remove(masterPath); err != nil && !os.IsNotExist(err) {
+			log.Printf("Failed to clean up aborted download %s: %v", masterPath, err)
+		}
 		return "", err
 	}
 
@@ -346,6 +360,9 @@ func (wp *Plugin) generateMissingDerivatives(ctx context.Context, img provider.I
 	}
 
 	for _, res := range resolutions {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		resDir := fmt.Sprintf("%dx%d", res.Width, res.Height)
 
 		// Skip if we already found it in the check phase?

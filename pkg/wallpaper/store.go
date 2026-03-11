@@ -40,6 +40,9 @@ type ImageStore struct {
 
 	debounceDuration time.Duration
 	os               OS
+
+	// QueryActiveFunc checks if a given source query ID is still active in the configuration.
+	QueryActiveFunc func(string) bool
 }
 
 func NewImageStore() *ImageStore {
@@ -60,6 +63,13 @@ func (s *ImageStore) SetDebounceDuration(d time.Duration) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.debounceDuration = d
+}
+
+// SetQueryActiveFunc sets the callback used to check if an image's source query is still active
+func (s *ImageStore) SetQueryActiveFunc(fn func(string) bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.QueryActiveFunc = fn
 }
 
 // SetOS sets the OS interface for filesystem operations.
@@ -166,6 +176,15 @@ func (s *ImageStore) Add(img provider.Image) bool {
 		}
 		return false
 	}
+
+	// Active Query Check: Reject images from queries disabled mid-download
+	if s.QueryActiveFunc != nil && img.SourceQueryID != "" {
+		if !s.QueryActiveFunc(img.SourceQueryID) {
+			log.Debugf("Store: Rejecting new image %s from inactive query %s", img.ID, img.SourceQueryID)
+			return false
+		}
+	}
+
 	if s.avoidSet[img.ID] {
 		return false
 	}
