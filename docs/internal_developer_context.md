@@ -186,3 +186,29 @@ go run cmd/spice/main.go
 
 **Note**: The `Makefile` automatically handles this injection via `cmd/util/load_secrets/main.go`, so you only need to manually source this script when bypassing the Makefile.
 
+## 9. Internationalization & Localization (i18n)
+
+Spice uses a custom i18n package (`pkg/i18n`) for runtime translations and synchronization with Fyne's internal state.
+
+### 9.1 Translation Architecture
+- **Language Selection**: Managed via `i18n.SetLanguage(code)`. It maps standard codes (e.g., "en", "de", "zh-Hant") to internal states and synchronizes with Fyne's `lang` package.
+- **String Retrieval**:
+    - `i18n.T("key")`: Standard translation retrieval.
+    - `i18n.Tf("key", map)`: Templated translation using Go `text/template` syntax.
+- **Embedded Files**: Translations are stored in `pkg/i18n/translations/*.json` and embedded into the binary using `//go:embed`.
+
+### 9.2 Contributing New Translations
+1.  **Reference English**: Use `pkg/i18n/translations/en.json` as the authoritative source for keys.
+2.  **Create JSON**: Add `[lang-code].json` to the translations directory.
+3.  **Register Language**: 
+    - Add the language code and its display name to the `switch` statement in `pkg/i18n/i18n.go:SetLanguage`.
+    - Update the `Language` dropdown in `ui/ui.go` within the Preferences window construction.
+4.  **Verify**: Run `make test` to ensure no JSON parsing errors or missing key panics.
+
+### 9.3 Tray Menu Constraints (Critical)
+When translating strings specifically for the system tray menu:
+- **Brevity**: Operating systems (especially Windows) calculate tray menu width based on the longest item. Keep translations as short as possible (e.g., German "Bild" vs "Hintergrundbild").
+- **Mnemonic Safety**: On Windows, `&` acts as a mnemonic prefix and is hidden. Use `+` as a universal cross-platform separator instead of `&` or `&&`.
+- **Sanitization**: All dynamic strings (like attributions) displayed in the tray MUST pass through `SanitizeMenuString` (in `pkg/wallpaper/helper.go`) to strip HTML and collapse excessive whitespace.
+- **Rune-Aware Truncation**: Never truncate tray labels by bytes. Always cast to `[]rune` before slicing to avoid corrupting multi-byte localized characters.
+
