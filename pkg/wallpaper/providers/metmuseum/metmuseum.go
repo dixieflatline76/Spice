@@ -16,6 +16,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
+	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
 	"github.com/dixieflatline76/Spice/v2/pkg/wallpaper"
@@ -589,7 +590,7 @@ func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl strin
 	return container.NewVBox(
 		header,
 		widget.NewSeparator(),
-		widget.NewLabelWithStyle("Collections", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		widget.NewLabelWithStyle(i18n.T("Collections"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		listContainer,
 	)
 }

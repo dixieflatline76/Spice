@@ -2,11 +2,11 @@ package wallpaper
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
 	"github.com/dixieflatline76/Spice/v2/util"
 	"github.com/dixieflatline76/Spice/v2/util/log"
@@ -99,7 +99,7 @@ func (wp *Plugin) FetchNewImages(providerID ...string) {
 				if len(sources) > 0 {
 					sourceStr = " from " + strings.Join(sources, ", ")
 				}
-				wp.manager.NotifyUser("Wallpaper Fetch", fmt.Sprintf("Downloading %d new images%s...", totalQueued.Value(), sourceStr))
+				wp.manager.NotifyUser(i18n.T("Wallpaper Fetch"), i18n.Tf("Downloading {{.Count}} new images{{.Sources}}...", map[string]any{"Count": totalQueued.Value(), "Sources": sourceStr}))
 			} else {
 				log.Println("Fetch returned 0 new images from all active queries.")
 			}

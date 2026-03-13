@@ -63,3 +63,17 @@ func (c *AppConfig) GetDebugLoggingEnabled() bool {
 func (c *AppConfig) SetDebugLoggingEnabled(enabled bool) {
 	c.prefs.SetBool(DebugLoggingEnabledKey, enabled)
 }
+
+// AppLanguageKey is the key for the app language preference
+const AppLanguageKey = "app_language"
+
+// GetLanguage returns the current application language override.
+// Returns "System" to use the system locale, or a specific locale code (e.g. "en", "de").
+func (c *AppConfig) GetLanguage() string {
+	return c.prefs.StringWithFallback(AppLanguageKey, "System")
+}
+
+// SetLanguage sets the application language override.
+func (c *AppConfig) SetLanguage(lang string) {
+	c.prefs.SetString(AppLanguageKey, lang)
+}

@@ -18,6 +18,7 @@ import (
 	"fyne.io/fyne/v2/data/validation"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
+	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
 	"github.com/dixieflatline76/Spice/v2/pkg/wallpaper"
@@ -479,8 +480,8 @@ func (p *WallhavenProvider) CreateSettingsPanel(sm setting.SettingsManager) fyne
 	syncConfig := setting.BoolConfig{
 		Name:         "WallhavenSyncEnabled",
 		InitialValue: p.cfg.GetWallhavenSyncEnabled(),
-		Label:        sm.CreateSettingTitleLabel("Keep Favorites (collections) Synced:"),
-		HelpContent:  sm.CreateSettingDescriptionLabel("Automatically synchronize your Wallhaven collections with Spice. New collections will be added as inactive queries."),
+		Label:        sm.CreateSettingTitleLabel(i18n.T("Keep Favorites (collections) Synced:")),
+		HelpContent:  sm.CreateSettingDescriptionLabel(i18n.T("Automatically synchronize your Wallhaven collections with Spice. New collections will be added as inactive queries.")),
 		EnabledIf: func() bool {
 			currentUsername := sm.GetValue("Wallhaven Username")
 			if currentUsername == nil {
@@ -520,7 +521,7 @@ func (p *WallhavenProvider) buildAPIKeySection(sm setting.SettingsManager, whHea
 		Name:          "wallhavenAPIKey",
 		InitialValue:  p.cfg.GetWallhavenAPIKey(),
 		PlaceHolder:   "Enter your wallhaven.cc API Key",
-		Label:         sm.CreateSettingTitleLabel("wallhaven API Key:"),
+		Label:         sm.CreateSettingTitleLabel(i18n.T("wallhaven API Key:")),
 		HelpContent:   widget.NewHyperlink("Restricted content requires an API key. Get one here.", whURL),
 		Validator:     validation.NewRegexp(WallhavenAPIKeyRegexp, "32 alphanumeric characters required"),
 		NeedsRefresh:  true,
@@ -637,7 +638,7 @@ func (p *WallhavenProvider) buildUsernameSection(sm setting.SettingsManager, whH
 		Name:          "Wallhaven Username",
 		InitialValue:  p.cfg.GetWallhavenUsername(),
 		PlaceHolder:   "Enter your Wallhaven username...",
-		Label:         sm.CreateSettingTitleLabel("Wallhaven Username:"),
+		Label:         sm.CreateSettingTitleLabel(i18n.T("Wallhaven Username:")),
 		Validator:     validation.NewRegexp(WallhavenUsernameRegexp, "3 to 20 alphanumeric characters (or -_) required"),
 		NeedsRefresh:  true,
 		DisplayStatus: false,
@@ -765,8 +766,8 @@ func (p *WallhavenProvider) CreateQueryPanel(sm setting.SettingsManager, pending
 	}
 
 	header := container.NewVBox()
-	header.Add(sm.CreateSettingTitleLabel("Wallhaven Queries and Collections (Favorites)"))
-	header.Add(sm.CreateSettingDescriptionLabel("Manage your wallhaven.cc image queries and collections here. Paste your image search or collection URL and Spice will take care of the rest."))
+	header.Add(sm.CreateSettingTitleLabel(i18n.T("Wallhaven Queries and Collections (Favorites)")))
+	header.Add(sm.CreateSettingDescriptionLabel(i18n.T("Manage your wallhaven.cc image queries and collections here. Paste your image search or collection URL and Spice will take care of the rest.")))
 	header.Add(addButton)
 	qpContainer := container.NewBorder(header, nil, nil, nil, imgQueryList)
 	return qpContainer

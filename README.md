@@ -41,6 +41,7 @@ Spice is a minimalist wallpaper manager that automatically cycles high-quality w
 
 ### 🎮 Control & Experience
 *   **⌨️ Global Hotkeys:** Control Spice instantly from anywhere.
+*   **🌐 Multilingual Support:** Fully localized in 10 languages (English, German, Spanish, French, Italian, Portuguese, Japanese, Russian, and Chinese).
 
 #### Targeted Actions (Single Monitor)
 Target a specific monitor (**1-9**) by holding that number key while pressing the shortcut. Defaults to **Display 1** if no number is held.

@@ -20,6 +20,7 @@ import (
 	"fyne.io/fyne/v2/data/validation"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
+	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
 	"github.com/dixieflatline76/Spice/v2/pkg/wallpaper"
@@ -413,7 +414,7 @@ func (p *PexelsProvider) CreateSettingsPanel(sm setting.SettingsManager) fyne.Ca
 		Name:          "pexelsAPIKey",
 		InitialValue:  p.cfg.GetPexelsAPIKey(),
 		PlaceHolder:   "Enter your Pexels API Key",
-		Label:         sm.CreateSettingTitleLabel("Pexels API Key:"),
+		Label:         sm.CreateSettingTitleLabel(i18n.T("Pexels API Key:")),
 		HelpContent:   widget.NewHyperlink("Get a free API key from Pexels.", pexURL),
 		Validator:     validation.NewRegexp(wallpaper.PexelsAPIKeyRegexp, "Invalid API Key format (56 characters)"),
 		NeedsRefresh:  true,
@@ -571,8 +572,8 @@ func (p *PexelsProvider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl
 	)
 
 	header := container.NewVBox()
-	header.Add(sm.CreateSettingTitleLabel("Pexels Queries"))
-	header.Add(sm.CreateSettingDescriptionLabel("Manage your Pexels image queries here."))
+	header.Add(sm.CreateSettingTitleLabel(i18n.T("Pexels Queries")))
+	header.Add(sm.CreateSettingDescriptionLabel(i18n.T("Manage your Pexels image queries here.")))
 
 	header.Add(addButton)
 

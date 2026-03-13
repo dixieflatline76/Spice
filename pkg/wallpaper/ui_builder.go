@@ -1,12 +1,12 @@
 package wallpaper
 
 import (
-	"fmt"
 	"sort"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
+	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
 )
@@ -52,8 +52,8 @@ func (b *PrefsPanelBuilder) addFrequencySetting(c *fyne.Container) {
 		Name:         "changeFrequency",
 		Options:      setting.StringOptions(GetFrequencies()),
 		InitialValue: int(b.plugin.cfg.GetWallpaperChangeFrequency()),
-		Label:        b.sm.CreateSettingTitleLabel("Wallpaper Change Frequency:"),
-		HelpContent:  b.sm.CreateSettingDescriptionLabel("Set how often the wallpaper changes. Set to \"Never\" to disable wallpaper changes."),
+		Label:        b.sm.CreateSettingTitleLabel(i18n.T("Wallpaper Change Frequency:")),
+		HelpContent:  b.sm.CreateSettingDescriptionLabel(i18n.T("Set how often the wallpaper changes. Set to \"Never\" to disable wallpaper changes.")),
 	}
 	config.ApplyFunc = func(val interface{}) {
 		freq := Frequency(val.(int))
@@ -69,8 +69,8 @@ func (b *PrefsPanelBuilder) addCacheSizeSetting(c *fyne.Container) {
 		Name:         "cacheSize",
 		Options:      setting.StringOptions(GetCacheSizes()),
 		InitialValue: int(b.plugin.cfg.GetCacheSize()),
-		Label:        b.sm.CreateSettingTitleLabel("Cache Size:"),
-		HelpContent:  b.sm.CreateSettingDescriptionLabel("Set how many images to cache for faster startup and less network usage. Set to \"None\" to disable caching."),
+		Label:        b.sm.CreateSettingTitleLabel(i18n.T("Cache Size:")),
+		HelpContent:  b.sm.CreateSettingDescriptionLabel(i18n.T("Set how many images to cache for faster startup and less network usage. Set to \"None\" to disable caching.")),
 	}
 	config.ApplyFunc = func(val interface{}) {
 		size := CacheSize(val.(int))
@@ -86,8 +86,8 @@ func (b *PrefsPanelBuilder) addSmartFitSection(c *fyne.Container) {
 		Name:         "smartFitMode",
 		Options:      GetSmartFitModes(),
 		InitialValue: int(b.plugin.cfg.GetSmartFitMode()),
-		Label:        b.sm.CreateSettingTitleLabel("Smart Fit Mode:"),
-		HelpContent:  b.sm.CreateSettingDescriptionLabel("Control how images are fitted to your screen:\n- Disabled: Original image.\n- Quality: Rejects images with mismatched aspect ratio.\n- Flexibility: Allows high-res images to crop aggressively."),
+		Label:        b.sm.CreateSettingTitleLabel(i18n.T("Smart Fit Mode:")),
+		HelpContent:  b.sm.CreateSettingDescriptionLabel(i18n.T("Control how images are fitted to your screen:\n- Disabled: Original image.\n- Quality: Rejects images with mismatched aspect ratio.\n- Flexibility: Allows high-res images to crop aggressively.")),
 	}
 	config.ApplyFunc = func(val interface{}) {
 		mode := SmartFitMode(val.(int))
@@ -108,8 +108,8 @@ func (b *PrefsPanelBuilder) addFaceOptions(c *fyne.Container) {
 	cropConfig = setting.BoolConfig{
 		Name:         "faceCrop",
 		InitialValue: b.plugin.cfg.GetFaceCropEnabled(),
-		Label:        b.sm.CreateSettingTitleLabel("Enable Face Crop:"),
-		HelpContent:  b.sm.CreateSettingDescriptionLabel("Aggressively crops the image to center on the largest face found. Good for portraits."),
+		Label:        b.sm.CreateSettingTitleLabel(i18n.T("Enable Face Crop:")),
+		HelpContent:  b.sm.CreateSettingDescriptionLabel(i18n.T("Aggressively crops the image to center on the largest face found. Good for portraits.")),
 		ApplyFunc: func(val bool) {
 			b.plugin.cfg.SetFaceCropEnabled(val)
 			if val {
@@ -132,8 +132,8 @@ func (b *PrefsPanelBuilder) addFaceOptions(c *fyne.Container) {
 	boostConfig = setting.BoolConfig{
 		Name:         "faceBoost",
 		InitialValue: b.plugin.cfg.GetFaceBoostEnabled(),
-		Label:        b.sm.CreateSettingTitleLabel("Enable Face Boost:"),
-		HelpContent:  b.sm.CreateSettingDescriptionLabel("Uses face detection to hint the smart cropper. Keeps faces in frame but balances with other image details."),
+		Label:        b.sm.CreateSettingTitleLabel(i18n.T("Enable Face Boost:")),
+		HelpContent:  b.sm.CreateSettingDescriptionLabel(i18n.T("Uses face detection to hint the smart cropper. Keeps faces in frame but balances with other image details.")),
 		ApplyFunc: func(val bool) {
 			b.plugin.cfg.SetFaceBoostEnabled(val)
 			if val {
@@ -166,8 +166,8 @@ func (b *PrefsPanelBuilder) addToggleSettings(c *fyne.Container) {
 	staggerConfig := setting.BoolConfig{
 		Name:         "staggerChanges",
 		InitialValue: b.plugin.cfg.GetStaggerMonitorChanges(),
-		Label:        b.sm.CreateSettingTitleLabel("Stagger monitor changes:"),
-		HelpContent:  b.sm.CreateSettingDescriptionLabel("Introduces a random delay when changing wallpapers across multiple screens to prevent a jarring simultaneous flash."),
+		Label:        b.sm.CreateSettingTitleLabel(i18n.T("Stagger monitor changes:")),
+		HelpContent:  b.sm.CreateSettingDescriptionLabel(i18n.T("Introduces a random delay when changing wallpapers across multiple screens to prevent a jarring simultaneous flash.")),
 		ApplyFunc: func(val bool) {
 			b.plugin.cfg.SetStaggerMonitorChanges(val)
 		},
@@ -178,8 +178,8 @@ func (b *PrefsPanelBuilder) addToggleSettings(c *fyne.Container) {
 	startConfig := setting.BoolConfig{
 		Name:         "chgImgOnStart",
 		InitialValue: b.plugin.cfg.GetChgImgOnStart(),
-		Label:        b.sm.CreateSettingTitleLabel("Change wallpaper on start:"),
-		HelpContent:  b.sm.CreateSettingDescriptionLabel("Disable if you prefer the wallpaper to change only based on its timer or a manual refresh."),
+		Label:        b.sm.CreateSettingTitleLabel(i18n.T("Change wallpaper on start:")),
+		HelpContent:  b.sm.CreateSettingDescriptionLabel(i18n.T("Disable if you prefer the wallpaper to change only based on its timer or a manual refresh.")),
 		ApplyFunc: func(val bool) {
 			b.plugin.cfg.SetChgImgOnStart(val)
 		},
@@ -191,8 +191,8 @@ func (b *PrefsPanelBuilder) addNightlyRefreshSetting(c *fyne.Container) {
 	config := setting.BoolConfig{
 		Name:         "nightlyRefresh",
 		InitialValue: b.plugin.cfg.GetNightlyRefresh(),
-		Label:        b.sm.CreateSettingTitleLabel("Refresh wallpapers nightly:"),
-		HelpContent:  b.sm.CreateSettingDescriptionLabel("Useful when using image queries with random elements. Toggling this will start or stop the nightly refresh process."),
+		Label:        b.sm.CreateSettingTitleLabel(i18n.T("Refresh wallpapers nightly:")),
+		HelpContent:  b.sm.CreateSettingDescriptionLabel(i18n.T("Useful when using image queries with random elements. Toggling this will start or stop the nightly refresh process.")),
 	}
 	config.ApplyFunc = func(val bool) {
 		b.plugin.cfg.SetNightlyRefresh(val)
@@ -209,31 +209,31 @@ func (b *PrefsPanelBuilder) addNightlyRefreshSetting(c *fyne.Container) {
 func (b *PrefsPanelBuilder) addActionButtons(c *fyne.Container) {
 	// Sync
 	syncConfig := setting.ButtonWithConfirmationConfig{
-		Label:       b.sm.CreateSettingTitleLabel("Display Configuration:"),
-		HelpContent: b.sm.CreateSettingDescriptionLabel("Synchronize Spice with currently connected monitors. Use this if you plugged or unplugged a monitor while Spice was running."),
-		ButtonText:  "Refresh Displays",
+		Label:       b.sm.CreateSettingTitleLabel(i18n.T("Display Configuration:")),
+		HelpContent: b.sm.CreateSettingDescriptionLabel(i18n.T("Synchronize Spice with currently connected monitors. Use this if you plugged or unplugged a monitor while Spice was running.")),
+		ButtonText:  i18n.T("Refresh Displays"),
 		OnPressed:   func() { b.plugin.SyncMonitors(true) },
 	}
 	b.sm.CreateButtonWithConfirmationSetting(&syncConfig, c)
 
 	// Clear Cache
 	clearConfig := setting.ButtonWithConfirmationConfig{
-		Label:          b.sm.CreateSettingTitleLabel("Clear Wallpaper Cache:"),
-		HelpContent:    b.sm.CreateSettingDescriptionLabel("Delete all downloaded wallpapers (Source and Derivatives). This is a safety feature."),
-		ButtonText:     "Clear Cache",
-		ConfirmTitle:   "Clear Cache?",
-		ConfirmMessage: "Are you sure? This will delete ALL downloaded images from disk. You will need internet to see new wallpapers.",
+		Label:          b.sm.CreateSettingTitleLabel(i18n.T("Clear Wallpaper Cache:")),
+		HelpContent:    b.sm.CreateSettingDescriptionLabel(i18n.T("Delete all downloaded wallpapers (Source and Derivatives). This is a safety feature.")),
+		ButtonText:     i18n.T("Clear Cache"),
+		ConfirmTitle:   i18n.T("Clear Cache?"),
+		ConfirmMessage: i18n.T("Are you sure? This will delete ALL downloaded images from disk. You will need internet to see new wallpapers."),
 		OnPressed:      b.plugin.ClearCache,
 	}
 	b.sm.CreateButtonWithConfirmationSetting(&clearConfig, c)
 
 	// Reset Avoid Set
 	resetConfig := setting.ButtonWithConfirmationConfig{
-		Label:          b.sm.CreateSettingTitleLabel("Blocked Images:"),
-		HelpContent:    b.sm.CreateSettingDescriptionLabel("Clear the blocked images list. Blocked images may be downloaded next time wallpapers are refreshed."),
-		ButtonText:     "Reset",
-		ConfirmTitle:   "Please Confirm",
-		ConfirmMessage: "This cannot be undone. Are you sure?",
+		Label:          b.sm.CreateSettingTitleLabel(i18n.T("Blocked Images:")),
+		HelpContent:    b.sm.CreateSettingDescriptionLabel(i18n.T("Clear the blocked images list. Blocked images may be downloaded next time wallpapers are refreshed.")),
+		ButtonText:     i18n.T("Reset"),
+		ConfirmTitle:   i18n.T("Please Confirm"),
+		ConfirmMessage: i18n.T("This cannot be undone. Are you sure?"),
 		OnPressed:      b.plugin.cfg.ResetAvoidSet,
 	}
 	b.sm.CreateButtonWithConfirmationSetting(&resetConfig, c)
@@ -355,7 +355,7 @@ func (b *PrefsPanelBuilder) createTitleFunc(p provider.ImageProvider) func() str
 	return func() string {
 		title := p.Title()
 		if title == "" {
-			title = "Image Sources (" + p.Name() + ")"
+			title = i18n.Tf("Image Sources ({{.Name}})", map[string]any{"Name": p.Name()})
 		}
 		activeCount := 0
 		for _, q := range b.plugin.cfg.GetQueries() {
@@ -365,9 +365,9 @@ func (b *PrefsPanelBuilder) createTitleFunc(p provider.ImageProvider) func() str
 		}
 		if activeCount > 0 {
 			if activeCount == 1 {
-				return fmt.Sprintf("%s (1 active)", title)
+				return i18n.Tf("{{.Title}} (1 active)", map[string]any{"Title": title})
 			}
-			return fmt.Sprintf("%s (%d active)", title, activeCount)
+			return i18n.Tf("{{.Title}} ({{.Count}} active)", map[string]any{"Title": title, "Count": activeCount})
 		}
 		return title
 	}

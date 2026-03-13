@@ -7,6 +7,7 @@ import (
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
+	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
 	utilLog "github.com/dixieflatline76/Spice/v2/util/log"
 )
@@ -46,11 +47,11 @@ func OpenAddQueryDialog(sm setting.SettingsManager, cfg AddQueryConfig, initialU
 
 	urlEntry, descEntry := createQueryEntries(cfg, initialURL, initialDesc)
 	formStatus := widget.NewLabel("")
-	activeBool := widget.NewCheck("Active", nil)
+	activeBool := widget.NewCheck(i18n.T("Active"), nil)
 	activeBool.SetChecked(true)
 
-	cancelButton := widget.NewButton("Cancel", nil)
-	saveButton := widget.NewButton("Save", nil)
+	cancelButton := widget.NewButton(i18n.T("Cancel"), nil)
+	saveButton := widget.NewButton(i18n.T("Save"), nil)
 
 	if initialURL == "" {
 		saveButton.Disable()
@@ -124,7 +125,7 @@ func createValidationLogic(cfg AddQueryConfig, urlEntry, descEntry *widget.Entry
 			}
 		}
 
-		formStatus.SetText("Everything looks good")
+		formStatus.SetText(i18n.T("Everything looks good"))
 		formStatus.Importance = widget.SuccessImportance
 		formStatus.Refresh()
 		return true
@@ -160,9 +161,9 @@ func createDialogLayout(sm setting.SettingsManager, cfg AddQueryConfig, urlEntry
 	if cfg.Description != "" {
 		c.Add(widget.NewLabel(cfg.Description))
 	}
-	c.Add(sm.CreateSettingTitleLabel("URL / Search Term:"))
+	c.Add(sm.CreateSettingTitleLabel(i18n.T("URL / Search Term:")))
 	c.Add(urlEntry)
-	c.Add(sm.CreateSettingTitleLabel("Description:"))
+	c.Add(sm.CreateSettingTitleLabel(i18n.T("Description:")))
 	c.Add(descEntry)
 	c.Add(status)
 	c.Add(active)

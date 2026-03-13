@@ -1,7 +1,6 @@
 package wallpaper
 
 import (
-	"fmt"
 	"net/url"
 	"sort"
 	"strings"
@@ -12,6 +11,8 @@ import (
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
+	"github.com/dixieflatline76/Spice/v2/pkg/provider"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
 	utilLog "github.com/dixieflatline76/Spice/v2/util/log"
 )
@@ -44,9 +45,9 @@ func CreateQueryList(sm setting.SettingsManager, cfg QueryListConfig) *widget.Li
 		},
 		// CreateItem — builds the cell template (no data binding here)
 		func() fyne.CanvasObject {
-			urlLink := widget.NewHyperlink("Placeholder", nil)
-			activeCheck := widget.NewCheck("Active", nil)
-			deleteButton := widget.NewButton("Delete", nil)
+			urlLink := widget.NewHyperlink(i18n.T("Placeholder"), nil)
+			activeCheck := widget.NewCheck(i18n.T("Active"), nil)
+			deleteButton := widget.NewButton(i18n.T("Delete"), nil)
 			return container.NewHBox(urlLink, layout.NewSpacer(), activeCheck, deleteButton)
 		},
 		// UpdateItem — binds data to a recycled cell (scroll-safe)
@@ -126,7 +127,7 @@ func CreateQueryList(sm setting.SettingsManager, cfg QueryListConfig) *widget.Li
 
 			// Wire delete button
 			deleteButton.OnTapped = func() {
-				d := dialog.NewConfirm("Please Confirm", fmt.Sprintf("Are you sure you want to delete %s?", query.Description), func(b bool) {
+				d := dialog.NewConfirm(i18n.T("Please Confirm"), i18n.Tf("Are you sure you want to delete {{.Description}}?", map[string]any{"Description": query.Description}), func(b bool) {
 					if b {
 						if query.Active {
 							sm.SetRefreshFlag(queryKey)
@@ -170,38 +171,96 @@ func (wp *Plugin) CreateTrayMenuItems() []*fyne.MenuItem {
 
 	// --- HELPER: Create Monitor Section Items ---
 	createMonitorItems := func(mID int) []*fyne.MenuItem {
-		// Actions
-		nextItem := wp.manager.CreateMenuItem("Next Wallpaper", func() { go wp.SetNextWallpaper(mID, true) }, "next.png")
-		prevItem := wp.manager.CreateMenuItem("Prev Wallpaper", func() { go wp.SetPreviousWallpaper(mID, true) }, "prev.png")
+		wp.monMu.RLock()
+		mc, hasMC := wp.Monitors[mID]
+		wp.monMu.RUnlock()
 
-		// Global (but requested in root and submenus?)
-		// User instruction said: "sub menu with items starting from Next Wallpaper to Delete And Block"
-		pauseItem := wp.manager.CreateMenuItem("Pause Play", func() {
+		var currentImage provider.Image
+		isInitialized := false
+		isPaused := false
+		if hasMC {
+			mc.mu.RLock()
+			currentImage = mc.State.CurrentImage
+			isInitialized = mc.State.CurrentID != ""
+			isPaused = mc.State.Paused
+			mc.mu.RUnlock()
+		}
+
+		// Actions
+		nextItem := wp.manager.CreateMenuItem(i18n.T("Next Wallpaper"), func() { go wp.SetNextWallpaper(mID, true) }, "next.png")
+		prevItem := wp.manager.CreateMenuItem(i18n.T("Prev Wallpaper"), func() { go wp.SetPreviousWallpaper(mID, true) }, "prev.png")
+
+		// Initial Labels with state awareness
+		providerLabel := i18n.T("Source: Initializing...")
+		artistLabel := i18n.T("By: Unknown")
+		favoriteLabel := i18n.T("Add to Favorites")
+		favoriteIcon := "favorite.png"
+		pauseLabel := i18n.T("Pause Play")
+		pauseIcon := "pause.png"
+
+		if isInitialized {
+			attribution := SanitizeMenuString(currentImage.Attribution)
+			runes := []rune(attribution)
+			if len(runes) > 20 {
+				attribution = string(runes[:17]) + "..."
+			}
+			providerLabel = i18n.Tf("Source: {{.Provider}}", map[string]any{"Provider": wp.GetProviderTitle(currentImage.Provider)})
+			artistLabel = i18n.Tf("By: {{.Attribution}}", map[string]any{"Attribution": attribution})
+			if currentImage.Attribution == "" {
+				artistLabel = i18n.T("By: Unknown")
+			}
+			if currentImage.IsFavorited {
+				favoriteLabel = i18n.T("Remove from Favorites")
+				favoriteIcon = "unfavorite.png"
+			}
+		}
+
+		if isPaused {
+			pauseLabel = i18n.T("Resume Play")
+			pauseIcon = "play.png"
+		}
+
+		pauseItem := wp.manager.CreateMenuItem(pauseLabel, func() {
 			wp.TogglePauseMonitorAction(mID)
-		}, "pause.png")
+		}, pauseIcon)
+
+		var providerAction func()
+		if isInitialized {
+			providerAction = func() {
+				wp.focusProviderName = currentImage.Provider
+				wp.manager.OpenPreferences("Wallpaper")
+			}
+		}
 
 		// Info Items (Store in monitorMenu for updates)
 		mItems := &MonitorMenuItems{
-			ProviderMenuItem: wp.manager.CreateMenuItem("Source: Initializing...", nil, ""),
-			ArtistMenuItem: wp.manager.CreateMenuItem("By: Unknown", func() {
+			ProviderMenuItem: wp.manager.CreateMenuItem(providerLabel, providerAction, ""),
+			ArtistMenuItem: wp.manager.CreateMenuItem(artistLabel, func() {
 				go wp.ViewCurrentImageOnWeb(mID)
 			}, "view.png"),
-		}
-		if q, exists := wp.cfg.GetQuery(FavoritesQueryID); exists && q.Active {
-			mItems.FavoriteMenuItem = wp.manager.CreateMenuItem("Add to Favorites", func() {
-				go wp.TriggerFavorite(mID)
-			}, "favorite.png")
+			PauseMenuItem: pauseItem,
 		}
 
-		deleteItem := wp.manager.CreateMenuItem("Delete And Block", func() {
+		// Provider Icon
+		if isInitialized {
+			if p, exists := wp.providers[currentImage.Provider]; exists {
+				mItems.ProviderMenuItem.Icon = p.GetProviderIcon()
+			}
+		}
+
+		if q, exists := wp.cfg.GetQuery(FavoritesQueryID); exists && q.Active {
+			mItems.FavoriteMenuItem = wp.manager.CreateMenuItem(favoriteLabel, func() {
+				go wp.TriggerFavorite(mID)
+			}, favoriteIcon)
+		}
+
+		deleteItem := wp.manager.CreateMenuItem(i18n.T("Delete And Block"), func() {
 			go wp.DeleteCurrentImage(mID)
 		}, "delete.png")
 
 		wp.monMu.Lock()
 		wp.monitorMenu[mID] = mItems
 		wp.monMu.Unlock()
-
-		mItems.PauseMenuItem = pauseItem
 
 		res := []*fyne.MenuItem{
 			nextItem,
@@ -232,12 +291,12 @@ func (wp *Plugin) CreateTrayMenuItems() []*fyne.MenuItem {
 				continue // Skip primary
 			}
 
-			displayName := fmt.Sprintf("Display %d", mID+1)
+			displayName := i18n.Tf("Display {{.ID}}", map[string]any{"ID": mID + 1})
 			wp.monMu.RLock()
 			if m, ok := wp.Monitors[mID]; ok && m.Monitor.Name != "" {
 				// Only append the name if it's a real device name (not a generic "Monitor N" index)
 				if m.Monitor.Name != "Primary" && !strings.HasPrefix(m.Monitor.Name, "Monitor ") {
-					displayName = fmt.Sprintf("Display %d (%s)", mID+1, m.Monitor.Name)
+					displayName = i18n.Tf("Display {{.ID}} ({{.Name}})", map[string]any{"ID": mID + 1, "Name": m.Monitor.Name})
 				}
 			}
 			wp.monMu.RUnlock()
@@ -266,14 +325,14 @@ func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 	onlineTab, localTab, targetTabIndex := builder.BuildProviderTabs()
 
 	// 3. AI Tab Placeholder
-	aiTab := container.NewStack(widget.NewLabelWithStyle("AI features coming soon...", fyne.TextAlignCenter, fyne.TextStyle{Italic: true}))
+	aiTab := container.NewStack(widget.NewLabelWithStyle(i18n.T("AI features coming soon..."), fyne.TextAlignCenter, fyne.TextStyle{Italic: true}))
 
 	// 4. Assemble Tabs
 	tabs := container.NewAppTabs(
-		container.NewTabItemWithIcon("General", theme.SettingsIcon(), generalTab),
-		container.NewTabItemWithIcon("Online", theme.GridIcon(), onlineTab),
-		container.NewTabItemWithIcon("Local", theme.FolderIcon(), localTab),
-		container.NewTabItemWithIcon("AI", theme.ComputerIcon(), aiTab),
+		container.NewTabItemWithIcon(i18n.T("General"), theme.SettingsIcon(), generalTab),
+		container.NewTabItemWithIcon(i18n.T("Online"), theme.GridIcon(), onlineTab),
+		container.NewTabItemWithIcon(i18n.T("Local"), theme.FolderIcon(), localTab),
+		container.NewTabItemWithIcon(i18n.T("AI"), theme.ComputerIcon(), aiTab),
 	)
 	wp.settingsTabs = tabs
 	tabs.SetTabLocation(container.TabLocationLeading)
