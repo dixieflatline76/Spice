@@ -8,6 +8,7 @@ import (
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
 	"github.com/dixieflatline76/Spice/v2/util/log"
 )
@@ -55,20 +56,20 @@ func CreateMuseumHeader(name, location, licenseText, licenseURL, description, ma
 
 	var mapBtn *widget.Button
 	if mapURL != "" {
-		mapBtn = widget.NewButtonWithIcon("📍 Plan a Visit", theme.InfoIcon(), func() {
+		mapBtn = widget.NewButtonWithIcon(i18n.T("📍 Plan a Visit"), theme.InfoIcon(), func() {
 			openURL(mapURL)
 		})
 	} else {
 		// Fallback for digital-only archives
-		mapBtn = widget.NewButtonWithIcon("License: CC0", theme.InfoIcon(), func() {
+		mapBtn = widget.NewButtonWithIcon(i18n.T("License: CC0"), theme.InfoIcon(), func() {
 			openURL("https://www.metmuseum.org/about-the-met/policies-and-documents/open-access")
 		})
 	}
 
-	webBtn := widget.NewButtonWithIcon("Visit Website", theme.HomeIcon(), func() {
+	webBtn := widget.NewButtonWithIcon(i18n.T("Visit Website"), theme.HomeIcon(), func() {
 		openURL(webURL)
 	})
-	donateBtn := widget.NewButtonWithIcon("Donate", theme.ContentAddIcon(), func() {
+	donateBtn := widget.NewButtonWithIcon(i18n.T("Donate"), theme.ContentAddIcon(), func() {
 		openURL(donateURL)
 	})
 	// Highlight Donate button

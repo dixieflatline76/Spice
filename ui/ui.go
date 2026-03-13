@@ -29,6 +29,7 @@ import (
 	"github.com/dixieflatline76/Spice/v2/asset"
 	"github.com/dixieflatline76/Spice/v2/config"
 	"github.com/dixieflatline76/Spice/v2/pkg/hotkey"
+	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 	"github.com/dixieflatline76/Spice/v2/pkg/sysinfo"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
@@ -152,6 +153,9 @@ func getInstance() *SpiceApp {
 				utilLog.SetDebugEnabled(true)
 			}
 
+			// Apply saved language preference
+			i18n.SetLanguage(saInstance.appConfig.GetLanguage())
+
 			// Apply saved theme
 			currentTheme := saInstance.appConfig.GetTheme()
 			switch currentTheme {
@@ -222,24 +226,25 @@ func (sa *SpiceApp) CreateTrayMenu() {
 	}
 
 	items = append(items, fyne.NewMenuItemSeparator())
-	items = append(items, sa.CreateMenuItem("Preferences", func() {
+	items = append(items, sa.CreateMenuItem(i18n.T("Preferences"), func() {
 		sa.CreatePreferencesWindow("")
 	}, "prefs.png"))
 
 	items = append(items, fyne.NewMenuItemSeparator())
-	items = append(items, sa.CreateMenuItem("About Spice", func() {
+	items = append(items, sa.CreateMenuItem(i18n.T("About Spice"), func() {
 		sa.CreateAboutSplash()
 	}, "tray.png"))
 
-	items = append(items, fyne.NewMenuItemSeparator())
-	items = append(items, sa.CreateMenuItem("Quit", func() {
+	quitItem := sa.CreateMenuItem(i18n.T("Quit"), func() {
 		sa.os.TransformToForeground()     // Ensure the app is in the foreground before quitting
 		time.Sleep(50 * time.Millisecond) // Small delay to ensure the OS processes the state change
 		sa.deactivateAllPlugins()         // Deactivate all plugins before quitting
 		time.Sleep(2 * time.Second)       // Small delay to ensure plugins are deactivate
 		utilLog.Println("Quitting Spice application")
 		sa.Quit()
-	}, "quit.png"))
+	}, "quit.png")
+	quitItem.IsQuit = true
+	items = append(items, fyne.NewMenuItemSeparator(), quitItem)
 
 	sa.trayMenu = fyne.NewMenu("", items...)
 	trayIcon, err := sa.assetMgr.GetIcon("tray.png")
@@ -430,7 +435,7 @@ func (sa *SpiceApp) CreatePreferencesWindow(initialTab string) {
 	}
 
 	// Create a new window for the preferences
-	prefsWindow := sa.NewWindow(fmt.Sprintf("%s Preferences", config.AppName))
+	prefsWindow := sa.NewWindow(fmt.Sprintf("%s %s", config.AppName, i18n.T("Preferences")))
 	sa.prefsWindow = prefsWindow // Store reference
 
 	// Build and bind the UI contents first, so the layout engine knows existing elements.
@@ -508,15 +513,15 @@ func (sa *SpiceApp) RebuildPreferencesContent(initialTab string) {
 
 	// --- General Tab ---
 	generalContainer := container.NewVBox()
-	generalContainer.Add(sm.CreateSectionTitleLabel("General Application Settings"))
+	generalContainer.Add(sm.CreateSectionTitleLabel(i18n.T("General Application Settings")))
 
 	// Enable System Notifications
 	var notificationsConfig setting.BoolConfig
 	notificationsConfig = setting.BoolConfig{
 		Name:         "enableNotifications",
 		InitialValue: sa.appConfig.GetAppNotificationsEnabled(),
-		Label:        sm.CreateSettingTitleLabel("Enable System Notifications:"),
-		HelpContent:  sm.CreateSettingDescriptionLabel("Enable or disable system notifications from Spice."),
+		Label:        sm.CreateSettingTitleLabel(i18n.T("Enable System Notifications:")),
+		HelpContent:  sm.CreateSettingDescriptionLabel(i18n.T("Enable or disable system notifications from Spice.")),
 		ApplyFunc: func(b bool) {
 			sa.appConfig.SetAppNotificationsEnabled(b)
 			notificationsConfig.InitialValue = b
@@ -529,8 +534,8 @@ func (sa *SpiceApp) RebuildPreferencesContent(initialTab string) {
 	updateCheckConfig = setting.BoolConfig{
 		Name:         "enableUpdateCheck",
 		InitialValue: sa.appConfig.GetUpdateCheckEnabled(),
-		Label:        sm.CreateSettingTitleLabel("Enable New Version Check:"),
-		HelpContent:  sm.CreateSettingDescriptionLabel("Automatically check for new versions of Spice on startup."),
+		Label:        sm.CreateSettingTitleLabel(i18n.T("Enable New Version Check:")),
+		HelpContent:  sm.CreateSettingDescriptionLabel(i18n.T("Automatically check for new versions of Spice on startup.")),
 		ApplyFunc: func(b bool) {
 			sa.appConfig.SetUpdateCheckEnabled(b)
 			updateCheckConfig.InitialValue = b
@@ -542,8 +547,8 @@ func (sa *SpiceApp) RebuildPreferencesContent(initialTab string) {
 	shortcutConfig := setting.BoolConfig{
 		Name:         "enableShortcuts",
 		InitialValue: !wallpaper.GetInstance().GetShortcutsDisabled(),
-		Label:        sm.CreateSettingTitleLabel("Enable global shortcuts:"),
-		HelpContent:  sm.CreateSettingDescriptionLabel("Use keyboard shortcuts to control wallpapers. Disable if they conflict with other apps."),
+		Label:        sm.CreateSettingTitleLabel(i18n.T("Enable global shortcuts:")),
+		HelpContent:  sm.CreateSettingDescriptionLabel(i18n.T("Use keyboard shortcuts to control wallpapers. Disable if they conflict with other apps.")),
 		ApplyFunc: func(val bool) {
 			wallpaper.GetInstance().SetShortcutsDisabled(!val)
 			hotkey.StartListeners(GetPluginManager())
@@ -556,8 +561,8 @@ func (sa *SpiceApp) RebuildPreferencesContent(initialTab string) {
 	targetedShortcutConfig := setting.BoolConfig{
 		Name:         "enableTargetedShortcuts",
 		InitialValue: !wallpaper.GetInstance().GetTargetedShortcutsDisabled(),
-		Label:        sm.CreateSettingTitleLabel("Enable Display Specific Shortcuts (Alt + Arrow + 1-9):"),
-		HelpContent:  sm.CreateSettingDescriptionLabel("Disable this if Alt+Arrow conflicts with your browser or other apps."),
+		Label:        sm.CreateSettingTitleLabel(i18n.T("Enable Display Specific Shortcuts (Alt + Arrow + 1-9):")),
+		HelpContent:  sm.CreateSettingDescriptionLabel(i18n.T("Disable this if Alt+Arrow conflicts with your browser or other apps.")),
 		ApplyFunc: func(val bool) {
 			wallpaper.GetInstance().SetTargetedShortcutsDisabled(!val)
 			hotkey.StartListeners(GetPluginManager())
@@ -575,7 +580,7 @@ func (sa *SpiceApp) RebuildPreferencesContent(initialTab string) {
 	indentation := widget.NewLabel("      ")
 
 	shortcutsGuideURL, _ := url.Parse("https://github.com/dixieflatline76/Spice/blob/main/docs/user_guide.md#keyboard-shortcuts")
-	shortcutsLink := widget.NewHyperlink("View all shortcuts →", shortcutsGuideURL)
+	shortcutsLink := widget.NewHyperlink(i18n.T("View all shortcuts →"), shortcutsGuideURL)
 	targetedAndLinkContainer := container.NewVBox(
 		targetedInner,
 		container.NewHBox(shortcutsLink),
@@ -599,8 +604,8 @@ func (sa *SpiceApp) RebuildPreferencesContent(initialTab string) {
 		Name:         "theme",
 		Options:      setting.StringOptions(util.StringsToStringers(themeOptions)),
 		InitialValue: initialThemeIndex,
-		Label:        sm.CreateSettingTitleLabel("Theme:"),
-		HelpContent:  sm.CreateSettingDescriptionLabel("Select the application theme."),
+		Label:        sm.CreateSettingTitleLabel(i18n.T("Theme:")),
+		HelpContent:  sm.CreateSettingDescriptionLabel(i18n.T("Select the application theme.")),
 	}
 	themeConfig.ApplyFunc = func(val interface{}) {
 		selectedIndex := val.(int)
@@ -623,13 +628,45 @@ func (sa *SpiceApp) RebuildPreferencesContent(initialTab string) {
 	}
 	sm.CreateSelectSetting(&themeConfig, generalContainer)
 
+	// Language Selection
+	langOptions := []string{"System Default", "English", "Deutsch", "Français", "Español", "Italiano", "Português", "简体中文", "日本語", "Русский", "繁體中文"}
+	langDisplayOptions := []string{i18n.T("System Default"), "English", "Deutsch", "Français", "Español", "Italiano", "Português", "简体中文", "日本語", "Русский", "繁體中文"}
+	currentLang := sa.appConfig.GetLanguage()
+	initialLangIndex := 0
+	for idx, l := range langOptions {
+		if l == currentLang {
+			initialLangIndex = idx
+			break
+		}
+	}
+
+	langConfig := setting.SelectConfig{
+		Name:         "language",
+		Options:      setting.StringOptions(util.StringsToStringers(langDisplayOptions)),
+		InitialValue: initialLangIndex,
+		Label:        sm.CreateSettingTitleLabel(i18n.T("Language:")),
+		HelpContent:  sm.CreateSettingDescriptionLabel(i18n.T("Select the application language. Restart may be required for full effect.")),
+		NeedsRefresh: true,
+	}
+	langConfig.ApplyFunc = func(val interface{}) {
+		selectedIndex := val.(int)
+		if selectedIndex < 0 || selectedIndex >= len(langOptions) {
+			return
+		}
+		selectedLang := langOptions[selectedIndex]
+		sa.appConfig.SetLanguage(selectedLang)
+		i18n.SetLanguage(selectedLang)
+		langConfig.InitialValue = selectedIndex
+	}
+	sm.CreateSelectSetting(&langConfig, generalContainer)
+
 	// Enable Debug Logging
 	var debugLogConfig setting.BoolConfig
 	debugLogConfig = setting.BoolConfig{
 		Name:         "enableDebugLogging",
 		InitialValue: sa.appConfig.GetDebugLoggingEnabled(),
-		Label:        sm.CreateSettingTitleLabel("Enable Debug Logging:"),
-		HelpContent:  sm.CreateSettingDescriptionLabel("Write verbose debug entries to the log file. Useful for troubleshooting."),
+		Label:        sm.CreateSettingTitleLabel(i18n.T("Enable Debug Logging:")),
+		HelpContent:  sm.CreateSettingDescriptionLabel(i18n.T("Write verbose debug entries to the log file. Useful for troubleshooting.")),
 		ApplyFunc: func(b bool) {
 			sa.appConfig.SetDebugLoggingEnabled(b)
 			utilLog.SetDebugEnabled(b)
@@ -638,7 +675,7 @@ func (sa *SpiceApp) RebuildPreferencesContent(initialTab string) {
 	}
 	sm.CreateBoolSetting(&debugLogConfig, generalContainer)
 
-	generalTabItem := container.NewTabItem("App", container.NewVScroll(generalContainer))
+	generalTabItem := container.NewTabItem(i18n.T("App"), container.NewVScroll(generalContainer))
 
 	// --- Plugin Tabs ---
 	var pluginTabItems []*container.TabItem
@@ -660,6 +697,13 @@ func (sa *SpiceApp) RebuildPreferencesContent(initialTab string) {
 		tabs.Append(item)
 	}
 
+	// Register refresh functions for global UI elements (e.g. language change)
+	sm.RegisterRefreshFunc(func() {
+		currentActiveTab := tabs.Selected().Text
+		sa.RebuildPreferencesContent(currentActiveTab)
+		sa.RebuildTrayMenu()
+	})
+
 	// Select the initial tab if specified
 	if initialTab != "" {
 		for _, item := range tabs.Items {
@@ -670,7 +714,7 @@ func (sa *SpiceApp) RebuildPreferencesContent(initialTab string) {
 		}
 	}
 
-	closeButton := widget.NewButton("Close", func() {
+	closeButton := widget.NewButton(i18n.T("Close"), func() {
 		sa.prefsWindow.Close()
 	})
 
@@ -713,7 +757,7 @@ func (sa *SpiceApp) displayEULAAcceptance() {
 
 	// Create a new window for the EULA
 	sa.os.TransformToForeground() // Ensure the app is in the foreground before showing the EULA
-	eulaWindow := sa.NewWindow("Spice EULA")
+	eulaWindow := sa.NewWindow(i18n.T("Spice EULA"))
 	eulaWindow.SetOnClosed(sa.os.TransformToBackground) // Set the close action to transform to background
 	eulaWindow.Resize(fyne.NewSize(800, 600))
 	eulaWindow.CenterOnScreen()
@@ -725,7 +769,7 @@ func (sa *SpiceApp) displayEULAAcceptance() {
 	eulaWdgt := widget.NewRichTextWithText(eulaText)
 	eulaWdgt.Wrapping = fyne.TextWrapWord
 	eulaScroll := container.NewVScroll(eulaWdgt)
-	eulaDialog := dialog.NewCustomConfirm("To continue using Spice, please review and accept the End User License Agreement.", "Accept", "Decline", eulaScroll, func(accepted bool) {
+	eulaDialog := dialog.NewCustomConfirm(i18n.T("To continue using Spice, please review and accept the End User License Agreement."), i18n.T("Accept"), i18n.T("Decline"), eulaScroll, func(accepted bool) {
 		if accepted {
 			// Mark the EULA as accepted
 			util.MarkEULAAccepted(sa.Preferences())
@@ -830,7 +874,7 @@ func (sa *SpiceApp) updateTrayMenu(info *util.CheckForUpdatesResult) {
 		// Find the insertion index (just before the separator above "About Spice").
 		insertIndex := -1
 		for i, item := range sa.trayMenu.Items {
-			if item.Label == "About Spice" {
+			if item.Label == i18n.T("About Spice") {
 				if i > 0 && sa.trayMenu.Items[i-1].IsSeparator {
 					insertIndex = i - 1
 				} else {
@@ -846,7 +890,7 @@ func (sa *SpiceApp) updateTrayMenu(info *util.CheckForUpdatesResult) {
 		} else {
 			// Fallback: add before the Quit button's separator if "About" isn't found.
 			for i, item := range sa.trayMenu.Items {
-				if item.Label == "Quit" {
+				if item.Label == i18n.T("Quit") {
 					insertIndex = i - 1
 					break
 				}
@@ -857,19 +901,18 @@ func (sa *SpiceApp) updateTrayMenu(info *util.CheckForUpdatesResult) {
 		}
 
 		// Notify user of new version available
-		sa.NotifyUser("Spice: Update Available", fmt.Sprintf("Click the tray icon to download version %s.", info.LatestVersion))
+		sa.NotifyUser(i18n.T("Spice: Update Available"), i18n.Tf("Click the tray icon to download version {{.Version}}.", map[string]any{"Version": info.LatestVersion}))
 
 		sa.trayMenu.Refresh()
 	})
 }
 
-// RefreshTrayMenu refreshes the tray menu labels and icons without rebuilding structure.
+// RefreshTrayMenu triggers a full rebuild of the tray menu structure.
+// We use RebuildTrayMenu (debounced) instead of a simple Refresh() to ensure
+// the system tray driver cleanly replaces the menu items, preventing duplicates
+// on platforms like Windows when labels change.
 func (sa *SpiceApp) RefreshTrayMenu() {
-	fyne.Do(func() {
-		if sa.trayMenu != nil {
-			sa.trayMenu.Refresh()
-		}
-	})
+	sa.RebuildTrayMenu()
 }
 
 // RebuildTrayMenu rebuilds the tray menu list from scratch with debouncing.

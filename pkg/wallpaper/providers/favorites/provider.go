@@ -20,6 +20,7 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/dixieflatline76/Spice/v2/config"
+	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
 	"github.com/dixieflatline76/Spice/v2/pkg/wallpaper"
@@ -566,8 +567,8 @@ func (p *Provider) FetchImages(ctx context.Context, apiURL string, page int) ([]
 }
 
 func (p *Provider) CreateSettingsPanel(sm setting.SettingsManager) fyne.CanvasObject {
-	clearBtn := widget.NewButtonWithIcon("Clear All Favorites", theme.DeleteIcon(), func() {
-		dialog.ShowConfirm("Clear All Favorites", "Are you sure you want to delete all saved favorites?", func(b bool) {
+	clearBtn := widget.NewButtonWithIcon(i18n.T("Clear All Favorites"), theme.DeleteIcon(), func() {
+		dialog.ShowConfirm(i18n.T("Clear All Favorites"), i18n.T("Are you sure you want to delete all saved favorites?"), func(b bool) {
 			if b {
 				path := p.rootDir
 				os.RemoveAll(path)
@@ -588,7 +589,7 @@ func (p *Provider) CreateSettingsPanel(sm setting.SettingsManager) fyne.CanvasOb
 	})
 	clearBtn.Importance = widget.DangerImportance
 
-	openFolderBtn := widget.NewButtonWithIcon("Open Favorites Folder", theme.FolderOpenIcon(), func() {
+	openFolderBtn := widget.NewButtonWithIcon(i18n.T("Open Favorites Folder"), theme.FolderOpenIcon(), func() {
 		u, err := url.Parse(p.HomeURL())
 		if err != nil {
 			log.Printf("Failed to parse favorites URL: %v", err)
@@ -600,8 +601,8 @@ func (p *Provider) CreateSettingsPanel(sm setting.SettingsManager) fyne.CanvasOb
 	})
 
 	return container.NewVBox(
-		widget.NewLabelWithStyle("Favorites Management", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-		widget.NewLabel("Local favorites are stored persistently in your Spice application folder."),
+		widget.NewLabelWithStyle(i18n.T("Favorites Management"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		widget.NewLabel(i18n.T("Local favorites are stored persistently in your Spice application folder.")),
 		openFolderBtn,
 		clearBtn,
 	)
@@ -615,7 +616,7 @@ func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl strin
 
 	query, exists := p.cfg.GetQuery(wallpaper.FavoritesQueryID)
 
-	label := widget.NewLabel("Favorite Images")
+	label := widget.NewLabel(i18n.T("Favorite Images"))
 	activeCheck := widget.NewCheck("Active", nil)
 	activeCheck.SetChecked(query.Active)
 
@@ -647,7 +648,7 @@ func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl strin
 	}
 
 	return container.NewVBox(
-		widget.NewLabel("Wallpaper Sources:"),
+		widget.NewLabel(i18n.T("Wallpaper Sources:")),
 		container.NewHBox(label, layout.NewSpacer(), activeCheck),
 	)
 }

@@ -131,5 +131,5 @@ func TestWikimediaProvider_Structure(t *testing.T) {
 	p := NewWikimediaProvider(cfg, client)
 
 	assert.Equal(t, "Wikimedia", p.Name())
-	assert.Equal(t, "Wikimedia Commons", p.Title())
+	assert.Equal(t, "Wikimedia", p.Title())
 }

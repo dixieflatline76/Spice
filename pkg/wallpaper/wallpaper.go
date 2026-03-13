@@ -22,6 +22,7 @@ import (
 	"fyne.io/fyne/v2/container"
 	"github.com/dixieflatline76/Spice/v2/asset"
 	"github.com/dixieflatline76/Spice/v2/config"
+	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui"
 	"github.com/dixieflatline76/Spice/v2/util"
@@ -567,11 +568,11 @@ func (wp *Plugin) TogglePauseMonitorAction(monitorID int) {
 	wp.dispatch(monitorID, CmdPause)
 
 	// 3. Notify based on the deterministic target state
-	state := "Resumed Play"
+	state := i18n.T("Resumed Play")
 	if willBePaused {
-		state = "Paused Play"
+		state = i18n.T("Paused Play")
 	}
-	wp.manager.NotifyUser(fmt.Sprintf("Display %d", monitorID+1), state)
+	wp.manager.NotifyUser(i18n.Tf("Display {{.ID}}", map[string]any{"ID": monitorID + 1}), state)
 }
 
 func (wp *Plugin) IsPaused() bool {
@@ -641,9 +642,9 @@ func (wp *Plugin) ChangeWallpaperFrequency(newFreq Frequency, silent bool) {
 	if !silent {
 		msg := newFreq.String()
 		if newFreq == FrequencyNever {
-			msg = "Never (Paused)"
+			msg = i18n.T("Never (Paused)")
 		}
-		wp.manager.NotifyUser("Wallpaper Change Frequency", msg)
+		wp.manager.NotifyUser(i18n.T("Wallpaper Change Frequency"), msg)
 	}
 
 	if wp.manager != nil {
@@ -718,7 +719,7 @@ func (wp *Plugin) ToggleFavorite(img provider.Image) {
 		} else {
 			wp.store.Update(img)
 		}
-		wp.manager.NotifyUser("Favorites", "Removed from favorites.")
+		wp.manager.NotifyUser(i18n.T("Favorites"), i18n.T("Removed from favorites."))
 	} else {
 		// Add
 		if err := wp.favoriter.AddFavorite(img); err != nil {
@@ -735,7 +736,7 @@ func (wp *Plugin) ToggleFavorite(img provider.Image) {
 		}
 		wp.downloadMutex.Unlock()
 
-		wp.manager.NotifyUser("Favorites", "Added to favorites.")
+		wp.manager.NotifyUser(i18n.T("Favorites"), i18n.T("Added to favorites."))
 		// Targeted Responsiveness Fix: Only trigger fetch for Favorites provider.
 		go wp.RequestFetch("Favorites")
 	}
@@ -970,11 +971,12 @@ func (wp *Plugin) updateTrayMenuUI(img provider.Image, monitorID int) {
 			return
 		}
 
-		attribution := img.Attribution
-		if len(attribution) > 20 {
-			attribution = attribution[:17] + "..."
+		attribution := SanitizeMenuString(img.Attribution)
+		runes := []rune(attribution)
+		if len(runes) > 20 {
+			attribution = string(runes[:17]) + "..."
 		}
-		mItems.ProviderMenuItem.Label = "Source: " + wp.GetProviderTitle(img.Provider)
+		mItems.ProviderMenuItem.Label = i18n.Tf("Source: {{.Provider}}", map[string]any{"Provider": wp.GetProviderTitle(img.Provider)})
 		mItems.ProviderMenuItem.Action = func() {
 			wp.focusProviderName = img.Provider
 			wp.manager.OpenPreferences("Wallpaper")
@@ -987,18 +989,18 @@ func (wp *Plugin) updateTrayMenuUI(img provider.Image, monitorID int) {
 			mItems.ProviderMenuItem.Icon = nil
 		}
 
-		mItems.ArtistMenuItem.Label = "By: " + attribution
+		mItems.ArtistMenuItem.Label = i18n.Tf("By: {{.Attribution}}", map[string]any{"Attribution": attribution})
 		if attribution == "" {
-			mItems.ArtistMenuItem.Label = "By: Unknown"
+			mItems.ArtistMenuItem.Label = i18n.T("By: Unknown")
 		}
 
 		// Update Favorite State
 		if mItems.FavoriteMenuItem != nil {
 			if img.IsFavorited {
-				mItems.FavoriteMenuItem.Label = "Remove from Favorites"
+				mItems.FavoriteMenuItem.Label = i18n.T("Remove from Favorites")
 				mItems.FavoriteMenuItem.Icon, _ = wp.manager.GetAssetManager().GetIcon("unfavorite.png")
 			} else {
-				mItems.FavoriteMenuItem.Label = "Add to Favorites"
+				mItems.FavoriteMenuItem.Label = i18n.T("Add to Favorites")
 				mItems.FavoriteMenuItem.Icon, _ = wp.manager.GetAssetManager().GetIcon("favorite.png")
 			}
 		}
@@ -1007,10 +1009,10 @@ func (wp *Plugin) updateTrayMenuUI(img provider.Image, monitorID int) {
 		if mItems.PauseMenuItem != nil {
 			paused := wp.IsMonitorPaused(monitorID)
 			if paused {
-				mItems.PauseMenuItem.Label = "Resume Play"
+				mItems.PauseMenuItem.Label = i18n.T("Resume Play")
 				mItems.PauseMenuItem.Icon, _ = wp.manager.GetAssetManager().GetIcon("play.png")
 			} else {
-				mItems.PauseMenuItem.Label = "Pause Play"
+				mItems.PauseMenuItem.Label = i18n.T("Pause Play")
 				mItems.PauseMenuItem.Icon, _ = wp.manager.GetAssetManager().GetIcon("pause.png")
 			}
 		}
@@ -1097,7 +1099,7 @@ func (wp *Plugin) ResetFavorites() {
 	// so they don't remain as "dead" icons in the library view after clearing.
 	wp.store.RemoveByQueryID(FavoritesQueryID)
 
-	wp.manager.NotifyUser("Favorites", "All favorites cleared.")
+	wp.manager.NotifyUser(i18n.T("Favorites"), i18n.T("All favorites cleared."))
 	go wp.RequestFetch("Favorites")
 }
 

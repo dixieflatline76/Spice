@@ -17,6 +17,7 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
 
+	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
 	"github.com/dixieflatline76/Spice/v2/pkg/wallpaper"
@@ -311,12 +312,12 @@ func (p *WikimediaProvider) FetchImages(ctx context.Context, query string, page 
 		// Title is unused in current Image struct logic below, so we ignore it.
 
 		// Attribution often contains HTML (links to user pages). We must strip it for the tray menu.
-		artist := stripHTML(info.ExtMetadata.Artist.Value)
+		artist := sanitizeAttribution(info.ExtMetadata.Artist.Value)
 		if artist == "" {
 			artist = "Unknown"
 		}
 
-		attribution := artist + " (" + info.ExtMetadata.LicenseShortName.Value + ")"
+		attribution := artist + " (" + sanitizeAttribution(info.ExtMetadata.LicenseShortName.Value) + ")"
 
 		img := provider.Image{
 			ID:          strconv.Itoa(page.PageID), // Unique PageID
@@ -361,7 +362,7 @@ func (p *WikimediaProvider) GetDownloadHeaders() map[string]string {
 // --- UI Integration ---
 
 func (p *WikimediaProvider) Title() string {
-	return "Wikimedia Commons"
+	return "Wikimedia"
 }
 
 func (p *WikimediaProvider) CreateSettingsPanel(sm setting.SettingsManager) fyne.CanvasObject {
@@ -424,8 +425,8 @@ func (p *WikimediaProvider) CreateQueryPanel(sm setting.SettingsManager, pending
 	)
 
 	header := container.NewVBox()
-	header.Add(sm.CreateSettingTitleLabel("Wikimedia Commons Queries"))
-	header.Add(sm.CreateSettingDescriptionLabel("Add queries for Wikimedia Commons categories or search results."))
+	header.Add(sm.CreateSettingTitleLabel(i18n.T("Wikimedia Commons Queries")))
+	header.Add(sm.CreateSettingDescriptionLabel(i18n.T("Add queries for Wikimedia Commons categories or search results.")))
 	header.Add(addButton)
 
 	// Auto-open if pending URL exists
@@ -473,11 +474,18 @@ func init() {
 	})
 }
 
-// stripHTML removes HTML tags from a string.
-// It uses a simple regex to replace <...> with empty string.
-func stripHTML(input string) string {
+// sanitizeAttribution removes HTML tags and collapses whitespace.
+// It ensures that weird source strings (like those with newlines or tabs) don't break the UI.
+func sanitizeAttribution(input string) string {
+	// 1. Strip HTML tags
 	re := regexp.MustCompile("<[^>]*>")
-	return re.ReplaceAllString(input, "")
+	output := re.ReplaceAllString(input, "")
+
+	// 2. Replace multiple whitespace characters (including newlines and tabs) with a single space
+	reSpace := regexp.MustCompile(`\s+`)
+	output = reSpace.ReplaceAllString(output, " ")
+
+	return strings.TrimSpace(output)
 }
 
 // GetProviderIcon returns the provider's icon for the tray menu.

@@ -43,3 +43,11 @@ func GenerateQueryID(url string) string {
 	h.Write([]byte(url))
 	return hex.EncodeToString(h.Sum(nil))
 }
+
+// SanitizeMenuString collapses all whitespace (newlines, tabs, multiple spaces)
+// into a single space and trims the result. This prevents tray menu layout issues.
+func SanitizeMenuString(s string) string {
+	// Simple whitespace collapsing logic
+	fields := strings.Fields(s)
+	return strings.Join(fields, " ")
+}

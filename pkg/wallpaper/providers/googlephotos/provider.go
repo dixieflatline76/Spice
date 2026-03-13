@@ -17,6 +17,7 @@ import (
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
 	"github.com/dixieflatline76/Spice/v2/config"
+	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
 	"github.com/dixieflatline76/Spice/v2/pkg/wallpaper"
@@ -167,7 +168,7 @@ func (p *Provider) FetchImages(ctx context.Context, apiURL string, page int) ([]
 }
 
 func (p *Provider) CreateSettingsPanel(sm setting.SettingsManager) fyne.CanvasObject {
-	statusLabel := widget.NewLabel("Status: Checking...")
+	statusLabel := widget.NewLabel(i18n.T("Status: Checking..."))
 
 	var connectBtn *widget.Button
 	var updateUI func()
@@ -215,7 +216,7 @@ func (p *Provider) CreateSettingsPanel(sm setting.SettingsManager) fyne.CanvasOb
 		connectBtn.Refresh()
 	}
 
-	connectBtn = widget.NewButton("Authorize", nil)
+	connectBtn = widget.NewButton(i18n.T("Authorize"), nil)
 	updateUI()
 
 	// Set importance based on state
@@ -232,7 +233,7 @@ func (p *Provider) CreateSettingsPanel(sm setting.SettingsManager) fyne.CanvasOb
 	}()
 
 	return container.NewVBox(
-		widget.NewLabelWithStyle("Google Photos Integration", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		widget.NewLabelWithStyle(i18n.T("Google Photos Integration"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		statusLabel,
 		connectBtn,
 	)
@@ -243,15 +244,15 @@ func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl strin
 	imgQueryList := p.createImgQueryList(sm)
 	sm.RegisterRefreshFunc(imgQueryList.Refresh)
 
-	info := widget.NewLabel("Create New Wallpaper Collection:")
+	info := widget.NewLabel(i18n.T("Create New Wallpaper Collection:"))
 
 	progressBar := widget.NewProgressBarInfinite()
 	progressBar.Hide()
 
 	statusLabel := widget.NewLabel("")
 
-	addBtn := widget.NewButton("Select Photos via Google Picker", nil)
-	cancelBtn := widget.NewButton("Cancel", nil)
+	addBtn := widget.NewButton(i18n.T("Select Photos via Google Picker"), nil)
+	cancelBtn := widget.NewButton(i18n.T("Cancel"), nil)
 	cancelBtn.Importance = widget.LowImportance // Subtle
 	cancelBtn.Hide()
 
@@ -311,7 +312,7 @@ func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl strin
 	}
 
 	return container.NewBorder(
-		container.NewVBox(info, container.NewStack(addBtn, cancelBtn), progressBar, statusLabel, widget.NewSeparator(), widget.NewLabel("My Collections:")),
+		container.NewVBox(info, container.NewStack(addBtn, cancelBtn), progressBar, statusLabel, widget.NewSeparator(), widget.NewLabel(i18n.T("My Collections:"))),
 		nil, nil, nil,
 		imgQueryList,
 	)
@@ -516,9 +517,9 @@ func (p *Provider) openAddGooglePhotosDialog(sm setting.SettingsManager, guid st
 	// Custom Dialog Content
 	// Layout: Label / Entry pairs
 	form := container.NewVBox(
-		widget.NewLabel("Internal ID:"),
+		widget.NewLabel(i18n.T("Internal ID:")),
 		urlEntry,
-		widget.NewLabel("Description:"),
+		widget.NewLabel(i18n.T("Description:")),
 		descEntry,
 		activeCheck,
 	)
