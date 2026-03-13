@@ -109,6 +109,7 @@ The **App** tab controls application-wide behaviour, independent of any wallpape
 | **Enable global shortcuts** | Master switch for all keyboard hotkeys. Disable if the shortcuts conflict with another application. |
 | **Enable Targeted Shortcuts** | Enable or disable targeted shortcuts (`Alt + 1-9 + Arrow` on Windows / `Cmd + 1-9 + Arrow` on macOS). Recommended to disable if they conflict with browser navigation. |
 | **Theme** | Choose between *System* (follows OS dark/light mode), *Dark*, or *Light*. Changes apply immediately. |
+| **Language** | Select between 10 supported languages (English, German, Spanish, French, Italian, Portuguese, Japanese, Russian, or Chinese). Choosing **System Default** follows your OS language. |
 
 ---
 
