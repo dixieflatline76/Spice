@@ -55,8 +55,12 @@ func NewWallhavenProvider(cfg *wallpaper.Config, client *http.Client) *Wallhaven
 	}
 }
 
-func (p *WallhavenProvider) Name() string {
+func (p *WallhavenProvider) ID() string {
 	return "Wallhaven"
+}
+
+func (p *WallhavenProvider) Name() string {
+	return i18n.T("Wallhaven")
 }
 
 func (p *WallhavenProvider) Type() provider.ProviderType {
@@ -220,7 +224,7 @@ func (p *WallhavenProvider) DiscoverCollections(ctx context.Context, username st
 			privacy = "Public"
 		}
 		queries = append(queries, wallpaper.ImageQuery{
-			ID:          wallpaper.GenerateQueryID(p.Name() + ":" + apiURL),
+			ID:          wallpaper.GenerateQueryID(p.ID() + ":" + apiURL),
 			Description: fmt.Sprintf("❤ Collection: %s - %s - %d images", col.Label, privacy, col.Count),
 			URL:         apiURL,
 			Active:      false, // Default to inactive for new synced collections
@@ -347,7 +351,7 @@ func (p *WallhavenProvider) FetchImages(ctx context.Context, apiURL string, page
 			Path:        item.Path,
 			ViewURL:     item.ShortURL,
 			Attribution: item.Uploader.Username,
-			Provider:    p.Name(),
+			Provider:    p.ID(),
 			FileType:    item.FileType,
 			Width:       item.DimensionX,
 			Height:      item.DimensionY,
@@ -727,7 +731,7 @@ func (p *WallhavenProvider) CreateQueryPanel(sm setting.SettingsManager, pending
 			}
 
 			// Check for duplicates
-			queryID := wallpaper.GenerateQueryID(p.Title() + ":" + apiURL)
+			queryID := wallpaper.GenerateQueryID(p.ID() + ":" + apiURL)
 			if p.cfg.IsDuplicateID(queryID) {
 				return errors.New(i18n.T("Duplicate query: this URL already exists"))
 			}

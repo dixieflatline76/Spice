@@ -15,8 +15,8 @@ func TestProvider_Basics(t *testing.T) {
 	client := &http.Client{}
 	p := NewProvider(cfg, client)
 
-	assert.Equal(t, "GooglePhotos", p.Name())
-	assert.Equal(t, "Google Photos", p.Title())
+	assert.Equal(t, "GooglePhotos", p.ID())
+	assert.Equal(t, "Google Photos", p.Name())
 	assert.Equal(t, "https://photos.google.com", p.HomeURL())
 }
 

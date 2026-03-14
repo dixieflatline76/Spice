@@ -288,6 +288,14 @@ type MockImageProvider struct {
 	mock.Mock
 }
 
+func (m *MockImageProvider) ID() string {
+	args := m.Called()
+	if len(args) == 0 {
+		return "mock"
+	}
+	return args.String(0)
+}
+
 func (m *MockImageProvider) Name() string {
 	args := m.Called()
 	return args.String(0)

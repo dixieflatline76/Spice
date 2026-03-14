@@ -135,8 +135,12 @@ func (p *Provider) migrateOldFavorites() {
 	}
 }
 
+func (p *Provider) ID() string {
+	return "Favorites"
+}
+
 func (p *Provider) Name() string {
-	return ProviderName
+	return i18n.T("Favorites")
 }
 
 func (p *Provider) Type() provider.ProviderType {

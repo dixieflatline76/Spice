@@ -34,6 +34,6 @@ func TestGenerateCodeChallenge(t *testing.T) {
 
 func TestProviderBasics(t *testing.T) {
 	p := &Provider{}
-	assert.Equal(t, "GooglePhotos", p.Name())
+	assert.Equal(t, "Google Photos", p.Name())
 	assert.Equal(t, "https://photos.google.com", p.HomeURL())
 }

@@ -51,6 +51,7 @@ type SpiceApp struct {
 	appConfig    *config.AppConfig
 	prefsWindow  fyne.Window        // Singleton preferences window
 	prefsTabs    *container.AppTabs // Reference to the main tabs in preferences
+	tabItems     map[string]*container.TabItem
 	trayMu       sync.Mutex
 	trayDebounce *time.Timer
 }
@@ -144,8 +145,9 @@ func getInstance() *SpiceApp {
 				notifiers: []ui.Notifier{func(title, message string) {
 					a.SendNotification(fyne.NewNotification(title, message))
 				}},
-				plugins: []ui.Plugin{},
-				os:      currentOS,
+				plugins:  []ui.Plugin{},
+				os:       currentOS,
+				tabItems: make(map[string]*container.TabItem),
 			}
 			saInstance.appConfig = config.NewAppConfig(saInstance.Preferences())
 
@@ -422,12 +424,9 @@ func (sa *SpiceApp) CreatePreferencesWindow(initialTab string) {
 
 	// If window already exists, just show it and switch tab if requested
 	if sa.prefsWindow != nil {
-		if initialTab != "" && sa.prefsTabs != nil {
-			for _, item := range sa.prefsTabs.Items {
-				if item.Text == initialTab {
-					sa.prefsTabs.Select(item)
-					break
-				}
+		if initialTab != "" && sa.tabItems != nil {
+			if item, ok := sa.tabItems[initialTab]; ok {
+				sa.prefsTabs.Select(item)
 			}
 		}
 		sa.prefsWindow.Show()
@@ -662,7 +661,9 @@ func (sa *SpiceApp) RebuildPreferencesContent(initialTab string) {
 
 		// Broadcast to extensions
 		if srv := api.GetServer(); srv != nil {
-			srv.BroadcastLanguage(i18n.GetLanguage())
+			if err := srv.BroadcastLanguage(i18n.GetLanguage()); err != nil {
+				utilLog.Printf("Failed to broadcast language change to extensions: %v", err)
+			}
 		}
 	}
 	sm.CreateSelectSetting(&langConfig, generalContainer)
@@ -682,19 +683,20 @@ func (sa *SpiceApp) RebuildPreferencesContent(initialTab string) {
 	}
 	sm.CreateBoolSetting(&debugLogConfig, generalContainer)
 
+	// Initialize/Reset tab mapping
+	sa.tabItems = make(map[string]*container.TabItem)
+
 	generalTabItem := container.NewTabItem(i18n.T("App"), container.NewVScroll(generalContainer))
+	sa.tabItems["App"] = generalTabItem
 
 	// --- Plugin Tabs ---
 	var pluginTabItems []*container.TabItem
 	for _, plugin := range sa.plugins {
 		// Create a tab for each plugin
 		pluginContainer := plugin.CreatePrefsPanel(sm)
-		// Wrap in scroll container if needed, but plugins usually handle their own layout.
-		// For now, let's assume CreatePrefsPanel returns a container that fits or handles scrolling if needed.
-		// Actually, CreatePrefsPanel returns a *fyne.Container. Let's wrap it in a VScroll just in case,
-		// or trust the plugin. The current implementation uses Border layout, so it might not scroll well if wrapped blindly.
-		// Let's stick to using the container directly as the tab content.
-		pluginTabItems = append(pluginTabItems, container.NewTabItem(plugin.Name(), pluginContainer))
+		item := container.NewTabItem(plugin.Name(), pluginContainer)
+		sa.tabItems[plugin.ID()] = item
+		pluginTabItems = append(pluginTabItems, item)
 	}
 
 	// Combine all tabs
@@ -706,18 +708,23 @@ func (sa *SpiceApp) RebuildPreferencesContent(initialTab string) {
 
 	// Register refresh functions for global UI elements (e.g. language change)
 	sm.RegisterRefreshFunc(func() {
-		currentActiveTab := tabs.Selected().Text
-		sa.RebuildPreferencesContent(currentActiveTab)
+		// Find current ID by searching our map
+		activeID := "App"
+		selected := tabs.Selected()
+		for id, item := range sa.tabItems {
+			if item == selected {
+				activeID = id
+				break
+			}
+		}
+		sa.RebuildPreferencesContent(activeID)
 		sa.RebuildTrayMenu()
 	})
 
 	// Select the initial tab if specified
 	if initialTab != "" {
-		for _, item := range tabs.Items {
-			if item.Text == initialTab {
-				tabs.Select(item)
-				break
-			}
+		if item, ok := sa.tabItems[initialTab]; ok {
+			tabs.Select(item)
 		}
 	}
 

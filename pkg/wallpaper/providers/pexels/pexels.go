@@ -56,8 +56,12 @@ func NewPexelsProvider(cfg *wallpaper.Config, client *http.Client) *PexelsProvid
 	}
 }
 
-func (p *PexelsProvider) Name() string {
+func (p *PexelsProvider) ID() string {
 	return "Pexels"
+}
+
+func (p *PexelsProvider) Name() string {
+	return i18n.T("Pexels")
 }
 
 func (p *PexelsProvider) Type() provider.ProviderType {
@@ -355,7 +359,7 @@ func (p *PexelsProvider) mapPexelsImage(photo PexelsPhoto) provider.Image {
 		Path:        imagePath,
 		ViewURL:     photo.URL,
 		Attribution: photo.Photographer,
-		Provider:    p.Name(),
+		Provider:    p.ID(),
 		FileType:    "image/jpeg", // Pexels primarily serves JPEGs
 		// Pexels doesn't require a specific download trigger URL like Unsplash
 	}
@@ -547,7 +551,7 @@ func (p *PexelsProvider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl
 			// Pexels regex validation happens via InputValidator, so we just check duplicates here
 
 			// Check for duplicates
-			queryID := wallpaper.GenerateQueryID(p.Name() + ":" + url)
+			queryID := wallpaper.GenerateQueryID(p.ID() + ":" + url)
 			if p.cfg.IsDuplicateID(queryID) {
 				return errors.New(i18n.T("duplicate query: this URL already exists"))
 			}

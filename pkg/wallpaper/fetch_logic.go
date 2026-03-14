@@ -179,7 +179,7 @@ func (wp *Plugin) fetchFromProvider(fetchCtx context.Context, q ImageQuery, p pr
 
 	// Track source
 	sourcesMutex.Lock()
-	activeSources[p.Name()] = true
+	activeSources[p.ID()] = true
 	sourcesMutex.Unlock()
 
 	queuedForThisQuery := 0
@@ -194,7 +194,7 @@ func (wp *Plugin) fetchFromProvider(fetchCtx context.Context, q ImageQuery, p pr
 		// *** NAMESPACING Middleware ***
 		// Ensure ID is unique across providers by prefixing it.
 		if p.Type() == provider.TypeOnline {
-			prefix := p.Name() + "_"
+			prefix := p.ID() + "_"
 			if !strings.HasPrefix(img.ID, prefix) {
 				img.ID = prefix + img.ID
 			}

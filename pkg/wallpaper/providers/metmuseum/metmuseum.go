@@ -68,12 +68,16 @@ func NewMetMuseumProvider(cfg *wallpaper.Config, client *http.Client) *Provider 
 	return p
 }
 
+func (p *Provider) ID() string {
+	return "MetMuseum"
+}
+
 func (p *Provider) HomeURL() string {
 	return "https://www.metmuseum.org"
 }
 
 func (p *Provider) Name() string {
-	return ProviderName
+	return i18n.T("The Metropolitan Museum of Art")
 }
 
 func (p *Provider) Title() string {
@@ -475,7 +479,7 @@ func (p *Provider) fetchObjectDetails(ctx context.Context, id int) (*provider.Im
 		Path:        obj.PrimaryImage,
 		ViewURL:     obj.ObjectURL,
 		Attribution: fmt.Sprintf("%s - %s", obj.ArtistDisplay, obj.Title),
-		Provider:    ProviderName,
+		Provider:    p.ID(),
 	}
 
 	p.cacheResult(id, &img)

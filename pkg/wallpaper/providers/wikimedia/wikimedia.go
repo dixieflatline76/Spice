@@ -43,9 +43,14 @@ func NewWikimediaProvider(cfg *wallpaper.Config, client *http.Client) *Wikimedia
 	}
 }
 
+// ID returns the provider's unique identifier
+func (p *WikimediaProvider) ID() string {
+	return "Wikimedia"
+}
+
 // Name returns the provider name
 func (p *WikimediaProvider) Name() string {
-	return "Wikimedia"
+	return i18n.T("Wikimedia")
 }
 
 func (p *WikimediaProvider) Type() provider.ProviderType {
@@ -321,7 +326,7 @@ func (p *WikimediaProvider) FetchImages(ctx context.Context, query string, page 
 
 		img := provider.Image{
 			ID:          strconv.Itoa(page.PageID), // Unique PageID
-			Provider:    p.Name(),
+			Provider:    p.ID(),
 			Path:        info.URL, // Original Full Res
 			ViewURL:     info.URL, // Or page url? info.DescriptionUrl is better if available, but URL is fine.
 			Attribution: attribution,
@@ -402,7 +407,7 @@ func (p *WikimediaProvider) CreateQueryPanel(sm setting.SettingsManager, pending
 			if err != nil {
 				return err
 			}
-			id := wallpaper.GenerateQueryID(p.Name() + ":" + normalized)
+			id := wallpaper.GenerateQueryID(p.ID() + ":" + normalized)
 			if p.cfg.IsDuplicateID(id) {
 				return errors.New(i18n.T("duplicate query"))
 			}

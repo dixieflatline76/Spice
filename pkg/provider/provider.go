@@ -46,7 +46,9 @@ const (
 
 // ImageProvider defines the interface for an image service.
 type ImageProvider interface {
-	// Name returns the provider name.
+	// ID returns a stable, non-localized provider ID.
+	ID() string
+	// Name returns the localized provider name.
 	Name() string
 	// Type returns the provider category (Online, Local, AI).
 	Type() ProviderType

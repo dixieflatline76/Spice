@@ -50,7 +50,7 @@ func (wp *Plugin) ProcessImageJob(ctx context.Context, job DownloadJob) (resultI
 	if err != nil {
 		providerName := "Unknown"
 		if downloadProvider != nil {
-			providerName = downloadProvider.Name()
+			providerName = downloadProvider.ID()
 		}
 		return provider.Image{}, fmt.Errorf("failed to ensure master (%s): %w", providerName, err)
 	}
@@ -141,7 +141,7 @@ func (wp *Plugin) enrichImage(ctx context.Context, img provider.Image, p provide
 	originalID := img.ID
 	namespaced := false
 	if p.Type() == provider.TypeOnline {
-		prefix := p.Name() + "_"
+		prefix := p.ID() + "_"
 		if strings.HasPrefix(img.ID, prefix) {
 			img.ID = strings.TrimPrefix(img.ID, prefix)
 			namespaced = true
@@ -235,7 +235,7 @@ func (wp *Plugin) downloadMasterFile(ctx context.Context, client *http.Client, r
 	if resp.StatusCode != http.StatusOK {
 		providerName := "Unknown"
 		if imgProvider != nil {
-			providerName = imgProvider.Name()
+			providerName = imgProvider.ID()
 		}
 		return "", fmt.Errorf("failed to ensure master (%s): status %d", providerName, resp.StatusCode)
 	}

@@ -50,6 +50,7 @@ type BenchMockProvider struct {
 	mock.Mock
 }
 
+func (m *BenchMockProvider) ID() string                          { return "wallhaven" }
 func (m *BenchMockProvider) Name() string                        { return "Wallhaven" }
 func (m *BenchMockProvider) ParseURL(url string) (string, error) { return url, nil }
 func (m *BenchMockProvider) FetchImages(ctx context.Context, apiURL string, page int) ([]provider.Image, error) {

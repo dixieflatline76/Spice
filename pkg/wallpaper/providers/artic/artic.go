@@ -148,8 +148,12 @@ func NewArtInstituteChicagoProvider(cfg Config, httpClient *http.Client) *Provid
 	return p
 }
 
+func (p *Provider) ID() string {
+	return "ArtInstituteChicago"
+}
+
 func (p *Provider) Name() string {
-	return ProviderName
+	return i18n.T("Art Institute of Chicago")
 }
 
 func (p *Provider) Title() string {
@@ -344,7 +348,7 @@ func (p *Provider) fetchArtworkDetails(ctx context.Context, id int) (*provider.I
 		Path:        imgURL,
 		ViewURL:     fmt.Sprintf("https://www.artic.edu/artworks/%d", result.Data.ID),
 		Attribution: result.Data.ArtistDisplay,
-		Provider:    ProviderName,
+		Provider:    p.ID(),
 		FileType:    "image/jpeg",
 	}, nil
 }

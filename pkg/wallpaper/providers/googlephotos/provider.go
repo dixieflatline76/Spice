@@ -63,8 +63,12 @@ func (p *Provider) SetTestConfig(host, rootDir string) {
 	p.rootDir = rootDir
 }
 
-func (p *Provider) Name() string {
+func (p *Provider) ID() string {
 	return "GooglePhotos"
+}
+
+func (p *Provider) Name() string {
+	return i18n.T("Google Photos")
 }
 
 func (p *Provider) Type() provider.ProviderType {
@@ -160,7 +164,7 @@ func (p *Provider) FetchImages(ctx context.Context, apiURL string, page int) ([]
 			Path:        item.URL,
 			ViewURL:     viewURL,
 			Attribution: item.Attribution,
-			Provider:    "GooglePhotos",
+			Provider:    p.ID(),
 		})
 	}
 
