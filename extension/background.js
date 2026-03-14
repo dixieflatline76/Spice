@@ -28,12 +28,18 @@ function connect() {
     }
 
     fetch(HEALTH_URL)
-        .then(response => {
-            if (response.ok) {
-                console.log('Spice Backend is UP. Opening WebSocket...');
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'running') {
+                console.log('Spice Backend is UP. Language:', data.language);
+                if (data.language) {
+                    chrome.storage.local.set({ "app_language": data.language });
+                } else {
+                    chrome.storage.local.remove("app_language");
+                }
                 openSocket();
             } else {
-                throw new Error('Health check failed: ' + response.statusText);
+                throw new Error('Health check failed: ' + data.status);
             }
         })
         .catch(err => {
@@ -120,6 +126,13 @@ function stopKeepAlive() {
 async function handleMessage(msg) {
     if (msg.type === 'set_wallpaper') {
         console.warn("set_wallpaper command received but feature is currently PAUSED.");
+    } else if (msg.type === 'set_language') {
+        console.log('Language sync received from App:', msg.language);
+        if (msg.language) {
+            chrome.storage.local.set({ "app_language": msg.language });
+        } else {
+            chrome.storage.local.remove("app_language");
+        }
     }
 }
 

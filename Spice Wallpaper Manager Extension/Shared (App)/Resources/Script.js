@@ -2,8 +2,8 @@ function show(platform, enabled, useSettingsInsteadOfPreferences) {
     document.body.classList.add(`platform-${platform}`);
 
     if (useSettingsInsteadOfPreferences) {
-        const fullLang = (navigator.language || 'en').toLowerCase();
-        const baseLang = fullLang.split('-')[0];
+        let fullLang = (navigator.language || 'en').toLowerCase();
+        let baseLang = fullLang.split('-')[0];
         const messages = {
             'de': {
                 'on': "Die Erweiterung des Spice Wallpaper Managers ist derzeit aktiviert. Sie können sie im Bereich Erweiterungen der Safari-Einstellungen deaktivieren.",
@@ -73,11 +73,27 @@ function show(platform, enabled, useSettingsInsteadOfPreferences) {
             }
         };
 
-        const msg = messages[fullLang] || messages[baseLang] || messages['en'];
-        document.getElementsByClassName('platform-mac state-on')[0].innerText = msg.on;
-        document.getElementsByClassName('platform-mac state-off')[0].innerText = msg.off;
-        document.getElementsByClassName('platform-mac state-unknown')[0].innerText = msg.unknown;
-        document.getElementsByClassName('platform-mac open-preferences')[0].innerText = msg.btn;
+        const updateUI = () => {
+            const msg = messages[fullLang] || messages[baseLang] || messages['en'];
+            document.getElementsByClassName('platform-mac state-on')[0].innerText = msg.on;
+            document.getElementsByClassName('platform-mac state-off')[0].innerText = msg.off;
+            document.getElementsByClassName('platform-mac state-unknown')[0].innerText = msg.unknown;
+            document.getElementsByClassName('platform-mac open-preferences')[0].innerText = msg.btn;
+        };
+
+        // Attempt to sync with Spice App
+        fetch('http://127.0.0.1:49452/health')
+            .then(r => r.json())
+            .then(data => {
+                if (data.language) {
+                    fullLang = data.language.toLowerCase();
+                    baseLang = fullLang.split('-')[0];
+                    updateUI();
+                }
+            })
+            .catch(() => { /* Fallback to navigator.language established above */ });
+
+        updateUI(); // Initial run
     }
 
     if (typeof enabled === "boolean") {

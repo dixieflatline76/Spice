@@ -28,6 +28,7 @@ import (
 	"github.com/disintegration/imaging"
 	"github.com/dixieflatline76/Spice/v2/asset"
 	"github.com/dixieflatline76/Spice/v2/config"
+	"github.com/dixieflatline76/Spice/v2/pkg/api"
 	"github.com/dixieflatline76/Spice/v2/pkg/hotkey"
 	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 	"github.com/dixieflatline76/Spice/v2/pkg/sysinfo"
@@ -658,6 +659,11 @@ func (sa *SpiceApp) RebuildPreferencesContent(initialTab string) {
 		sa.appConfig.SetLanguage(selectedLang)
 		i18n.SetLanguage(selectedLang)
 		langConfig.InitialValue = selectedIndex
+
+		// Broadcast to extensions
+		if srv := api.GetServer(); srv != nil {
+			srv.BroadcastLanguage(i18n.GetLanguage())
+		}
 	}
 	sm.CreateSelectSetting(&langConfig, generalContainer)
 

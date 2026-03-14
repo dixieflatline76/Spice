@@ -85,6 +85,14 @@ func SetLanguage(lang string) {
 	currentLanguage = "" // Default if not found
 }
 
+// GetLanguage returns the current application language code.
+// Returns an empty string if set to "System Default".
+func GetLanguage() string {
+	mu.RLock()
+	defer mu.RUnlock()
+	return currentLanguage
+}
+
 // T returns the localized version of the given English string.
 func T(english string) string {
 	mu.RLock()

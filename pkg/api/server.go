@@ -27,6 +27,15 @@ type Server struct {
 	onAddCollection func(url string) error
 }
 
+var (
+	globalServer *Server
+)
+
+// GetServer returns the global API server instance.
+func GetServer() *Server {
+	return globalServer
+}
+
 // NewServer creates a new API server.
 func NewServer() *Server {
 	s := &Server{
@@ -40,6 +49,7 @@ func NewServer() *Server {
 		namespaces: make(map[string]string),
 	}
 	s.setupRoutes()
+	globalServer = s
 	return s
 }
 
@@ -116,6 +126,27 @@ func (s *Server) BroadcastWallpaper(path string) error {
 		err := client.WriteJSON(msg)
 		if err != nil {
 			log.Printf("Failed to broadcast to client: %v", err)
+			client.Close()
+			delete(s.clients, client)
+		}
+	}
+	return nil
+}
+
+// BroadcastLanguage sends a "set_language" command to all connected clients.
+func (s *Server) BroadcastLanguage(langCode string) error {
+	s.clientsMu.Lock()
+	defer s.clientsMu.Unlock()
+
+	msg := map[string]string{
+		"type":     "set_language",
+		"language": langCode,
+	}
+
+	for client := range s.clients {
+		err := client.WriteJSON(msg)
+		if err != nil {
+			log.Printf("Failed to broadcast language: %v", err)
 			client.Close()
 			delete(s.clients, client)
 		}

@@ -13,13 +13,47 @@ document.addEventListener('DOMContentLoaded', () => {
     errorDiv.classList.add('hidden');
 
     // Localize UI
-    document.querySelectorAll('[data-i18n]').forEach(el => {
-        const key = el.getAttribute('data-i18n');
-        const message = chrome.i18n.getMessage(key);
-        if (message) {
-            el.textContent = message;
+    chrome.storage.local.get(['app_language'], (res) => {
+        const appLang = res.app_language;
+        if (appLang && appLang !== 'en') {
+            // Manual override for localized UI
+            fetch(`_locales/${appLang}/messages.json`)
+                .then(r => r.json())
+                .then(messages => {
+                    document.querySelectorAll('[data-i18n]').forEach(el => {
+                        const key = el.getAttribute('data-i18n');
+                        if (messages[key]) {
+                            el.textContent = messages[key].message;
+                        }
+                    });
+                    // Store for functions
+                    window.spiceLocales = messages;
+                })
+                .catch(err => {
+                    console.error("Failed to load local messages:", err);
+                    defaultLocalize();
+                });
+        } else {
+            defaultLocalize();
         }
     });
+
+    function defaultLocalize() {
+        document.querySelectorAll('[data-i18n]').forEach(el => {
+            const key = el.getAttribute('data-i18n');
+            const message = chrome.i18n.getMessage(key);
+            if (message) {
+                el.textContent = message;
+            }
+        });
+    }
+
+    function getMsg(key) {
+        if (window.spiceLocales && window.spiceLocales[key]) {
+            return window.spiceLocales[key].message;
+        }
+        return chrome.i18n.getMessage(key);
+    }
 
     // Check Backend Connection via Background Script with Timeout
     let responseReceived = false;
@@ -73,7 +107,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function addQuery(url) {
-        statusDiv.textContent = chrome.i18n.getMessage("sendingToSpice");
+        statusDiv.textContent = getMsg("sendingToSpice");
         statusDiv.style.color = "#8D6E63"; // Reset color
 
         fetch('http://127.0.0.1:49452/add', {
@@ -85,7 +119,7 @@ document.addEventListener('DOMContentLoaded', () => {
         })
             .then(response => {
                 if (response.ok) {
-                    statusDiv.textContent = chrome.i18n.getMessage("addedToSpice");
+                    statusDiv.textContent = getMsg("addedToSpice");
                     statusDiv.style.color = "green";
                     // Disable button to prevent double-click
                     addBtn.disabled = true;
@@ -96,7 +130,7 @@ document.addEventListener('DOMContentLoaded', () => {
             })
             .catch(err => {
                 console.error(err);
-                statusDiv.textContent = chrome.i18n.getMessage("errorPrefix") + err.message;
+                statusDiv.textContent = getMsg("errorPrefix") + err.message;
                 statusDiv.style.color = "red";
             });
     }
