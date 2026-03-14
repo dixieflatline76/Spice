@@ -1,0 +1,35 @@
+{
+  "extensionName": {
+    "message": "Расширение Spice Wallpaper Manager"
+  },
+  "extensionDescription": {
+    "message": "Помогает добавлять новые коллекции изображений в Spice из поддерживаемых фотосервисов."
+  },
+  "popupTitle": {
+    "message": "Spice Wallpaper Manager"
+  },
+  "contentFound": {
+    "message": "Найдена поддерживаемая коллекция изображений!"
+  },
+  "addToSpice": {
+    "message": "Добавить в Spice"
+  },
+  "noContentDetected": {
+    "message": "Поддерживаемая коллекция изображений не обнаружена."
+  },
+  "backendNotDetectedTitle": {
+    "message": "Бэкенд Spice не обнаружен"
+  },
+  "appRunningCheck": {
+    "message": "Запущено ли приложение Spice?"
+  },
+  "sendingToSpice": {
+    "message": "Отправка в Spice..."
+  },
+  "addedToSpice": {
+    "message": "Добавлено в Spice!"
+  },
+  "errorPrefix": {
+    "message": "Ошибка: "
+  }
+}

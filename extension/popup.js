@@ -12,6 +12,15 @@ document.addEventListener('DOMContentLoaded', () => {
     noContentDiv.classList.add('hidden');
     errorDiv.classList.add('hidden');
 
+    // Localize UI
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        const message = chrome.i18n.getMessage(key);
+        if (message) {
+            el.textContent = message;
+        }
+    });
+
     // Check Backend Connection via Background Script with Timeout
     let responseReceived = false;
     const timeoutMsg = setTimeout(() => {
@@ -64,7 +73,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function addQuery(url) {
-        statusDiv.textContent = "Sending to Spice...";
+        statusDiv.textContent = chrome.i18n.getMessage("sendingToSpice");
         statusDiv.style.color = "#8D6E63"; // Reset color
 
         fetch('http://127.0.0.1:49452/add', {
@@ -76,7 +85,7 @@ document.addEventListener('DOMContentLoaded', () => {
         })
             .then(response => {
                 if (response.ok) {
-                    statusDiv.textContent = "Added to Spice!";
+                    statusDiv.textContent = chrome.i18n.getMessage("addedToSpice");
                     statusDiv.style.color = "green";
                     // Disable button to prevent double-click
                     addBtn.disabled = true;
@@ -87,7 +96,7 @@ document.addEventListener('DOMContentLoaded', () => {
             })
             .catch(err => {
                 console.error(err);
-                statusDiv.textContent = "Error: " + err.message;
+                statusDiv.textContent = chrome.i18n.getMessage("errorPrefix") + err.message;
                 statusDiv.style.color = "red";
             });
     }

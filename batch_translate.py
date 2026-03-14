@@ -603,5 +603,180 @@ def batch_translate():
         else:
             print(f"No updates needed for {lang}.json")
 
+# Extension translations mapping
+extension_translations = {
+    "de": {
+        "extensionName": "Spice Wallpaper Manager Erweiterung",
+        "extensionDescription": "Hilft dir, neue Bildersammlungen von unterstützten Bildanbietern zu Spice hinzuzufügen.",
+        "popupTitle": "Spice Wallpaper Manager",
+        "contentFound": "Unterstützte Bildersammlung gefunden!",
+        "addToSpice": "Zu Spice hinzufügen",
+        "noContentDetected": "Keine unterstützte Bildersammlung erkannt.",
+        "backendNotDetectedTitle": "Spice Backend nicht erkannt",
+        "appRunningCheck": "Läuft die Spice-App?",
+        "sendingToSpice": "Senden an Spice...",
+        "addedToSpice": "Zu Spice hinzugefügt!",
+        "errorPrefix": "Fehler: "
+    },
+    "es": {
+        "extensionName": "Extensión Spice Wallpaper Manager",
+        "extensionDescription": "Te ayuda a añadir nuevas colecciones de imágenes a Spice desde proveedores de imágenes compatibles.",
+        "popupTitle": "Spice Wallpaper Manager",
+        "contentFound": "¡Colección de imágenes compatible encontrada!",
+        "addToSpice": "Añadir a Spice",
+        "noContentDetected": "No se detectó ninguna colección de imágenes compatible.",
+        "backendNotDetectedTitle": "Backend de Spice no detectado",
+        "appRunningCheck": "¿Está funcionando la aplicación Spice?",
+        "sendingToSpice": "Enviando a Spice...",
+        "addedToSpice": "¡Añadido a Spice!",
+        "errorPrefix": "Error: "
+    },
+    "fr": {
+        "extensionName": "Extension Spice Wallpaper Manager",
+        "extensionDescription": "Vous aide à ajouter de nouvelles collections d'images à Spice à partir de fournisseurs d'images pris en charge.",
+        "popupTitle": "Spice Wallpaper Manager",
+        "contentFound": "Collection d'images prise en charge trouvée !",
+        "addToSpice": "Ajouter à Spice",
+        "noContentDetected": "Aucune collection d'images prise en charge détectée.",
+        "backendNotDetectedTitle": "Backend Spice non détecté",
+        "appRunningCheck": "L'application Spice est-elle lancée ?",
+        "sendingToSpice": "Envoi à Spice...",
+        "addedToSpice": "Ajouté à Spice !",
+        "errorPrefix": "Erreur : "
+    },
+    "it": {
+        "extensionName": "Estensione Spice Wallpaper Manager",
+        "extensionDescription": "Ti aiuta ad aggiungere nuove collezioni di immagini a Spice da provider di immagini supportati.",
+        "popupTitle": "Spice Wallpaper Manager",
+        "contentFound": "Collezione di immagini supportata trovata!",
+        "addToSpice": "Aggiungi a Spice",
+        "noContentDetected": "Nessuna collezione di immagini supportata rilevata.",
+        "backendNotDetectedTitle": "Backend Spice non rilevato",
+        "appRunningCheck": "L'app Spice è in esecuzione?",
+        "sendingToSpice": "Invio a Spice...",
+        "addedToSpice": "Aggiunto a Spice!",
+        "errorPrefix": "Errore: "
+    },
+    "ja": {
+        "extensionName": "Spice Wallpaper Manager 拡張機能",
+        "extensionDescription": "対応している画像プロバイダーから Spice に新しい画像コレクションを追加するのをサポートします。",
+        "popupTitle": "Spice Wallpaper Manager",
+        "contentFound": "対応している画像コレクションが見つかりました！",
+        "addToSpice": "Spice に追加",
+        "noContentDetected": "対応している画像コレクションが見つかりませんでした。",
+        "backendNotDetectedTitle": "Spice バックエンドが検出されません",
+        "appRunningCheck": "Spice アプリは起動していますか？",
+        "sendingToSpice": "Spice に送信中...",
+        "addedToSpice": "Spice に追加されました！",
+        "errorPrefix": "エラー: "
+    },
+    "pt": {
+        "extensionName": "Extensão Spice Wallpaper Manager",
+        "extensionDescription": "Ajuda você a adicionar novas coleções de imagens ao Spice de provedores de imagens suportados.",
+        "popupTitle": "Spice Wallpaper Manager",
+        "contentFound": "Coleção de imagens suportada encontrada!",
+        "addToSpice": "Adicionar ao Spice",
+        "noContentDetected": "Nenhuma coleção de imagens suportada detectada.",
+        "backendNotDetectedTitle": "Backend do Spice não detectado",
+        "appRunningCheck": "O aplicativo Spice está em execução?",
+        "sendingToSpice": "Enviando para o Spice...",
+        "addedToSpice": "Adicionado ao Spice!",
+        "errorPrefix": "Erro: "
+    },
+    "ru": {
+        "extensionName": "Расширение Spice Wallpaper Manager",
+        "extensionDescription": "Помогает добавлять новые коллекции изображений в Spice из поддерживаемых фотосервисов.",
+        "popupTitle": "Spice Wallpaper Manager",
+        "contentFound": "Найдена поддерживаемая коллекция изображений!",
+        "addToSpice": "Добавить в Spice",
+        "noContentDetected": "Поддерживаемая коллекция изображений не обнаружена.",
+        "backendNotDetectedTitle": "Бэкенд Spice не обнаружен",
+        "appRunningCheck": "Запущено ли приложение Spice?",
+        "sendingToSpice": "Отправка в Spice...",
+        "addedToSpice": "Добавлено в Spice!",
+        "errorPrefix": "Ошибка: "
+    },
+    "uk": {
+        "extensionName": "Розширення Spice Wallpaper Manager",
+        "extensionDescription": "Допомагає додавати нові колекції зображень у Spice з підтримуваних фотосервісів.",
+        "popupTitle": "Spice Wallpaper Manager",
+        "contentFound": "Знайдено підтримувану колекцію зображень!",
+        "addToSpice": "Додати в Spice",
+        "noContentDetected": "Підтримувану колекцію зображень не виявлено.",
+        "backendNotDetectedTitle": "Бекенд Spice не виявлено",
+        "appRunningCheck": "Чи запущено програму Spice?",
+        "sendingToSpice": "Надсилання в Spice...",
+        "addedToSpice": "Додано в Spice!",
+        "errorPrefix": "Помилка: "
+    },
+    "zh": {
+        "extensionName": "Spice Wallpaper Manager 扩展",
+        "extensionDescription": "帮助您从受支持的图片提供商向 Spice 添加新的图片收藏。",
+        "popupTitle": "Spice Wallpaper Manager",
+        "contentFound": "发现受支持的图片收藏！",
+        "addToSpice": "添加到 Spice",
+        "noContentDetected": "未检测到受支持的图片收藏。",
+        "backendNotDetectedTitle": "未检测到 Spice 后端",
+        "appRunningCheck": "Spice 应用程序是否正在运行？",
+        "sendingToSpice": "正在发送到 Spice...",
+        "addedToSpice": "已添加到 Spice！",
+        "errorPrefix": "错误: "
+    },
+    "zh-Hant": {
+        "extensionName": "Spice Wallpaper Manager 擴充功能",
+        "extensionDescription": "協助您從受支援的圖片供應商向 Spice 新增新的圖片收藏。",
+        "popupTitle": "Spice Wallpaper Manager",
+        "contentFound": "發現受支援的圖片收藏！",
+        "addToSpice": "新增至 Spice",
+        "noContentDetected": "未偵測到受支援的圖片收藏。",
+        "backendNotDetectedTitle": "未偵測到 Spice 後端",
+        "appRunningCheck": "Spice 應用程式是否正在執行？",
+        "sendingToSpice": "正在傳送至 Spice...",
+        "addedToSpice": "已新增至 Spice！",
+        "errorPrefix": "錯誤: "
+    }
+}
+
+extension_locales_dir = "extension/_locales"
+
+def batch_translate_extension():
+    # Base English (already created, but let's ensure it's in the loop if needed)
+    en_path = os.path.join(extension_locales_dir, "en", "messages.json")
+    if not os.path.exists(os.path.dirname(en_path)):
+        os.makedirs(os.path.dirname(en_path))
+    
+    # We'll re-generate it to be consistent
+    en_messages = {
+        "extensionName": {"message": "Spice Wallpaper Manager Extension"},
+        "extensionDescription": {"message": "Helps you add new image collections to Spice from supported image providers."},
+        "popupTitle": {"message": "Spice Wallpaper Manager"},
+        "contentFound": {"message": "Found supported image collection!"},
+        "addToSpice": {"message": "Add to Spice"},
+        "noContentDetected": {"message": "No supported image collection detected."},
+        "backendNotDetectedTitle": {"message": "Spice Backend Not Detected"},
+        "appRunningCheck": {"message": "Is the Spice app running?"},
+        "sendingToSpice": {"message": "Sending to Spice..."},
+        "addedToSpice": {"message": "Added to Spice!"},
+        "errorPrefix": {"message": "Error: "}
+    }
+    with open(en_path, 'w', encoding='utf-8') as f:
+        json.dump(en_messages, f, ensure_ascii=False, indent=2)
+    print("Ensured en/messages.json")
+
+    for lang, terms in extension_translations.items():
+        lang_dir = os.path.join(extension_locales_dir, lang)
+        if not os.path.exists(lang_dir):
+            os.makedirs(lang_dir)
+            
+        messages = {}
+        for key, val in terms.items():
+            messages[key] = {"message": val}
+            
+        filepath = os.path.join(lang_dir, "messages.json")
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(messages, f, ensure_ascii=False, indent=2)
+        print(f"Updated extension locale: {lang}")
+
 if __name__ == "__main__":
     batch_translate()
+    batch_translate_extension()
