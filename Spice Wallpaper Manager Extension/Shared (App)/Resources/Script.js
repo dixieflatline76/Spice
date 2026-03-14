@@ -2,7 +2,8 @@ function show(platform, enabled, useSettingsInsteadOfPreferences) {
     document.body.classList.add(`platform-${platform}`);
 
     if (useSettingsInsteadOfPreferences) {
-        const lang = (navigator.language || 'en').split('-')[0];
+        const fullLang = (navigator.language || 'en').toLowerCase();
+        const baseLang = fullLang.split('-')[0];
         const messages = {
             'de': {
                 'on': "Die Erweiterung des Spice Wallpaper Managers ist derzeit aktiviert. Sie können sie im Bereich Erweiterungen der Safari-Einstellungen deaktivieren.",
@@ -72,7 +73,7 @@ function show(platform, enabled, useSettingsInsteadOfPreferences) {
             }
         };
 
-        const msg = messages[lang] || messages['en'];
+        const msg = messages[fullLang] || messages[baseLang] || messages['en'];
         document.getElementsByClassName('platform-mac state-on')[0].innerText = msg.on;
         document.getElementsByClassName('platform-mac state-off')[0].innerText = msg.off;
         document.getElementsByClassName('platform-mac state-unknown')[0].innerText = msg.unknown;
