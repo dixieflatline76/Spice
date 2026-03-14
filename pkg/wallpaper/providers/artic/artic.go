@@ -373,9 +373,9 @@ func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl strin
 	header := wallpaper.CreateMuseumHeader(
 		"Art Institute of Chicago",
 		"Chicago, IL • USA",
-		"CC0 - Public Domain",
+		i18n.T("CC0 - Public Domain"),
 		"https://www.artic.edu/open-access/open-access-images",
-		"One of the world's great art museums, housing icons like Nighthawks and American Gothic.",
+		i18n.T("One of the world's great art museums, housing icons like Nighthawks and American Gothic."),
 		"https://www.google.com/maps/search/?api=1&query=Art+Institute+of+Chicago",
 		"https://www.artic.edu",
 		"https://sales.artic.edu/donate",

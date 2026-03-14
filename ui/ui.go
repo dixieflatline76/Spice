@@ -590,7 +590,7 @@ func (sa *SpiceApp) RebuildPreferencesContent(initialTab string) {
 	generalContainer.Add(indentedWrapper)
 
 	// Theme Selection
-	themeOptions := []string{"System", "Dark", "Light"}
+	themeOptions := []string{i18n.T("System"), i18n.T("Dark"), i18n.T("Light")}
 	currentTheme := sa.appConfig.GetTheme()
 	initialThemeIndex := 0
 	for i, t := range themeOptions {
@@ -629,8 +629,9 @@ func (sa *SpiceApp) RebuildPreferencesContent(initialTab string) {
 	sm.CreateSelectSetting(&themeConfig, generalContainer)
 
 	// Language Selection
-	langOptions := []string{"System Default", "English", "Deutsch", "Français", "Español", "Italiano", "Português", "简体中文", "日本語", "Русский", "繁體中文"}
-	langDisplayOptions := []string{i18n.T("System Default"), "English", "Deutsch", "Français", "Español", "Italiano", "Português", "简体中文", "日本語", "Русский", "繁體中文"}
+	langOptions := i18n.GetLanguageNames()
+	langDisplayOptions := i18n.GetLanguageNames()
+	langDisplayOptions[0] = i18n.T("System Default")
 	currentLang := sa.appConfig.GetLanguage()
 	initialLangIndex := 0
 	for idx, l := range langOptions {

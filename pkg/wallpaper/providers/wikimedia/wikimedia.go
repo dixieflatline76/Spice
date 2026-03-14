@@ -368,9 +368,9 @@ func (p *WikimediaProvider) Title() string {
 func (p *WikimediaProvider) CreateSettingsPanel(sm setting.SettingsManager) fyne.CanvasObject {
 	donationURL, _ := url.Parse("https://donate.wikimedia.org/")
 	return container.NewVBox(
-		widget.NewLabel("Wikimedia Commons is a media file repository making public domain and"),
-		widget.NewLabel("freely-licensed educational media content available to everyone."),
-		widget.NewHyperlink("Donate to Wikimedia", donationURL),
+		widget.NewLabel(i18n.T("Wikimedia Commons is a media file repository making public domain and")),
+		widget.NewLabel(i18n.T("freely-licensed educational media content available to everyone.")),
+		widget.NewHyperlink(i18n.T("Donate to Wikimedia"), donationURL),
 	)
 }
 
@@ -384,19 +384,19 @@ func (p *WikimediaProvider) CreateQueryPanel(sm setting.SettingsManager, pending
 	}
 
 	addQueryCfg := wallpaper.AddQueryConfig{
-		Title:           "New Wikimedia Query",
-		URLPlaceholder:  "Enter Category URL, Search URL, or plain 'category:Name'",
+		Title:           i18n.T("New Wikimedia Query"),
+		URLPlaceholder:  i18n.T("Enter Category URL, Search URL, or plain 'category:Name'"),
 		URLValidator:    "", // Custom validation used in ValidateFunc
 		URLErrorMsg:     "",
-		DescPlaceholder: "Add a description",
+		DescPlaceholder: i18n.T("Add a description"),
 		DescValidator:   "", // Basic length validation only
 		DescErrorMsg:    "",
 		ValidateFunc: func(term, desc string) error {
 			if len(desc) < 5 {
-				return fmt.Errorf("description too short")
+				return errors.New(i18n.T("description too short"))
 			}
 			if len(desc) > wallpaper.MaxDescLength {
-				return fmt.Errorf("description too long")
+				return errors.New(i18n.T("description too long"))
 			}
 			normalized, err := p.ParseURL(term)
 			if err != nil {
@@ -404,7 +404,7 @@ func (p *WikimediaProvider) CreateQueryPanel(sm setting.SettingsManager, pending
 			}
 			id := wallpaper.GenerateQueryID(p.Name() + ":" + normalized)
 			if p.cfg.IsDuplicateID(id) {
-				return fmt.Errorf("duplicate query")
+				return errors.New(i18n.T("duplicate query"))
 			}
 			return nil
 		},
@@ -418,7 +418,7 @@ func (p *WikimediaProvider) CreateQueryPanel(sm setting.SettingsManager, pending
 		},
 	}
 	addButton := wallpaper.CreateAddQueryButton(
-		"Add Wikimedia Query",
+		i18n.T("Add Wikimedia Query"),
 		sm,
 		addQueryCfg,
 		onAdded,

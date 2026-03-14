@@ -13,7 +13,10 @@ pack-extension:
 	go run cmd/util/pack_extension/main.go
 
 # --- Code Generation ---
-generate:
+gen-i18n:
+	go run cmd/util/gen_i18n/main.go
+
+generate: gen-i18n
 	go generate ./...
 
 # --- Build targets ---

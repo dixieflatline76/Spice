@@ -355,7 +355,7 @@ func (b *PrefsPanelBuilder) createTitleFunc(p provider.ImageProvider) func() str
 	return func() string {
 		title := p.Title()
 		if title == "" {
-			title = i18n.Tf("Image Sources ({{.Name}})", map[string]any{"Name": p.Name()})
+			title = i18n.Tf("Image Sources ({{.Name}})", map[string]any{"Name": p.Name()}) + "..."
 		}
 		activeCount := 0
 		for _, q := range b.plugin.cfg.GetQueries() {

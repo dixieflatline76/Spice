@@ -180,12 +180,12 @@ func (p *Provider) CreateSettingsPanel(sm setting.SettingsManager) fyne.CanvasOb
 		token := p.cfg.GetGooglePhotosToken()
 		if token != "" {
 			expiry := p.cfg.GetGooglePhotosTokenExpiry()
-			statusMsg := "Status: Authorized (Ready to Select)"
+			statusMsg := i18n.T("Status: Authorized (Ready to Select)")
 			if time.Now().After(expiry) {
-				statusMsg += " (Token Expired)"
+				statusMsg += " " + i18n.T("(Token Expired)")
 			}
 			statusLabel.SetText(statusMsg)
-			connectBtn.SetText("Disconnect Authorisation")
+			connectBtn.SetText(i18n.T("Disconnect Authorisation"))
 			connectBtn.OnTapped = func() {
 				// revoke
 				p.cfg.SetGooglePhotosToken("")
@@ -193,8 +193,8 @@ func (p *Provider) CreateSettingsPanel(sm setting.SettingsManager) fyne.CanvasOb
 			}
 			connectBtn.Importance = widget.DangerImportance
 		} else {
-			statusLabel.SetText("Status: Not Authorized")
-			connectBtn.SetText("Authorize Google Photos")
+			statusLabel.SetText(i18n.T("Status: Not Authorized"))
+			connectBtn.SetText(i18n.T("Authorize Google Photos"))
 			connectBtn.Importance = widget.LowImportance // Or Medium
 			connectBtn.OnTapped = func() {
 				err := p.auth.StartOAuthFlow(func(u *url.URL) error {
@@ -203,7 +203,7 @@ func (p *Provider) CreateSettingsPanel(sm setting.SettingsManager) fyne.CanvasOb
 				if err != nil {
 					dialog.ShowError(err, sm.GetSettingsWindow())
 				} else {
-					dialog.ShowInformation("Success", "Authorized!", sm.GetSettingsWindow())
+					dialog.ShowInformation(i18n.T("Success"), i18n.T("Authorized!"), sm.GetSettingsWindow())
 					updateUI()
 				}
 			}
@@ -337,39 +337,39 @@ func (p *Provider) runPickerFlow(ctx context.Context, sm setting.SettingsManager
 
 	// 2. Open Browser
 	fyne.Do(func() {
-		statusLabel.SetText("Please select photos in your browser...")
+		statusLabel.SetText(i18n.T("Please select photos in your browser..."))
 	})
 	if err := p.OpenBrowser(session.PickerURI); err != nil {
 		if ctx.Err() == context.Canceled {
 			return
 		}
-		p.uiError(sm, "Browser Error", err, addBtn, progressBar, statusLabel, cancelBtn)
+		p.uiError(sm, i18n.T("Browser Error"), err, addBtn, progressBar, statusLabel, cancelBtn)
 		return
 	}
 
 	// 3. Poll
 	fyne.Do(func() {
-		statusLabel.SetText("Waiting for selection (check browser)...")
+		statusLabel.SetText(i18n.T("Waiting for selection (check browser)..."))
 	})
 	finalSession, err := p.PollSession(ctx, session.ID, session.PollingConfig.PollInterval)
 	if err != nil {
 		if ctx.Err() == context.Canceled {
 			return
 		}
-		p.uiError(sm, "Polling Error (Timed out?)", err, addBtn, progressBar, statusLabel, cancelBtn)
+		p.uiError(sm, i18n.T("Polling Error (Timed out?)"), err, addBtn, progressBar, statusLabel, cancelBtn)
 		return
 	}
 
 	// 4. Get Items
 	fyne.Do(func() {
-		statusLabel.SetText("Retrieving items...")
+		statusLabel.SetText(i18n.T("Retrieving items..."))
 	})
 	items, err := p.GetSessionItems(ctx, finalSession.ID)
 	if err != nil {
 		if ctx.Err() == context.Canceled {
 			return
 		}
-		p.uiError(sm, "Retrieval Error", err, addBtn, progressBar, statusLabel, cancelBtn)
+		p.uiError(sm, i18n.T("Retrieval Error"), err, addBtn, progressBar, statusLabel, cancelBtn)
 		return
 	}
 
@@ -380,7 +380,7 @@ func (p *Provider) runPickerFlow(ctx context.Context, sm setting.SettingsManager
 
 	// 5. Download
 	fyne.Do(func() {
-		statusLabel.SetText(fmt.Sprintf("Downloading %d items...", len(items)))
+		statusLabel.SetText(fmt.Sprintf(i18n.T("Downloading %d items..."), len(items)))
 	})
 
 	guid := uuid.New().String()
@@ -393,7 +393,7 @@ func (p *Provider) runPickerFlow(ctx context.Context, sm setting.SettingsManager
 		if ctx.Err() == context.Canceled {
 			return
 		}
-		p.uiError(sm, "Download Error", err, addBtn, progressBar, statusLabel, cancelBtn)
+		p.uiError(sm, i18n.T("Download Error"), err, addBtn, progressBar, statusLabel, cancelBtn)
 		return
 	}
 
@@ -427,7 +427,7 @@ func (p *Provider) uiError(sm setting.SettingsManager, title string, err error, 
 		addBtn.Show()
 		addBtn.Enable()
 		bar.Hide()
-		label.SetText("Error: " + err.Error())
+		label.SetText(i18n.T("Error: ") + err.Error())
 	})
 }
 
@@ -497,7 +497,7 @@ func (p *Provider) saveInitialMetadata(guid string, fileLinks map[string]string)
 // openAddGooglePhotosDialog shows a dialog to confirm the new collection.
 func (p *Provider) openAddGooglePhotosDialog(sm setting.SettingsManager, guid string, count int, list *widget.List) {
 	urlStr := "googlephotos://" + guid
-	defaultDesc := fmt.Sprintf("Collection %s (%d items)", time.Now().Format("Jan 02 15:04"), count)
+	defaultDesc := fmt.Sprintf(i18n.T("Collection %s (%d items)"), time.Now().Format("Jan 02 15:04"), count)
 
 	// UI Elements
 	// URL (Disabled)
@@ -508,10 +508,10 @@ func (p *Provider) openAddGooglePhotosDialog(sm setting.SettingsManager, guid st
 	// Description (Editable)
 	descEntry := widget.NewEntry()
 	descEntry.SetText(defaultDesc)
-	descEntry.PlaceHolder = "Enter description..."
+	descEntry.PlaceHolder = i18n.T("Enter description...")
 
 	// Active (Check)
-	activeCheck := widget.NewCheck("Active", nil)
+	activeCheck := widget.NewCheck(i18n.T("Active"), nil)
 	activeCheck.SetChecked(true)
 
 	// Custom Dialog Content
@@ -525,9 +525,9 @@ func (p *Provider) openAddGooglePhotosDialog(sm setting.SettingsManager, guid st
 	)
 
 	d := dialog.NewCustomConfirm(
-		"Save Collection",
-		"Save",
-		"Cancel",
+		i18n.T("Save Collection"),
+		i18n.T("Save"),
+		i18n.T("Cancel"),
 		form,
 		func(save bool) {
 			if save {

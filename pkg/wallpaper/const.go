@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"math"
 	"time"
+
+	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 )
 
 // pluginName is the name of the wallpaper plugin
@@ -123,21 +125,21 @@ var FrequencyDurations = map[Frequency]time.Duration{
 func (f Frequency) String() string {
 	switch f {
 	case FrequencyNever:
-		return "Never"
+		return i18n.T("Never")
 	case Frequency5Minutes:
-		return "Every 5 Minutes"
+		return i18n.T("Every 5 Minutes")
 	case Frequency15Minutes:
-		return "Every 15 Minutes"
+		return i18n.T("Every 15 Minutes")
 	case Frequency30Minutes:
-		return "Every 30 Minutes"
+		return i18n.T("Every 30 Minutes")
 	case FrequencyHourly:
-		return "Hourly"
+		return i18n.T("Hourly")
 	case Frequency3Hours:
-		return "Every 3 Hours"
+		return i18n.T("Every 3 Hours")
 	case Frequency6Hours:
-		return "Every 6 Hours"
+		return i18n.T("Every 6 Hours")
 	case FrequencyDaily:
-		return "Daily"
+		return i18n.T("Daily")
 	default:
 		return "Unknown"
 	}
@@ -194,17 +196,17 @@ var CacheSizeValues = map[CacheSize]int{
 func (cs CacheSize) String() string {
 	switch cs {
 	case CacheNone:
-		return "None"
+		return i18n.T("None")
 	case Cache100Images:
-		return "100 Images"
+		return "100"
 	case Cache200Images:
-		return "200 Images"
+		return "200"
 	case Cache300Images:
-		return "300 Images"
+		return "300"
 	case Cache500Images:
-		return "500 Images"
+		return "500"
 	case Cache1000Images:
-		return "1000 Images"
+		return "1000"
 	default:
 		return "Unknown"
 	}

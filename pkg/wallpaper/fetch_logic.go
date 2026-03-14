@@ -95,11 +95,12 @@ func (wp *Plugin) FetchNewImages(providerID ...string) {
 				for s := range activeSources {
 					sources = append(sources, s)
 				}
-				sourceStr := ""
-				if len(sources) > 0 {
-					sourceStr = " from " + strings.Join(sources, ", ")
+				sourceStr := strings.Join(sources, ", ")
+				if sourceStr != "" {
+					wp.manager.NotifyUser(i18n.T("Wallpaper Fetch"), i18n.Tf("Downloading {{.Count}} new images from {{.Sources}}...", map[string]any{"Count": totalQueued.Value(), "Sources": sourceStr}))
+				} else {
+					wp.manager.NotifyUser(i18n.T("Wallpaper Fetch"), i18n.Tf("Downloading {{.Count}} new images...", map[string]any{"Count": totalQueued.Value()}))
 				}
-				wp.manager.NotifyUser(i18n.T("Wallpaper Fetch"), i18n.Tf("Downloading {{.Count}} new images{{.Sources}}...", map[string]any{"Count": totalQueued.Value(), "Sources": sourceStr}))
 			} else {
 				log.Println("Fetch returned 0 new images from all active queries.")
 			}

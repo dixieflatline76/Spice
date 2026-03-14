@@ -413,10 +413,10 @@ func (p *PexelsProvider) CreateSettingsPanel(sm setting.SettingsManager) fyne.Ca
 	pexelsAPIKeyConfig := setting.TextEntrySettingConfig{
 		Name:          "pexelsAPIKey",
 		InitialValue:  p.cfg.GetPexelsAPIKey(),
-		PlaceHolder:   "Enter your Pexels API Key",
+		PlaceHolder:   i18n.T("Enter your Pexels API Key"),
 		Label:         sm.CreateSettingTitleLabel(i18n.T("Pexels API Key:")),
-		HelpContent:   widget.NewHyperlink("Get a free API key from Pexels.", pexURL),
-		Validator:     validation.NewRegexp(wallpaper.PexelsAPIKeyRegexp, "Invalid API Key format (56 characters)"),
+		HelpContent:   widget.NewHyperlink(i18n.T("Get a free API key from Pexels."), pexURL),
+		Validator:     validation.NewRegexp(wallpaper.PexelsAPIKeyRegexp, i18n.T("Invalid API Key format (56 characters)")),
 		NeedsRefresh:  true,
 		DisplayStatus: true,
 		IsPassword:    true,
@@ -445,12 +445,12 @@ func (p *PexelsProvider) CreateSettingsPanel(sm setting.SettingsManager) fyne.Ca
 				if s == "" {
 					pexKeyBtn.Hide()
 				} else {
-					pexKeyBtn.SetText("Clear API Key")
+					pexKeyBtn.SetText(i18n.T("Clear API Key"))
 					pexKeyBtn.Importance = widget.DangerImportance
 					pexKeyBtn.Show()
 				}
 			} else {
-				pexKeyBtn.SetText("Verify & Connect")
+				pexKeyBtn.SetText(i18n.T("Verify & Connect"))
 				pexKeyBtn.Importance = widget.HighImportance
 				if s == "" {
 					pexKeyBtn.Hide()
@@ -471,13 +471,13 @@ func (p *PexelsProvider) CreateSettingsPanel(sm setting.SettingsManager) fyne.Ca
 	sm.CreateTextEntrySetting(&pexelsAPIKeyConfig, pexHeader)
 
 	// Pexels API Key Action Button
-	pexKeyBtn = widget.NewButton("Verify & Connect", func() {
+	pexKeyBtn = widget.NewButton(i18n.T("Verify & Connect"), func() {
 		currKey := sm.GetValue("pexelsAPIKey").(string)
 		baseKey := sm.GetBaseline("pexelsAPIKey").(string)
 
 		if currKey == baseKey && currKey != "" {
 			// State: Clear
-			dialog.NewConfirm("Clear API Key", "Are you sure you want to clear the Pexels API Key?", func(b bool) {
+			dialog.NewConfirm(i18n.T("Clear API Key"), i18n.T("Are you sure you want to clear the Pexels API Key?"), func(b bool) {
 				if b {
 					sm.SetValue("pexelsAPIKey", "")
 					p.cfg.SetPexelsAPIKey("")
@@ -491,7 +491,7 @@ func (p *PexelsProvider) CreateSettingsPanel(sm setting.SettingsManager) fyne.Ca
 
 		// State: Verify & Connect
 		pexKeyBtn.Disable()
-		pexKeyBtn.SetText("Verifying...")
+		pexKeyBtn.SetText(i18n.T("Verifying..."))
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
@@ -500,7 +500,7 @@ func (p *PexelsProvider) CreateSettingsPanel(sm setting.SettingsManager) fyne.Ca
 				pexKeyBtn.Enable()
 				if err != nil {
 					dialog.ShowError(err, sm.GetSettingsWindow())
-					pexKeyBtn.SetText("Verify & Connect")
+					pexKeyBtn.SetText(i18n.T("Verify & Connect"))
 					return
 				}
 				// Success! Save immediately and lock
@@ -517,7 +517,7 @@ func (p *PexelsProvider) CreateSettingsPanel(sm setting.SettingsManager) fyne.Ca
 	if initialKey == "" {
 		pexKeyBtn.Hide()
 	} else {
-		pexKeyBtn.SetText("Clear API Key")
+		pexKeyBtn.SetText(i18n.T("Clear API Key"))
 		pexKeyBtn.Importance = widget.DangerImportance
 	}
 	pexHeader.Add(pexKeyBtn)
@@ -535,13 +535,13 @@ func (p *PexelsProvider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl
 	}
 
 	addQueryCfg := wallpaper.AddQueryConfig{
-		Title:           "New Pexels Query",
-		URLPlaceholder:  "Pexels Search URL (e.g. https://www.pexels.com/search/nature/)",
+		Title:           i18n.T("New Pexels Query"),
+		URLPlaceholder:  i18n.T("Pexels Search URL (e.g. https://www.pexels.com/search/nature/)"),
 		URLValidator:    wallpaper.PexelsURLRegexp,
-		URLErrorMsg:     "Invalid Pexels URL (search or collection)",
-		DescPlaceholder: "Add a description",
+		URLErrorMsg:     i18n.T("Invalid Pexels URL (search or collection)"),
+		DescPlaceholder: i18n.T("Add a description"),
 		DescValidator:   wallpaper.PexelsDescRegexp,
-		DescErrorMsg:    fmt.Sprintf("Description must be between 5 and %d alpha numeric characters long", wallpaper.MaxDescLength),
+		DescErrorMsg:    fmt.Sprintf(i18n.T("Description must be between 5 and %d alpha numeric characters long"), wallpaper.MaxDescLength),
 		ValidateFunc: func(url, desc string) error {
 			// Validate string using Pexels specific logic
 			// Pexels regex validation happens via InputValidator, so we just check duplicates here
@@ -549,7 +549,7 @@ func (p *PexelsProvider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl
 			// Check for duplicates
 			queryID := wallpaper.GenerateQueryID(p.Name() + ":" + url)
 			if p.cfg.IsDuplicateID(queryID) {
-				return errors.New("duplicate query: this URL already exists")
+				return errors.New(i18n.T("duplicate query: this URL already exists"))
 			}
 			return nil
 		},
@@ -565,7 +565,7 @@ func (p *PexelsProvider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl
 
 	// Create "Add" Button using standardized helper
 	addButton := wallpaper.CreateAddQueryButton(
-		"Add Pexels Search",
+		i18n.T("Add Pexels Search"),
 		sm,
 		addQueryCfg,
 		onAdded,

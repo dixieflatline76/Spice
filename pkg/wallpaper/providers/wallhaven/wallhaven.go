@@ -495,7 +495,7 @@ func (p *WallhavenProvider) CreateSettingsPanel(sm setting.SettingsManager) fyne
 
 			// Perform sync/cleanup on Apply
 			if b && p.cfg.GetWallhavenUsername() == "" {
-				dialog.ShowError(errors.New("Please enter your wallhaven.cc username"), sm.GetSettingsWindow())
+				dialog.ShowError(errors.New(i18n.T("Please enter your wallhaven.cc username")), sm.GetSettingsWindow())
 				// we don't return here so the setting is still saved, but sync is skipped
 			}
 
@@ -520,10 +520,10 @@ func (p *WallhavenProvider) buildAPIKeySection(sm setting.SettingsManager, whHea
 	wallhavenAPIKeyConfig := setting.TextEntrySettingConfig{
 		Name:          "wallhavenAPIKey",
 		InitialValue:  p.cfg.GetWallhavenAPIKey(),
-		PlaceHolder:   "Enter your wallhaven.cc API Key",
+		PlaceHolder:   i18n.T("Enter your wallhaven.cc API Key"),
 		Label:         sm.CreateSettingTitleLabel(i18n.T("wallhaven API Key:")),
-		HelpContent:   widget.NewHyperlink("Restricted content requires an API key. Get one here.", whURL),
-		Validator:     validation.NewRegexp(WallhavenAPIKeyRegexp, "32 alphanumeric characters required"),
+		HelpContent:   widget.NewHyperlink(i18n.T("Restricted content requires an API key. Get one here."), whURL),
+		Validator:     validation.NewRegexp(WallhavenAPIKeyRegexp, i18n.T("32 alphanumeric characters required")),
 		NeedsRefresh:  true,
 		DisplayStatus: true,
 		IsPassword:    true,
@@ -551,12 +551,12 @@ func (p *WallhavenProvider) buildAPIKeySection(sm setting.SettingsManager, whHea
 				if s == "" {
 					apiKeyBtn.Hide()
 				} else {
-					apiKeyBtn.SetText("Clear API Key")
+					apiKeyBtn.SetText(i18n.T("Clear API Key"))
 					apiKeyBtn.Importance = widget.DangerImportance
 					apiKeyBtn.Show()
 				}
 			} else {
-				apiKeyBtn.SetText("Verify & Connect")
+				apiKeyBtn.SetText(i18n.T("Verify & Connect"))
 				apiKeyBtn.Importance = widget.HighImportance
 				if s == "" {
 					apiKeyBtn.Hide()
@@ -575,12 +575,12 @@ func (p *WallhavenProvider) buildAPIKeySection(sm setting.SettingsManager, whHea
 
 	sm.CreateTextEntrySetting(&wallhavenAPIKeyConfig, whHeader)
 
-	apiKeyBtn = widget.NewButton("Verify & Connect", func() {
+	apiKeyBtn = widget.NewButton(i18n.T("Verify & Connect"), func() {
 		currKey := sm.GetValue("wallhavenAPIKey").(string)
 		baseKey := sm.GetBaseline("wallhavenAPIKey").(string)
 
 		if currKey == baseKey && currKey != "" {
-			dialog.NewConfirm("Clear API Key", "Are you sure you want to clear the Wallhaven API Key, Username, and all synced collections?", func(b bool) {
+			dialog.NewConfirm(i18n.T("Clear API Key"), i18n.T("Are you sure you want to clear the Wallhaven API Key, Username, and all synced collections?"), func(b bool) {
 				if b {
 					p.validatedUsername = ""
 					sm.SetValue("wallhavenAPIKey", "")
@@ -601,7 +601,7 @@ func (p *WallhavenProvider) buildAPIKeySection(sm setting.SettingsManager, whHea
 		}
 
 		apiKeyBtn.Disable()
-		apiKeyBtn.SetText("Verifying...")
+		apiKeyBtn.SetText(i18n.T("Verifying..."))
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
@@ -610,7 +610,7 @@ func (p *WallhavenProvider) buildAPIKeySection(sm setting.SettingsManager, whHea
 				apiKeyBtn.Enable()
 				if err != nil {
 					dialog.ShowError(err, sm.GetSettingsWindow())
-					apiKeyBtn.SetText("Verify & Connect")
+					apiKeyBtn.SetText(i18n.T("Verify & Connect"))
 					return
 				}
 				p.cfg.SetWallhavenAPIKey(currKey)
@@ -625,7 +625,7 @@ func (p *WallhavenProvider) buildAPIKeySection(sm setting.SettingsManager, whHea
 	if initialKey == "" {
 		apiKeyBtn.Hide()
 	} else {
-		apiKeyBtn.SetText("Clear API Key")
+		apiKeyBtn.SetText(i18n.T("Clear API Key"))
 		apiKeyBtn.Importance = widget.DangerImportance
 	}
 	whHeader.Add(apiKeyBtn)
@@ -637,9 +637,9 @@ func (p *WallhavenProvider) buildUsernameSection(sm setting.SettingsManager, whH
 	whUsernameConfig := setting.TextEntrySettingConfig{
 		Name:          "Wallhaven Username",
 		InitialValue:  p.cfg.GetWallhavenUsername(),
-		PlaceHolder:   "Enter your Wallhaven username...",
+		PlaceHolder:   i18n.T("Please enter your wallhaven.cc username"),
 		Label:         sm.CreateSettingTitleLabel(i18n.T("Wallhaven Username:")),
-		Validator:     validation.NewRegexp(WallhavenUsernameRegexp, "3 to 20 alphanumeric characters (or -_) required"),
+		Validator:     validation.NewRegexp(WallhavenUsernameRegexp, i18n.T("3 to 20 alphanumeric characters (or -_) required")),
 		NeedsRefresh:  true,
 		DisplayStatus: false,
 		EnabledIf: func() bool {
@@ -663,7 +663,7 @@ func (p *WallhavenProvider) buildUsernameSection(sm setting.SettingsManager, whH
 	}
 	sm.CreateTextEntrySetting(&whUsernameConfig, whHeader)
 
-	usernameBtn = widget.NewButton("Verify Username", func() {
+	usernameBtn = widget.NewButton(i18n.T("Verify Username"), func() {
 		currUser := sm.GetValue("Wallhaven Username").(string)
 		apiKeyVal := sm.GetValue("wallhavenAPIKey")
 		var apiKey string
@@ -672,19 +672,19 @@ func (p *WallhavenProvider) buildUsernameSection(sm setting.SettingsManager, whH
 		}
 
 		if apiKey == "" {
-			dialog.ShowError(fmt.Errorf("API Key required for verification"), sm.GetSettingsWindow())
+			dialog.ShowError(errors.New(i18n.T("API Key required for verification")), sm.GetSettingsWindow())
 			return
 		}
 
 		usernameBtn.Disable()
-		usernameBtn.SetText("Verifying...")
+		usernameBtn.SetText(i18n.T("Verifying..."))
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			err := CheckWallhavenUsername(ctx, currUser, apiKey)
 			fyne.Do(func() {
 				usernameBtn.Enable()
-				usernameBtn.SetText("Verify Username")
+				usernameBtn.SetText(i18n.T("Verify Username"))
 				if err != nil {
 					dialog.ShowError(err, sm.GetSettingsWindow())
 					p.validatedUsername = ""
@@ -712,13 +712,13 @@ func (p *WallhavenProvider) CreateQueryPanel(sm setting.SettingsManager, pending
 
 	// Configuration for the Add Query Dialog
 	addCfg := wallpaper.AddQueryConfig{
-		Title:           "New Image Query",
-		URLPlaceholder:  "Paste your Wallhaven Search or Collection (Favorites) URL",
+		Title:           i18n.T("New Image Query"),
+		URLPlaceholder:  i18n.T("Paste your Wallhaven Search or Collection (Favorites) URL"),
 		URLValidator:    WallhavenURLRegexp,
-		URLErrorMsg:     "Invalid wallhaven image query URL pattern",
-		DescPlaceholder: "Add a description",
+		URLErrorMsg:     i18n.T("Invalid wallhaven image query URL pattern"),
+		DescPlaceholder: i18n.T("Add a description"),
 		DescValidator:   WallhavenDescRegexp,
-		DescErrorMsg:    fmt.Sprintf("Description must be between 5 and %d alpha numeric characters long", wallpaper.MaxDescLength),
+		DescErrorMsg:    fmt.Sprintf(i18n.T("Description must be between 5 and %d alpha numeric characters long"), wallpaper.MaxDescLength),
 		ValidateFunc: func(url, desc string) error {
 			// Wallhaven specific logic: we need to convert the Web URL to API URL
 			apiURL, _, err := CovertWebToAPIURL(url)
@@ -729,7 +729,7 @@ func (p *WallhavenProvider) CreateQueryPanel(sm setting.SettingsManager, pending
 			// Check for duplicates
 			queryID := wallpaper.GenerateQueryID(p.Title() + ":" + apiURL)
 			if p.cfg.IsDuplicateID(queryID) {
-				return errors.New("Duplicate query: this URL already exists")
+				return errors.New(i18n.T("Duplicate query: this URL already exists"))
 			}
 			return nil
 		},
@@ -742,7 +742,7 @@ func (p *WallhavenProvider) CreateQueryPanel(sm setting.SettingsManager, pending
 
 	// Create "Add" Button using standardized helper
 	addButton := wallpaper.CreateAddQueryButton(
-		"Add Wallhaven URL",
+		i18n.T("Add Wallhaven URL"),
 		sm,
 		addCfg,
 		func() {

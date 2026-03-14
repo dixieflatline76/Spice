@@ -7,6 +7,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
+	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
 )
 
@@ -131,10 +132,10 @@ func (sm *SettingsManager) HasPendingChange(name string) bool {
 // CreateApplyButton is a helper function that creates and sets up the Apply Changes button.
 func createApplyButton(sm *SettingsManager) *widget.Button {
 	var applyButton *widget.Button
-	applyButton = widget.NewButton("Apply Changes", func() {
+	applyButton = widget.NewButton(i18n.T("Apply Changes"), func() {
 		originalText := applyButton.Text
 		sm.applyButton.Disable()
-		sm.applyButton.SetText("Applying changes, please wait...")
+		sm.applyButton.SetText(i18n.T("Applying changes, please wait..."))
 		sm.applyButton.Refresh()
 		fyne.Do(func() {
 			defer func() {

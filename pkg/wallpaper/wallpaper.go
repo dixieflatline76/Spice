@@ -315,7 +315,7 @@ func (wp *Plugin) actionWorker() {
 }
 
 func (wp *Plugin) Name() string {
-	return "Wallpaper"
+	return i18n.T("Wallpaper")
 }
 
 func (wp *Plugin) stopAllWorkers() {
