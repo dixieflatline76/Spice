@@ -348,9 +348,10 @@ func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 type accordionItem struct {
 	Title     string
 	TitleFunc func() string // Optional: Function to generate title dynamically
-	Content   fyne.CanvasObject
-	Open      bool
-	Icon      fyne.Resource
+
+	Content fyne.CanvasObject
+	Open    bool
+	Icon    fyne.Resource
 }
 
 func createAccordion(items []accordionItem) (fyne.CanvasObject, func()) {

@@ -452,6 +452,13 @@ func (c *SmartImageProcessor) findBestFace(img image.Image) (image.Rectangle, er
 	var maxScore float32 = -1.0
 	found := false
 
+	// Debug: Log all raw detections to help tune thresholds for tilted or difficult faces
+	log.Debugf("--- RAW PIGO DETECTIONS ---")
+	for _, d := range dets {
+		log.Debugf("Raw Det: %v (Q: %.2f)", d, d.Q)
+	}
+	log.Debugf("---------------------------")
+
 	bottomEdgeThreshold := int(float64(height) * c.config.Tuning.FaceBottomEdgeThreshold)
 
 	confThreshold := float32(c.config.Tuning.FaceDetectConfidence)

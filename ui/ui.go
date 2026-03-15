@@ -665,6 +665,19 @@ func (sa *SpiceApp) RebuildPreferencesContent(initialTab string) {
 				utilLog.Printf("Failed to broadcast language change to extensions: %v", err)
 			}
 		}
+
+		// Since language has changed, we must rebuild the entire Preferences window and Tray Menu.
+		// We determine the active tab beforehand to restore it.
+		activeID := "App"
+		selected := sa.prefsTabs.Selected() // sa.prefsTabs might be nil if this is during setup, but Apply happens much later.
+		for id, item := range sa.tabItems {
+			if item == selected {
+				activeID = id
+				break
+			}
+		}
+		sa.RebuildPreferencesContent(activeID)
+		sa.RebuildTrayMenu()
 	}
 	sm.CreateSelectSetting(&langConfig, generalContainer)
 
@@ -705,21 +718,6 @@ func (sa *SpiceApp) RebuildPreferencesContent(initialTab string) {
 	for _, item := range pluginTabItems {
 		tabs.Append(item)
 	}
-
-	// Register refresh functions for global UI elements (e.g. language change)
-	sm.RegisterRefreshFunc(func() {
-		// Find current ID by searching our map
-		activeID := "App"
-		selected := tabs.Selected()
-		for id, item := range sa.tabItems {
-			if item == selected {
-				activeID = id
-				break
-			}
-		}
-		sa.RebuildPreferencesContent(activeID)
-		sa.RebuildTrayMenu()
-	})
 
 	// Select the initial tab if specified
 	if initialTab != "" {
