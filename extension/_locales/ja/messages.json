@@ -1,0 +1,35 @@
+{
+  "extensionName": {
+    "message": "Spice Wallpaper Manager 拡張機能"
+  },
+  "extensionDescription": {
+    "message": "対応している画像プロバイダーから Spice に新しい画像コレクションを追加するのをサポートします。"
+  },
+  "popupTitle": {
+    "message": "Spice Wallpaper Manager"
+  },
+  "contentFound": {
+    "message": "対応している画像コレクションが見つかりました！"
+  },
+  "addToSpice": {
+    "message": "Spice に追加"
+  },
+  "noContentDetected": {
+    "message": "対応している画像コレクションが見つかりませんでした。"
+  },
+  "backendNotDetectedTitle": {
+    "message": "Spice バックエンドが検出されません"
+  },
+  "appRunningCheck": {
+    "message": "Spice アプリは起動していますか？"
+  },
+  "sendingToSpice": {
+    "message": "Spice に送信中..."
+  },
+  "addedToSpice": {
+    "message": "Spice に追加されました！"
+  },
+  "errorPrefix": {
+    "message": "エラー: "
+  }
+}

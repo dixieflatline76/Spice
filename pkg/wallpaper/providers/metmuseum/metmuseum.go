@@ -68,12 +68,16 @@ func NewMetMuseumProvider(cfg *wallpaper.Config, client *http.Client) *Provider 
 	return p
 }
 
+func (p *Provider) ID() string {
+	return "MetMuseum"
+}
+
 func (p *Provider) HomeURL() string {
 	return "https://www.metmuseum.org"
 }
 
 func (p *Provider) Name() string {
-	return ProviderName
+	return i18n.T("The Metropolitan Museum of Art")
 }
 
 func (p *Provider) Title() string {
@@ -475,7 +479,7 @@ func (p *Provider) fetchObjectDetails(ctx context.Context, id int) (*provider.Im
 		Path:        obj.PrimaryImage,
 		ViewURL:     obj.ObjectURL,
 		Attribution: fmt.Sprintf("%s - %s", obj.ArtistDisplay, obj.Title),
-		Provider:    ProviderName,
+		Provider:    p.ID(),
 	}
 
 	p.cacheResult(id, &img)
@@ -506,9 +510,9 @@ func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl strin
 	header := wallpaper.CreateMuseumHeader(
 		"The Metropolitan Museum of Art",
 		"New York City, USA",
-		"Open Access (CC0)",
+		i18n.T("Open Access (CC0)"),
 		"https://www.metmuseum.org/about-the-met/policies-and-documents/open-access",
-		"The crown jewel of New York City. From ancient Egyptian temples to modern masterpieces, The Met houses 5,000 years of humanity's greatest creative achievements.",
+		i18n.T("The crown jewel of New York City. From ancient Egyptian temples to modern masterpieces, The Met houses 5,000 years of humanity's greatest creative achievements."),
 		"https://www.google.com/maps/search/?api=1&query=The+Metropolitan+Museum+of+Art",
 		"https://www.metmuseum.org",
 		"https://www.metmuseum.org/donate",
@@ -520,11 +524,11 @@ func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl strin
 		Name string
 		Key  string
 	}{
-		{"Director's Cut: Essential Masterpieces", CollectionSpiceMelange},
-		{"American Wing", CollectionAmerican},
-		{"European Paintings", CollectionEuropean},
-		{"Arts of Asia", CollectionAsian},
-		{"Egyptian Art", CollectionEgyptian},
+		{i18n.T("Director's Cut: Essential Masterpieces"), CollectionSpiceMelange},
+		{i18n.T("American Wing"), CollectionAmerican},
+		{i18n.T("European Paintings"), CollectionEuropean},
+		{i18n.T("Arts of Asia"), CollectionAsian},
+		{i18n.T("Egyptian Art"), CollectionEgyptian},
 	}
 
 	// Helper to find existing query state
@@ -559,7 +563,7 @@ func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl strin
 								log.Printf("MET: Failed to enable %s: %v", col.Name, err)
 							}
 						} else {
-							desc := fmt.Sprintf("The Met: %s", col.Name)
+							desc := fmt.Sprintf(i18n.T("The Met: %s"), col.Name)
 							if _, err := p.cfg.AddMetMuseumQuery(desc, col.Key, true); err != nil {
 								log.Printf("MET: Failed to add %s: %v", col.Name, err)
 							}

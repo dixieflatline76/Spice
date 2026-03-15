@@ -37,6 +37,7 @@ func TestDownloadAllImages(t *testing.T) {
 
 	// Mock Provider
 	mockProvider := new(MockImageProvider)
+	mockProvider.On("ID").Return("Wallhaven")
 	mockProvider.On("Name").Return("Wallhaven") // Pretend to be Wallhaven for default AddImageQuery
 	mockProvider.On("ParseURL", "http://mock.url").Return("http://api.mock.url", nil)
 	mockProvider.On("ParseURL", mock.Anything).Return("", assert.AnError)
@@ -82,6 +83,7 @@ func TestDownloadAllImages(t *testing.T) {
 
 	// Update the mock provider to return the ts URL for the image path
 	mockProvider.ExpectedCalls = nil // Setup mock provider
+	mockProvider.On("ID").Return("Wallhaven")
 	mockProvider.On("Name").Return("Wallhaven")
 	// ParseURL with Specific Match (Success)
 	mockProvider.On("ParseURL", "http://mock.url").Return("http://api.mock.url", nil)
@@ -152,6 +154,7 @@ func TestDownloadAllImages_EnrichmentFailure(t *testing.T) {
 
 	// Mock Provider
 	mockProvider := &MockImageProvider{}
+	mockProvider.On("ID").Return("Mock")
 	mockProvider.On("Name").Return("Mock")
 	mockProvider.On("Title").Return("Mock Provider")
 	mockProvider.On("CreateSettingsPanel", mock.Anything).Return(nil)
@@ -204,10 +207,11 @@ func TestDownloadAllImages_EnrichmentFailure(t *testing.T) {
 	img.Path = ts.URL + "/image_fail.jpg"
 	// Re-setup FetchImages with correct path
 	mockProvider.ExpectedCalls = nil
+	mockProvider.On("ID").Return("Wallhaven")
 	mockProvider.On("Name").Return("Wallhaven")
 	// The producer now iterates providers and calls ParseURL, so we must expect it implicitly or explicitly.
 	// Since we iterate, it might be called with any typical URL.
-	// But in this test, we call produceJobsForURL explicitly? No, downloadAllImages calls it.
+	// But in this test, we call produceJobs forURL explicitly? No, downloadAllImages calls it.
 	// We expect ParseURL with "http://mock.url" (the query URL).
 	// ParseURL with Specific Match (Success)
 	mockProvider.On("ParseURL", "http://mock.url").Return("http://api.mock.url", nil)
@@ -580,6 +584,10 @@ type CuratedMockProvider struct {
 	MockImageProvider
 }
 
+func (m *CuratedMockProvider) ID() string {
+	return "Museum"
+}
+
 func (m *CuratedMockProvider) SupportsUserQueries() bool {
 	return false
 }
@@ -654,6 +662,7 @@ func TestAddQuery_InitializesPage(t *testing.T) {
 
 	// Add a provider
 	mockProvider := &MockImageProvider{}
+	mockProvider.On("ID").Return("Mock")
 	mockProvider.On("Name").Return("Mock")
 	mockProvider.On("FetchImages", mock.Anything, mock.Anything, 1).Return([]provider.Image{}, nil)
 	wp.providers["Mock"] = mockProvider

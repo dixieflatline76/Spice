@@ -135,8 +135,12 @@ func (p *Provider) migrateOldFavorites() {
 	}
 }
 
+func (p *Provider) ID() string {
+	return "Favorites"
+}
+
 func (p *Provider) Name() string {
-	return ProviderName
+	return i18n.T("Favorites")
 }
 
 func (p *Provider) Type() provider.ProviderType {
@@ -617,7 +621,7 @@ func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl strin
 	query, exists := p.cfg.GetQuery(wallpaper.FavoritesQueryID)
 
 	label := widget.NewLabel(i18n.T("Favorite Images"))
-	activeCheck := widget.NewCheck("Active", nil)
+	activeCheck := widget.NewCheck(i18n.T("Active"), nil)
 	activeCheck.SetChecked(query.Active)
 
 	sm.SeedBaseline(wallpaper.FavoritesQueryID, query.Active)

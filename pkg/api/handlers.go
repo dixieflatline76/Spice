@@ -4,14 +4,17 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+
+	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 )
 
 // handleHealth returns the server health status.
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(map[string]string{
-		"status":  "running",
-		"version": "2.1.0",
+		"status":   "running",
+		"version":  "2.1.0",
+		"language": i18n.GetLanguage(),
 	}); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}

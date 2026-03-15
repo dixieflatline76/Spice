@@ -315,6 +315,7 @@ type StubImageProvider struct {
 	icon fyne.Resource
 }
 
+func (s *StubImageProvider) ID() string                             { return "stub" }
 func (s *StubImageProvider) Name() string                           { return "Stub" }
 func (s *StubImageProvider) HomeURL() string                        { return "" }
 func (s *StubImageProvider) ParseURL(webURL string) (string, error) { return "", nil }

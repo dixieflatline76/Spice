@@ -1,0 +1,35 @@
+{
+  "extensionName": {
+    "message": "Spice Wallpaper Manager Extension"
+  },
+  "extensionDescription": {
+    "message": "Helps you add new image collections to Spice from supported image providers."
+  },
+  "popupTitle": {
+    "message": "Spice Wallpaper Manager"
+  },
+  "contentFound": {
+    "message": "Found supported image collection!"
+  },
+  "addToSpice": {
+    "message": "Add to Spice"
+  },
+  "noContentDetected": {
+    "message": "No supported image collection detected."
+  },
+  "backendNotDetectedTitle": {
+    "message": "Spice Backend Not Detected"
+  },
+  "appRunningCheck": {
+    "message": "Is the Spice app running?"
+  },
+  "sendingToSpice": {
+    "message": "Sending to Spice..."
+  },
+  "addedToSpice": {
+    "message": "Added to Spice!"
+  },
+  "errorPrefix": {
+    "message": "Error: "
+  }
+}

@@ -148,8 +148,12 @@ func NewArtInstituteChicagoProvider(cfg Config, httpClient *http.Client) *Provid
 	return p
 }
 
+func (p *Provider) ID() string {
+	return "ArtInstituteChicago"
+}
+
 func (p *Provider) Name() string {
-	return ProviderName
+	return i18n.T("Art Institute of Chicago")
 }
 
 func (p *Provider) Title() string {
@@ -344,7 +348,7 @@ func (p *Provider) fetchArtworkDetails(ctx context.Context, id int) (*provider.I
 		Path:        imgURL,
 		ViewURL:     fmt.Sprintf("https://www.artic.edu/artworks/%d", result.Data.ID),
 		Attribution: result.Data.ArtistDisplay,
-		Provider:    ProviderName,
+		Provider:    p.ID(),
 		FileType:    "image/jpeg",
 	}, nil
 }
@@ -373,9 +377,9 @@ func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl strin
 	header := wallpaper.CreateMuseumHeader(
 		"Art Institute of Chicago",
 		"Chicago, IL • USA",
-		"CC0 - Public Domain",
+		i18n.T("CC0 - Public Domain"),
 		"https://www.artic.edu/open-access/open-access-images",
-		"One of the world's great art museums, housing icons like Nighthawks and American Gothic.",
+		i18n.T("One of the world's great art museums, housing icons like Nighthawks and American Gothic."),
 		"https://www.google.com/maps/search/?api=1&query=Art+Institute+of+Chicago",
 		"https://www.artic.edu",
 		"https://sales.artic.edu/donate",

@@ -7,7 +7,8 @@ import (
 
 // Plugin is the interface that must be implemented by all plugins.
 type Plugin interface {
-	Name() string                                             // Returns the plugin's name.
+	ID() string                                               // ID returns a stable, non-localized provider ID.
+	Name() string                                             // Name returns the localized provider name.
 	Activate()                                                // Called to activate the plugin.
 	Deactivate()                                              // Called to deactivate the plugin.
 	CreateTrayMenuItems() []*fyne.MenuItem                    // Returns menu items to add to the tray.

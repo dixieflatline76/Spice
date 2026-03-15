@@ -95,11 +95,12 @@ func (wp *Plugin) FetchNewImages(providerID ...string) {
 				for s := range activeSources {
 					sources = append(sources, s)
 				}
-				sourceStr := ""
-				if len(sources) > 0 {
-					sourceStr = " from " + strings.Join(sources, ", ")
+				sourceStr := strings.Join(sources, ", ")
+				if sourceStr != "" {
+					wp.manager.NotifyUser(i18n.T("Wallpaper Fetch"), i18n.Tf("Downloading {{.Count}} new images from {{.Sources}}...", map[string]any{"Count": totalQueued.Value(), "Sources": sourceStr}))
+				} else {
+					wp.manager.NotifyUser(i18n.T("Wallpaper Fetch"), i18n.Tf("Downloading {{.Count}} new images...", map[string]any{"Count": totalQueued.Value()}))
 				}
-				wp.manager.NotifyUser(i18n.T("Wallpaper Fetch"), i18n.Tf("Downloading {{.Count}} new images{{.Sources}}...", map[string]any{"Count": totalQueued.Value(), "Sources": sourceStr}))
 			} else {
 				log.Println("Fetch returned 0 new images from all active queries.")
 			}
@@ -178,7 +179,7 @@ func (wp *Plugin) fetchFromProvider(fetchCtx context.Context, q ImageQuery, p pr
 
 	// Track source
 	sourcesMutex.Lock()
-	activeSources[p.Name()] = true
+	activeSources[p.ID()] = true
 	sourcesMutex.Unlock()
 
 	queuedForThisQuery := 0
@@ -193,7 +194,7 @@ func (wp *Plugin) fetchFromProvider(fetchCtx context.Context, q ImageQuery, p pr
 		// *** NAMESPACING Middleware ***
 		// Ensure ID is unique across providers by prefixing it.
 		if p.Type() == provider.TypeOnline {
-			prefix := p.Name() + "_"
+			prefix := p.ID() + "_"
 			if !strings.HasPrefix(img.ID, prefix) {
 				img.ID = prefix + img.ID
 			}

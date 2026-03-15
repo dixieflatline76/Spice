@@ -11,6 +11,7 @@ import (
 	"fyne.io/fyne/v2/lang"
 )
 
+//go:generate go run ../../cmd/util/gen_i18n/main.go
 //go:embed translations
 var translationFS embed.FS
 
@@ -68,30 +69,28 @@ func SetLanguage(lang string) {
 	mu.Lock()
 	defer mu.Unlock()
 
-	switch strings.ToLower(lang) {
-	case "english", "en":
-		currentLanguage = "en"
-	case "deutsch", "de":
-		currentLanguage = "de"
-	case "français", "fr":
-		currentLanguage = "fr"
-	case "español", "es":
-		currentLanguage = "es"
-	case "italiano", "it":
-		currentLanguage = "it"
-	case "português", "pt":
-		currentLanguage = "pt"
-	case "简体中文", "zh":
-		currentLanguage = "zh"
-	case "日本語", "ja":
-		currentLanguage = "ja"
-	case "русский", "ru":
-		currentLanguage = "ru"
-	case "繁體中文", "zh-Hant":
-		currentLanguage = "zh-Hant"
-	default:
-		currentLanguage = "" // Reverts to system default
+	lang = strings.ToLower(lang)
+	if lang == "" || lang == "system default" {
+		currentLanguage = ""
+		return
 	}
+
+	for _, sl := range SupportedLanguages {
+		if strings.ToLower(sl.Name) == lang || strings.ToLower(sl.Code) == lang {
+			currentLanguage = sl.Code
+			return
+		}
+	}
+
+	currentLanguage = "" // Default if not found
+}
+
+// GetLanguage returns the current application language code.
+// Returns an empty string if set to "System Default".
+func GetLanguage() string {
+	mu.RLock()
+	defer mu.RUnlock()
+	return currentLanguage
 }
 
 // T returns the localized version of the given English string.

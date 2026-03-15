@@ -1,0 +1,35 @@
+{
+  "extensionName": {
+    "message": "Spice Wallpaper Manager 擴充功能"
+  },
+  "extensionDescription": {
+    "message": "協助您從受支援的圖片供應商向 Spice 新增新的圖片收藏。"
+  },
+  "popupTitle": {
+    "message": "Spice Wallpaper Manager"
+  },
+  "contentFound": {
+    "message": "發現受支援的圖片收藏！"
+  },
+  "addToSpice": {
+    "message": "新增至 Spice"
+  },
+  "noContentDetected": {
+    "message": "未偵測到受支援的圖片收藏。"
+  },
+  "backendNotDetectedTitle": {
+    "message": "未偵測到 Spice 後端"
+  },
+  "appRunningCheck": {
+    "message": "Spice 應用程式是否正在執行？"
+  },
+  "sendingToSpice": {
+    "message": "正在傳送至 Spice..."
+  },
+  "addedToSpice": {
+    "message": "已新增至 Spice！"
+  },
+  "errorPrefix": {
+    "message": "錯誤: "
+  }
+}

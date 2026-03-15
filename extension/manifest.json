@@ -1,8 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "Spice Wallpaper Manager Extension",
+  "name": "__MSG_extensionName__",
   "version": "2.1.4",
-  "description": "Helps you add new image collections to Spice from supported image providers.",
+  "description": "__MSG_extensionDescription__",
+  "default_locale": "en",
   "permissions": [
     "activeTab",
     "storage",

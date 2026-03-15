@@ -16,6 +16,7 @@ import (
 	"fyne.io/fyne/v2"
 	"github.com/dixieflatline76/Spice/v2/asset"
 	"github.com/dixieflatline76/Spice/v2/config"
+	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 	"github.com/zalando/go-keyring"
 )
 
@@ -76,13 +77,13 @@ const (
 func (m SmartFitMode) String() string {
 	switch m {
 	case SmartFitOff:
-		return "Disabled"
+		return i18n.T("Disabled")
 	case SmartFitNormal:
-		return "Quality"
+		return i18n.T("Quality")
 	case SmartFitAggressive:
-		return "Flexibility"
+		return i18n.T("Flexibility")
 	default:
-		return "Unknown"
+		return i18n.T("Unknown")
 	}
 }
 

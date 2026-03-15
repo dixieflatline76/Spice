@@ -269,8 +269,8 @@ func (wp *Plugin) Init(manager ui.PluginManager) {
 	wp.providers = make(map[string]provider.ImageProvider)
 	for _, factory := range GetRegisteredProviders() {
 		p := factory(wp.cfg, wp.httpClient)
-		wp.providers[p.Name()] = p
-		log.Debugf("Registered provider: %s", p.Name())
+		wp.providers[p.ID()] = p
+		log.Debugf("Registered provider: %s", p.ID())
 
 		if f, ok := p.(provider.Favoriter); ok {
 			wp.favoriter = f
@@ -314,8 +314,12 @@ func (wp *Plugin) actionWorker() {
 	}
 }
 
-func (wp *Plugin) Name() string {
+func (wp *Plugin) ID() string {
 	return "Wallpaper"
+}
+
+func (wp *Plugin) Name() string {
+	return i18n.T("Wallpaper")
 }
 
 func (wp *Plugin) stopAllWorkers() {

@@ -3,11 +3,11 @@
 package hotkey
 
 import (
-	"fmt"
 	"time"
 
 	"sync"
 
+	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui"
 	"github.com/dixieflatline76/Spice/v2/pkg/wallpaper"
 	"github.com/dixieflatline76/Spice/v2/util/log"
@@ -144,7 +144,7 @@ func doStartListeners(mgr ui.PluginManager) {
 		handleTargeted(mgr, func(mid int) string {
 			if wp != nil {
 				wp.SetNextWallpaper(mid, true)
-				return fmt.Sprintf("Display %d: Next Wallpaper", mid+1)
+				return i18n.Tf("Display {{.ID}}: Next Wallpaper", map[string]any{"ID": mid + 1})
 			}
 			return ""
 		})
@@ -154,7 +154,7 @@ func doStartListeners(mgr ui.PluginManager) {
 		handleTargeted(mgr, func(mid int) string {
 			if wp != nil {
 				wp.SetPreviousWallpaper(mid, true)
-				return fmt.Sprintf("Display %d: Previous Wallpaper", mid+1)
+				return i18n.Tf("Display {{.ID}}: Previous Wallpaper", map[string]any{"ID": mid + 1})
 			}
 			return ""
 		})
@@ -164,7 +164,7 @@ func doStartListeners(mgr ui.PluginManager) {
 		handleTargeted(mgr, func(mid int) string {
 			if wp != nil {
 				wp.DeleteCurrentImage(mid)
-				return fmt.Sprintf("Display %d: Image Blocked", mid+1)
+				return i18n.Tf("Display {{.ID}}: Image Blocked", map[string]any{"ID": mid + 1})
 			}
 			return ""
 		})
@@ -282,7 +282,7 @@ func registerAndListenTargeted(hk *hotkey.Hotkey, name string, action func()) {
 
 func handleTargeted(mgr ui.PluginManager, action func(mid int) string) {
 	mid := GetMonitorIDFromKey()
-	title := "Wallpaper Action"
+	title := i18n.T("Wallpaper Action")
 	msg := ""
 
 	if mid != -1 {

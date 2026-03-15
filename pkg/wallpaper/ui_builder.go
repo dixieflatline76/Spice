@@ -245,7 +245,7 @@ func (b *PrefsPanelBuilder) BuildProviderTabs() (fyne.CanvasObject, fyne.CanvasO
 	var localItems []accordionItem
 	targetTabIndex := 0
 
-	names := b.getSortedProviderNames()
+	names := b.getSortedProviderIDs()
 
 	for _, name := range names {
 		p := b.plugin.providers[name]
@@ -283,7 +283,7 @@ func (b *PrefsPanelBuilder) BuildProviderTabs() (fyne.CanvasObject, fyne.CanvasO
 	return onlineTab, localTab, targetTabIndex
 }
 
-func (b *PrefsPanelBuilder) getSortedProviderNames() []string {
+func (b *PrefsPanelBuilder) getSortedProviderIDs() []string {
 	var names []string
 	for n := range b.plugin.providers {
 		names = append(names, n)
@@ -305,7 +305,7 @@ func (b *PrefsPanelBuilder) createProviderAccordionItem(p provider.ImageProvider
 			b.plugin.pendingAddUrl = ""
 		}
 	}
-	if b.plugin.focusProviderName == p.Name() {
+	if b.plugin.focusProviderName == p.ID() {
 		isPending = true
 		b.plugin.focusProviderName = ""
 	}
@@ -355,11 +355,11 @@ func (b *PrefsPanelBuilder) createTitleFunc(p provider.ImageProvider) func() str
 	return func() string {
 		title := p.Title()
 		if title == "" {
-			title = i18n.Tf("Image Sources ({{.Name}})", map[string]any{"Name": p.Name()})
+			title = i18n.Tf("Image Sources ({{.Name}})", map[string]any{"Name": p.Name()}) + "..."
 		}
 		activeCount := 0
 		for _, q := range b.plugin.cfg.GetQueries() {
-			if q.Provider == p.Name() && q.Active {
+			if q.Provider == p.ID() && q.Active {
 				activeCount++
 			}
 		}
