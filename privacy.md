@@ -5,7 +5,7 @@ title: Privacy Policy
 
 # Privacy Policy
 
-**Effective Date:** February 21, 2026
+**Effective Date:** March 15, 2026
 
 ## Introduction
 
@@ -24,8 +24,8 @@ Spice is a **100% client-side application**. We do not operate a central backend
 
 ### 3. Website Content and Web History (Extension Only)
 The Extension requires permission to read the URL of your active browser tab ("activeTab" or host permissions) for the sole purpose of:
-1.  **Detection:** Identifying if you are currently viewing a supported wallpaper collection page (e.g., on Wallhaven, Pexels, Unsplash, or Wikimedia Commons).
-2.  **Functionality:** Enabling the "Add to Spice" button to transfer that specific collection URL to your local Desktop App.
+1.  **Detection:** Identifying if you are currently viewing a supported wallpaper collection page (e.g., on Wallhaven, Pexels, Unsplash, or Wikimedia Commons).
+2.  **Functionality:** Enabling the "Add to Spice" button to transfer that specific collection URL to your local Desktop App.
 
 **Crucially:**
 - This URL checking occurs locally within your browser.
@@ -36,7 +36,9 @@ The Extension requires permission to read the URL of your active browser tab ("a
 Our Application uses the **Google Photos Picker API** to allow you to select your own photos for use as wallpapers.
 - **Access:** We only access the specific media items that you explicitly select using the Google-provided picker dialog. We do not have access to your entire library.
 - **Storage:** We store a local reference (product URL) for the selected images to allow the Application to fetch and apply them as wallpapers. This metadata is stored only on your local machine.
-- **Usage:** Your Google Photos data is used solely to provide the wallpaper management functionality of Spice. 
+- **Usage:** Your Google Photos data is used solely to provide the wallpaper management functionality of Spice. 
+- **Data Retention:** Because Spice operates entirely as a local desktop application, we do not retain your Google user data on any remote servers or databases. The local references (product URLs) to your selected Google Photos are retained strictly on your personal device's local file system for only as long as you keep those images in your active wallpaper rotation.
+- **Data Deletion:** You maintain complete control over the deletion of your data. You can delete your Google user data at any time by removing the selected photos from your wallpaper rotation within the application, clearing the local application data directory, or by uninstalling the application. Once removed locally, the data is permanently deleted.
 - **Limited Use Disclosure:** Spice's use and transfer to any other app of information received from Google APIs will adhere to [Google API Services User Data Policy](https://developers.google.com/terms/api-services-user-data-policy), including the Limited Use requirements.
 
 ### 5. Other Third-Party Services
