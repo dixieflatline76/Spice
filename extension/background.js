@@ -143,9 +143,9 @@ const SUPPORTED_PATTERNS = [
     // Wallhaven
     /^https:\/\/wallhaven\.cc\/(?:latest|toplist|hot|random|search|api\/v1\/search|api\/v1\/collections\/[a-zA-Z0-9_]+\/[0-9]+|user\/[a-zA-Z0-9_]+\/favorites\/[0-9]+|favorites\/[0-9]+)(?:\?[a-zA-Z0-9_\-.~!$&'()*+,;=:@\/?%]*|)$/,
     // Pexels
-    /^https:\/\/(?:www\.)?pexels\.com\/(?:search\/|collections\/).*$/,
+    /^https:\/\/(?:www\.|api\.)?pexels\.com\/(?:search\/|collections\/|v1\/).*$/,
     // Wikimedia
-    /^https:\/\/commons\.wikimedia\.org\/(?:wiki\/(?:Category:|File:)|w\/index\.php\?).*$/,
+    /^(https:\/\/commons\.wikimedia\.org\/(?:wiki\/|w\/index\.php\?)|category:|search:|file:|page:).*$/,
 ];
 // REGEX_END
 

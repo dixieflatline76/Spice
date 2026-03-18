@@ -44,10 +44,13 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// 1. Parse main.go to find enabled providers
-	enabledProviders, err := getEnabledProviders(filepath.Join(projectRoot, mainAppPath))
+	// 1. Parse main.go and zz_generated_providers.go to find enabled providers
+	mainPath := filepath.Join(projectRoot, mainAppPath)
+	genPath := filepath.Join(projectRoot, "cmd/spice/zz_generated_providers.go")
+
+	enabledProviders, err := getEnabledProviders(mainPath, genPath)
 	if err != nil {
-		log.Fatalf("Failed to parse main.go: %v", err)
+		log.Fatalf("Failed to parse provider imports: %v", err)
 	}
 	log.Printf("Detected enabled providers: %v", enabledProviders)
 
@@ -94,24 +97,29 @@ func main() {
 	log.Println("Successfully synced regex constants to background.js")
 }
 
-// getEnabledProviders parses main.go imports to find enabled providers
-func getEnabledProviders(mainPath string) ([]string, error) {
-	fset := token.NewFileSet()
-	node, err := parser.ParseFile(fset, mainPath, nil, parser.ImportsOnly)
-	if err != nil {
-		return nil, err
-	}
-
+// getEnabledProviders parses multiple Go files to find enabled providers
+func getEnabledProviders(paths ...string) ([]string, error) {
 	var providers []string
 	prefix := "github.com/dixieflatline76/Spice/v2/pkg/wallpaper/providers/"
 
-	for _, imp := range node.Imports {
-		// imp.Path.Value includes quotes, e.g. "github.com/..."
-		path := strings.Trim(imp.Path.Value, "\"")
+	fset := token.NewFileSet()
+	for _, path := range paths {
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			continue
+		}
+		node, err := parser.ParseFile(fset, path, nil, parser.ImportsOnly)
+		if err != nil {
+			return nil, err
+		}
 
-		if strings.HasPrefix(path, prefix) {
-			providerName := strings.TrimPrefix(path, prefix)
-			providers = append(providers, providerName)
+		for _, imp := range node.Imports {
+			// imp.Path.Value includes quotes, e.g. "github.com/..."
+			impPath := strings.Trim(imp.Path.Value, "\"")
+
+			if strings.HasPrefix(impPath, prefix) {
+				providerName := strings.TrimPrefix(impPath, prefix)
+				providers = append(providers, providerName)
+			}
 		}
 	}
 	return providers, nil
@@ -139,7 +147,16 @@ func generateJSBlock(regexMap map[string]string) string {
 		// Capitalize for display comment
 		display := strings.ToUpper(key[:1]) + key[1:]
 		jsBuilder.WriteString(fmt.Sprintf("    // %s\n", display))
-		jsBuilder.WriteString(fmt.Sprintf("    /%s/", regex))
+
+		// JS Regex Literals use / as delimiters, so we MUST escape any / in the string.
+		// Wallhaven might already be escaped in Go, but Pexels and others are not.
+		// We replace / with \/ unless it's already escaped.
+		// Actually, strings.ReplaceAll(regex, "/", `\/`) might double-escape Wallhaven't existing \/.
+		// Let's use a safer approach: Replace \/ with / first, then replace all / with \/.
+		normalizedRegex := strings.ReplaceAll(regex, `\/`, `/`)
+		escapedRegex := strings.ReplaceAll(normalizedRegex, "/", `\/`)
+
+		jsBuilder.WriteString(fmt.Sprintf("    /%s/", escapedRegex))
 
 		// Add comma if not the last item?
 		// Simpler: Add comma always, trailing comma is valid in JS arrays.

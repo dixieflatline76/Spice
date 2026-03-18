@@ -33,6 +33,7 @@ type StoreInterface interface {
 	Count() int
 	Get(index int) (provider.Image, bool)
 	GetByID(id string) (provider.Image, bool)
+	Exists(id string) bool
 	Remove(id string) (provider.Image, bool)
 	Update(img provider.Image) bool
 	Add(img provider.Image) bool

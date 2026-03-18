@@ -220,5 +220,6 @@
   "duplicate query": "重複したクエリ",
   "Add Wikimedia Query": "Wikimedia クエリを追加",
   "Donate to Wikimedia": "ウィキメディアに寄付する",
+  "only 'Category:', 'File:' or component Search URLs are currently supported directly": "「Category:」、「File:」、またはコンポーネントの検索URLのみが直接サポートされています",
   "Verify & Connect...": "検証して接続中..."
 }

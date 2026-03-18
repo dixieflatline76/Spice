@@ -219,6 +219,7 @@
   "description too long": "Опис занадто довгий",
   "duplicate query": "Дублікат запиту",
   "Add Wikimedia Query": "Додати запит Wikimedia",
-  "Donate to Wikimedia": "Пожертувати Вікімедіа",
+  "Donate to Wikimedia": "Пожертвувати Вікімедіа",
+  "only 'Category:', 'File:' or component Search URLs are currently supported directly": "На даний момент безпосередньо підтримуються лише URL-адреси категорій, файлів або пошуку компонентів",
   "Verify & Connect...": "Перевірка та підключення..."
 }

@@ -1,6 +1,6 @@
 module github.com/dixieflatline76/Spice/v2
 
-go 1.24.0
+go 1.25.0
 
 require fyne.io/fyne/v2 v2.7.3
 
@@ -14,6 +14,7 @@ require (
 	github.com/kr/text v0.2.0 // indirect
 	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646 // indirect
 	github.com/stretchr/objx v0.5.3 // indirect
+	golang.org/x/time v0.15.0 // indirect
 )
 
 require (

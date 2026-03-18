@@ -141,6 +141,11 @@ func (m *MockImageStore) Remove(id string) (provider.Image, bool) {
 	return args.Get(0).(provider.Image), args.Bool(1)
 }
 
+func (m *MockImageStore) Exists(id string) bool {
+	args := m.Called(id)
+	return args.Bool(0)
+}
+
 func (m *MockImageStore) MarkSeen(filePath string) {
 	m.Called(filePath)
 }
@@ -249,6 +254,16 @@ func (m *MockImageStore) WaitForImages(ctx context.Context) error {
 	return args.Error(0)
 }
 
+// MockPipeline is a mock implementation of the JobSubmitter interface.
+type MockPipeline struct {
+	mock.Mock
+}
+
+func (m *MockPipeline) Submit(ctx context.Context, job DownloadJob) bool {
+	args := m.Called(ctx, job)
+	return args.Bool(0)
+}
+
 // MockImageProcessor is a mock implementation of the ImageProcessor interface.
 type MockImageProcessor struct {
 	mock.Mock
@@ -286,6 +301,16 @@ func (m *MockImageProcessor) CheckCompatibility(imgWidth, imgHeight, targetWidth
 // MockImageProvider implements ImageProvider for testing
 type MockImageProvider struct {
 	mock.Mock
+}
+
+// MockThrottledProvider represents a provider with throttling capabilities (Circuit Breaker)
+type MockThrottledProvider struct {
+	MockImageProvider
+}
+
+func (m *MockThrottledProvider) IsThrottled() bool {
+	args := m.Called()
+	return args.Bool(0)
 }
 
 func (m *MockImageProvider) ID() string {

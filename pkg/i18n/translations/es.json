@@ -220,5 +220,6 @@
   "duplicate query": "Consulta duplicada",
   "Add Wikimedia Query": "Añadir consulta de Wikimedia",
   "Donate to Wikimedia": "Donar a Wikimedia",
+  "only 'Category:', 'File:' or component Search URLs are currently supported directly": "Solo se admiten directamente las URLs de 'Categoría:', 'Archivo:' o de búsqueda de componentes",
   "Verify & Connect...": "Verificar y conectar..."
 }

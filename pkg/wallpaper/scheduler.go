@@ -119,7 +119,7 @@ func (wp *Plugin) checkAndRunRefresh(now time.Time, lastRefreshDay int, isInitia
 			wp.queryPages[id].Set(1)
 		}
 		wp.downloadMutex.Unlock()
-		wp.FetchNewImages()
+		wp.FetchNewImages(false)
 
 		log.Print("Nightly refresh action finished.")
 		return updatedLastRefreshDay // Return the new day

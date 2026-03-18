@@ -106,3 +106,9 @@ type CustomClientProvider interface {
 type Syncer interface {
 	Sync(ctx context.Context) error
 }
+
+// ThrottledProvider is an optional interface for providers that can signal
+// they are currently in a cooldown state (e.g., due to a 429 error).
+type ThrottledProvider interface {
+	IsThrottled() bool
+}

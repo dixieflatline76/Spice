@@ -120,7 +120,7 @@ func TestDownloadAllImages(t *testing.T) {
 	wp.fm = NewFileManager(wp.downloadedDir)
 	assert.NoError(t, wp.fm.EnsureDirs())
 	wp.store.SetFileManager(wp.fm, wp.downloadedDir+"/cache.json")
-	wp.pipeline = NewPipeline(wp.cfg, wp.store, wp.ProcessImageJob)
+	wp.pipeline = NewPipeline(context.Background(), wp.cfg, wp.store, wp.ProcessImageJob)
 	wp.jobSubmitter = wp.pipeline
 	wp.pipeline.Start(1)
 	defer wp.pipeline.Stop()
@@ -132,7 +132,7 @@ func TestDownloadAllImages(t *testing.T) {
 	mockOS.On("GetMonitors").Return([]Monitor{{ID: 0, Name: "Primary", Rect: image.Rect(0, 0, 1920, 1080)}}, nil)
 
 	// Run
-	wp.FetchNewImages()
+	wp.FetchNewImages(false)
 
 	// Verify
 
@@ -241,7 +241,7 @@ func TestDownloadAllImages_EnrichmentFailure(t *testing.T) {
 	wp.fm = NewFileManager(wp.downloadedDir)
 	assert.NoError(t, wp.fm.EnsureDirs())
 	wp.store.SetFileManager(wp.fm, wp.downloadedDir+"/cache.json")
-	wp.pipeline = NewPipeline(wp.cfg, wp.store, wp.ProcessImageJob)
+	wp.pipeline = NewPipeline(context.Background(), wp.cfg, wp.store, wp.ProcessImageJob)
 	wp.jobSubmitter = wp.pipeline
 	wp.pipeline.Start(1)
 	defer wp.pipeline.Stop()
@@ -252,7 +252,7 @@ func TestDownloadAllImages_EnrichmentFailure(t *testing.T) {
 	mockOS.On("GetMonitors").Return([]Monitor{{ID: 0, Name: "Primary", Rect: image.Rect(0, 0, 1920, 1080)}}, nil)
 
 	// Run
-	wp.FetchNewImages()
+	wp.FetchNewImages(false)
 
 	// Verify
 	// Strict Mode: Enrichment Failure -> Image Dropped -> Count 0
@@ -656,7 +656,7 @@ func TestAddQuery_InitializesPage(t *testing.T) {
 		jobSubmitter:       nil,
 		httpClient:         &http.Client{},
 	}
-	wp.pipeline = NewPipeline(cfg, NewImageStore(), func(ctx context.Context, job DownloadJob) (provider.Image, error) { return job.Image, nil })
+	wp.pipeline = NewPipeline(context.Background(), cfg, NewImageStore(), func(ctx context.Context, job DownloadJob) (provider.Image, error) { return job.Image, nil })
 	wp.jobSubmitter = wp.pipeline
 	wp.fm = NewFileManager(wp.downloadedDir)
 
@@ -676,7 +676,7 @@ func TestAddQuery_InitializesPage(t *testing.T) {
 	}}
 
 	// Trigger Fetch
-	wp.FetchNewImages()
+	wp.FetchNewImages(false)
 
 	// Wait for fetch to complete
 	assert.Eventually(t, func() bool {

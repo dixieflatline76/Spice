@@ -91,6 +91,8 @@ jobs:
           UNSPLASH_CLIENT_SECRET: ${{ secrets.UNSPLASH_CLIENT_SECRET }}
           GOOGLE_PHOTOS_CLIENT_ID: ${{ secrets.GOOGLE_PHOTOS_CLIENT_ID }}
           GOOGLE_PHOTOS_CLIENT_SECRET: ${{ secrets.GOOGLE_PHOTOS_CLIENT_SECRET }}
+          WIKIMEDIA_CLIENT_ID: ${{ secrets.WIKIMEDIA_CLIENT_ID }}
+          WIKIMEDIA_CLIENT_SECRET: ${{ secrets.WIKIMEDIA_CLIENT_SECRET }}
         run: make build-win-amd64
 
       - name: Verify Build Output File
@@ -245,6 +247,8 @@ jobs:
           UNSPLASH_CLIENT_SECRET: ${{ secrets.UNSPLASH_CLIENT_SECRET }}
           GOOGLE_PHOTOS_CLIENT_ID: ${{ secrets.GOOGLE_PHOTOS_CLIENT_ID }}
           GOOGLE_PHOTOS_CLIENT_SECRET: ${{ secrets.GOOGLE_PHOTOS_CLIENT_SECRET }}
+          WIKIMEDIA_CLIENT_ID: ${{ secrets.WIKIMEDIA_CLIENT_ID }}
+          WIKIMEDIA_CLIENT_SECRET: ${{ secrets.WIKIMEDIA_CLIENT_SECRET }}
         run: |
           # Build Safari Extension Wrapper (Direct Build)
           # We use 'build' instead of 'archive' to avoid exportOptions.plist complexity for now.

@@ -232,6 +232,13 @@ func (s *ImageStore) GetByID(id string) (provider.Image, bool) {
 	return provider.Image{}, false
 }
 
+// Exists checks if an image ID is already in the store.
+func (s *ImageStore) Exists(id string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.idSet[id]
+}
+
 func (s *ImageStore) Contains(id string) bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
