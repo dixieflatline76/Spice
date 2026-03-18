@@ -610,3 +610,13 @@ func (p *PexelsProvider) createImgQueryList(sm setting.SettingsManager) *widget.
 func (p *PexelsProvider) GetProviderIcon() fyne.Resource {
 	return fyne.NewStaticResource("Pexels", iconData)
 }
+
+// GetAPIPacing implements the PacedProvider interface to space out API calls.
+func (p *PexelsProvider) GetAPIPacing() time.Duration {
+	return 500 * time.Millisecond
+}
+
+// GetProcessPacing implements the PacedProvider interface to space out image downloads.
+func (p *PexelsProvider) GetProcessPacing() time.Duration {
+	return 800 * time.Millisecond
+}

@@ -12,80 +12,72 @@ permissions:
   contents: write # Needed for softprops/action-gh-release
 
 jobs:
-  test-and-lint:
-    runs-on: windows-latest
+  validate:
+    name: Lint & Test
+    strategy:
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     if: github.event_name == 'pull_request' || github.event_name == 'push'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4 # Use latest checkout action
 
-
       - name: Set up Go
         uses: actions/setup-go@v5 # Use latest setup-go action
         with:
-          go-version: '1.24.x' # Downgraded to 1.24 for golangci-lint compatibility
+          go-version: '1.25.x'
           cache: true
 
-
-      - name: Install GCC (if not cached)
-        run: choco install mingw -y --no-progress
-
-      - name: Install make (if not cached)
-        run: choco install make -y --no-progress
-
-      # Removed redundant 'go get fyne...' step here
+      - name: Install Windows Dependencies
+        if: runner.os == 'Windows'
+        run: |
+          choco install mingw -y --no-progress
+          choco install make -y --no-progress
 
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
-          version: v1.64.6 # Pinned to a recent stable version
+          version: v1.64.6
           args: --out-format=colored-line-number ./...
+          install-mode: goinstall # Build from source using Go 1.25 to prevent version panic
         env:
            GOGC: 10
            CGO_ENABLED: 1
 
       - name: Run tests
         run: go test ./...
-        shell: pwsh # Explicitly use pwsh for consistency if needed
 
-  build:
+      - name: Dry Run Build (No Secrets)
+        if: runner.os == 'Windows'
+        run: make build-win-amd64
+
+  build-win:
+    name: Build Windows
     runs-on: windows-latest
-    if: github.event_name == 'pull_request' || github.event_name == 'release'
+    if: github.event_name == 'release'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24.x' 
+          go-version: '1.25.x' 
           cache: true
 
-      - name: Cache Chocolatey packages
-        uses: actions/cache@v4
-        with:
-          path: C:\ProgramData\chocolatey\lib # Correct default Chocolatey lib path
-          key: ${{ runner.os }}-chocolatey-${{ hashFiles('**/tools.txt') }} # Assuming you might have a tools.txt
-          restore-keys: |
-            ${{ runner.os }}-chocolatey-
 
-      - name: Install GCC (if not cached)
-        run: choco install mingw -y --no-progress
+      - name: Install Dependencies
+        run: |
+          choco install mingw -y --no-progress
+          choco install make -y --no-progress
 
-      - name: Install make (if not cached)
-        run: choco install make -y --no-progress
-
-      - name: Update version.txt (if release)
-        if: github.event_name == 'release'
+      - name: Update version.txt
         run: |
           echo "${{ github.event.release.tag_name }}" | Out-File -Encoding UTF8 version.txt
-          Get-Content version.txt
-        shell: pwsh # Use PowerShell for file writing
+        shell: pwsh
 
       - name: Build Application
-        # Assuming Makefile's build-win-amd64 outputs to bin/Spice.exe
-        # And Makefile doesn't need -v anymore
         env:
           UNSPLASH_CLIENT_ID: ${{ secrets.UNSPLASH_CLIENT_ID }}
           UNSPLASH_CLIENT_SECRET: ${{ secrets.UNSPLASH_CLIENT_SECRET }}
@@ -95,115 +87,25 @@ jobs:
           WIKIMEDIA_CLIENT_SECRET: ${{ secrets.WIKIMEDIA_CLIENT_SECRET }}
         run: make build-win-amd64
 
-      - name: Verify Build Output File
-        run: |
-          echo "--- Verifying Spice.exe exists ---"
-          dir .\bin\Spice.exe
-          echo "--- Calculating SHA256 ---"
-          certutil -hashfile .\bin\Spice.exe SHA256
-        shell: cmd # Use cmd for dir and certutil
-
-      - name: Build Setup (if release)
-        if: github.event_name == 'release'
+      - name: Build Setup
         uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
         with:
           path: Spice.iss
-          # Pass defines using native PowerShell variables from previous step
           options: /Q /DMyAppPlatform=amd64
 
       - name: Pack Extensions (Chrome/Firefox)
         run: make pack-extension
 
-      - name: Upload build artifact (contains Spice.exe and maybe Spice-Setup-*.exe)
+      - name: Upload Windows Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: spice-release-build
+          name: spice-win-artifacts
           path: |
             bin/
             dist/
 
-  release:
-    runs-on: windows-latest
-    needs: build
-    if: github.event_name == 'release' # Only run this job for release events
-    # Removed invalid 'env:' block that caused the error
-    steps:
-    - name: Download build artifact
-      uses: actions/download-artifact@v4
-      with:
-        name: spice-release-build
-        # This downloads the contents of the 'bin' dir from the artifact
-        # into the current workspace directory (e.g., Spice.exe, Spice-Setup-*.exe)
-
-    - name: Define filenames
-      id: filenames
-      run: |
-        # Extract version number from tag using PowerShell
-        $tagName = '${{ github.event.release.tag_name }}'
-        $appVersion = $tagName -replace '^v' # Remove leading 'v'
-        $appPlatform = "amd64" # Define platform
-
-        # Define the expected names based on extracted/defined variables
-        $exeName = "Spice.exe"
-        $setupName = "Spice-Setup-${appVersion}-${appPlatform}.exe"
-
-        # Set step outputs
-        echo "EXE_NAME=$exeName" >> $env:GITHUB_OUTPUT
-        echo "SETUP_NAME=$setupName" >> $env:GITHUB_OUTPUT
-
-        # Optional: Log expected names
-        echo "Expected files:"
-        echo "* $exeName"
-        echo "* $setupName"
-      shell: pwsh
-
-    - name: List downloaded files # Diagnostic step
-      run: dir .
-      shell: cmd
-
-    - name: Sign executables with Azure Artifact Signing
-      uses: azure/artifact-signing-action@v1
-      with:
-        azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-        azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
-        azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
-        endpoint: https://weu.codesigning.azure.net/
-        signing-account-name: SpiceOSS
-        certificate-profile-name: Spice
-        files: |
-          ${{ github.workspace }}/bin/${{ steps.filenames.outputs.EXE_NAME }}
-          ${{ github.workspace }}/bin/${{ steps.filenames.outputs.SETUP_NAME }}
-        file-digest: SHA256
-        timestamp-rfc3161: http://timestamp.acs.microsoft.com
-        timestamp-digest: SHA256
-
-    - name: Calculate checksums and create .sha256 files
-      # This MUST run after signing because signing modifies the .exe and changed the hash
-      run: |
-        certutil -hashfile "bin/${{ steps.filenames.outputs.EXE_NAME }}" SHA256 | findstr /V /B /C:"CertUtil" /C:"SHA256" > "bin/${{ steps.filenames.outputs.EXE_NAME }}.sha256"
-        certutil -hashfile "bin/${{ steps.filenames.outputs.SETUP_NAME }}" SHA256 | findstr /V /B /C:"CertUtil" /C:"SHA256" > "bin/${{ steps.filenames.outputs.SETUP_NAME }}.sha256"
-        certutil -hashfile "dist/spice-extension-chrome.zip" SHA256 | findstr /V /B /C:"CertUtil" /C:"SHA256" > "dist/spice-extension-chrome.zip.sha256"
-        certutil -hashfile "dist/spice-extension-firefox.zip" SHA256 | findstr /V /B /C:"CertUtil" /C:"SHA256" > "dist/spice-extension-firefox.zip.sha256"
-      shell: cmd
-
-    - name: Upload binaries to GitHub Release (CLI)
-      env:
-        GH_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
-      run: |
-        gh release upload ${{ github.event.release.tag_name }} `
-          bin/${{ steps.filenames.outputs.EXE_NAME }} `
-          bin/${{ steps.filenames.outputs.EXE_NAME }}.sha256 `
-          bin/${{ steps.filenames.outputs.SETUP_NAME }} `
-          bin/${{ steps.filenames.outputs.SETUP_NAME }}.sha256 `
-          dist/spice-extension-chrome.zip `
-          dist/spice-extension-chrome.zip.sha256 `
-          dist/spice-extension-firefox.zip `
-          dist/spice-extension-firefox.zip.sha256 `
-          --repo ${{ github.repository }} `
-          --clobber
-      shell: pwsh
-
-  build-and-release-mac:
+  build-mac:
+    name: Build macOS
     runs-on: macos-latest
     if: github.event_name == 'release'
     steps:
@@ -213,17 +115,14 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          # Pinned to your exact local version
-          go-version: '1.24.x'
+          go-version: '1.25.3'
 
-      - name: Install create-dmg
-        run: brew install create-dmg
+      - name: Install Dependencies
+        run: |
+          brew install create-dmg
+          go install fyne.io/tools/cmd/fyne@v1.6.2
 
-      - name: Install Fyne CLI
-        # Pinned to your exact local version
-        run: go install fyne.io/tools/cmd/fyne@v1.6.2
-
-      - name: Update version.txt from release tag
+      - name: Update version.txt
         run: echo "${{ github.event.release.tag_name }}" > version.txt
         
       - name: Import Apple Certificate
@@ -250,9 +149,6 @@ jobs:
           WIKIMEDIA_CLIENT_ID: ${{ secrets.WIKIMEDIA_CLIENT_ID }}
           WIKIMEDIA_CLIENT_SECRET: ${{ secrets.WIKIMEDIA_CLIENT_SECRET }}
         run: |
-          # Build Safari Extension Wrapper (Direct Build)
-          # We use 'build' instead of 'archive' to avoid exportOptions.plist complexity for now.
-          # The Makefile step will handle the final codesign verification/re-sign.
           xcodebuild -project "Spice Wallpaper Manager Extension/Spice Wallpaper Manager Extension.xcodeproj" \
             -scheme "Spice Wallpaper Manager Extension (macOS)" \
             -configuration Release \
@@ -260,30 +156,112 @@ jobs:
             CODE_SIGN_IDENTITY="${SIGNING_IDENTITY}" \
             CODE_SIGN_STYLE="Manual" \
             build
-
-          # Copy the built app to root so Makefile finds it
-          # Expected location: build/Build/Products/Release/Spice Wallpaper Manager Extension.app
           cp -R "build/Build/Products/Release/Spice Wallpaper Manager Extension.app" .
-
-          # Now build the main app
-          # We set SKIP_EXTENSION_BUILD=1 because we just built and signed it above
           SKIP_EXTENSION_BUILD=1 make build-darwin-arm64
         
       - name: Notarize macOS App
         run: make notarize-mac-arm64
         
-      - name: Define Release Asset Names
-        id: assets
+      - name: Upload macOS Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: spice-mac-artifacts
+          path: dist/
+
+  publish-release:
+    name: Publish Release
+    runs-on: windows-latest
+    needs: [build-win, build-mac]
+    if: github.event_name == 'release'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download Windows Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: spice-win-artifacts
+          path: .
+
+      - name: Download macOS Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: spice-mac-artifacts
+          path: .
+
+      - name: Normalize Artifact Names
+        id: filenames
         run: |
-          VERSION=$(cat version.txt)
-          echo "DMG_NAME=Spice-${VERSION}-arm64.dmg" >> $GITHUB_OUTPUT
+          $tagName = '${{ github.event.release.tag_name }}'
+          $version = $tagName -replace '^v'
           
-      - name: Create Checksum for DMG
-        run: shasum -a 256 "dist/${{ steps.assets.outputs.DMG_NAME }}" > "dist/${{ steps.assets.outputs.DMG_NAME }}.sha256"
-        
-      - name: Upload macOS Release Assets
+          # Define new normalized names
+          $rawExe = "Spice.exe"
+          $newExe = "Spice-${version}-windows-amd64.exe"
+          
+          $rawSetup = "Spice-Setup-${version}-amd64.exe"
+          $newSetup = "Spice-Setup-${version}-windows-amd64.exe"
+          
+          $rawDmg = "Spice-${version}-arm64.dmg"
+          $newDmg = "Spice-${version}-macos-arm64.dmg"
+
+          $rawChrome = "spice-extension-chrome.zip"
+          $newChrome = "Spice-Extension-${version}-chrome.zip"
+
+          $rawFirefox = "spice-extension-firefox.zip"
+          $newFirefox = "Spice-Extension-${version}-firefox.zip"
+
+          # Rename the files physically on disk
+          Rename-Item -Path "bin\$rawExe" -NewName $newExe
+          Rename-Item -Path "bin\$rawSetup" -NewName $newSetup
+          Rename-Item -Path "dist\$rawDmg" -NewName $newDmg
+          Rename-Item -Path "dist\$rawChrome" -NewName $newChrome
+          Rename-Item -Path "dist\$rawFirefox" -NewName $newFirefox
+
+          # Export for remaining steps
+          echo "EXE_NAME=$newExe" >> $env:GITHUB_OUTPUT
+          echo "SETUP_NAME=$newSetup" >> $env:GITHUB_OUTPUT
+          echo "DMG_NAME=$newDmg" >> $env:GITHUB_OUTPUT
+          echo "CHROME_NAME=$newChrome" >> $env:GITHUB_OUTPUT
+          echo "FIREFOX_NAME=$newFirefox" >> $env:GITHUB_OUTPUT
+        shell: pwsh
+
+      - name: Sign Windows Executables
+        uses: azure/artifact-signing-action@v1
+        with:
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          endpoint: https://weu.codesigning.azure.net/
+          signing-account-name: SpiceOSS
+          certificate-profile-name: Spice
+          files: |
+            ${{ github.workspace }}\bin\${{ steps.filenames.outputs.EXE_NAME }}
+            ${{ github.workspace }}\bin\${{ steps.filenames.outputs.SETUP_NAME }}
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
+      - name: Calculate checksums
+        run: |
+          certutil -hashfile "bin\${{ steps.filenames.outputs.EXE_NAME }}" SHA256 | findstr /V /B /C:"CertUtil" /C:"SHA256" > "bin\${{ steps.filenames.outputs.EXE_NAME }}.sha256"
+          certutil -hashfile "bin\${{ steps.filenames.outputs.SETUP_NAME }}" SHA256 | findstr /V /B /C:"CertUtil" /C:"SHA256" > "bin\${{ steps.filenames.outputs.SETUP_NAME }}.sha256"
+          certutil -hashfile "dist\${{ steps.filenames.outputs.CHROME_NAME }}" SHA256 | findstr /V /B /C:"CertUtil" /C:"SHA256" > "dist\${{ steps.filenames.outputs.CHROME_NAME }}.sha256"
+          certutil -hashfile "dist\${{ steps.filenames.outputs.FIREFOX_NAME }}" SHA256 | findstr /V /B /C:"CertUtil" /C:"SHA256" > "dist\${{ steps.filenames.outputs.FIREFOX_NAME }}.sha256"
+          certutil -hashfile "dist\${{ steps.filenames.outputs.DMG_NAME }}" SHA256 | findstr /V /B /C:"CertUtil" /C:"SHA256" > "dist\${{ steps.filenames.outputs.DMG_NAME }}.sha256"
+        shell: cmd
+
+      - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/${{ steps.assets.outputs.DMG_NAME }}
-            dist/${{ steps.assets.outputs.DMG_NAME }}.sha256
+            bin/${{ steps.filenames.outputs.EXE_NAME }}
+            bin/${{ steps.filenames.outputs.EXE_NAME }}.sha256
+            bin/${{ steps.filenames.outputs.SETUP_NAME }}
+            bin/${{ steps.filenames.outputs.SETUP_NAME }}.sha256
+            dist/${{ steps.filenames.outputs.CHROME_NAME }}
+            dist/${{ steps.filenames.outputs.CHROME_NAME }}.sha256
+            dist/${{ steps.filenames.outputs.FIREFOX_NAME }}
+            dist/${{ steps.filenames.outputs.FIREFOX_NAME }}.sha256
+            dist/${{ steps.filenames.outputs.DMG_NAME }}
+            dist/${{ steps.filenames.outputs.DMG_NAME }}.sha256

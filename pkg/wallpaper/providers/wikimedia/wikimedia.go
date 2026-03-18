@@ -586,7 +586,8 @@ func (t *ThrottledRoundTripper) RoundTrip(req *http.Request) (*http.Response, er
 		log.Debugf("Wikimedia Throttler: [%s] Slot acquired. Starting request: %s", reqType, req.URL.String())
 
 		// 4. Mandatory gap for requests to avoid triggering anti-scraping
-		if reqType == "API" {
+		switch reqType {
+		case "API":
 			t.lastAPIMu.Lock()
 			elapsed := time.Since(t.lastAPIReq)
 			t.lastAPIMu.Unlock()
@@ -605,7 +606,7 @@ func (t *ThrottledRoundTripper) RoundTrip(req *http.Request) (*http.Response, er
 				t.lastAPIReq = time.Now()
 				t.lastAPIMu.Unlock()
 			}()
-		} else if reqType == "Media" {
+		case "Media":
 			t.lastMediaMu.Lock()
 			elapsed := time.Since(t.lastMediaReq)
 			t.lastMediaMu.Unlock()

@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"net/http"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
@@ -111,4 +112,11 @@ type Syncer interface {
 // they are currently in a cooldown state (e.g., due to a 429 error).
 type ThrottledProvider interface {
 	IsThrottled() bool
+}
+
+// PacedProvider is an optional interface for providers that require specific rate limiting gaps
+// between API requests and image processing (downloads/enrichments).
+type PacedProvider interface {
+	GetAPIPacing() time.Duration
+	GetProcessPacing() time.Duration
 }

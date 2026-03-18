@@ -189,6 +189,15 @@ func (wp *Plugin) fetchFromProvider(fetchCtx context.Context, q ImageQuery, p pr
 	ctx, cancel := context.WithTimeout(fetchCtx, 30*time.Second)
 	defer cancel()
 
+	// Rate limit API calls via PacedProvider interface
+	if limiter := wp.getAPILimiter(p); limiter != nil {
+		log.Debugf("[Pacing] Waiting for API rate limiter slot for provider %s...", p.ID())
+		if err := limiter.Wait(ctx); err != nil {
+			log.Printf("Provider %s fetch aborted due to context cancellation during pacing: %v", p.ID(), err)
+			return
+		}
+	}
+
 	images, err := p.FetchImages(ctx, q.URL, page)
 	if err != nil {
 		log.Printf("Provider %s fetch failed: %v", q.Provider, err)

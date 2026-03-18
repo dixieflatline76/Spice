@@ -18,6 +18,8 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/time/rate"
+
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"github.com/dixieflatline76/Spice/v2/asset"
@@ -104,6 +106,10 @@ type Plugin struct {
 	queryContexts    map[string]context.Context
 	queryCancelFuncs map[string]context.CancelFunc
 	queryCancelMu    sync.Mutex
+
+	// Rate limiters for PacedProviders
+	apiLimiters     sync.Map // string (providerID) -> *rate.Limiter
+	processLimiters sync.Map // string (providerID) -> *rate.Limiter
 
 	// Context tracking for the overarching fetch loop
 	globalFetchCtx    context.Context
@@ -1238,4 +1244,36 @@ func (wp *Plugin) CancelFetchContext() {
 	if wp.globalFetchCancel != nil {
 		wp.globalFetchCancel()
 	}
+}
+
+// getAPILimiter returns the API rate limiter for a specific provider, if configured via the PacedProvider interface.
+func (wp *Plugin) getAPILimiter(p provider.ImageProvider) *rate.Limiter {
+	if paced, ok := p.(provider.PacedProvider); ok {
+		if val, exists := wp.apiLimiters.Load(p.ID()); exists {
+			return val.(*rate.Limiter)
+		}
+		duration := paced.GetAPIPacing()
+		if duration > 0 {
+			limiter := rate.NewLimiter(rate.Every(duration), 1)
+			wp.apiLimiters.Store(p.ID(), limiter)
+			return limiter
+		}
+	}
+	return nil
+}
+
+// getProcessLimiter returns the image download/enrichment limiter for a specific provider, if configured.
+func (wp *Plugin) getProcessLimiter(p provider.ImageProvider) *rate.Limiter {
+	if paced, ok := p.(provider.PacedProvider); ok {
+		if val, exists := wp.processLimiters.Load(p.ID()); exists {
+			return val.(*rate.Limiter)
+		}
+		duration := paced.GetProcessPacing()
+		if duration > 0 {
+			limiter := rate.NewLimiter(rate.Every(duration), 1)
+			wp.processLimiters.Store(p.ID(), limiter)
+			return limiter
+		}
+	}
+	return nil
 }
