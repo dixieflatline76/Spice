@@ -23,7 +23,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5 # Use latest setup-go action
         with:
-          go-version: '1.25.x' # Pin to 1.25 to prevent fips140 issues
+          go-version: '1.24.x' # Downgraded to 1.24 for golangci-lint compatibility
           cache: true
 
 
@@ -59,7 +59,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.25.3' # Or pin to a specific version e.g., '1.22.x'
+          go-version: '1.24.x' 
           cache: true
 
       - name: Cache Chocolatey packages
@@ -214,7 +214,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           # Pinned to your exact local version
-          go-version: '1.25.3'
+          go-version: '1.24.x'
 
       - name: Install create-dmg
         run: brew install create-dmg

@@ -14,7 +14,6 @@ require (
 	github.com/kr/text v0.2.0 // indirect
 	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646 // indirect
 	github.com/stretchr/objx v0.5.3 // indirect
-	golang.org/x/time v0.15.0 // indirect
 )
 
 require (
@@ -58,5 +57,6 @@ require (
 	golang.org/x/image v0.36.0
 	golang.org/x/mod v0.33.0
 	golang.org/x/sync v0.19.0
+	golang.org/x/time v0.15.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
