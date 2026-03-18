@@ -189,7 +189,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: spice-mac-artifacts
-          path: .
+          path: dist
 
       - name: Normalize Artifact Names
         id: filenames
