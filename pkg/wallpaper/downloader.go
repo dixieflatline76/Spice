@@ -43,9 +43,27 @@ func (wp *Plugin) ProcessImageJob(ctx context.Context, job DownloadJob) (resultI
 	}
 
 	// 1. Lazy Enrichment (Soft Fail)
+	// Rate limit Image Enrichment (API calls) via PacedProvider interface
+	if downloadProvider != nil {
+		if limiter := wp.getAPILimiter(downloadProvider); limiter != nil {
+			log.Debugf("[Pacing] Waiting for API rate limiter slot for provider enrichment %s...", downloadProvider.ID())
+			if err := limiter.Wait(ctx); err != nil {
+				return provider.Image{}, fmt.Errorf("job aborted due to context cancellation during API pacing: %w", err)
+			}
+		}
+	}
 	img = wp.enrichImage(ctx, img, downloadProvider)
 
 	// 2. Ensure Master (Raw Image)
+	// Rate limit Media Fetch (Network downloads) via PacedProvider interface
+	if downloadProvider != nil {
+		if limiter := wp.getProcessLimiter(downloadProvider); limiter != nil {
+			log.Debugf("[Pacing] Waiting for processing rate limiter slot for provider download %s...", downloadProvider.ID())
+			if err := limiter.Wait(ctx); err != nil {
+				return provider.Image{}, fmt.Errorf("job aborted due to context cancellation during download pacing: %w", err)
+			}
+		}
+	}
 	masterPath, err := wp.ensureMaster(ctx, img, downloadProvider)
 	if err != nil {
 		providerName := "Unknown"
@@ -309,7 +327,7 @@ func (wp *Plugin) ensureDerivative(ctx context.Context, img provider.Image, mast
 	}
 
 	if len(paths) == 0 {
-		return nil, fmt.Errorf("failed to generate any derivatives")
+		return nil, fmt.Errorf("incompatible: failed to generate any derivatives")
 	}
 
 	return wp.ensurePrimaryPath(paths), nil

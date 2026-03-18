@@ -49,7 +49,21 @@ You must implement the following 6 methods.
   * **Usage**: Some search APIs don't return high-res URLs or file types. Use this to perform a secondary fetch (e.g., HEAD request or scraping) to fill in `FileType`, `Path`, etc.
   * **Safe Default**: If your API provides everything in `FetchImages`, just return `img, nil`.
 
-### 2.2 UI Integration
+### 2.2 Advanced Interfaces (Optional but Recommended)
+
+* **`provider.PacedProvider`**:
+  * **Purpose**: Prevents rate limits (429s) when processing many images concurrently.
+  * **Methods**:
+    * `GetAPIPacing() time.Duration`: Enforces a minimum delay between metadata/enrichment API calls.
+    * `GetProcessPacing() time.Duration`: Enforces a minimum delay between actual media file downloads.
+  * **Mechanics**: The overarching `downloader` pipeline runs 16 concurrent workers. If this interface is omitted, workers execute network calls at `rate.Inf` (unlimited burst space). If implemented, workers funnel through a strict `rate.Limiter` queue.
+
+* **`provider.CustomClientProvider`**:
+  * **Purpose**: Inject a heavily customized HTTP client.
+  * **Methods**: `GetClient() *http.Client`
+  * **Mechanics**: Use this to enforce strict server-side restrictions that `PacedProvider` can't handle, such as building a custom `http.RoundTripper` with a global `sync.Mutex` to serialize all connections to exactly 1 inflight request at a time (e.g. used by Wikimedia and ArtInstituteChicago).
+
+### 2.3 UI Integration
 
 * **`GetProviderIcon() fyne.Resource`**:
   * **Purpose**: 64x64px icon for Tray Menu and Settings Headers.

@@ -824,3 +824,13 @@ func (p *WallhavenProvider) getWebURL(apiURL string) *url.URL {
 	}
 	return u
 }
+
+// GetAPIPacing implements the PacedProvider interface to space out API calls.
+func (p *WallhavenProvider) GetAPIPacing() time.Duration {
+	return 1000 * time.Millisecond // 1 second per API call
+}
+
+// GetProcessPacing implements the PacedProvider interface to space out image downloads.
+func (p *WallhavenProvider) GetProcessPacing() time.Duration {
+	return 1000 * time.Millisecond // 1 second per image download
+}

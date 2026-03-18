@@ -527,15 +527,23 @@ func (p *WikimediaProvider) GetClient() *http.Client {
 	return p.httpClient
 }
 
+const (
+	WikimediaAPIPacing       = 5 * time.Second
+	WikimediaMediaPacing     = 60 * time.Second
+	WikimediaDefaultCooldown = 15 * time.Minute
+)
+
 // ThrottledRoundTripper handles Wikimedia rate limiting and concurrency.
 type ThrottledRoundTripper struct {
-	Base      http.RoundTripper
-	Config    *wallpaper.Config
-	CB        *CircuitBreaker
-	APISem    chan struct{}
-	MediaSem  chan struct{}
-	lastReqMu sync.Mutex
-	lastReq   time.Time
+	Base         http.RoundTripper
+	Config       *wallpaper.Config
+	CB           *CircuitBreaker
+	APISem       chan struct{}
+	MediaSem     chan struct{}
+	lastMediaReq time.Time
+	lastMediaMu  sync.Mutex
+	lastAPIReq   time.Time
+	lastAPIMu    sync.Mutex
 }
 
 func (t *ThrottledRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -577,14 +585,33 @@ func (t *ThrottledRoundTripper) RoundTrip(req *http.Request) (*http.Response, er
 		defer func() { <-sem }()
 		log.Debugf("Wikimedia Throttler: [%s] Slot acquired. Starting request: %s", reqType, req.URL.String())
 
-		// 4. Mandatory gap for Media requests to avoid triggering anti-scraping
-		if reqType == "Media" {
-			t.lastReqMu.Lock()
-			elapsed := time.Since(t.lastReq)
-			t.lastReqMu.Unlock()
+		// 4. Mandatory gap for requests to avoid triggering anti-scraping
+		if reqType == "API" {
+			t.lastAPIMu.Lock()
+			elapsed := time.Since(t.lastAPIReq)
+			t.lastAPIMu.Unlock()
 
-			if elapsed < 15*time.Second {
-				wait := 15*time.Second - elapsed
+			if elapsed < WikimediaAPIPacing {
+				wait := WikimediaAPIPacing - elapsed
+				log.Debugf("Wikimedia Throttler: [API] Pacing request. Sleeping %v...", wait)
+				if err := contextSleep(req.Context(), wait); err != nil {
+					return nil, err
+				}
+			}
+
+			// Update last request time BEFORE releasing the slot
+			defer func() {
+				t.lastAPIMu.Lock()
+				t.lastAPIReq = time.Now()
+				t.lastAPIMu.Unlock()
+			}()
+		} else if reqType == "Media" {
+			t.lastMediaMu.Lock()
+			elapsed := time.Since(t.lastMediaReq)
+			t.lastMediaMu.Unlock()
+
+			if elapsed < WikimediaMediaPacing {
+				wait := WikimediaMediaPacing - elapsed
 				log.Debugf("Wikimedia Throttler: [Media] Pacing request. Sleeping %v...", wait)
 				if err := contextSleep(req.Context(), wait); err != nil {
 					return nil, err
@@ -593,9 +620,9 @@ func (t *ThrottledRoundTripper) RoundTrip(req *http.Request) (*http.Response, er
 
 			// Update last request time BEFORE releasing the slot
 			defer func() {
-				t.lastReqMu.Lock()
-				t.lastReq = time.Now()
-				t.lastReqMu.Unlock()
+				t.lastMediaMu.Lock()
+				t.lastMediaReq = time.Now()
+				t.lastMediaMu.Unlock()
 			}()
 		}
 
@@ -615,7 +642,7 @@ func (t *ThrottledRoundTripper) RoundTrip(req *http.Request) (*http.Response, er
 
 		// Pattern: Circuit Breaker Trip
 		// Check for Retry-After header
-		coolDown := 5 * time.Minute // Default long cooldown for 429
+		coolDown := WikimediaDefaultCooldown // Default long cooldown for 429
 		if ra := resp.Header.Get("Retry-After"); ra != "" {
 			if seconds, err := strconv.Atoi(ra); err == nil {
 				coolDown = time.Duration(seconds) * time.Second

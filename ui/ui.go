@@ -282,7 +282,9 @@ func (sa *SpiceApp) deactivateAllPlugins() {
 
 // CreateMenuItem creates a menu item with the given label, action, and icon
 func (sa *SpiceApp) CreateMenuItem(label string, action func(), iconName string) *fyne.MenuItem {
-	mi := fyne.NewMenuItem(label, action)
+	mi := fyne.NewMenuItem(label, func() {
+		fyne.Do(action)
+	})
 	if iconName == "" {
 		return mi
 	}
@@ -316,15 +318,17 @@ func (sa *SpiceApp) CreateToggleMenuItem(label string, action func(bool), iconNa
 	}
 	mi.Checked = checked
 	mi.Action = func() {
-		newChecked := !mi.Checked
-		if newChecked {
-			mi.Label = fmt.Sprintf("%s ✔", label)
-		} else {
-			mi.Label = label
-		}
-		mi.Checked = newChecked
-		action(newChecked)
-		sa.trayMenu.Refresh()
+		fyne.Do(func() {
+			newChecked := !mi.Checked
+			if newChecked {
+				mi.Label = fmt.Sprintf("%s ✔", label)
+			} else {
+				mi.Label = label
+			}
+			mi.Checked = newChecked
+			action(newChecked)
+			sa.trayMenu.Refresh()
+		})
 	}
 
 	return mi
