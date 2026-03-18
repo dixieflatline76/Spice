@@ -220,5 +220,6 @@
   "duplicate query": "Дубликат запроса",
   "Add Wikimedia Query": "Добавить запрос Wikimedia",
   "Donate to Wikimedia": "Пожертвовать Викимедиа",
+  "only 'Category:', 'File:' or component Search URLs are currently supported directly": "На данный момент напрямую поддерживаются только URL-адреса категорий, файлов или поиска компонентов",
   "Verify & Connect...": "Проверка и подключение..."
 }

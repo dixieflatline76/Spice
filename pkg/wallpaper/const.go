@@ -32,6 +32,9 @@ const (
 	GooglePhotosTokenPrefKey        = "google_photos_access_token"
 	GooglePhotosRefreshTokenPrefKey = "google_photos_refresh_token"
 	GooglePhotosTokenExpiryPrefKey  = "google_photos_token_expiry"
+	WikimediaAccessTokenPrefKey     = "wikimedia_access_token"  //nolint:gosec // Preference key, not a secret
+	WikimediaRefreshTokenPrefKey    = "wikimedia_refresh_token" //nolint:gosec // Preference key, not a secret
+	WikimediaTokenExpiryPrefKey     = "wikimedia_token_expiry"
 	WallhavenAPIKeyPrefKey          = "wallhaven_api_key" //nolint:gosec // Preference key, not a secret
 	wallhavenConfigPrefKey          = "wallhaven_image_queries"
 	PexelsAPIKeyPrefKey             = "pexels_api_key"    //nolint:gosec // Preference key, not a secret
@@ -40,6 +43,8 @@ const (
 	PexelsDescRegexp                = `^[a-zA-Z0-9\s]{5,50}$`
 	PexelsAPISearchURL              = "https://api.pexels.com/v1/search"
 	PexelsAPICollectionURL          = "https://api.pexels.com/v1/collections/%s"
+
+	WikimediaTokenPrefKey = "wikimedia_personal_token" //nolint:gosec // Preference key, not a secret
 )
 
 // URLType indicates the type of image source (Search or Collection).

@@ -53,8 +53,8 @@ type StateCmd struct {
 }
 
 // NewPipeline creates a new pipeline with the given configuration and store.
-func NewPipeline(cfg *Config, store StoreInterface, processor ProcessFunc) *Pipeline {
-	ctx, cancel := context.WithCancel(context.Background())
+func NewPipeline(ctx context.Context, cfg *Config, store StoreInterface, processor ProcessFunc) *Pipeline {
+	ctx, cancel := context.WithCancel(ctx)
 	return &Pipeline{
 		jobChan:    make(chan DownloadJob, 100), // Buffered job channel
 		resultChan: make(chan ProcessResult, 100),
@@ -112,15 +112,21 @@ func (p *Pipeline) workerLoop(id int) {
 		case <-p.ctx.Done():
 			log.Debugf("Worker %d stopping", id)
 			return
-		case job := <-p.jobChan:
-			// Ensure context exists (Testing safety net)
-			if job.Ctx == nil {
-				job.Ctx = p.ctx
-			}
+		default:
+			select {
+			case <-p.ctx.Done():
+				log.Debugf("Worker %d stopping", id)
+				return
+			case job := <-p.jobChan:
+				// Ensure context exists (Testing safety net)
+				if job.Ctx == nil {
+					job.Ctx = p.ctx
+				}
 
-			// Process the job using the job's context rather than the global pipeline context
-			processedImg, err := p.processor(job.Ctx, job)
-			p.resultChan <- ProcessResult{Image: processedImg, Error: err}
+				// Process the job using the job's context rather than the global pipeline context
+				processedImg, err := p.processor(job.Ctx, job)
+				p.resultChan <- ProcessResult{Image: processedImg, Error: err}
+			}
 		}
 	}
 }

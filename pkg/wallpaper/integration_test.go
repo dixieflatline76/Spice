@@ -121,6 +121,8 @@ func TestLifecycle_BlockPersistence(t *testing.T) {
 		t.Log("[Phase 1] Starting App Instance 1...")
 		wp1 := setupTestPlugin(t, persistentPrefs)
 		wp1.Activate()
+		// Re-inject dummy pipeline if setupTestPlugin provided one and we want to keep it
+		// Actually wp1.Activate() creates a real one. We'll leave it for wp1 as it's just blocking.
 
 		// Simulate User Blocking an Image
 		// We use the public API/Config logic to ensure it writes to prefs.
@@ -159,6 +161,10 @@ func TestLifecycle_BlockPersistence(t *testing.T) {
 
 		// Run Activate - this triggers the Store loading logic
 		wp2.Activate()
+		// Re-inject dummy pipeline to use dummyProcessor
+		wp2.pipeline = NewPipeline(wp2.ctx, wp2.cfg, wp2.store, func(ctx context.Context, job DownloadJob) (provider.Image, error) { return job.Image, nil })
+		wp2.jobSubmitter = wp2.pipeline
+		wp2.pipeline.Start(1)
 
 		// Verify Store State (Internal Verification)
 		// This confirms the Config -> Store wiring works.
@@ -176,6 +182,10 @@ func TestLifecycle_BlockPersistence(t *testing.T) {
 		t.Log("[Phase 3] Simulating Provider pushing blocked content...")
 		wp3 := setupTestPlugin(t, persistentPrefs)
 		wp3.Activate()
+		// Re-inject dummy pipeline
+		wp3.pipeline = NewPipeline(wp3.ctx, wp3.cfg, wp3.store, func(ctx context.Context, job DownloadJob) (provider.Image, error) { return job.Image, nil })
+		wp3.jobSubmitter = wp3.pipeline
+		wp3.pipeline.Start(1)
 
 		// Setup a dummy job for the blocked image
 		badJob := DownloadJob{
@@ -219,6 +229,10 @@ func TestLifecycle_BlockPersistence(t *testing.T) {
 		t.Log("[Phase 4] Verifying 'Clear()' does not wipe blocklist...")
 		wp4 := setupTestPlugin(t, persistentPrefs)
 		wp4.Activate()
+		// Re-inject dummy pipeline
+		wp4.pipeline = NewPipeline(wp4.ctx, wp4.cfg, wp4.store, func(ctx context.Context, job DownloadJob) (provider.Image, error) { return job.Image, nil })
+		wp4.jobSubmitter = wp4.pipeline
+		wp4.pipeline.Start(1)
 
 		// 1. Trigger Clear (Simulating 'Refresh Images' / 'Wipe')
 		// Note: We use Clear(), not Wipe(). Wipe() implies full reset.
@@ -373,7 +387,7 @@ func setupTestPlugin(t *testing.T, prefs fyne.Preferences) *Plugin {
 		return job.Image, nil
 	}
 
-	pipeline := NewPipeline(cfg, imageStore, dummyProcessor)
+	pipeline := NewPipeline(context.Background(), cfg, imageStore, dummyProcessor)
 
 	wp := &Plugin{
 		os:                 mockOS,

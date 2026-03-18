@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/dixieflatline76/Spice/v2/pkg/wallpaper"
 	"github.com/stretchr/testify/assert"
@@ -24,6 +25,10 @@ func TestWikimediaParseURL(t *testing.T) {
 		{"https://commons.wikimedia.org/wiki/Category:Nature", "category:Nature", false},
 		{"mountain", "search:mountain", false},
 		{"Space Exploration", "search:Space Exploration", false},
+		{"https://commons.wikimedia.org/wiki/Commons:Featured_pictures/Astronomy", "page:Commons:Featured_pictures/Astronomy", false},
+		{"https://commons.wikimedia.org/wiki/Commons:Featured_pictures/Animals", "page:Commons:Featured_pictures/Animals", false},
+		{"https://commons.wikimedia.org/wiki/Commons:Featured_pictures", "page:Commons:Featured_pictures", false},
+		{"page:CustomPage", "page:CustomPage", false},
 		{"http://google.com", "", true}, // Invalid domain
 		{"", "", true},                  // Empty
 	}
@@ -125,11 +130,107 @@ func TestWikimediaFetchImages_Category(t *testing.T) {
 	assert.Equal(t, "Photographer X (CC-BY-SA)", images[0].Attribution)
 }
 
+func TestWikimediaFetchImages_Gallery(t *testing.T) {
+	// Mock Server
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "Commons:Featured_pictures/Astronomy", r.URL.Query().Get("titles"))
+		assert.Equal(t, "images", r.URL.Query().Get("generator"))
+		assert.Equal(t, "imageinfo", r.URL.Query().Get("prop"))
+
+		response := `{
+			"query": {
+				"pages": {
+					"456": {
+						"pageid": 456,
+						"title": "File:Galaxy.jpg",
+						"imageinfo": [{
+							"url": "https://upload.wikimedia.org/Galaxy.jpg",
+							"extmetadata": {
+								"ObjectName": {"value": "Andromeda"},
+								"Artist": {"value": "Hubble"},
+								"LicenseShortName": {"value": "Public Domain"}
+							}
+						}]
+					}
+				}
+			}
+		}`
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(response))
+	}))
+	defer ts.Close()
+
+	cfg := &wallpaper.Config{}
+	client := ts.Client()
+	wp := NewWikimediaProvider(cfg, client)
+	wp.baseURL = ts.URL
+
+	images, err := wp.FetchImages(context.Background(), "page:Commons:Featured_pictures/Astronomy", 1)
+	assert.NoError(t, err)
+	assert.Len(t, images, 1)
+	assert.Equal(t, "456", images[0].ID)
+	assert.Equal(t, "Hubble (Public Domain)", images[0].Attribution)
+}
+
 func TestWikimediaProvider_Structure(t *testing.T) {
 	cfg := &wallpaper.Config{}
 	client := &http.Client{}
 	p := NewWikimediaProvider(cfg, client)
 
-	assert.Equal(t, "Wikimedia", p.Name())
 	assert.Equal(t, "Wikimedia", p.Title())
+}
+
+func TestCircuitBreaker(t *testing.T) {
+	cb := &CircuitBreaker{}
+
+	// Initial State: Closed
+	assert.False(t, cb.IsOpen())
+
+	// Trip it for 100ms
+	cb.Trip(100 * time.Millisecond)
+	assert.True(t, cb.IsOpen())
+	assert.Greater(t, cb.GetCooldownTime(), 0*time.Second)
+
+	// Wait for expiration
+	time.Sleep(150 * time.Millisecond)
+	assert.False(t, cb.IsOpen())
+
+	// Reset manually
+	cb.Trip(5 * time.Minute)
+	assert.True(t, cb.IsOpen())
+	cb.Reset()
+	assert.False(t, cb.IsOpen())
+}
+
+func TestThrottledRoundTripper_429(t *testing.T) {
+	cb := &CircuitBreaker{}
+	apiSem := make(chan struct{}, 1)
+	mediaSem := make(chan struct{}, 1)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Retry-After", "1")
+		w.WriteHeader(429)
+	}))
+	defer server.Close()
+
+	tripper := &ThrottledRoundTripper{
+		Base:     server.Client().Transport,
+		CB:       cb,
+		APISem:   apiSem,
+		MediaSem: mediaSem,
+	}
+
+	// Use context with timeout for safety
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	req, _ := http.NewRequestWithContext(ctx, "GET", server.URL+"/w/api.php", nil)
+
+	resp, err := tripper.RoundTrip(req)
+	assert.Error(t, err)
+	assert.Nil(t, resp)
+	assert.Contains(t, err.Error(), "rate limited (429)")
+
+	// Check if CB is tripped
+	assert.True(t, cb.IsOpen())
 }

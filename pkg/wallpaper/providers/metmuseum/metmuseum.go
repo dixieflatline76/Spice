@@ -99,6 +99,16 @@ func (p *Provider) GetProviderIcon() fyne.Resource {
 	return fyne.NewStaticResource("MetMuseum.png", iconData)
 }
 
+// GetAPIPacing implements the PacedProvider interface to space out API calls.
+func (p *Provider) GetAPIPacing() time.Duration {
+	return 1 * time.Second
+}
+
+// GetProcessPacing implements the PacedProvider interface to space out image downloads.
+func (p *Provider) GetProcessPacing() time.Duration {
+	return 1 * time.Second
+}
+
 func (p *Provider) ParseURL(url string) (string, error) {
 	// Check for direct object URL
 	matches := ObjectURLRegex.FindStringSubmatch(url)

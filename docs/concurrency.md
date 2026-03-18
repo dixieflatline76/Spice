@@ -15,7 +15,7 @@ title: Concurrency & Favorites Lifecycle
 | Actor | Goroutines | Lock(s) Held | Lifetime |
 | :--- | :--- | :--- | :--- |
 | MonitorController | 1 per monitor | `mc.mu` (RWMutex) | `Activate()` → `Deactivate()` |
-| Pipeline workers | N (NumCPU) | None (channel-only) | `Activate()` → `Deactivate()` |
+| Pipeline workers | 16 (Fixed) | None (channel-only) | `Activate()` → `Deactivate()` |
 | Pipeline stateManager | 1 | `store.mu` via Store API | `Activate()` → `Deactivate()` |
 | Nightly scheduler | 1 | `downloadMutex` | `Activate()` → `Deactivate()` |
 | Monitor watcher | 1 | `monMu` (via SyncMonitors) | `Activate()` → context cancel |
@@ -136,3 +136,6 @@ The `ChangeWallpaperFrequency` ticker goroutine compares `wp.ticker != currentTi
 
 ### 4.2 `Sync.determineSyncAction` avoidSet Read (Practically Safe)
 `determineSyncAction` reads `s.avoidSet` in a gap between `mu.RUnlock()` and `mu.Lock()` in `Sync()`. This is technically a data race, but `avoidSet` is only mutated by `Remove()` and `LoadAvoidSet()` — neither runs concurrently with `Sync()` in the current codebase. Documented as an accepted technical debt.
+
+### 4.3 Network Rate Limiting (`PacedProvider` concurrency context)
+When the 16 parallel generic pipeline workers attempt HTTP operations, they first lock around shared `rate.Limiter` objects mapped internally inside `Plugin.apiLimiters` and `Plugin.processLimiters`. This gracefully transforms unbounded concurrent network spikes into orderly bursts governed by the individual provider policies, ensuring 429 safety while fully utilizing CPU logic outside the network window.

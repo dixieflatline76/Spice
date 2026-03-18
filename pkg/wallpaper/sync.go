@@ -1,8 +1,6 @@
 package wallpaper
 
 import (
-	"context"
-
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
 	"github.com/dixieflatline76/Spice/v2/util/log"
 )
@@ -13,7 +11,7 @@ func (wp *Plugin) SyncWallhavenCollections() {
 		if syncer, ok := p.(provider.Syncer); ok {
 			log.Debugf("Triggering automated sync for provider: %s", name)
 			go func(s provider.Syncer, providerName string) {
-				if err := s.Sync(context.Background()); err != nil {
+				if err := s.Sync(wp.ctx); err != nil {
 					log.Debugf("Automated sync failed for provider %s: %v", providerName, err)
 				} else {
 					log.Debugf("Automated sync completed for provider %s", providerName)

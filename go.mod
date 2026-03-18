@@ -1,6 +1,6 @@
 module github.com/dixieflatline76/Spice/v2
 
-go 1.24.0
+go 1.25.0
 
 require fyne.io/fyne/v2 v2.7.3
 
@@ -57,5 +57,6 @@ require (
 	golang.org/x/image v0.36.0
 	golang.org/x/mod v0.33.0
 	golang.org/x/sync v0.19.0
+	golang.org/x/time v0.15.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )

@@ -219,6 +219,7 @@
   "description too long": "Beschreibung zu lang",
   "duplicate query": "Doppelte Abfrage",
   "Add Wikimedia Query": "Wikimedia-Abfrage hinzufügen",
-  "Donate to Wikimedia": "Spende an Wikimedia",
+  "Donate to Wikimedia": "An Wikimedia spenden",
+  "only 'Category:', 'File:' or component Search URLs are currently supported directly": "Nur 'Kategorie:', 'Datei:' oder Komponenten-Such-URLs werden derzeit direkt unterstützt",
   "Verify & Connect...": "Verifizieren & Verbinden..."
 }

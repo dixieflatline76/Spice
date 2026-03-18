@@ -158,6 +158,14 @@ A persistent, single-goroutine worker that "pivots" to the user's current locati
   - When user navigates, instantly aborts current look-ahead and jumps to new index.
   - Ensures metadata is ready *just in time*, reducing API waste.
 
+### 4.5 Orchestrator & Provider Rate Limiting (Pipeline Concurrency)
+
+To maximize download speeds while safely obeying strict third-party API limits, Spice uses a decoupled bulkhead architecture:
+
+- **16 Generic Pipeline Workers**: The core orchestrator spawns 16 parallel workers that rapidly consume incoming image references.
+- **`provider.PacedProvider` Interface**: If a provider implements this, the orchestrator routes the 16 workers through a strict `rate.Limiter`. This forces the parallel workers into a synchronized holding pattern, guaranteeing they only hit the external network at the provider's exact specified cadence (e.g. 1 API call per 2 seconds) eliminating HTTP 429 errors.
+- **`provider.CustomClientProvider` Interface**: For exotic limit architectures (like ArtInstituteChicago's single-threaded serialized fetch requirements), providers can inject entirely custom `http.RoundTripper` pipelines that govern the 16 workers at the transport layer.
+
 ## 3.4 Interaction Flows
 
 ### 3.4.1 "Next Wallpaper" Flow (Zero Contention)

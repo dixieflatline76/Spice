@@ -16,6 +16,8 @@ func main() {
 		"GOOGLE_PHOTOS_CLIENT_SECRET": "github.com/dixieflatline76/Spice/v2/pkg/wallpaper/providers/googlephotos.GoogleClientSecret",
 		"UNSPLASH_CLIENT_ID":          "github.com/dixieflatline76/Spice/v2/pkg/wallpaper/providers/unsplash.UnsplashClientID",
 		"UNSPLASH_CLIENT_SECRET":      "github.com/dixieflatline76/Spice/v2/pkg/wallpaper/providers/unsplash.UnsplashClientSecret",
+		"WIKIMEDIA_CLIENT_ID":         "github.com/dixieflatline76/Spice/v2/pkg/wallpaper/providers/wikimedia.WikimediaClientID",
+		"WIKIMEDIA_CLIENT_SECRET":     "github.com/dixieflatline76/Spice/v2/pkg/wallpaper/providers/wikimedia.WikimediaClientSecret",
 	}
 
 	collected := make(map[string]string)

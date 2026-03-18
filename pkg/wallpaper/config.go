@@ -160,6 +160,11 @@ func (c *Config) loadFromPrefs() error {
 		return err
 	}
 
+	// Sync AvoidSet from JSON into the thread-safe avoidMap
+	for id := range c.AvoidSet {
+		c.avoidMap.Store(id, true)
+	}
+
 	// Execute Migration Chain
 	migrations := NewMigrationChain()
 	if err := migrations.Execute(c); err != nil {
@@ -577,6 +582,113 @@ func (c *Config) SetPexelsAPIKey(apiKey string) {
 	if err != nil {
 		log.Printf("failed to save Pexels API key to keyring: %v", err)
 	}
+}
+
+// GetWikimediaPersonalToken returns the Wikimedia Personal API Token from the keyring.
+func (c *Config) GetWikimediaPersonalToken() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	token, err := keyring.Get(WikimediaTokenPrefKey, c.userid)
+	if err != nil {
+		if !errors.Is(err, keyring.ErrNotFound) {
+			log.Printf("failed to retrieve Wikimedia personal token from keyring: %v", err)
+		}
+		return ""
+	}
+	return token
+}
+
+// SetWikimediaPersonalToken sets the Wikimedia Personal API Token in the keyring.
+func (c *Config) SetWikimediaPersonalToken(token string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if token == "" {
+		_ = keyring.Delete(WikimediaTokenPrefKey, c.userid)
+		return
+	}
+	err := keyring.Set(WikimediaTokenPrefKey, c.userid, token)
+	if err != nil {
+		log.Printf("failed to save Wikimedia personal token to keyring: %v", err)
+	}
+}
+
+// GetWikimediaToken returns the Wikimedia OAuth Access Token from the keyring.
+func (c *Config) GetWikimediaToken() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	token, err := keyring.Get(WikimediaAccessTokenPrefKey, c.userid)
+	if err != nil {
+		if !errors.Is(err, keyring.ErrNotFound) {
+			log.Printf("failed to retrieve Wikimedia access token from keyring: %v", err)
+		}
+		return ""
+	}
+	return token
+}
+
+// SetWikimediaToken sets the Wikimedia OAuth Access Token in the keyring.
+func (c *Config) SetWikimediaToken(token string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if token == "" {
+		_ = keyring.Delete(WikimediaAccessTokenPrefKey, c.userid)
+		return
+	}
+	err := keyring.Set(WikimediaAccessTokenPrefKey, c.userid, token)
+	if err != nil {
+		log.Printf("failed to save Wikimedia access token to keyring: %v", err)
+	}
+}
+
+// GetWikimediaRefreshToken returns the Wikimedia OAuth Refresh Token from the keyring.
+func (c *Config) GetWikimediaRefreshToken() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	token, err := keyring.Get(WikimediaRefreshTokenPrefKey, c.userid)
+	if err != nil {
+		if !errors.Is(err, keyring.ErrNotFound) {
+			log.Printf("failed to retrieve Wikimedia refresh token from keyring: %v", err)
+		}
+		return ""
+	}
+	return token
+}
+
+// SetWikimediaRefreshToken sets the Wikimedia OAuth Refresh Token in the keyring.
+func (c *Config) SetWikimediaRefreshToken(token string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if token == "" {
+		_ = keyring.Delete(WikimediaRefreshTokenPrefKey, c.userid)
+		return
+	}
+	err := keyring.Set(WikimediaRefreshTokenPrefKey, c.userid, token)
+	if err != nil {
+		log.Printf("failed to save Wikimedia refresh token to keyring: %v", err)
+	}
+}
+
+// GetWikimediaTokenExpiry returns the Wikimedia OAuth Token Expiry from the keyring.
+func (c *Config) GetWikimediaTokenExpiry() time.Time {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	expiryStr := c.StringWithFallback(WikimediaTokenExpiryPrefKey, "")
+	if expiryStr == "" {
+		return time.Time{}
+	}
+	expiry, err := time.Parse(time.RFC3339, expiryStr)
+	if err != nil {
+		log.Printf("failed to parse Wikimedia token expiry: %v", err)
+		return time.Time{}
+	}
+	return expiry
+}
+
+// SetWikimediaTokenExpiry sets the Wikimedia OAuth Token Expiry in the keyring.
+func (c *Config) SetWikimediaTokenExpiry(expiry time.Time) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.SetString(WikimediaTokenExpiryPrefKey, expiry.Format(time.RFC3339))
 }
 
 // GetGooglePhotosToken returns the Google Photos Access Token from the keyring.

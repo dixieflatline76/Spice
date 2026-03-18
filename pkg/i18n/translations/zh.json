@@ -220,5 +220,6 @@
   "duplicate query": "重复查询",
   "Add Wikimedia Query": "添加 Wikimedia 查询",
   "Donate to Wikimedia": "向维基媒体捐款",
+  "only 'Category:', 'File:' or component Search URLs are currently supported directly": "目前仅直接支持“分类:”、“文件:”或组件搜索 URL",
   "Verify & Connect...": "正在验证并连接..."
 }

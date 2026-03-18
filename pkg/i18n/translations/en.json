@@ -218,5 +218,6 @@
   "Add Wikimedia Query": "Add Wikimedia Query",
   "Wikimedia Commons Queries": "Wikimedia Commons Queries",
   "Wallhaven Username:": "Wallhaven Username:",
-  "Donate to Wikimedia": "Donate to Wikimedia"
+  "Donate to Wikimedia": "Donate to Wikimedia",
+  "only 'Category:', 'File:' or component Search URLs are currently supported directly": "only 'Category:', 'File:' or component Search URLs are currently supported directly"
 }

@@ -13,8 +13,9 @@ import (
 )
 
 // FetchNewImages iterates over active queries and submits new image jobs to the pipeline.
+// If force is true, it proceeds even if another fetch is in progress (ignoring the debounce lock).
 // If providerID is specified, only queries for that provider are fetched.
-func (wp *Plugin) FetchNewImages(providerID ...string) {
+func (wp *Plugin) FetchNewImages(force bool, providerID ...string) {
 	targetProvider := ""
 	if len(providerID) > 0 {
 		targetProvider = providerID[0]
@@ -23,9 +24,9 @@ func (wp *Plugin) FetchNewImages(providerID ...string) {
 	// Special-case Favorites for on-the-fly responsiveness
 	isFavRequest := targetProvider == "Favorites"
 
-	if isFavRequest || wp.fetchingInProgress.CompareAndSwap(false, true) {
+	if force || isFavRequest || wp.fetchingInProgress.CompareAndSwap(false, true) {
 		go func() {
-			if !isFavRequest {
+			if !isFavRequest && !force {
 				defer wp.fetchingInProgress.Set(false)
 			}
 			log.Debugf("Starting image fetch (Target: %s)...", func() string {
@@ -76,8 +77,31 @@ func (wp *Plugin) FetchNewImages(providerID ...string) {
 				wg.Add(1)
 				go func(q ImageQuery, p provider.ImageProvider) {
 					defer wg.Done()
-					sem <- struct{}{}        // Acquire
-					defer func() { <-sem }() // Release
+
+					// Pattern: Bulkhead
+					// Wikimedia uses a dedicated lane to avoid blocking other providers.
+					var mySem chan struct{}
+					if p.ID() == "Wikimedia" {
+						mySem = wp.wikimediaBulkhead
+					} else {
+						mySem = sem
+					}
+
+					// Pattern: Early Exit (Circuit Breaker)
+					if tp, ok := p.(provider.ThrottledProvider); ok {
+						if tp.IsThrottled() {
+							log.Printf("Provider %s is currently throttled. Skipping fetch for query %s.", p.ID(), q.ID)
+							return
+						}
+					}
+
+					log.Debugf("[Fetch] %s Waiting for slot... (Lane Load: %d/%d)", p.ID(), len(mySem), cap(mySem))
+					select {
+					case mySem <- struct{}{}:
+						defer func() { <-mySem }()
+					case <-fetchCtx.Done():
+						return
+					}
 
 					wp.fetchFromProvider(fetchCtx, q, p, isFavRequest, &sourcesMutex, activeSources, totalQueued)
 				}(q, p)
@@ -129,11 +153,11 @@ func (wp *Plugin) RefreshImagesAndPulse() {
 			wp.manager.RebuildTrayMenu()
 		}
 
-		// Trigger immediate fetch
-		wp.FetchNewImages()
+		// Trigger immediate fetch (Forced because we just applied settings)
+		wp.FetchNewImages(true)
 
 		// Wait for images using event driven notification (up to 15s)
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		ctx, cancel := context.WithTimeout(wp.ctx, 15*time.Second)
 		defer cancel()
 
 		log.Debugf("[Init] Waiting for images before initial pulse...")
@@ -162,8 +186,17 @@ func (wp *Plugin) fetchFromProvider(fetchCtx context.Context, q ImageQuery, p pr
 	log.Debugf("Fetching from provider: %s (Query: %s, Page: %d)", q.Provider, q.Description, page)
 
 	// Add timeout to prevent hangs
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(fetchCtx, 30*time.Second)
 	defer cancel()
+
+	// Rate limit API calls via PacedProvider interface
+	if limiter := wp.getAPILimiter(p); limiter != nil {
+		log.Debugf("[Pacing] Waiting for API rate limiter slot for provider %s...", p.ID())
+		if err := limiter.Wait(ctx); err != nil {
+			log.Printf("Provider %s fetch aborted due to context cancellation during pacing: %v", p.ID(), err)
+			return
+		}
+	}
 
 	images, err := p.FetchImages(ctx, q.URL, page)
 	if err != nil {
@@ -202,6 +235,13 @@ func (wp *Plugin) fetchFromProvider(fetchCtx context.Context, q ImageQuery, p pr
 
 		if !isFavRequest && wp.cfg.InAvoidSet(img.ID) {
 			log.Debugf("Skipping blocked image: %s", img.ID)
+			continue
+		}
+
+		// Pattern: Deduplication (At-the-Gate)
+		// Skip images we already have in the store to save bandwidth and API calls.
+		if wp.store.Exists(img.ID) {
+			log.Debugf("Skipping image already in store: %s", img.ID)
 			continue
 		}
 		job := DownloadJob{

@@ -18,6 +18,8 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/time/rate"
+
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"github.com/dixieflatline76/Spice/v2/asset"
@@ -105,10 +107,17 @@ type Plugin struct {
 	queryCancelFuncs map[string]context.CancelFunc
 	queryCancelMu    sync.Mutex
 
+	// Rate limiters for PacedProviders
+	apiLimiters     sync.Map // string (providerID) -> *rate.Limiter
+	processLimiters sync.Map // string (providerID) -> *rate.Limiter
+
 	// Context tracking for the overarching fetch loop
 	globalFetchCtx    context.Context
 	globalFetchCancel context.CancelFunc
 	globalFetchMu     sync.Mutex
+
+	// Bulkhead for Wikimedia (isolated slow lane)
+	wikimediaBulkhead chan struct{}
 }
 
 var (
@@ -185,6 +194,7 @@ func getPlugin() *Plugin {
 			fetchingInProgress: util.NewSafeBool(),
 			runOnUI:            fyne.Do,
 			focusProviderName:  "",
+			wikimediaBulkhead:  make(chan struct{}, 1),
 		}
 
 		wpInstance.imgPulseOp = func() { wpInstance.SetNextWallpaper(-1, true) }
@@ -239,7 +249,7 @@ func (wp *Plugin) RequestFetch(providerID ...string) {
 	}
 
 	// 3. Trigger
-	go wp.FetchNewImages(targetProvider)
+	go wp.FetchNewImages(false, targetProvider)
 }
 
 // GetInstance returns the singleton instance of the wallpaper plugin.
@@ -254,6 +264,8 @@ func LoadPlugin(manager ui.PluginManager) {
 
 // Init initializes the wallpaper plugin with the given PluginManager.
 func (wp *Plugin) Init(manager ui.PluginManager) {
+	wp.ctx, wp.cancel = context.WithCancel(context.Background())
+
 	wp.manager = manager
 	wp.cfg = GetConfig(manager.GetPreferences())
 
@@ -298,8 +310,6 @@ func (wp *Plugin) Init(manager ui.PluginManager) {
 
 	wp.Monitors = make(map[int]*MonitorController)
 
-	wp.pipeline = NewPipeline(wp.cfg, wp.store, wp.ProcessImageJob)
-	wp.jobSubmitter = wp.pipeline
 	wp.enrichmentSignal = make(chan int, 1)
 
 	log.Debugf("Wallpaper Plugin Initialized.")
@@ -347,6 +357,8 @@ func (wp *Plugin) Activate() {
 	}
 	// Create a new context for this activation cycle
 	wp.ctx, wp.cancel = context.WithCancel(context.Background())
+	wp.pipeline = NewPipeline(wp.ctx, wp.cfg, wp.store, wp.ProcessImageJob)
+	wp.jobSubmitter = wp.pipeline
 
 	if err := wp.fm.EnsureDirs(); err != nil {
 		log.Fatalf("Error ensuring directories: %v", err)
@@ -445,7 +457,9 @@ func (wp *Plugin) Activate() {
 			wp.queryPages[q.ID] = util.NewSafeIntWithValue(1)
 		}
 		wp.downloadMutex.Unlock()
-		wp.FetchNewImages()
+		// Sync Collections and then fetch
+		wp.SyncWallhavenCollections()
+		wp.FetchNewImages(false)
 	}
 	wp.ChangeWallpaperFrequency(wp.cfg.GetWallpaperChangeFrequency(), false)
 
@@ -483,6 +497,7 @@ func (wp *Plugin) Deactivate() {
 	if wp.pipeline != nil {
 		wp.pipeline.Stop()
 	}
+	wp.CancelFetchContext()
 
 	// Stop Monitors
 	wp.monMu.Lock() // Write lock needed for map modification if we were to delete, but here just stopping
@@ -1174,7 +1189,11 @@ func (wp *Plugin) GetOrCreateQueryContext(queryID string) context.Context {
 	}
 
 	// Tie to application background context so global stopping still works
-	ctx, cancel := context.WithCancel(context.Background())
+	parent := wp.ctx
+	if parent == nil {
+		parent = context.Background()
+	}
+	ctx, cancel := context.WithCancel(parent)
 	wp.queryContexts[queryID] = ctx
 	wp.queryCancelFuncs[queryID] = cancel
 	return ctx
@@ -1205,7 +1224,13 @@ func (wp *Plugin) StartFetchContext() context.Context {
 		wp.globalFetchCancel()
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	// Tie to application lifecycle if available
+	parent := wp.ctx
+	if parent == nil {
+		parent = context.Background()
+	}
+
+	ctx, cancel := context.WithCancel(parent)
 	wp.globalFetchCtx = ctx
 	wp.globalFetchCancel = cancel
 	return ctx
@@ -1219,4 +1244,36 @@ func (wp *Plugin) CancelFetchContext() {
 	if wp.globalFetchCancel != nil {
 		wp.globalFetchCancel()
 	}
+}
+
+// getAPILimiter returns the API rate limiter for a specific provider, if configured via the PacedProvider interface.
+func (wp *Plugin) getAPILimiter(p provider.ImageProvider) *rate.Limiter {
+	if paced, ok := p.(provider.PacedProvider); ok {
+		if val, exists := wp.apiLimiters.Load(p.ID()); exists {
+			return val.(*rate.Limiter)
+		}
+		duration := paced.GetAPIPacing()
+		if duration > 0 {
+			limiter := rate.NewLimiter(rate.Every(duration), 1)
+			wp.apiLimiters.Store(p.ID(), limiter)
+			return limiter
+		}
+	}
+	return nil
+}
+
+// getProcessLimiter returns the image download/enrichment limiter for a specific provider, if configured.
+func (wp *Plugin) getProcessLimiter(p provider.ImageProvider) *rate.Limiter {
+	if paced, ok := p.(provider.PacedProvider); ok {
+		if val, exists := wp.processLimiters.Load(p.ID()); exists {
+			return val.(*rate.Limiter)
+		}
+		duration := paced.GetProcessPacing()
+		if duration > 0 {
+			limiter := rate.NewLimiter(rate.Every(duration), 1)
+			wp.processLimiters.Store(p.ID(), limiter)
+			return limiter
+		}
+	}
+	return nil
 }

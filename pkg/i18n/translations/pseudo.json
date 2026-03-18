@@ -215,6 +215,7 @@
   "duplicate query": "[!! duupliicaatee quueery !!]",
   "duplicate query: this URL already exists": "[!! duupliicaatee quueery: thiis UURL aalreeaady eexiists !!]",
   "freely-licensed educational media content available to everyone.": "[!! freeeely-liiceenseed eeduucaatiioonaal meediiaa coonteent aavaaiilaablee too eeveeryoonee. !!]",
+  "only 'Category:', 'File:' or component Search URLs are currently supported directly": "[!! oonly 'Caateegoory:', 'Fiilee:' oor coompooneent Seeaarch UURLs aaree cuurreently suuppoorteed diireectly !!]",
   "wallhaven API Key:": "[!! waallhaaveen AAPII Keey: !!]",
   "{{.Title}} (1 active)": "[!! {{.Title}} (1 aactiivee) !!]",
   "{{.Title}} ({{.Count}} active)": "[!! {{.Title}} ({{.Count}} aactiivee) !!]",
