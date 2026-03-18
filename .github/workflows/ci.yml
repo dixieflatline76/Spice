@@ -204,7 +204,7 @@ jobs:
           $rawSetup = "Spice-Setup-${version}-amd64.exe"
           $newSetup = "Spice-Setup-${version}-windows-amd64.exe"
           
-          $rawDmg = "Spice-${version}-arm64.dmg"
+          $rawDmg = "Spice-${tagName}-arm64.dmg"
           $newDmg = "Spice-${version}-macos-arm64.dmg"
 
           $rawChrome = "spice-extension-chrome.zip"
