@@ -56,12 +56,12 @@ You must implement the following 6 methods.
   * **Methods**:
     * `GetAPIPacing() time.Duration`: Enforces a minimum delay between metadata/enrichment API calls.
     * `GetProcessPacing() time.Duration`: Enforces a minimum delay between actual media file downloads.
-  * **Mechanics**: The overarching `downloader` pipeline runs 16 concurrent workers. If this interface is omitted, workers execute network calls at `rate.Inf` (unlimited burst space). If implemented, workers funnel through a strict `rate.Limiter` queue.
+  * **Mechanics**: The overarching `downloader` pipeline runs 16 concurrent generic workers. If this interface is omitted, jobs are immediately piped to workers at maximum concurrency. If implemented, a central **Fair Bouncer Dispatcher** meticulously spaces out jobs *before* handing them to the workers. This eliminates head-of-line (HOL) blocking and guarantees the provider's API limits are respected without stalling the rest of the application.
 
 * **`provider.CustomClientProvider`**:
   * **Purpose**: Inject a heavily customized HTTP client.
   * **Methods**: `GetClient() *http.Client`
-  * **Mechanics**: Use this to enforce strict server-side restrictions that `PacedProvider` can't handle, such as building a custom `http.RoundTripper` with a global `sync.Mutex` to serialize all connections to exactly 1 inflight request at a time (e.g. used by Wikimedia and ArtInstituteChicago).
+  * **Mechanics**: Use this to enforce transport-layer restrictions that `PacedProvider` alone cannot handle. For example, building a custom `http.RoundTripper` that implements a **Global Circuit Breaker** to instantly halt all downloads across all workers if an HTTP 429 response is encountered (e.g., used by Wikimedia).
 
 ### 2.3 UI Integration
 
