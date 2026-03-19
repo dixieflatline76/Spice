@@ -27,8 +27,8 @@ func (wp *Plugin) ProcessImageJob(ctx context.Context, job DownloadJob) (resultI
 	// If context is cancelled midway through downloading/processing, we aggressively clean up
 	// any master or derivative files we just wrote instead of waiting for the nightly sweep.
 	defer func() {
-		if finalErr != nil && ctx.Err() != nil {
-			log.Debugf("Context cancelled for job %s, running cleanup...", img.ID)
+		if finalErr != nil && wp.fm != nil {
+			log.Debugf("Job failed for %s (Err: %v), cleaning up artifacts...", img.ID, finalErr)
 			_ = wp.fm.DeepDelete(img.ID)
 		}
 	}()
@@ -43,26 +43,16 @@ func (wp *Plugin) ProcessImageJob(ctx context.Context, job DownloadJob) (resultI
 	}
 
 	// 1. Lazy Enrichment (Soft Fail)
-	// Rate limit Image Enrichment (API calls) via PacedProvider interface
+	// (API pacing is automatically handled upstream by the Fair Scheduler Dispatcher)
 	if downloadProvider != nil {
-		if limiter := wp.getAPILimiter(downloadProvider); limiter != nil {
-			log.Debugf("[Pacing] Waiting for API rate limiter slot for provider enrichment %s...", downloadProvider.ID())
-			if err := limiter.Wait(ctx); err != nil {
-				return provider.Image{}, fmt.Errorf("job aborted due to context cancellation during API pacing: %w", err)
-			}
-		}
+		log.Debugf("Enriching image %s...", img.ID)
 	}
 	img = wp.enrichImage(ctx, img, downloadProvider)
 
 	// 2. Ensure Master (Raw Image)
-	// Rate limit Media Fetch (Network downloads) via PacedProvider interface
+	// (Download pacing is automatically handled upstream by the Fair Scheduler Dispatcher)
 	if downloadProvider != nil {
-		if limiter := wp.getProcessLimiter(downloadProvider); limiter != nil {
-			log.Debugf("[Pacing] Waiting for processing rate limiter slot for provider download %s...", downloadProvider.ID())
-			if err := limiter.Wait(ctx); err != nil {
-				return provider.Image{}, fmt.Errorf("job aborted due to context cancellation during download pacing: %w", err)
-			}
-		}
+		log.Debugf("Downloading raw master image %s...", img.ID)
 	}
 	masterPath, err := wp.ensureMaster(ctx, img, downloadProvider)
 	if err != nil {

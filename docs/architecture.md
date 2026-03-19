@@ -80,7 +80,8 @@ graph TD
     end
 
     subgraph Pipeline_Layer ["Pipeline Context"]
-        Workers[["Worker Pool<br/>(Download/Crop)"]]:::pipe
+        Dispatcher{{"Dispatcher<br/>(Fair Bouncer)"}}:::pipe
+        Workers[["16x Worker Pool<br/>(Download/Crop)"]]:::pipe
         Manager(("State Manager<br/>Loop")):::pipe
     end
 
@@ -88,6 +89,7 @@ graph TD
     Plugin -- "1. Dispatch Cmd" --> Monitor1
     Monitor1 -- "2. RLock (Fast)" --> Store
     
+    Dispatcher -- "Paced Jobs" --> Workers
     Workers -- "Result (New Image)" --> Manager
     Manager -- "3. Lock (Exclusive)" --> Store
     
@@ -160,11 +162,12 @@ A persistent, single-goroutine worker that "pivots" to the user's current locati
 
 ### 4.5 Orchestrator & Provider Rate Limiting (Pipeline Concurrency)
 
-To maximize download speeds while safely obeying strict third-party API limits, Spice uses a decoupled bulkhead architecture:
+To maximize download speeds while safely obeying strict third-party API limits, Spice uses a decoupled dispatcher and bulkhead architecture:
 
-- **16 Generic Pipeline Workers**: The core orchestrator spawns 16 parallel workers that rapidly consume incoming image references.
-- **`provider.PacedProvider` Interface**: If a provider implements this, the orchestrator routes the 16 workers through a strict `rate.Limiter`. This forces the parallel workers into a synchronized holding pattern, guaranteeing they only hit the external network at the provider's exact specified cadence (e.g. 1 API call per 2 seconds) eliminating HTTP 429 errors.
-- **`provider.CustomClientProvider` Interface**: For exotic limit architectures (like ArtInstituteChicago's single-threaded serialized fetch requirements), providers can inject entirely custom `http.RoundTripper` pipelines that govern the 16 workers at the transport layer.
+- **Dispatcher (Fair Bouncer)**: Upstream of the pipeline, a dedicated `Dispatcher` manages all incoming download jobs. It queries the `provider.PacedProvider` interface to apply delays *before* the job hits the shared generic pipeline channel, ensuring that heavily rate-limited providers do not cause Head-of-Line (HOL) blocking for fast providers.
+- **16 Generic Pipeline Workers**: The core orchestrator spawns 16 parallel workers that rapidly consume incoming image jobs. These workers no longer have inline generic rate limiters; they execute jobs immediately upon receipt from the queue, maximizing concurrency footprint.
+- **Global Circuit Breakers & Bulkheads**: For extreme throttling conditions (e.g., Wikimedia 429 policies), providers implement dedicated Bulkheads (1-slot semaphores) to force strict serialized access, and a `CircuitBreaker` transport layer that globalizes hard cooldowns across all parallel processing.
+- **`provider.CustomClientProvider` Interface**: For exotic limit architectures (like ArtInstituteChicago), providers can inject entirely custom `http.RoundTripper` pipelines that govern network calls at the transport layer.
 
 ## 3.4 Interaction Flows
 
@@ -326,24 +329,25 @@ IDs are namespaced at the ingestion boundary and de-namespaced when interacting 
 
 ```mermaid
 sequenceDiagram
-    participant P as Plugin (FetchNewImages)
+    participant P as Plugin (fetch_logic.go)
     participant Prov as ImageProvider
-    participant Pipe as Pipeline/Store
-    participant W as Worker (enrichImage)
+    participant Disp as Dispatcher
+    participant Pipe as Worker/Store
 
     Note over P,Prov: "1. Ingestion Phase"
     P->>Prov: FetchImages()
     Prov-->>P: []Image (IDs: 123, 456)
     Note right of P: "Middleware: Prefix IDs (Provider_123)"
-    P->>Pipe: Submit(namespacedJob)
+    P->>Disp: Submit(namespacedJob)
+    Disp->>Pipe: Pace & Queue Job
 
-    Note over W,Prov: "2. Interaction Phase (Lazy Enrichment)"
-    W->>W: Get namespaced ID (Provider_123)
-    Note right of W: "Middleware: Strip Prefix (123)"
-    W->>Prov: EnrichImage(raw_img)
-    Prov-->>W: raw_modified_img
-    Note right of W: "Middleware: Restore Prefix (Provider_123)"
-    W->>Pipe: Save enriched image
+    Note over Pipe,Prov: "2. Interaction Phase (Lazy Processing)"
+    Pipe->>Pipe: Get namespaced ID (Provider_123)
+    Note right of Pipe: "Middleware: Strip Prefix (123)"
+    Pipe->>Prov: EnrichImage(raw_img)
+    Prov-->>Pipe: raw_modified_img
+    Note right of Pipe: "Middleware: Restore Prefix (Provider_123)"
+    Pipe->>Pipe: Save enriched image to Store
 ```
 
 -   **Persistence**: The `ImageStore` and `FileManager` only see and store namespaced IDs (`Provider_ID`).

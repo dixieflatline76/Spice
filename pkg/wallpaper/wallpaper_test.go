@@ -120,7 +120,7 @@ func TestDownloadAllImages(t *testing.T) {
 	wp.fm = NewFileManager(wp.downloadedDir)
 	assert.NoError(t, wp.fm.EnsureDirs())
 	wp.store.SetFileManager(wp.fm, wp.downloadedDir+"/cache.json")
-	wp.pipeline = NewPipeline(context.Background(), wp.cfg, wp.store, wp.ProcessImageJob)
+	wp.pipeline = NewPipeline(context.Background(), wp.cfg, wp.store, wp.ProcessImageJob, nil, nil)
 	wp.jobSubmitter = wp.pipeline
 	wp.pipeline.Start(1)
 	defer wp.pipeline.Stop()
@@ -241,7 +241,7 @@ func TestDownloadAllImages_EnrichmentFailure(t *testing.T) {
 	wp.fm = NewFileManager(wp.downloadedDir)
 	assert.NoError(t, wp.fm.EnsureDirs())
 	wp.store.SetFileManager(wp.fm, wp.downloadedDir+"/cache.json")
-	wp.pipeline = NewPipeline(context.Background(), wp.cfg, wp.store, wp.ProcessImageJob)
+	wp.pipeline = NewPipeline(context.Background(), wp.cfg, wp.store, wp.ProcessImageJob, nil, nil)
 	wp.jobSubmitter = wp.pipeline
 	wp.pipeline.Start(1)
 	defer wp.pipeline.Stop()
@@ -656,7 +656,9 @@ func TestAddQuery_InitializesPage(t *testing.T) {
 		jobSubmitter:       nil,
 		httpClient:         &http.Client{},
 	}
-	wp.pipeline = NewPipeline(context.Background(), cfg, NewImageStore(), func(ctx context.Context, job DownloadJob) (provider.Image, error) { return job.Image, nil })
+	wp.pipeline = NewPipeline(context.Background(), cfg, wp.store, func(ctx context.Context, job DownloadJob) (resultImg provider.Image, finalErr error) {
+		return job.Image, nil
+	}, nil, nil)
 	wp.jobSubmitter = wp.pipeline
 	wp.fm = NewFileManager(wp.downloadedDir)
 

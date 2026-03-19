@@ -19,7 +19,6 @@ func TestBulkhead_LaneSeparation(t *testing.T) {
 	// Setup Plugin with 1-slot wikimedia bulkhead
 	wp := &Plugin{
 		providers:          make(map[string]provider.ImageProvider),
-		wikimediaBulkhead:  make(chan struct{}, 1),
 		queryPages:         make(map[string]*util.SafeCounter),
 		fetchingInProgress: util.NewSafeBool(),
 		store:              &MockImageStore{},
@@ -114,7 +113,6 @@ func TestBulkhead_LaneSeparation(t *testing.T) {
 func TestBulkhead_CircuitBreakerRejection(t *testing.T) {
 	wp := &Plugin{
 		providers:          make(map[string]provider.ImageProvider),
-		wikimediaBulkhead:  make(chan struct{}, 1),
 		queryPages:         make(map[string]*util.SafeCounter),
 		fetchingInProgress: util.NewSafeBool(),
 		store:              &MockImageStore{},
@@ -157,7 +155,6 @@ func TestBulkhead_CircuitBreakerRejection(t *testing.T) {
 func TestBulkhead_Deduplication(t *testing.T) {
 	wp := &Plugin{
 		providers:          make(map[string]provider.ImageProvider),
-		wikimediaBulkhead:  make(chan struct{}, 1),
 		queryPages:         make(map[string]*util.SafeCounter),
 		fetchingInProgress: util.NewSafeBool(),
 		store:              &MockImageStore{},

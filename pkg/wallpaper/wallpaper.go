@@ -115,9 +115,6 @@ type Plugin struct {
 	globalFetchCtx    context.Context
 	globalFetchCancel context.CancelFunc
 	globalFetchMu     sync.Mutex
-
-	// Bulkhead for Wikimedia (isolated slow lane)
-	wikimediaBulkhead chan struct{}
 }
 
 var (
@@ -194,7 +191,6 @@ func getPlugin() *Plugin {
 			fetchingInProgress: util.NewSafeBool(),
 			runOnUI:            fyne.Do,
 			focusProviderName:  "",
-			wikimediaBulkhead:  make(chan struct{}, 1),
 		}
 
 		wpInstance.imgPulseOp = func() { wpInstance.SetNextWallpaper(-1, true) }
@@ -357,7 +353,7 @@ func (wp *Plugin) Activate() {
 	}
 	// Create a new context for this activation cycle
 	wp.ctx, wp.cancel = context.WithCancel(context.Background())
-	wp.pipeline = NewPipeline(wp.ctx, wp.cfg, wp.store, wp.ProcessImageJob)
+	wp.pipeline = NewPipeline(wp.ctx, wp.cfg, wp.store, wp.ProcessImageJob, wp.getAPILimiter, wp.getProcessLimiter)
 	wp.jobSubmitter = wp.pipeline
 
 	if err := wp.fm.EnsureDirs(); err != nil {

@@ -18,7 +18,8 @@ Spice is designed to remain responsive (60fps UI) even while downloading 50MB 8K
     *   **Synchronization Model**: The `Sync` method uses a **Policy Pattern** via `ImageSyncAction` (Keep, Delete, Invalidate). This ensures deterministic state transitions for every image based on active queries, avoid sets, and file availability, replacing complex ad-hoc logic.
 
 *   **The Pipeline (`pkg/wallpaper/pipeline.go`)**: The workhorse.
-    *   **Worker Pool**: N goroutines (default: NumCPU) that fetch and process images. They communicate results via `resultChan`.
+    *   **Dispatcher (Fair Bouncer)**: A dedicated goroutine that holds jobs and trickles them into the worker pool based on strict provider API limits.
+    *   **Worker Pool**: 16 generic goroutines that fetch and process images immediately upon receiving a job. They communicate results via `resultChan`.
     *   **State Manager Loop**: The serialized writer for the **hot path**. It `select`s on:
         1.  `resultChan`: New images from workers -> Calls `store.Add()`.
         2.  `cmdChan`: Commands from UI (`CmdMarkSeen`, `CmdRemove`) -> Calls `store.MarkSeen()`.
