@@ -2,6 +2,7 @@ package wallpaper
 
 import (
 	"context"
+	"golang.org/x/time/rate"
 	"runtime"
 	"strings"
 	"sync"
@@ -13,6 +14,7 @@ import (
 // Pipeline manages a pool of workers to process image downloads.
 type Pipeline struct {
 	jobChan    chan DownloadJob
+	dispatcher *Dispatcher
 	resultChan chan ProcessResult
 	cmdChan    chan StateCmd
 	workerWg   sync.WaitGroup
@@ -53,10 +55,10 @@ type StateCmd struct {
 }
 
 // NewPipeline creates a new pipeline with the given configuration and store.
-func NewPipeline(ctx context.Context, cfg *Config, store StoreInterface, processor ProcessFunc) *Pipeline {
+func NewPipeline(ctx context.Context, cfg *Config, store StoreInterface, processor ProcessFunc, apiLim func(provider.ImageProvider) *rate.Limiter, procLim func(provider.ImageProvider) *rate.Limiter) *Pipeline {
 	ctx, cancel := context.WithCancel(ctx)
-	return &Pipeline{
-		jobChan:    make(chan DownloadJob, 100), // Buffered job channel
+	p := &Pipeline{
+		jobChan:    make(chan DownloadJob), // Unbuffered to strictly guarantee pacing execution
 		resultChan: make(chan ProcessResult, 100),
 		cmdChan:    make(chan StateCmd, 100),
 		ctx:        ctx,
@@ -65,6 +67,8 @@ func NewPipeline(ctx context.Context, cfg *Config, store StoreInterface, process
 		store:      store,
 		processor:  processor,
 	}
+	p.dispatcher = NewDispatcher(ctx, p.jobChan, apiLim, procLim, &p.workerWg)
+	return p
 }
 
 // Start starts the worker pool.
@@ -89,17 +93,12 @@ func (p *Pipeline) Stop() {
 	log.Println("Pipeline Stopped.")
 }
 
-// Submit submits a job to the pipeline.
+// Submit submits a job to the pipeline perfectly paced by the Dispatcher.
 // Returns false if pipeline is stopped or if the provided context is cancelled.
 func (p *Pipeline) Submit(ctx context.Context, job DownloadJob) bool {
-	select {
-	case p.jobChan <- job:
-		return true
-	case <-ctx.Done():
-		return false
-	case <-p.ctx.Done():
-		return false
-	}
+	// The Dispatcher natively handles provider cooldowns and drops the job
+	// into p.jobChan ONLY when it is fully ready to be processed without sleeping.
+	return p.dispatcher.Submit(job)
 }
 
 // workerLoop is the main loop for a worker goroutine.

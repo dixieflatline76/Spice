@@ -78,15 +78,6 @@ func (wp *Plugin) FetchNewImages(force bool, providerID ...string) {
 				go func(q ImageQuery, p provider.ImageProvider) {
 					defer wg.Done()
 
-					// Pattern: Bulkhead
-					// Wikimedia uses a dedicated lane to avoid blocking other providers.
-					var mySem chan struct{}
-					if p.ID() == "Wikimedia" {
-						mySem = wp.wikimediaBulkhead
-					} else {
-						mySem = sem
-					}
-
 					// Pattern: Early Exit (Circuit Breaker)
 					if tp, ok := p.(provider.ThrottledProvider); ok {
 						if tp.IsThrottled() {
@@ -95,10 +86,20 @@ func (wp *Plugin) FetchNewImages(force bool, providerID ...string) {
 						}
 					}
 
-					log.Debugf("[Fetch] %s Waiting for slot... (Lane Load: %d/%d)", p.ID(), len(mySem), cap(mySem))
+					// Pattern: Pacing Penalty OUTSIDE of CPU semaphore
+					// Wait freely without holding any execution lock so we don't starve fast providers!
+					if limiter := wp.getAPILimiter(p); limiter != nil {
+						log.Debugf("[Pacing] Waiting for API rate limiter slot for provider %s...", p.ID())
+						if err := limiter.Wait(fetchCtx); err != nil {
+							log.Printf("Provider %s fetch aborted due to context cancellation during pacing: %v", p.ID(), err)
+							return
+						}
+					}
+
+					log.Debugf("[Fetch] %s Waiting for slot... (Lane Load: %d/%d)", p.ID(), len(sem), cap(sem))
 					select {
-					case mySem <- struct{}{}:
-						defer func() { <-mySem }()
+					case sem <- struct{}{}:
+						defer func() { <-sem }()
 					case <-fetchCtx.Done():
 						return
 					}
@@ -190,13 +191,7 @@ func (wp *Plugin) fetchFromProvider(fetchCtx context.Context, q ImageQuery, p pr
 	defer cancel()
 
 	// Rate limit API calls via PacedProvider interface
-	if limiter := wp.getAPILimiter(p); limiter != nil {
-		log.Debugf("[Pacing] Waiting for API rate limiter slot for provider %s...", p.ID())
-		if err := limiter.Wait(ctx); err != nil {
-			log.Printf("Provider %s fetch aborted due to context cancellation during pacing: %v", p.ID(), err)
-			return
-		}
-	}
+	// Pattern updated: Pacing penalty is now paid BEFORE grabbing the global semaphore in FetchNewImages.
 
 	images, err := p.FetchImages(ctx, q.URL, page)
 	if err != nil {

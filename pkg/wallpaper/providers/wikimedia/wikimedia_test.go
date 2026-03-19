@@ -202,10 +202,8 @@ func TestCircuitBreaker(t *testing.T) {
 	assert.False(t, cb.IsOpen())
 }
 
-func TestThrottledRoundTripper_429(t *testing.T) {
+func TestCircuitBreakerRoundTripper_429(t *testing.T) {
 	cb := &CircuitBreaker{}
-	apiSem := make(chan struct{}, 1)
-	mediaSem := make(chan struct{}, 1)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Retry-After", "1")
@@ -213,11 +211,9 @@ func TestThrottledRoundTripper_429(t *testing.T) {
 	}))
 	defer server.Close()
 
-	tripper := &ThrottledRoundTripper{
-		Base:     server.Client().Transport,
-		CB:       cb,
-		APISem:   apiSem,
-		MediaSem: mediaSem,
+	tripper := &CircuitBreakerRoundTripper{
+		Base: server.Client().Transport,
+		CB:   cb,
 	}
 
 	// Use context with timeout for safety
@@ -233,4 +229,76 @@ func TestThrottledRoundTripper_429(t *testing.T) {
 
 	// Check if CB is tripped
 	assert.True(t, cb.IsOpen())
+}
+
+func TestWikimediaPaginationState(t *testing.T) {
+	callCount := 0
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+
+		var response string
+		switch callCount {
+		case 1:
+			// First call, no continue params. Returns page 1 and tokens for page 2.
+			assert.Empty(t, r.URL.Query().Get("continue"))
+			response = `{
+				"query": {
+					"pages": {
+						"1": {
+							"pageid": 1,
+							"title": "File:1.jpg",
+							"imageinfo": [{"url": "https://upload.wikimedia.org/1.jpg", "extmetadata": {}}]
+						}
+					}
+				},
+				"continue": {
+					"continue": "-||",
+					"gcmcontinue": "page|12345"
+				}
+			}`
+		case 2:
+			// Second call, should have the tokens injected from the cache.
+			assert.Equal(t, "-||", r.URL.Query().Get("continue"))
+			assert.Equal(t, "page|12345", r.URL.Query().Get("gcmcontinue"))
+			response = `{
+				"query": {
+					"pages": {
+						"2": {
+							"pageid": 2,
+							"title": "File:2.jpg",
+							"imageinfo": [{"url": "https://upload.wikimedia.org/2.jpg", "extmetadata": {}}]
+						}
+					}
+				}
+			}`
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(response))
+	}))
+	defer ts.Close()
+
+	cfg := &wallpaper.Config{}
+	client := ts.Client()
+	wp := NewWikimediaProvider(cfg, client)
+	wp.baseURL = ts.URL
+
+	// 1. Fetch Page 1
+	images1, err := wp.FetchImages(context.Background(), "category:Nature", 1)
+	assert.NoError(t, err)
+	assert.Len(t, images1, 1)
+	assert.Equal(t, "1", images1[0].ID)
+	// Assert state was populated tightly mapped to subsequent page 2
+	assert.NotNil(t, wp.queryTokens["category:Nature"])
+	assert.NotNil(t, wp.queryTokens["category:Nature"][2])
+	assert.Equal(t, "-||", wp.queryTokens["category:Nature"][2].Get("continue"))
+
+	// 2. Fetch Page 2
+	images2, err := wp.FetchImages(context.Background(), "category:Nature", 2)
+	assert.NoError(t, err)
+	assert.Len(t, images2, 1)
+	assert.Equal(t, "2", images2[0].ID)
+
+	// 3. Assert call count to ensure exactly 2 distinct HTTP hits occurred
+	assert.Equal(t, 2, callCount)
 }
