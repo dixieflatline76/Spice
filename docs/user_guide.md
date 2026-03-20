@@ -249,7 +249,7 @@ The "Favorites" provider is the heart of Spice's localized content. It acts as a
 - **Deep Integration**: Favorited images preserve their original metadata, so you can still use the "Open in Browser" feature to visit the original source.
 
 **How to Use:**
-- **Adding**: Click the Heart icon in the tray menu or use `Alt` + `N` + `↑` (Windows) / `Cmd` + `Control` + `N` + `↑` (macOS).
+- **Adding**: Click the Heart icon in the tray menu or use `Alt` + `N` + `↑` (Windows) / `Command` + `N` + `↑` (macOS).
 - **Managing**: Go to the **Local** tab to see your library. You can browse, open, or clear your entire collection.
 - **Storage**: Favorites images are stored in your system's application data directory. Use the **Open Favorites Folder** button to access them directly.
 

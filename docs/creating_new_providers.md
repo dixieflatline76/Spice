@@ -2,6 +2,15 @@
 
 A deep-dive technical guide for implementing new image sources in Spice (v1.1.0+).
 
+### Prerequisites — Recommended Reading Order
+
+Before starting, familiarize yourself with these documents in order:
+
+1.  **This document** — The primary provider creation guide (interface, settings, Apply lifecycle).
+2.  **`architecture.md` §3–4** — The pipeline, store, and actor model your provider plugs into.
+3.  **`internal_developer_context.md` §1–4** — Concurrency model, existing provider deep-dives, and the extension guide.
+4.  **`creating_new_museum_providers.md`** — Only if building a cultural institution provider.
+
 ## 1. Provider Architecture
 
 Spice uses a **Registry Pattern** to decouple providers. Providers are standalone packages in `pkg/wallpaper/providers/<name>`.
@@ -123,8 +132,6 @@ Constructs the image source list.
        },
    )
    ```
-
-## 4. The "Apply" Lifecycle (Critical)
 
 ## 4. The "Apply" Lifecycle (Critical Pattern)
 
@@ -249,17 +256,27 @@ func (p *Provider) resolveIDs(query string) ([]int, error) {
 }
 ```
 
-## 6. Registration (Automated)
+## 6. ID Namespacing (Automatic)
+
+To prevent ID collisions across providers (e.g., Pexels and Wallhaven both using numeric IDs), Spice applies a **transparent namespacing middleware**.
+
+*   **How it works**: When `FetchImages` returns images with IDs like `123`, the pipeline automatically prefixes them as `YourProvider_123` before storing.
+*   **Transparency**: Your provider code never sees the prefix. `EnrichImage` receives the raw ID (`123`), and the pipeline re-applies the namespace after enrichment.
+*   **You do nothing**: This is handled entirely by the pipeline. Just return clean, provider-native IDs from your methods.
+
+For full details, see `architecture.md` §3.12.
+
+## 7. Registration (Automated)
  
  Spice uses a code generation tool (`cmd/util/gen_providers`) to automatically register all providers found in `pkg/wallpaper/providers/`.
  
- ### 6.1 The Logic
+ ### 7.1 The Logic
  
  1.  **Auto-Discovery**: The tool scans the `providers/` directory for subdirectories.
  2.  **Generation**: It creates `cmd/spice/zz_generated_providers.go`, which contains the necessary `_` imports to trigger the `init()` functions of your providers.
  3.  **Build Integration**: The generation runs automatically via `go generate` (called by `make build` or `make run`).
  
- ### 6.2 Disabling a Provider
+ ### 7.2 Disabling a Provider
  
  To temporarily disable a provider without deleting the code:
  
@@ -267,18 +284,18 @@ func (p *Provider) resolveIDs(query string) ([]int, error) {
  2.  Run `go generate ./...` (or `make gen`).
  3.  The tool will skip this directory when generating `zz_generated_providers.go`, effectively compiling it out of the final binary.
  
- ### 6.3 Manual imports (Legacy/Debug)
+ ### 7.3 Manual imports (Legacy/Debug)
  
  You do **not** need to manually edit `cmd/spice/main.go` anymore. The `//go:generate` directive at the top of `main.go` handles this.
 
 
-## 6. Testing
+## 8. Testing
 
 * **Unit**: Test `ParseURL` with table-driven tests.
 * **Integration**: Mock the `http.Client` or usage `httptest.Server` to test `FetchImages` without real network calls.
 * **UI**: UI testing is optional but recommended if complex.
 
-## 7. Browser Extension Integration
+## 9. Browser Extension Integration
 
 If your provider supports "copy-pasting" URLs from the browser (like Wallhaven or Pexels), you can integrate with the Spice Safari/Chrome extension.
 
@@ -295,13 +312,28 @@ If your provider supports "copy-pasting" URLs from the browser (like Wallhaven o
     make sync-extension
     ```
 
-## Reference
 
-## 8. The Museum Template (v1.6+)
+## 10. Rate Limiting — Decision Tree
+
+Spice has three distinct rate limiting mechanisms. Choose based on your API's behavior:
+
+| Scenario | Mechanism | What to Implement |
+| :--- | :--- | :--- |
+| **Standard API limits** (e.g., 45 RPM) | **`PacedProvider`** | Return appropriate `time.Duration` from `GetAPIPacing()` and `GetProcessPacing()`. The Fair Bouncer Dispatcher spaces out jobs automatically. |
+| **Aggressive 429 responses** (e.g., Wikimedia) | **`CustomClientProvider`** + Circuit Breaker | Return a custom `*http.Client` with a `RoundTripper` that implements a global circuit breaker. Halts all workers instantly on 429. |
+| **Fragile / slow APIs** (e.g., Museum endpoints) | **`errgroup` + manual delays** | Use `errgroup.SetLimit(N)` for concurrency caps and/or `time.Sleep` between batches. Consider a `sync.Mutex`-based `RoundTripper` for strict serialization. |
+
+**Rules of Thumb:**
+*   If your API publishes a rate limit (e.g., "45 requests per minute"), use `PacedProvider`. It's the simplest.
+*   If your API aggressively returns HTTP 429 and bans repeat offenders, use `CustomClientProvider` with a circuit breaker transport.
+*   If your API is undocumented or fragile (common with museum/institutional APIs), be conservative — use `errgroup` with a low limit (3–5) and manual sleep between requests.
+*   **Never** rely on the 16 generic pipeline workers for pacing — they execute immediately. All pacing must happen upstream.
+
+## 11. The Museum Template (v1.6+)
 
 For cultural institutions (Museums, Archives), Spice provides a standardized "Evangelist" UI template designed to drive engagement rather than just utility.
 
-### 8.1 Core Components (`ui_museum.go`)
+### 11.1 Core Components (`ui_museum.go`)
 
 *   **Header**: Use `wallpaper.CreateMuseumHeader`.
     *   **Arguments**: Name, Location, Description, MapURL, WebURL, DonateURL, SettingsManager.
@@ -310,12 +342,12 @@ For cultural institutions (Museums, Archives), Spice provides a standardized "Ev
         *   **Clickable License**: Supports explicit licensing links (e.g., CC0) in the header metadata.
         *   **Romance Copy**: Supports long-form, evocative descriptions to "sell the magic" of the institution.
 
-### 8.2 Collections as Tours
+### 11.2 Collections as Tours
 Instead of raw database categories, frame collections as curated experiences:
 *   **Bad**: "Department 1", "Asian Art".
 *   **Good**: "Director's Cut", "Arts of Asia", "The Impressionist Era".
 
-### 8.3 Interaction Model
+### 11.3 Interaction Model
 *   **Fixed List**: Use a fixed set of checkboxes (via `widget.NewCheck`) for collections.
 *   **No Delete**: Unlike generic queries, these are permanent fixtures of the provider.
 *   **Toggle Logic**: Map checkbox states directly to `cfg.Enable/DisableQuery`.

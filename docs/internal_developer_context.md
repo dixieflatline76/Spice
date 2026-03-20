@@ -82,8 +82,8 @@ Key logic patterns for the major providers in `pkg/wallpaper/providers/`.
 *   **The Template**: Uses `wallpaper.CreateMuseumHeader` for a standardized "Institution" look.
 *   **Director's Cut Configuration**: Unlike generic search providers, The Met uses a **Fixed List** of curated `const` queries (e.g., "Arts of Asia"). These are rendered as `widget.NewCheck` logic groups, not a dynamic `widget.List`.
 *   **Parallel Fetching**: Uses `errgroup` with a concurrency limit (5) to "scan" for valid images.
-*   **Filtering**: Implementation strictly filters images:
-    *   **Aspect Ratio**: Must be > 1.2 (Strict Landscape). Rejects portraits and squares.
+*   **Filtering**: Implementation filters images:
+    *   **Shape**: Rejects extreme aspect ratios (>3.0 or <0.33) but allows both landscape and portrait, since `SmartImageProcessor` handles orientation scaling for multi-monitor setups.
     *   **Quality**: Must have high-res `primaryImage`.
 
 ### 3.3 Favorites (`favorites.go`)
