@@ -27,6 +27,7 @@ Spice is a minimalist wallpaper manager that automatically cycles high-quality w
 *   **🏛️ The Museum Experience:** Turn your desk into a gallery with 4K+ Open Access masterpieces from **The Met** and **Art Institute of Chicago**.
 *   **📸 Curated Sources:** Native support for **Wallhaven**, **Pexels**, and **Wikimedia Commons**.
 *   **☁️ Personal Collections:** Seamlessly cycle your own memories with **Google Photos** integration.
+*   **📁 Local Folders:** Point Spice to any directory on your computer to use your existing wallpaper library.
 *   **❤️ Local Favorites:** Build your own curated collection that works offline.
 
 ### 🧠 Smart Technology
@@ -122,7 +123,6 @@ We have big plans for Spice!
 
 * **Linux & Intel Mac Support:** While we currently focus on Apple Silicon (arm64), we plan to expand our official builds to Intel Macs and Linux.
 * **More Providers:** Adding support for other wallpaper sources like **Pixabay**, **Cleveland Museum of Art**, and the **Rijksmuseum** (Amsterdam).
-* **Local Collections:** Point Spice to any folder on your computer to use your existing wallpaper library.
 * **Customizable Keyboard Shortcuts:** Full control over modifier keys and hotkey combinations to avoid OS-level conflicts.
 
 ## ⚠️ Known Limitations

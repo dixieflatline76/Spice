@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -176,10 +177,22 @@ func (p *Provider) FetchImages(ctx context.Context, folderPath string, page int)
 }
 
 func (p *Provider) CreateSettingsPanel(_ setting.SettingsManager) fyne.CanvasObject {
-	return container.NewVBox(
+	vbox := container.NewVBox(
 		widget.NewLabelWithStyle(i18n.T("Local Folders"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		widget.NewLabel(i18n.T("Browse to a folder on your computer containing wallpaper images.")),
 	)
+
+	if runtime.GOOS == "windows" {
+		winHelp := widget.NewLabelWithStyle(
+			i18n.T("Note (Windows): Due to OS limitations, to select a folder you must click on any image file inside the desired folder and then click 'Open'. The entire folder containing that image will be added."),
+			fyne.TextAlignLeading,
+			fyne.TextStyle{Italic: true},
+		)
+		winHelp.Wrapping = fyne.TextWrapWord
+		vbox.Add(winHelp)
+	}
+
+	return vbox
 }
 
 func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, _ string) fyne.CanvasObject {

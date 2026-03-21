@@ -257,6 +257,7 @@ The "Favorites" provider is the heart of Spice's localized content. It acts as a
 Want to use your own photography or personal collection?
 1. Open **Preferences → Wallpaper → Local**.
 2. Click **Add Folder** to select a directory on your computer.
+   - **Note for Windows Users:** Due to OS limitations, the folder picker requires you to select a specific file. Navigate to your desired folder, click on **any image file** inside it, and click "Open". Spice will automatically add the entire folder containing that image to your rotation, not just the single file.
 3. Spice will search for high-resolution images (`.jpg`, `.png`, `.webp`) and add them to your rotation.
 4. **Tip**: Click the folder name in the list to open that directory directly in your file explorer.
 
