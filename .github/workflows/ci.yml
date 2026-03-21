@@ -85,8 +85,6 @@ jobs:
           UNSPLASH_CLIENT_SECRET: ${{ secrets.UNSPLASH_CLIENT_SECRET }}
           GOOGLE_PHOTOS_CLIENT_ID: ${{ secrets.GOOGLE_PHOTOS_CLIENT_ID }}
           GOOGLE_PHOTOS_CLIENT_SECRET: ${{ secrets.GOOGLE_PHOTOS_CLIENT_SECRET }}
-          WIKIMEDIA_CLIENT_ID: ${{ secrets.WIKIMEDIA_CLIENT_ID }}
-          WIKIMEDIA_CLIENT_SECRET: ${{ secrets.WIKIMEDIA_CLIENT_SECRET }}
         run: make build-win-amd64
 
       - name: Build Setup
@@ -148,8 +146,6 @@ jobs:
           UNSPLASH_CLIENT_SECRET: ${{ secrets.UNSPLASH_CLIENT_SECRET }}
           GOOGLE_PHOTOS_CLIENT_ID: ${{ secrets.GOOGLE_PHOTOS_CLIENT_ID }}
           GOOGLE_PHOTOS_CLIENT_SECRET: ${{ secrets.GOOGLE_PHOTOS_CLIENT_SECRET }}
-          WIKIMEDIA_CLIENT_ID: ${{ secrets.WIKIMEDIA_CLIENT_ID }}
-          WIKIMEDIA_CLIENT_SECRET: ${{ secrets.WIKIMEDIA_CLIENT_SECRET }}
         run: |
           xcodebuild -project "Spice Wallpaper Manager Extension/Spice Wallpaper Manager Extension.xcodeproj" \
             -scheme "Spice Wallpaper Manager Extension (macOS)" \
