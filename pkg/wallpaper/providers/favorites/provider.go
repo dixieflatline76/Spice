@@ -2,6 +2,7 @@ package favorites
 
 import (
 	"context"
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -16,7 +17,6 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/storage"
-	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/dixieflatline76/Spice/v2/config"
 	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
@@ -25,6 +25,9 @@ import (
 	"github.com/dixieflatline76/Spice/v2/pkg/wallpaper"
 	"github.com/dixieflatline76/Spice/v2/util/log"
 )
+
+//go:embed Favorites.png
+var iconData []byte
 
 const (
 	ProviderName = "Favorites"
@@ -177,12 +180,7 @@ func (p *Provider) HomeURL() string {
 }
 
 func (p *Provider) GetProviderIcon() fyne.Resource {
-	res, err := p.cfg.GetAssetManager().GetIcon("favorite.png")
-	if err != nil {
-		log.Printf("Failed to load favorite.png: %v", err)
-		return theme.SettingsIcon()
-	}
-	return res
+	return fyne.NewStaticResource(ProviderName, iconData)
 }
 
 func (p *Provider) ParseURL(webURL string) (string, error) {

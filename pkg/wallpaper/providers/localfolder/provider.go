@@ -2,6 +2,7 @@ package localfolder
 
 import (
 	"context"
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -24,6 +25,9 @@ import (
 	"github.com/dixieflatline76/Spice/v2/pkg/wallpaper"
 	"github.com/dixieflatline76/Spice/v2/util/log"
 )
+
+//go:embed localfolder.png
+var iconData []byte
 
 const ProviderName = "LocalFolder"
 
@@ -76,10 +80,6 @@ func (p *Provider) Title() string {
 
 func (p *Provider) HomeURL() string {
 	return ""
-}
-
-func (p *Provider) GetProviderIcon() fyne.Resource {
-	return theme.FolderIcon()
 }
 
 func (p *Provider) ParseURL(webURL string) (string, error) {
@@ -303,4 +303,9 @@ func (p *Provider) ResolveNamespace(namespace, collectionID string) (string, boo
 		}
 	}
 	return "", false
+}
+
+// GetProviderIcon returns the provider's icon for the tray menu.
+func (p *Provider) GetProviderIcon() fyne.Resource {
+	return fyne.NewStaticResource(ProviderName, iconData)
 }
