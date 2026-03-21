@@ -57,6 +57,30 @@ func (s *Server) handleLocal(w http.ResponseWriter, r *http.Request) {
 
 	rootPath, ok := s.namespaces[namespace]
 	if !ok {
+		// Try dynamic resolver (used by Local Folder provider)
+		if s.resolver != nil {
+			directPath, resolved := s.resolver(namespace, collectionID)
+			if resolved {
+				switch actionOrType {
+				case "images":
+					// For dynamic paths, use the directPath as the scan root.
+					// We pass collectionID (the hash) so the handler can still
+					// use it to generate stable asset URLs.
+					h := NewLocalListingHandler(s, w, r, "", namespace, collectionID)
+					h.collectionPath = directPath
+					h.Handle()
+				case "assets":
+					if len(parts) < 4 {
+						http.Error(w, "Missing filename", http.StatusBadRequest)
+						return
+					}
+					s.handleLocalAsset(w, r, directPath, parts[3])
+				default:
+					http.Error(w, "Unknown action", http.StatusNotFound)
+				}
+				return
+			}
+		}
 		http.Error(w, "Namespace not found", http.StatusNotFound)
 		return
 	}

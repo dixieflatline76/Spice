@@ -110,6 +110,10 @@ func (p *WikimediaProvider) Type() provider.ProviderType {
 	return provider.TypeOnline
 }
 
+func (p *WikimediaProvider) GetAttributionType() provider.AttributionType {
+	return provider.AttributionBy
+}
+
 func (p *WikimediaProvider) SupportsUserQueries() bool {
 	return true
 }
@@ -689,7 +693,8 @@ func (p *WikimediaProvider) createImgQueryList(sm setting.SettingsManager) *widg
 	})
 }
 
-func (p *WikimediaProvider) getDisplayURL(queryURL string) *url.URL {
+func (p *WikimediaProvider) getDisplayURL(q wallpaper.ImageQuery) *url.URL {
+	queryURL := q.URL
 	lowerURL := strings.ToLower(queryURL)
 	var displayURL string
 	if strings.HasPrefix(lowerURL, "category:") {

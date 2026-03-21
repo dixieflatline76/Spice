@@ -26,6 +26,7 @@ func NewMigrationChain() *MigrationChain {
 			BackfillUnifiedStep,
 			SanitizeFaceSettingsStep,
 			PruneStaleFavoritesStep,
+			EnsureManagedFavoritesStep,
 			UpdateCollisionsStep,
 		},
 	}
@@ -67,6 +68,7 @@ func EnsureFavoritesStep(cfg *Config) (bool, error) {
 			URL:         FavoritesQueryID,
 			Active:      true,
 			Provider:    "Favorites",
+			Managed:     true, // Ensure new Favorites are managed
 		}
 		cfg.Queries = append(cfg.Queries, favQuery)
 		return true, nil
@@ -208,6 +210,19 @@ func UpdateCollisionsStep(cfg *Config) (bool, error) {
 		if cfg.Queries[i].ID != newID {
 			log.Printf("Migration: Updating query ID for %s: %s -> %s", cfg.Queries[i].Provider, cfg.Queries[i].ID, newID)
 			cfg.Queries[i].ID = newID
+			changed = true
+		}
+	}
+	return changed, nil
+}
+
+// EnsureManagedFavoritesStep ensures existing Favorites queries are marked as Managed.
+func EnsureManagedFavoritesStep(cfg *Config) (bool, error) {
+	changed := false
+	for i := range cfg.Queries {
+		if cfg.Queries[i].Provider == "Favorites" && !cfg.Queries[i].Managed {
+			log.Printf("Migration: Marking Favorites query as managed: %s", cfg.Queries[i].ID)
+			cfg.Queries[i].Managed = true
 			changed = true
 		}
 	}

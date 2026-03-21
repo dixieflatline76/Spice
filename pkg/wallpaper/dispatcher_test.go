@@ -40,6 +40,9 @@ func (m *MockPacedProvider) GetProviderIcon() fyne.Resource { return nil }
 func (m *MockPacedProvider) HomeURL() string                { return "" }
 func (m *MockPacedProvider) Title() string                  { return m.id }
 func (m *MockPacedProvider) Type() provider.ProviderType    { return provider.TypeOnline }
+func (m *MockPacedProvider) GetAttributionType() provider.AttributionType {
+	return provider.AttributionBy
+}
 
 func (m *MockPacedProvider) GetAPIPacing() time.Duration     { return m.apiPacing }
 func (m *MockPacedProvider) GetProcessPacing() time.Duration { return m.procPacing }

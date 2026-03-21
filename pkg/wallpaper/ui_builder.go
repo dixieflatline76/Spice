@@ -280,6 +280,16 @@ func (b *PrefsPanelBuilder) BuildProviderTabs() (fyne.CanvasObject, fyne.CanvasO
 		}
 	})
 
+	// Register with SM to refresh on ANY settings change (Reactive Titles)
+	b.sm.RegisterRefreshFunc(func() {
+		if refreshOnline != nil {
+			refreshOnline()
+		}
+		if refreshLocal != nil {
+			refreshLocal()
+		}
+	})
+
 	return onlineTab, localTab, targetTabIndex
 }
 
@@ -359,8 +369,16 @@ func (b *PrefsPanelBuilder) createTitleFunc(p provider.ImageProvider) func() str
 		}
 		activeCount := 0
 		for _, q := range b.plugin.cfg.GetQueries() {
-			if q.Provider == p.ID() && q.Active {
-				activeCount++
+			if q.Provider == p.ID() {
+				// Reactive: Check pending state in SM first, then fallback to persisted config
+				isActive := q.Active
+				if b.sm.HasPendingChange(q.ID) {
+					isActive = !q.Active // If it has a pending change, the state is flipped from baseline
+				}
+
+				if isActive {
+					activeCount++
+				}
 			}
 		}
 		if activeCount > 0 {

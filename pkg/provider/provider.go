@@ -45,6 +45,14 @@ const (
 	TypeAI
 )
 
+// AttributionType defines how an image's attribution should be phrased (e.g., "By Photographer" vs "In Folder").
+type AttributionType int
+
+const (
+	AttributionBy AttributionType = iota
+	AttributionIn
+)
+
 // ImageProvider defines the interface for an image service.
 type ImageProvider interface {
 	// ID returns a stable, non-localized provider ID.
@@ -53,6 +61,8 @@ type ImageProvider interface {
 	Name() string
 	// Type returns the provider category (Online, Local, AI).
 	Type() ProviderType
+	// GetAttributionType returns the preferred phrasing for attribution (e.g. By or In).
+	GetAttributionType() AttributionType
 	// HomeURL returns the home URL of the provider service.
 	HomeURL() string
 	// ParseURL checks if the given web URL is valid for this provider and returns the API URL.

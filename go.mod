@@ -5,9 +5,9 @@ go 1.25.0
 require fyne.io/fyne/v2 v2.7.3
 
 require (
-	al.essio.dev/pkg/shellescape v1.6.0 // indirect
 	github.com/danieljoos/wincred v1.2.3 // indirect
 	github.com/fyne-io/oksvg v0.2.0 // indirect
+	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/hack-pad/go-indexeddb v0.3.2 // indirect
 	github.com/hack-pad/safejs v0.1.1 // indirect
@@ -30,7 +30,7 @@ require (
 	github.com/go-gl/glfw/v3.3/glfw v0.0.0-20250301202403-da16c1255728 // indirect
 	github.com/go-text/render v0.2.1 // indirect
 	github.com/go-text/typesetting v0.3.4 // indirect
-	github.com/godbus/dbus/v5 v5.1.0 // indirect
+	github.com/godbus/dbus/v5 v5.2.2 // indirect
 	github.com/jeandeaual/go-locale v0.0.0-20250612000132-0ef82f21eade // indirect
 	github.com/jsummers/gobmp v0.0.0-20230614200233-a9de23ed2e25 // indirect
 	github.com/muesli/smartcrop v0.3.0
@@ -52,7 +52,8 @@ require (
 	github.com/google/go-github/v63 v63.0.0
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
-	github.com/zalando/go-keyring v0.2.6
+	github.com/harry1453/go-common-file-dialog v1.2.1-0.20250428222125-566edcc205d7
+	github.com/zalando/go-keyring v0.2.7
 	golang.design/x/hotkey v0.4.1
 	golang.org/x/image v0.36.0
 	golang.org/x/mod v0.33.0

@@ -199,7 +199,14 @@ func (wp *Plugin) fetchFromProvider(fetchCtx context.Context, q ImageQuery, p pr
 		return
 	}
 	if len(images) == 0 {
-		log.Printf("Provider %s returned no new images.", q.Provider)
+		log.Printf("Provider %s returned no new images for query %s.", q.Provider, q.ID)
+		// Auto-reset to page 1 for local providers to ensure they cycle through content correctly.
+		// For online providers, we stay on the last page to avoid redundant scanning.
+		if page > 1 && p.Type() == provider.TypeLocal {
+			pg.Set(1)
+			wp.saveQueryPages()
+			log.Debugf("Query %s: End of local content reached. Resetting to page 1.", q.ID)
+		}
 		return
 	}
 
@@ -256,9 +263,9 @@ func (wp *Plugin) fetchFromProvider(fetchCtx context.Context, q ImageQuery, p pr
 		}
 	}
 
-	if queuedForThisQuery > 0 {
+	if len(images) > 0 {
 		pg.Increment()
 		wp.saveQueryPages() // Persist pagination state
-		log.Debugf("Query %s: Successfully queued %d images. Incrementing to page %d", q.ID, queuedForThisQuery, pg.Value())
+		log.Debugf("Query %s: Successfully processed page %d (Found: %d, Queued: %d). Incrementing to page %d", q.ID, page, len(images), queuedForThisQuery, pg.Value())
 	}
 }

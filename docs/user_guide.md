@@ -250,14 +250,16 @@ The "Favorites" provider is the heart of Spice's localized content. It acts as a
 
 **How to Use:**
 - **Adding**: Click the Heart icon in the tray menu or use `Alt` + `N` + `↑` (Windows) / `Command` + `N` + `↑` (macOS).
-- **Managing**: Go to the **Local** tab to see your library. You can browse, open, or clear your entire collection.
-- **Storage**: Favorites images are stored in your system's application data directory. Use the **Open Favorites Folder** button to access them directly.
+- **Managing**: Go to the **Local** tab to see your library. You can toggle your favorites on/off or clear your entire collection using the **Clear** button.
+- **Quick-Access**: Click the **"❤️ Personal Favorites"** name in the list to immediately open your local favorites folder in the OS file explorer.
 
 #### Local Folders
 Want to use your own photography or personal collection?
 1. Open **Preferences → Wallpaper → Local**.
 2. Click **Add Folder** to select a directory on your computer.
-3. Spice will recursively search for high-resolution images (`.jpg`, `.png`, `.webp`) and add them to your rotation.
+   - **Note for Windows Users:** Due to OS limitations, the folder picker requires you to select a specific file. Navigate to your desired folder, click on **any image file** inside it, and click "Open". Spice will automatically add the entire folder containing that image to your rotation, not just the single file.
+3. Spice will search for high-resolution images (`.jpg`, `.png`, `.webp`) and add them to your rotation.
+4. **Tip**: Click the folder name in the list to open that directory directly in your file explorer.
 
 ---
 

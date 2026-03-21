@@ -77,6 +77,9 @@ func (m *BenchMockProvider) CreateSettingsPanel(sm setting.SettingsManager) fyne
 func (m *BenchMockProvider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl string) fyne.CanvasObject {
 	return nil
 }
+func (m *BenchMockProvider) GetAttributionType() provider.AttributionType {
+	return provider.AttributionBy
+}
 func (m *BenchMockProvider) GetDownloadHeaders() map[string]string { return nil }
 
 // MockOS for benchmarking

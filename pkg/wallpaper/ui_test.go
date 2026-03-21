@@ -3,11 +3,13 @@
 package wallpaper
 
 import (
+	"context"
 	"testing"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/widget"
+	"github.com/dixieflatline76/Spice/v2/pkg/provider"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -25,6 +27,8 @@ type MockSettingsManager struct {
 	selectWidgets  map[string]*setting.SelectConfig
 	checkWidgets   map[string]*widget.Check
 	managedWidgets []managedMockWidget
+	pendingChanges map[string]bool
+	refreshFuncs   []func()
 }
 
 func NewMockSettingsManager() *MockSettingsManager {
@@ -32,6 +36,7 @@ func NewMockSettingsManager() *MockSettingsManager {
 		selectWidgets:  make(map[string]*setting.SelectConfig),
 		checkWidgets:   make(map[string]*widget.Check),
 		managedWidgets: make([]managedMockWidget, 0),
+		pendingChanges: make(map[string]bool),
 	}
 }
 
@@ -114,7 +119,7 @@ func (m *MockSettingsManager) UnsetRefreshFlag(settingName string) {
 }
 
 func (m *MockSettingsManager) RegisterRefreshFunc(refreshFunc func()) {
-	// No-op
+	m.refreshFuncs = append(m.refreshFuncs, refreshFunc)
 }
 
 func (m *MockSettingsManager) RegisterOnSettingsSaved(callback func()) {
@@ -167,11 +172,17 @@ func (m *MockSettingsManager) SetValue(name string, val interface{}) {
 }
 
 func (m *MockSettingsManager) HasPendingChange(name string) bool {
-	return false
+	return m.pendingChanges[name]
+}
+
+func (m *MockSettingsManager) SetPendingChange(name string, pending bool) {
+	m.pendingChanges[name] = pending
 }
 
 func (m *MockSettingsManager) Refresh() {
-	// No-op for mock
+	for _, f := range m.refreshFuncs {
+		f()
+	}
 }
 
 func (m *MockSettingsManager) refreshWidgetStates() {
@@ -232,3 +243,66 @@ func TestSmartFitEnablesFaceOptions(t *testing.T) {
 	assert.True(t, faceCrop.Disabled(), "Face Crop should be disabled after switching to Disabled")
 	assert.True(t, faceBoost.Disabled(), "Face Boost should be disabled after switching to Disabled")
 }
+
+func TestReactiveAccordionTitle(t *testing.T) {
+	ResetConfig()
+	prefs := NewMockPreferences()
+	cfg := GetConfig(prefs)
+
+	// Setup: 1 active query for Wallhaven
+	cfg.Queries = []ImageQuery{}
+	id, _ := cfg.AddImageQuery("Wallhaven Default", "http://wallhaven.cc/1", true)
+
+	wp := &Plugin{cfg: cfg, providers: make(map[string]provider.ImageProvider)}
+	// Mock provider
+	p := &MockProvider{IDVal: "Wallhaven", TitleVal: "Wallhaven"}
+	wp.providers["Wallhaven"] = p
+
+	sm := NewMockSettingsManager()
+	builder := NewPrefsPanelBuilder(wp, sm)
+
+	// Execute: Create Title Func
+	titleFunc := builder.createTitleFunc(p)
+
+	// Initial State: Should show (1 active)
+	assert.Contains(t, titleFunc(), "(1 active)")
+
+	// Action: Simulate user untoggling the query in the UI (pending change)
+	sm.SetPendingChange(id, true) // baseline was 'true', so pending change makes it 'false' in the title logic
+
+	// Verify Reactivity: Title should update immediately when func is called (provided Refresh was triggered)
+	// In the real app, sm.Refresh() is called on toggle, which calls the accordion refreshers, which call the titleFunc.
+	assert.NotContains(t, titleFunc(), "(1 active)", "Title should no longer show active count after pending untoggle")
+	assert.Equal(t, "Wallhaven", titleFunc())
+
+	// Action: Reset pending change
+	sm.SetPendingChange(id, false)
+	assert.Contains(t, titleFunc(), "(1 active)")
+}
+
+// Minimal MockProvider for testing
+type MockProvider struct {
+	mock.Mock
+	IDVal    string
+	TitleVal string
+}
+
+func (m *MockProvider) ID() string                                                       { return m.IDVal }
+func (m *MockProvider) Name() string                                                     { return m.IDVal }
+func (m *MockProvider) Title() string                                                    { return m.TitleVal }
+func (m *MockProvider) Type() provider.ProviderType                                      { return provider.TypeOnline }
+func (m *MockProvider) GetProviderIcon() fyne.Resource                                   { return nil }
+func (m *MockProvider) GetAttributionType() provider.AttributionType                     { return provider.AttributionBy }
+func (m *MockProvider) ParseURL(url string) (string, error)                              { return "", nil }
+func (m *MockProvider) CreateSettingsPanel(sm setting.SettingsManager) fyne.CanvasObject { return nil }
+func (m *MockProvider) CreateQueryPanel(sm setting.SettingsManager, pendingURL string) fyne.CanvasObject {
+	return nil
+}
+func (m *MockProvider) FetchImages(ctx context.Context, apiURL string, page int) ([]provider.Image, error) {
+	return nil, nil
+}
+func (m *MockProvider) EnrichImage(ctx context.Context, img provider.Image) (provider.Image, error) {
+	return img, nil
+}
+func (m *MockProvider) SupportsUserQueries() bool { return true }
+func (m *MockProvider) HomeURL() string           { return "" }

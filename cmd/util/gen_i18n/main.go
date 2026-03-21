@@ -43,9 +43,21 @@ func main() {
 	}
 
 	// Calculate counts for logging
+	metaName := enMap["_meta_name"]
 	delete(enMap, "_meta_name")
 	enKeyCount := len(enMap)
 	fmt.Printf("Reference en.json loaded with %d keys\n", enKeyCount)
+
+	// Rewrite en.json immediately to guarantee alphabetical sorting
+	if metaName != nil {
+		enMap["_meta_name"] = metaName
+	}
+	if enOut, err := json.MarshalIndent(enMap, "", "  "); err == nil {
+		if writeErr := os.WriteFile(enPath, enOut, 0600); writeErr != nil {
+			log.Printf("warning: failed to write %s: %v", enPath, writeErr)
+		}
+	}
+	delete(enMap, "_meta_name")
 
 	// 2. Generate pseudo.json
 	pseudoMap := make(map[string]string)
@@ -96,18 +108,26 @@ func main() {
 			continue
 		}
 
-		// Strictly check if all keys in en.json exist in this file
-		var missing []string
-		for k := range enMap {
+		// Auto-fill any missing keys from en.json
+		changed := false
+		for k, v := range enMap {
 			if _, ok := m[k]; !ok {
-				missing = append(missing, k)
+				m[k] = v
+				changed = true
 			}
 		}
 
-		if len(missing) > 0 {
-			sort.Strings(missing)
-			log.Printf("warning: skipping %s - missing %d keys. Example: %q", code, len(missing), missing[0])
-			continue
+		if changed {
+			log.Printf("info: auto-filled missing keys in %s.json", code)
+		}
+
+		// Always rewrite the file to guarantee alphabetical sorting
+		if outData, err := json.MarshalIndent(m, "", "  "); err == nil {
+			if writeErr := os.WriteFile(path, outData, 0600); writeErr != nil {
+				log.Printf("warning: failed to write %s: %v", path, writeErr)
+			}
+		} else {
+			log.Printf("warning: failed to rewrite %s: %v", path, err)
 		}
 
 		languages = append(languages, Language{

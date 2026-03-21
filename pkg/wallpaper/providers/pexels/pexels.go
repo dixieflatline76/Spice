@@ -68,6 +68,10 @@ func (p *PexelsProvider) Type() provider.ProviderType {
 	return provider.TypeOnline
 }
 
+func (p *PexelsProvider) GetAttributionType() provider.AttributionType {
+	return provider.AttributionBy
+}
+
 func (p *PexelsProvider) SupportsUserQueries() bool {
 	return true
 }

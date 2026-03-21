@@ -362,6 +362,10 @@ func (s *StubImageProvider) CreateQueryPanel(sm setting.SettingsManager, pending
 	return nil
 }
 
+func (s *StubImageProvider) GetAttributionType() provider.AttributionType {
+	return provider.AttributionBy
+}
+
 func setupTestPlugin(t *testing.T, prefs fyne.Preferences) *Plugin {
 	// Re-load config from prefs (Simulate fresh start)
 	cfg := GetConfig(prefs)
