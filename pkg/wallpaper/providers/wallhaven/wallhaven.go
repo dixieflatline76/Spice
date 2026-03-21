@@ -67,6 +67,10 @@ func (p *WallhavenProvider) Type() provider.ProviderType {
 	return provider.TypeOnline
 }
 
+func (p *WallhavenProvider) GetAttributionType() provider.AttributionType {
+	return provider.AttributionBy
+}
+
 func (p *WallhavenProvider) SupportsUserQueries() bool {
 	return true
 }
@@ -792,7 +796,8 @@ func (p *WallhavenProvider) GetProviderIcon() fyne.Resource {
 	return fyne.NewStaticResource("Wallhaven", iconData)
 }
 
-func (p *WallhavenProvider) getWebURL(apiURL string) *url.URL {
+func (p *WallhavenProvider) getWebURL(q wallpaper.ImageQuery) *url.URL {
+	apiURL := q.URL
 	// 1. Handle Search URLs
 	if strings.Contains(apiURL, "/api/v1/search") {
 		urlStr := strings.Replace(apiURL, "https://wallhaven.cc/api/v1/search", "https://wallhaven.cc/search", 1)

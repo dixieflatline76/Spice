@@ -127,3 +127,26 @@ func TestAvoidSet(t *testing.T) {
 	cfg.ResetAvoidSet()
 	assert.False(t, cfg.InAvoidSet(id))
 }
+
+func TestFavoritesQueryManagement(t *testing.T) {
+	ResetConfig()
+	p := NewMockPreferences()
+	cfg := GetConfig(p)
+
+	// Clean start
+	cfg.Queries = []ImageQuery{}
+
+	// Add Favorites
+	id, err := cfg.AddFavoritesQuery("My Favs", "favorites://collection1", true)
+	assert.NoError(t, err)
+	assert.Equal(t, "favorites://collection1", id)
+
+	// Add another non-favorites query
+	_, _ = cfg.AddImageQuery("Other", "http://example.com", true)
+
+	// Verify GetFavoritesQueries
+	favs := cfg.GetFavoritesQueries()
+	assert.Equal(t, 1, len(favs))
+	assert.Equal(t, id, favs[0].ID)
+	assert.True(t, favs[0].Managed, "Favorites should be marked as managed")
+}

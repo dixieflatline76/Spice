@@ -10,6 +10,11 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// NamespaceResolver is called when a static namespace lookup fails.
+// It receives the namespace and collectionID from the URL and returns
+// the direct path to serve (bypassing resolveCollectionPath) and whether it matched.
+type NamespaceResolver func(namespace, collectionID string) (directPath string, ok bool)
+
 // Server represents the Local REST/WebSocket server.
 type Server struct {
 	httpServer *http.Server
@@ -22,6 +27,7 @@ type Server struct {
 
 	// Local file serving
 	namespaces map[string]string // name -> absPath
+	resolver   NamespaceResolver // dynamic fallback resolver
 
 	// Callbacks
 	onAddCollection func(url string) error
@@ -63,6 +69,12 @@ func (s *Server) setupRoutes() {
 // RegisterNamespace registers a local directory to be served under /local/{name}.
 func (s *Server) RegisterNamespace(name, path string) {
 	s.namespaces[name] = path
+}
+
+// SetDynamicResolver sets a callback for resolving namespaces not found in the static map.
+// This enables providers like Local Folder to serve user-selected directories dynamically.
+func (s *Server) SetDynamicResolver(resolver NamespaceResolver) {
+	s.resolver = resolver
 }
 
 // enableCORS adds CORS headers to the handler.

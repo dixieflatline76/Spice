@@ -29,8 +29,16 @@ type QueryListConfig struct {
 	DisableQuery func(id string) error
 	// RemoveQuery is called when the user confirms deletion.
 	RemoveQuery func(id string) error
+	// GetDisplayText converts a query to its display label (e.g. full path). Optional.
+	GetDisplayText func(q ImageQuery) string
 	// GetDisplayURL converts an API URL to a clickable web URL. Optional.
-	GetDisplayURL func(apiURL string) *url.URL
+	GetDisplayURL func(q ImageQuery) *url.URL
+	// DeleteLabel is the text for the action button. Default is "Delete".
+	DeleteLabel string
+	// ForceActionEnabled will enable the action button even for managed queries.
+	ForceActionEnabled bool
+	// DeleteConfirmMessage is the custom message for the confirmation dialog.
+	DeleteConfirmMessage string
 }
 
 // CreateQueryList builds a scroll-safe widget.List for query management.
@@ -47,7 +55,7 @@ func CreateQueryList(sm setting.SettingsManager, cfg QueryListConfig) *widget.Li
 		func() fyne.CanvasObject {
 			urlLink := widget.NewHyperlink(i18n.T("Placeholder"), nil)
 			activeCheck := widget.NewCheck(i18n.T("Active"), nil)
-			deleteButton := widget.NewButton(i18n.T("Delete"), nil)
+			deleteButton := widget.NewButton(i18n.T("Delete"), func() {})
 			return container.NewHBox(urlLink, layout.NewSpacer(), activeCheck, deleteButton)
 		},
 		// UpdateItem — binds data to a recycled cell (scroll-safe)
@@ -64,10 +72,16 @@ func CreateQueryList(sm setting.SettingsManager, cfg QueryListConfig) *widget.Li
 			activeCheck := c.Objects[2].(*widget.Check)
 			deleteButton := c.Objects[3].(*widget.Button)
 
-			// Set display text and URL
-			urlLink.SetText(query.Description)
+			// Set display text
+			if cfg.GetDisplayText != nil {
+				urlLink.SetText(cfg.GetDisplayText(query))
+			} else {
+				urlLink.SetText(query.Description)
+			}
+
+			// Set clickable URL
 			if cfg.GetDisplayURL != nil {
-				if u := cfg.GetDisplayURL(query.URL); u != nil {
+				if u := cfg.GetDisplayURL(query); u != nil {
 					urlLink.SetURL(u)
 				}
 			} else {
@@ -123,11 +137,32 @@ func CreateQueryList(sm setting.SettingsManager, cfg QueryListConfig) *widget.Li
 					sm.UnsetRefreshFlag(queryKey)
 				}
 				sm.GetCheckAndEnableApplyFunc()()
+				sm.Refresh() // Trigger reactive UI updates (like accordion titles)
 			}
 
-			// Wire delete button
+			// Wire action button (Delete or Clear for managed queries)
+			label := i18n.T("Delete")
+			if cfg.DeleteLabel != "" {
+				label = cfg.DeleteLabel
+			} else if query.Managed {
+				label = i18n.T("Clear")
+			}
+			deleteButton.SetText(label)
+
 			deleteButton.OnTapped = func() {
-				d := dialog.NewConfirm(i18n.T("Please Confirm"), i18n.Tf("Are you sure you want to delete {{.Description}}?", map[string]any{"Description": query.Description}), func(b bool) {
+				confirmTitle := i18n.T("Please Confirm")
+				confirmMsg := i18n.Tf("Are you sure you want to delete {{.Description}}?", map[string]any{"Description": query.Description})
+
+				if cfg.DeleteConfirmMessage != "" {
+					confirmMsg = cfg.DeleteConfirmMessage
+				} else if query.Managed || cfg.ForceActionEnabled {
+					// Default fallback for managed if no custom message
+					if cfg.DeleteLabel == i18n.T("Clear") {
+						confirmMsg = i18n.T("Are you sure you want to delete all saved favorites?")
+					}
+				}
+
+				d := dialog.NewConfirm(confirmTitle, confirmMsg, func(b bool) {
 					if b {
 						if query.Active {
 							sm.SetRefreshFlag(queryKey)
@@ -142,12 +177,13 @@ func CreateQueryList(sm setting.SettingsManager, cfg QueryListConfig) *widget.Li
 				d.Show()
 			}
 
-			// Managed queries cannot be deleted
-			if query.Managed {
+			// Managed queries cannot be deleted by default, unless force enabled
+			if query.Managed && !cfg.ForceActionEnabled {
 				deleteButton.Disable()
 			} else {
 				deleteButton.Enable()
 			}
+			deleteButton.Refresh()
 		},
 	)
 	return queryList
@@ -205,9 +241,20 @@ func (wp *Plugin) CreateTrayMenuItems() []*fyne.MenuItem {
 				attribution = string(runes[:17]) + "..."
 			}
 			providerLabel = i18n.Tf("Source: {{.Provider}}", map[string]any{"Provider": wp.GetProviderTitle(currentImage.Provider)})
-			artistLabel = i18n.Tf("By: {{.Attribution}}", map[string]any{"Attribution": attribution})
+
+			attrType := provider.AttributionBy
+			if p, exists := wp.providers[currentImage.Provider]; exists {
+				attrType = p.GetAttributionType()
+			}
+
 			if currentImage.Attribution == "" {
 				artistLabel = i18n.T("By: Unknown")
+			} else {
+				key := "attribution_by"
+				if attrType == provider.AttributionIn {
+					key = "attribution_in"
+				}
+				artistLabel = i18n.Tf(key, map[string]any{"Attribution": attribution})
 			}
 			if currentImage.IsFavorited {
 				favoriteLabel = i18n.T("Remove from Favorites")

@@ -6,6 +6,8 @@ import (
 	"net/url"
 	"path/filepath"
 	"strings"
+
+	"github.com/dixieflatline76/Spice/v2/util/log"
 )
 
 // extractFilenameFromURL extracts the filename from a URL, ignoring query parameters.
@@ -41,7 +43,9 @@ func extractFilenameSimple(urlStr string) string {
 func GenerateQueryID(url string) string {
 	h := fnv.New64a()
 	h.Write([]byte(url))
-	return hex.EncodeToString(h.Sum(nil))
+	id := hex.EncodeToString(h.Sum(nil))
+	log.Debugf("[Helper] GenerateQueryID: url=%s -> id=%s", url, id)
+	return id
 }
 
 // SanitizeMenuString collapses all whitespace (newlines, tabs, multiple spaces)

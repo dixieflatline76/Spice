@@ -1,8 +1,11 @@
 package wallpaper
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"math"
+	"path/filepath"
 	"time"
 
 	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
@@ -96,7 +99,15 @@ const (
 	FavoritesNamespace        = "favorites" // API Namespace
 	FavoritesCollection       = "favorite_images"
 	FavoritesQueryID          = "favorites://" + FavoritesCollection
+	LocalFolderNamespace      = "local_folders" // API Namespace for user-selected local folders
+	LocalFolderProviderID     = "LocalFolder"   // Stable provider ID
 )
+
+// HashFolderPath generates a short, URL-safe hash for a folder path to use as a collectionID.
+func HashFolderPath(folderPath string) string {
+	h := sha256.Sum256([]byte(filepath.Clean(folderPath)))
+	return hex.EncodeToString(h[:8]) // 16 hex chars — unique enough, URL-safe
+}
 
 // Frequency represents the frequency of a service
 type Frequency int

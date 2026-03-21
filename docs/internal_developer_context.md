@@ -68,6 +68,14 @@ For sensitive credentials (API Keys, Usernames), Spice bypasses the strictly def
     4.  **Hanging Prevention**: All verification transactions MUST include a timeout (standard: 10s) via `context.WithTimeout` to prevent UI "stuckness".
 *   **Implementation**: This is handled manually in the provider's `CreateSettingsPanel` by wiring the action button to `p.cfg.SetKey()`, `sm.SeedBaseline()`, and `sm.Refresh()`.
 
+#### 2.3 The Generic Action Pattern (v2.7)
+
+To keep `ui.go` provider-agnostic, the `QueryListConfig` now uses an **Explicit Action Contract** for the list's primary action button (historically "Delete").
+
+*   **`DeleteLabel`**: Allows a provider to rename the button (e.g., to "Clear") without the UI layer knowing the provider's identity.
+*   **`ForceActionEnabled`**: Overrides the standard `Managed` check. This allows "Clearable" system queries (like Favorites) to remain interactive while preserving the "Disabled" guard for strictly read-only synced sources (like Wallhaven collections).
+*   **`DeleteConfirmMessage`**: Allows for provider-specific warnings (e.g., "Are you sure you want to delete all saved favorites?") to be injected from the provider layer.
+
 ## 3. Deep Dive: Provider Implementations
 
 Key logic patterns for the major providers in `pkg/wallpaper/providers/`.
@@ -87,12 +95,19 @@ Key logic patterns for the major providers in `pkg/wallpaper/providers/`.
     *   **Quality**: Must have high-res `primaryImage`.
 
 ### 3.3 Favorites (`favorites.go`)
-*   **Local Bridge**: This provider is unique—it bridges the `chrome-extension://` world with the local filesystem.
 *   **Worker Pattern**: File IO (copying 5MB images) is too slow for the main thread.
     *   It uses a `jobChan favJob` channel.
-    *   `runWorker` loop consumes jobs to `Add` or `Remove` files from `/tmp/spice/favorites`.
+    *   `runWorker` loop consumes jobs to `Add` or `Remove` files from the persistent favorites directory.
 *   **FIFO Garbage Collection**: It enforces a hard limit (MaxFavoritesLimit). When adding, if full, it finds the oldest file (by `ModTime`) and deletes it before writing the new one.
-*   **Metadata Sidecar**: It maintains `metadata.json` in the same folder to store Attribution and Product URL, which cannot be stored in the image file itself reliably.
+*   **Metadata Sidecar**: It maintains `metadata.json` in the same folder to store Attribution and Product URL.
+*   **UI Implementation**: Uses the **Generic Action Pattern** (v2.7) to rename its list button to "Clear" and force it to be interactive despite being a system-managed query.
+
+### 3.4 Local Folders (`localfolder.go`)
+*   **Cross-Platform Picker**: Uses a dual-implementation: 
+    *   **Windows**: Uses a native `cfd` shell picker via `picker_windows.go` to avoid Fyne/Cgo deadlocks when opening native dialogs.
+    *   **Fallback**: Uses standard Fyne folder pickers for macOS/Linux.
+*   **Path Normalization**: Implements strict case-insensitive deduplication and trailing slash removal to ensure `C:\Images` and `C:/images/` are treated as the same source.
+*   **Recursive Scanning**: Uses `filepath.WalkDir` with an early-exit optimization that stops scanning a subdirectory as soon as it finds its first valid image, minimizing disk thrashing.
 
 ## 4. Extension Guide
 

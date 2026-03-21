@@ -162,25 +162,178 @@ func TestFetchImages(t *testing.T) {
 func TestFIFOEviction(t *testing.T) {
 	tempDir := t.TempDir()
 	rootDir := filepath.Join(tempDir, "favorites_root")
+	sourceDir := filepath.Join(tempDir, "source")
+	require.NoError(t, os.MkdirAll(sourceDir, 0755))
+
 	p := NewProvider(&wallpaper.Config{})
 	p.SetTestConfig("localhost:0", rootDir)
+	p.SetTestMaxFavorites(3) // Low limit for fast testing
+	defer p.Close()
 
-	// Reduce limit for testing?
-	// The constants are in wallpaper package, can we assume they are large?
-	// wallpaper.MaxFavoritesLimit is 200. We don't want to write 200 files.
-	// It's hardcoded. We might need to write 201 files to test eviction.
-	// Let's settle for testing that AddFavorite works for now, unless we can mock the limit check.
-	// Writing 200 small files is fast enough on modern SSDs.
+	// Create and add 3 favorites with staggered times
+	for i := 0; i < 3; i++ {
+		name := fmt.Sprintf("img_%d", i)
+		srcPath := filepath.Join(sourceDir, name+".jpg")
+		require.NoError(t, os.WriteFile(srcPath, []byte(fmt.Sprintf("content_%d", i)), 0644))
 
-	// Create dummy source
-	srcPath := filepath.Join(tempDir, "source.jpg")
-	err := os.WriteFile(srcPath, []byte("x"), 0644)
-	assert.NoError(t, err)
+		img := provider.Image{
+			ID:       name,
+			FilePath: srcPath,
+		}
+		require.NoError(t, p.AddFavorite(img))
 
-	// Write 200 files, sleeping slightly to ensure modtimes differ?
-	// Note: FS resolution might be low.
-	// Just rely on order if possible, or explicit sleep.
+		// Wait for async worker to process
+		destPath := filepath.Join(rootDir, name+".jpg")
+		assert.Eventually(t, func() bool {
+			_, err := os.Stat(destPath)
+			return err == nil
+		}, 2*time.Second, 50*time.Millisecond, "File %s should exist", name)
 
-	// Skip full eviction test to keep it fast, or implement small scale loop.
-	// Let's skip deep FIFO test for speed, focusing on core functionality.
+		// Stagger modtimes so oldest is deterministic
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	// Verify all 3 exist
+	assert.True(t, p.IsFavorited(provider.Image{ID: "img_0"}))
+	assert.True(t, p.IsFavorited(provider.Image{ID: "img_1"}))
+	assert.True(t, p.IsFavorited(provider.Image{ID: "img_2"}))
+
+	// Add a 4th — should trigger FIFO eviction of img_0 (oldest)
+	srcPath4 := filepath.Join(sourceDir, "img_3.jpg")
+	require.NoError(t, os.WriteFile(srcPath4, []byte("content_3"), 0644))
+
+	img4 := provider.Image{ID: "img_3", FilePath: srcPath4}
+	require.NoError(t, p.AddFavorite(img4))
+
+	// Wait for the 4th to be written
+	assert.Eventually(t, func() bool {
+		_, err := os.Stat(filepath.Join(rootDir, "img_3.jpg"))
+		return err == nil
+	}, 2*time.Second, 50*time.Millisecond)
+
+	// img_0 should have been evicted
+	assert.Eventually(t, func() bool {
+		return !p.IsFavorited(provider.Image{ID: "img_0"})
+	}, 2*time.Second, 50*time.Millisecond, "img_0 should be evicted from favMap")
+
+	assert.Eventually(t, func() bool {
+		_, err := os.Stat(filepath.Join(rootDir, "img_0.jpg"))
+		return os.IsNotExist(err)
+	}, 2*time.Second, 50*time.Millisecond, "img_0.jpg should be deleted from disk")
+
+	// Others should still exist
+	assert.True(t, p.IsFavorited(provider.Image{ID: "img_1"}))
+	assert.True(t, p.IsFavorited(provider.Image{ID: "img_2"}))
+	assert.True(t, p.IsFavorited(provider.Image{ID: "img_3"}))
+}
+
+func TestOrphanCleanup(t *testing.T) {
+	tempDir := t.TempDir()
+	rootDir := filepath.Join(tempDir, "favorites_root")
+	require.NoError(t, os.MkdirAll(rootDir, 0755))
+
+	// Create metadata.json with entries for files that don't exist on disk
+	meta := map[string]interface{}{
+		"files": map[string]interface{}{
+			"real_image.jpg": map[string]string{
+				"attribution": "Author A",
+				"product_url": "http://example.com/a",
+			},
+			"orphan_image.jpg": map[string]string{
+				"attribution": "Author B",
+				"product_url": "http://example.com/b",
+			},
+			"another_orphan.png": map[string]string{
+				"attribution": "Author C",
+				"product_url": "http://example.com/c",
+			},
+		},
+	}
+	metaData, err := json.MarshalIndent(meta, "", "  ")
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(rootDir, "metadata.json"), metaData, 0644))
+
+	// Only create the "real" file on disk
+	require.NoError(t, os.WriteFile(filepath.Join(rootDir, "real_image.jpg"), []byte("real"), 0644))
+
+	// Create provider — loadInitialMetadata will run cleanOrphanMetadata
+	p := NewProvider(&wallpaper.Config{})
+	p.SetTestConfig("localhost:0", rootDir)
+	defer p.Close()
+
+	// real_image should be in favMap
+	assert.True(t, p.IsFavorited(provider.Image{ID: "real_image"}))
+
+	// orphans should be cleaned from favMap
+	assert.False(t, p.IsFavorited(provider.Image{ID: "orphan_image"}))
+	assert.False(t, p.IsFavorited(provider.Image{ID: "another_orphan"}))
+
+	// Verify metadata.json was also cleaned
+	updatedMeta, err := os.ReadFile(filepath.Join(rootDir, "metadata.json"))
+	require.NoError(t, err)
+
+	var parsed map[string]interface{}
+	require.NoError(t, json.Unmarshal(updatedMeta, &parsed))
+
+	filesMeta := parsed["files"].(map[string]interface{})
+	assert.Contains(t, filesMeta, "real_image.jpg", "real_image.jpg should remain in metadata")
+	assert.NotContains(t, filesMeta, "orphan_image.jpg", "orphan_image.jpg should be removed from metadata")
+	assert.NotContains(t, filesMeta, "another_orphan.png", "another_orphan.png should be removed from metadata")
+}
+
+func TestClearFavorites(t *testing.T) {
+	tempDir := t.TempDir()
+	rootDir := filepath.Join(tempDir, "favorites_root")
+	sourceDir := filepath.Join(tempDir, "source")
+	require.NoError(t, os.MkdirAll(sourceDir, 0755))
+
+	p := NewProvider(&wallpaper.Config{})
+	p.SetTestConfig("localhost:0", rootDir)
+	defer p.Close()
+
+	// Add a couple of favorites
+	for i := 0; i < 3; i++ {
+		name := fmt.Sprintf("clear_img_%d", i)
+		srcPath := filepath.Join(sourceDir, name+".jpg")
+		require.NoError(t, os.WriteFile(srcPath, []byte("data"), 0644))
+		require.NoError(t, p.AddFavorite(provider.Image{ID: name, FilePath: srcPath, Attribution: "Author"}))
+	}
+
+	// Wait for all to be written
+	assert.Eventually(t, func() bool {
+		entries, _ := os.ReadDir(rootDir)
+		imageCount := 0
+		for _, e := range entries {
+			if !e.IsDir() && filepath.Ext(e.Name()) != ".json" {
+				imageCount++
+			}
+		}
+		return imageCount >= 3
+	}, 3*time.Second, 50*time.Millisecond, "All 3 files should be written")
+
+	// Now clear everything (extracted logic from CreateSettingsPanel)
+	os.RemoveAll(rootDir)
+	require.NoError(t, os.MkdirAll(rootDir, 0755))
+
+	p.mu.Lock()
+	p.favMap = make(map[string]bool)
+	p.mu.Unlock()
+
+	// Verify everything is wiped
+	assert.False(t, p.IsFavorited(provider.Image{ID: "clear_img_0"}))
+	assert.False(t, p.IsFavorited(provider.Image{ID: "clear_img_1"}))
+	assert.False(t, p.IsFavorited(provider.Image{ID: "clear_img_2"}))
+
+	entries, err := os.ReadDir(rootDir)
+	require.NoError(t, err)
+	assert.Empty(t, entries, "Favorites directory should be empty after clear")
+}
+
+func TestWorkerShutdown(t *testing.T) {
+	p := NewProvider(&wallpaper.Config{})
+	p.SetTestConfig("localhost:0", t.TempDir())
+
+	// Close should not panic and should be idempotent
+	p.Close()
+	p.Close() // Second call should be safe
 }

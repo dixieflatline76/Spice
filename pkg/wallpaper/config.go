@@ -26,7 +26,7 @@ import (
 
 // Config struct to hold all configuration data
 type Config struct {
-	fyne.Preferences
+	fyne.Preferences  `json:"-"`      // DO NOT serialize the Fyne interface to JSON (prevents "null" unmarshal panics)
 	WallhavenAPIKey   string          `json:"wallhaven_api_key"`
 	Queries           []ImageQuery    `json:"queries"`            // Unified list of image queries
 	ImageQueries      []ImageQuery    `json:"query_urls"`         // Legacy: List of image queries (Wallhaven)
@@ -136,6 +136,15 @@ func GetConfig(p fyne.Preferences) *Config {
 	return cfgInstance
 }
 
+// GetConfigInstance returns the already-initialized Config singleton.
+// This panics if GetConfig has not been called yet.
+func GetConfigInstance() *Config {
+	if cfgInstance == nil {
+		panic("wallpaper.GetConfigInstance called before GetConfig initialization")
+	}
+	return cfgInstance
+}
+
 // GetPath returns the path to the user's config directory
 func GetPath() string {
 	homeDir, err := os.UserHomeDir()
@@ -176,7 +185,7 @@ func (c *Config) loadFromPrefs() error {
 }
 
 // AddProviderQuery is the unified method for adding a query for ANY provider.
-func (c *Config) AddProviderQuery(description, url, provider string, active bool) (string, error) {
+func (c *Config) AddProviderQuery(description, url, provider string, active, managed bool) (string, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -188,10 +197,23 @@ func (c *Config) AddProviderQuery(description, url, provider string, active bool
 		// Include provider in ID to prevent collisions across different providers using same IDs (e.g. object:123)
 		id = GenerateQueryID(provider + ":" + url)
 	}
+	log.Debugf("[Config] AddProviderQuery: provider=%s, url=%s, generatedID=%s", provider, url, id)
 
 	if c.isDuplicateID(id) {
+		log.Debugf("[Config] AddProviderQuery: duplicate detected for ID=%s", id)
 		// If it's favorites and already exists, just return it (no error)
 		if provider == "Favorites" {
+			// Ensure it's marked as managed if it was a legacy query
+			for i := range c.Queries {
+				if c.Queries[i].ID == id {
+					if !c.Queries[i].Managed {
+						log.Printf("AddProviderQuery: upgrading legacy Favorites query to managed")
+						c.Queries[i].Managed = true
+						c.save()
+					}
+					break
+				}
+			}
 			return id, nil
 		}
 		return "", fmt.Errorf("duplicate query: this URL already exists")
@@ -203,7 +225,9 @@ func (c *Config) AddProviderQuery(description, url, provider string, active bool
 		URL:         url,
 		Active:      active,
 		Provider:    provider,
+		Managed:     managed,
 	}
+	log.Debugf("[Config] AddProviderQuery: appending new query: %+v", newQuery)
 
 	c.Queries = append([]ImageQuery{newQuery}, c.Queries...)
 	c.save()
@@ -212,17 +236,17 @@ func (c *Config) AddProviderQuery(description, url, provider string, active bool
 
 // AddImageQuery adds a new Wallhaven image query.
 func (c *Config) AddImageQuery(desc, url string, active bool) (string, error) {
-	return c.AddProviderQuery(desc, url, "Wallhaven", active)
+	return c.AddProviderQuery(desc, url, "Wallhaven", active, false)
 }
 
 // AddPexelsQuery adds a new Pexels query.
 func (c *Config) AddPexelsQuery(description, url string, active bool) (string, error) {
-	return c.AddProviderQuery(description, url, "Pexels", active)
+	return c.AddProviderQuery(description, url, "Pexels", active, false)
 }
 
 // AddWikimediaQuery adds a new Wikimedia query.
 func (c *Config) AddWikimediaQuery(description, url string, active bool) (string, error) {
-	return c.AddProviderQuery(description, url, "Wikimedia", active)
+	return c.AddProviderQuery(description, url, "Wikimedia", active, false)
 }
 
 // isDuplicateID checks if a query ID already exists in the unified list.
@@ -315,6 +339,10 @@ func (c *Config) RemoveImageQuery(id string) error {
 	index, err := c.findQueryIndex(id)
 	if err != nil {
 		return err
+	}
+
+	if c.Queries[index].Managed {
+		return fmt.Errorf("cannot remove a managed system query: %s", id)
 	}
 
 	c.Queries = append(c.Queries[:index], c.Queries[index+1:]...)
@@ -764,12 +792,59 @@ func (c *Config) SetGooglePhotosTokenExpiry(expiry time.Time) {
 
 // AddFavoritesQuery adds a new Favorites query.
 func (c *Config) AddFavoritesQuery(description, url string, active bool) (string, error) {
-	return c.AddProviderQuery(description, url, "Favorites", active)
+	return c.AddProviderQuery(description, url, "Favorites", active, true)
+}
+
+// GetFavoritesQueries returns only the Favorites query.
+func (c *Config) GetFavoritesQueries() []ImageQuery {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	var queries []ImageQuery
+	for i := range c.Queries {
+		q := c.Queries[i]
+		if q.Provider == "Favorites" {
+			q.Managed = true // Force managed flag in memory for UI consistency
+			queries = append(queries, q)
+		}
+	}
+	return queries
+}
+
+// AddLocalFolderQuery adds a new Local Folder query.
+// The url parameter should be the absolute path to the user-selected folder.
+func (c *Config) AddLocalFolderQuery(description, url string, active bool) (string, error) {
+	log.Debugf("[Config] AddLocalFolderQuery: desc=%q, path=%q, active=%v", description, url, active)
+
+	// Robust path normalization to catch duplicates even with trailing slashes or relative paths.
+	cleanPath := filepath.Clean(url)
+	if abs, err := filepath.Abs(cleanPath); err == nil {
+		cleanPath = abs
+	}
+
+	return c.AddProviderQuery(description, cleanPath, LocalFolderProviderID, active, false)
+}
+
+// RemoveLocalFolderQuery removes a Local Folder query from the unified list.
+func (c *Config) RemoveLocalFolderQuery(id string) error {
+	return c.RemoveImageQuery(id)
+}
+
+// GetLocalFolderQueries returns a copy of the Local Folder queries in a thread-safe manner.
+func (c *Config) GetLocalFolderQueries() []ImageQuery {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	var queries []ImageQuery
+	for _, q := range c.Queries {
+		if q.Provider == LocalFolderProviderID {
+			queries = append(queries, q)
+		}
+	}
+	return queries
 }
 
 // AddGooglePhotosQuery adds a new Google Photos query.
 func (c *Config) AddGooglePhotosQuery(description, url string, active bool) (string, error) {
-	return c.AddProviderQuery(description, url, "GooglePhotos", active)
+	return c.AddProviderQuery(description, url, "GooglePhotos", active, false)
 }
 
 // RemoveGooglePhotosQuery removes a Google Photos query from the unified list.
@@ -954,20 +1029,49 @@ func (c *Config) GetUnlockAspectRatio() bool {
 // Save saves the current configuration to the user's config file
 func (c *Config) save() {
 	// Don't lock the mutex here because we're already holding it in all calling functions
+	// However, we MUST NOT block the calling functions (and Fyne's RLock polling) for the duration
+	// of a massive JSON marshal. So we clone the struct while under the current lock,
+	// and then marshal the clone.
 
-	// Sync avoidMap to AvoidSet for JSON marshaling
-	c.AvoidSet = make(map[string]bool)
+	// Create a fresh struct to avoid copying the sync.RWMutex and sync.Map by value (copylocks)
+	var clone Config
+	clone.WallhavenAPIKey = c.WallhavenAPIKey
+	clone.WallhavenUsername = c.WallhavenUsername
+	clone.LogLevel = c.LogLevel
+	clone.MaxConcurrentProcessors = c.MaxConcurrentProcessors
+	clone.Tuning = c.Tuning
+	clone.ShortcutsDisabled = c.ShortcutsDisabled
+	clone.WallhavenSyncEnabled = c.WallhavenSyncEnabled
+
+	// Sync avoidMap to AvoidSet for JSON marshaling (doing this into the clone)
+	clone.AvoidSet = make(map[string]bool)
 	c.avoidMap.Range(func(key, value interface{}) bool {
-		c.AvoidSet[key.(string)] = true
+		clone.AvoidSet[key.(string)] = true
 		return true
 	})
 
-	data, err := json.MarshalIndent(c, "", "  ") // Use indentation for readability
-	if err != nil {
-		log.Fatalf("Error encoding config data: %v", err)
-	}
+	// Deep copy slices to avoid data races when marshaling in the background
+	clone.Queries = make([]ImageQuery, len(c.Queries))
+	copy(clone.Queries, c.Queries)
 
-	c.SetString(wallhavenConfigPrefKey, string(data))
+	clone.ImageQueries = make([]ImageQuery, len(c.ImageQueries))
+	copy(clone.ImageQueries, c.ImageQueries)
+
+	clone.PexelsQueries = make([]ImageQuery, len(c.PexelsQueries))
+	copy(clone.PexelsQueries, c.PexelsQueries)
+
+	// Fast-path: spin off the actual 5-second marshaling/saving to a goroutine so the
+	// caller's defer c.mu.Unlock() executes instantly and Fyne isn't blocked!
+	go func(cfgClone *Config) {
+		data, err := json.MarshalIndent(cfgClone, "", "  ") // Use indentation for readability
+		if err != nil {
+			log.Fatalf("Error encoding config data: %v", err)
+			return
+		}
+
+		// SetString might internally lock Fyne preferences, but it's safe outside our own c.mu
+		c.SetString(wallhavenConfigPrefKey, string(data))
+	}(&clone)
 }
 
 // GetImageQueries returns a copy of the Wallhaven queries in a thread-safe manner.
@@ -1033,7 +1137,7 @@ func (c *Config) GetActiveQueries() []ImageQuery {
 
 // AddMetMuseumQuery adds a new Met Museum query.
 func (c *Config) AddMetMuseumQuery(description, url string, active bool) (string, error) {
-	return c.AddProviderQuery(description, url, "MetMuseum", active)
+	return c.AddProviderQuery(description, url, "MetMuseum", active, false)
 }
 
 // RemoveMetMuseumQuery removes a Met Museum query.
@@ -1066,7 +1170,7 @@ func (c *Config) GetMetMuseumQueries() []ImageQuery {
 
 // AddArtInstituteChicagoQuery adds a new AIC query.
 func (c *Config) AddArtInstituteChicagoQuery(description, url string, active bool) (string, error) {
-	return c.AddProviderQuery(description, url, "ArtInstituteChicago", active)
+	return c.AddProviderQuery(description, url, "ArtInstituteChicago", active, false)
 }
 
 // EnableArtInstituteChicagoQuery enables an AIC query.

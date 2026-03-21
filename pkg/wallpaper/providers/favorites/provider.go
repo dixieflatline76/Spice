@@ -15,8 +15,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/dialog"
-	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/dixieflatline76/Spice/v2/config"
@@ -48,9 +47,11 @@ type Provider struct {
 	apiHost string
 	rootDir string
 
-	mu      sync.RWMutex
-	favMap  map[string]bool
-	jobChan chan favJob
+	mu           sync.RWMutex
+	favMap       map[string]bool
+	jobChan      chan favJob
+	stopChan     chan struct{}
+	maxFavorites int
 }
 
 func init() {
@@ -61,11 +62,13 @@ func init() {
 
 func NewProvider(cfg *wallpaper.Config) *Provider {
 	p := &Provider{
-		cfg:     cfg,
-		apiHost: "127.0.0.1:49452",
-		rootDir: filepath.Join(config.GetAppDir(), wallpaper.FavoritesCollection),
-		favMap:  make(map[string]bool),
-		jobChan: make(chan favJob, 100),
+		cfg:          cfg,
+		apiHost:      "127.0.0.1:49452",
+		rootDir:      filepath.Join(config.GetAppDir(), wallpaper.FavoritesCollection),
+		favMap:       make(map[string]bool),
+		jobChan:      make(chan favJob, 100),
+		stopChan:     make(chan struct{}),
+		maxFavorites: wallpaper.MaxFavoritesLimit,
 	}
 	p.migrateOldFavorites()
 	p.loadInitialMetadata()
@@ -143,8 +146,16 @@ func (p *Provider) Name() string {
 	return i18n.T("Favorites")
 }
 
+func (p *Provider) GetFavoritesDisplayName() string {
+	return "❤️  " + i18n.T("Personal Favorites")
+}
+
 func (p *Provider) Type() provider.ProviderType {
 	return provider.TypeLocal
+}
+
+func (p *Provider) GetAttributionType() provider.AttributionType {
+	return provider.AttributionBy
 }
 
 func (p *Provider) SupportsUserQueries() bool {
@@ -161,13 +172,8 @@ func (p *Provider) HomeURL() string {
 		log.Printf("Failed to resolve favorites dir: %v", err)
 		return ""
 	}
-	// Convert to URI-friendly path (forward slashes)
-	// On Windows: C:/Users/... -> file:///C:/Users/...
-	path := filepath.ToSlash(absPath)
-	if !strings.HasPrefix(path, "/") {
-		path = "/" + path
-	}
-	return "file://" + path
+	u := storage.NewFileURI(absPath)
+	return u.String()
 }
 
 func (p *Provider) GetProviderIcon() fyne.Resource {
@@ -267,14 +273,37 @@ func (p *Provider) cleanOrphanMetadata(favDir string, meta map[string]interface{
 }
 
 func (p *Provider) runWorker() {
-	for job := range p.jobChan {
-		switch job.jobType {
-		case jobAdd:
-			p.addFavoriteInternal(job.img)
-		case jobRemove:
-			p.removeFavoriteInternal(job.img)
+	for {
+		select {
+		case <-p.stopChan:
+			return
+		case job, ok := <-p.jobChan:
+			if !ok {
+				return
+			}
+			switch job.jobType {
+			case jobAdd:
+				p.addFavoriteInternal(job.img)
+			case jobRemove:
+				p.removeFavoriteInternal(job.img)
+			}
 		}
 	}
+}
+
+// Close stops the worker goroutine. Safe to call multiple times.
+func (p *Provider) Close() {
+	select {
+	case <-p.stopChan:
+		// Already closed
+	default:
+		close(p.stopChan)
+	}
+}
+
+// SetTestMaxFavorites allows tests to override the FIFO eviction limit.
+func (p *Provider) SetTestMaxFavorites(n int) {
+	p.maxFavorites = n
 }
 
 func (p *Provider) GetSourceQueryID() string {
@@ -327,7 +356,7 @@ func (p *Provider) findOldestFavorite(favDir string) string {
 		}
 	}
 
-	if len(images) < wallpaper.MaxFavoritesLimit {
+	if len(images) < p.maxFavorites {
 		return ""
 	}
 
@@ -352,15 +381,20 @@ func (p *Provider) pruneOldestFavorite(favDir string) error {
 		return nil
 	}
 
-	if err := os.Remove(filepath.Join(favDir, oldest)); err != nil {
-		return err
-	}
-
-	// Also remove from favMap
+	// Update favMap BEFORE deleting the file to prevent IsFavorited() returning
+	// true for a deleted file (mirrors the add-flow pattern).
 	oldestID := strings.TrimSuffix(oldest, filepath.Ext(oldest))
 	p.mu.Lock()
 	delete(p.favMap, oldestID)
 	p.mu.Unlock()
+
+	if err := os.Remove(filepath.Join(favDir, oldest)); err != nil {
+		// Re-add to favMap if file deletion fails to maintain consistency
+		p.mu.Lock()
+		p.favMap[oldestID] = true
+		p.mu.Unlock()
+		return err
+	}
 
 	p.removeMetadataEntry(favDir, oldest)
 	log.Printf("FIFO: Removed oldest favorite %s", oldest)
@@ -571,88 +605,55 @@ func (p *Provider) FetchImages(ctx context.Context, apiURL string, page int) ([]
 }
 
 func (p *Provider) CreateSettingsPanel(sm setting.SettingsManager) fyne.CanvasObject {
-	clearBtn := widget.NewButtonWithIcon(i18n.T("Clear All Favorites"), theme.DeleteIcon(), func() {
-		dialog.ShowConfirm(i18n.T("Clear All Favorites"), i18n.T("Are you sure you want to delete all saved favorites?"), func(b bool) {
-			if b {
-				path := p.rootDir
-				os.RemoveAll(path)
-				if err := os.MkdirAll(path, 0755); err != nil {
-					log.Printf("Failed to create favorites directory: %v", err)
-				}
-				log.Println("Favorites cleared.")
-
-				p.mu.Lock()
-				p.favMap = make(map[string]bool)
-				p.mu.Unlock()
-
-				if p.cfg.FavoritesClearedCallback != nil {
-					go p.cfg.FavoritesClearedCallback()
-				}
-			}
-		}, sm.GetSettingsWindow())
-	})
-	clearBtn.Importance = widget.DangerImportance
-
-	openFolderBtn := widget.NewButtonWithIcon(i18n.T("Open Favorites Folder"), theme.FolderOpenIcon(), func() {
-		u, err := url.Parse(p.HomeURL())
-		if err != nil {
-			log.Printf("Failed to parse favorites URL: %v", err)
-			return
-		}
-		if err := fyne.CurrentApp().OpenURL(u); err != nil {
-			log.Printf("Failed to open favorites folder: %v", err)
-		}
-	})
-
 	return container.NewVBox(
 		widget.NewLabelWithStyle(i18n.T("Favorites Management"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		widget.NewLabel(i18n.T("Local favorites are stored persistently in your Spice application folder.")),
-		openFolderBtn,
-		clearBtn,
 	)
 }
 
-func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl string) fyne.CanvasObject {
-	// Single row: "Favorite Images" with Active toggle
-
-	// Check if query exists, if not create it (auto-activation usually happens on first favorite)
-	// But for UI display we should ensure it's "visible" or at least represented.
-
-	query, exists := p.cfg.GetQuery(wallpaper.FavoritesQueryID)
-
-	label := widget.NewLabel(i18n.T("Favorite Images"))
-	activeCheck := widget.NewCheck(i18n.T("Active"), nil)
-	activeCheck.SetChecked(query.Active)
-
-	sm.SeedBaseline(wallpaper.FavoritesQueryID, query.Active)
-	activeCheck.OnChanged = func(b bool) {
-		if b != sm.GetBaseline(wallpaper.FavoritesQueryID).(bool) {
-			sm.SetSettingChangedCallback(wallpaper.FavoritesQueryID, func() {
-				var err error
-				if b {
-					// Ensure it exists in config
-					if !exists {
-						_, err = p.cfg.AddFavoritesQuery("Favorite Images", wallpaper.FavoritesQueryID, true)
-					} else {
-						err = p.cfg.EnableImageQuery(wallpaper.FavoritesQueryID)
-					}
-				} else {
-					err = p.cfg.DisableImageQuery(wallpaper.FavoritesQueryID)
-				}
-				if err != nil {
-					log.Printf("Failed to toggle favorites: %v", err)
-				}
-			})
-			sm.SetRefreshFlag(wallpaper.FavoritesQueryID)
-		} else {
-			sm.RemoveSettingChangedCallback(wallpaper.FavoritesQueryID)
-			sm.UnsetRefreshFlag(wallpaper.FavoritesQueryID)
-		}
-		sm.GetCheckAndEnableApplyFunc()()
+func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, _ string) fyne.CanvasObject {
+	// Ensure the favorites query exists in config
+	if len(p.cfg.GetFavoritesQueries()) == 0 {
+		_, _ = p.cfg.AddFavoritesQuery("Favorite Images", wallpaper.FavoritesQueryID, true)
 	}
 
+	queryList := wallpaper.CreateQueryList(sm, wallpaper.QueryListConfig{
+		GetQueries:   p.cfg.GetFavoritesQueries,
+		EnableQuery:  p.cfg.EnableImageQuery,
+		DisableQuery: p.cfg.DisableImageQuery,
+		RemoveQuery: func(id string) error {
+			// Instead of removing the query from config, we wipe the folder (Clear All)
+			path := p.rootDir
+			_ = os.RemoveAll(path)
+			_ = os.MkdirAll(path, 0755)
+			log.Println("[Favorites] Wipe requested via UI: folder cleared.")
+
+			p.mu.Lock()
+			p.favMap = make(map[string]bool)
+			p.mu.Unlock()
+
+			if p.cfg.FavoritesClearedCallback != nil {
+				go p.cfg.FavoritesClearedCallback()
+			}
+			return nil
+		},
+		GetDisplayText: func(q wallpaper.ImageQuery) string {
+			return p.GetFavoritesDisplayName()
+		},
+		GetDisplayURL: func(q wallpaper.ImageQuery) *url.URL {
+			if u, err := url.Parse(p.HomeURL()); err == nil {
+				return u
+			}
+			return nil
+		},
+		DeleteLabel:          i18n.T("Clear"),
+		ForceActionEnabled:   true,
+		DeleteConfirmMessage: i18n.T("Are you sure you want to delete all saved favorites?"),
+	})
+	sm.RegisterRefreshFunc(queryList.Refresh)
+
 	return container.NewVBox(
-		widget.NewLabel(i18n.T("Wallpaper Sources:")),
-		container.NewHBox(label, layout.NewSpacer(), activeCheck),
+		widget.NewLabelWithStyle(i18n.T("Favorites:"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		queryList,
 	)
 }

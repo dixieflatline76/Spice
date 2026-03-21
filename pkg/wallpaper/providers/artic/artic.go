@@ -168,6 +168,10 @@ func (p *Provider) Type() provider.ProviderType {
 	return provider.TypeOnline
 }
 
+func (p *Provider) GetAttributionType() provider.AttributionType {
+	return provider.AttributionBy
+}
+
 func (p *Provider) SupportsUserQueries() bool {
 	return false
 }

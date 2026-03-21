@@ -58,6 +58,21 @@ func main() {
 		// allowing favorite_images to be the collection ID.
 		apiServer.RegisterNamespace(wallpaper.FavoritesNamespace, appDir)
 
+		// Wire up dynamic resolver for Local Folder provider
+		// This allows user-selected folders to be served via the local API
+		// without needing static namespace registration per folder.
+		apiServer.SetDynamicResolver(func(namespace, collectionID string) (string, bool) {
+			if namespace != wallpaper.LocalFolderNamespace {
+				return "", false
+			}
+			for _, q := range wallpaper.GetConfigInstance().GetLocalFolderQueries() {
+				if wallpaper.HashFolderPath(q.URL) == collectionID {
+					return q.URL, true
+				}
+			}
+			return "", false
+		})
+
 		log.Printf("Starting Local API Server on :49452...")
 		if err := apiServer.Start(); err != nil {
 			log.Printf("Failed to start API Server: %v", err)

@@ -15,6 +15,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/widget"
 	"github.com/dixieflatline76/Spice/v2/config"
 	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
@@ -73,6 +74,10 @@ func (p *Provider) Name() string {
 
 func (p *Provider) Type() provider.ProviderType {
 	return provider.TypeOnline
+}
+
+func (p *Provider) GetAttributionType() provider.AttributionType {
+	return provider.AttributionIn
 }
 
 func (p *Provider) SupportsUserQueries() bool {
@@ -584,6 +589,18 @@ func (p *Provider) createImgQueryList(sm setting.SettingsManager) *widget.List {
 				}
 			}
 			return p.cfg.RemoveGooglePhotosQuery(id)
+		},
+		GetDisplayURL: func(q wallpaper.ImageQuery) *url.URL {
+			u, err := url.Parse(q.URL)
+			if err != nil || u.Scheme != "googlephotos" {
+				return nil
+			}
+			guid := u.Host
+			absPath := filepath.Join(p.rootDir, guid)
+
+			f := storage.NewFileURI(absPath)
+			res, _ := url.Parse(f.String())
+			return res
 		},
 	})
 }

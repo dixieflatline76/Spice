@@ -374,4 +374,12 @@ func (m *MockImageProvider) CreateSettingsPanel(sm setting.SettingsManager) fyne
 func (m *MockImageProvider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl string) fyne.CanvasObject {
 	return nil
 }
+func (m *MockImageProvider) GetAttributionType() provider.AttributionType {
+	args := m.Called()
+	if len(args) == 0 {
+		return provider.AttributionBy
+	}
+	return args.Get(0).(provider.AttributionType)
+}
+
 func (m *MockImageProvider) GetProviderIcon() fyne.Resource { return nil }

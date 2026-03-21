@@ -9,6 +9,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"fyne.io/fyne/v2/storage"
 )
 
 // LocalListingHandler encapsulates the logic for listing local images.
@@ -66,6 +68,10 @@ func (h *LocalListingHandler) Handle() {
 }
 
 func (h *LocalListingHandler) resolvePath() bool {
+	// If the path was already resolved (e.g. by a dynamic resolver), skip.
+	if h.collectionPath != "" {
+		return true
+	}
 	var err error
 	h.collectionPath, err = h.server.resolveCollectionPath(h.rootPath, h.collectionID)
 	if err != nil {
@@ -116,7 +122,11 @@ func (h *LocalListingHandler) readMetadata() {
 		}
 	}
 	if h.attribution == "" && h.namespace != "favorites" {
-		h.attribution = h.collectionID
+		if h.namespace == "local_folders" {
+			h.attribution = filepath.Base(h.collectionPath)
+		} else {
+			h.attribution = h.collectionID
+		}
 	}
 }
 
@@ -196,6 +206,13 @@ func (h *LocalListingHandler) sendResponse() {
 					pUrl, _ = v.(string)
 				}
 			}
+		}
+
+		// For local folders, if no ProductURL is provided, use the absolute file path as a file:/// URI.
+		// This makes the attribution clickable and opens the local file.
+		if pUrl == "" && (h.namespace == "local_folders" || h.namespace == "favorites") {
+			absPath := filepath.Join(h.collectionPath, name)
+			pUrl = storage.NewFileURI(absPath).String()
 		}
 
 		result = append(result, LocalImage{

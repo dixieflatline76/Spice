@@ -1004,9 +1004,22 @@ func (wp *Plugin) updateTrayMenuUI(img provider.Image, monitorID int) {
 			mItems.ProviderMenuItem.Icon = nil
 		}
 
-		mItems.ArtistMenuItem.Label = i18n.Tf("By: {{.Attribution}}", map[string]any{"Attribution": attribution})
+		attrType := provider.AttributionBy
+		if p, exists := wp.providers[img.Provider]; exists {
+			attrType = p.GetAttributionType()
+		}
+
 		if attribution == "" {
 			mItems.ArtistMenuItem.Label = i18n.T("By: Unknown")
+		} else {
+			key := "attribution_by"
+			if attrType == provider.AttributionIn {
+				key = "attribution_in"
+			}
+			mItems.ArtistMenuItem.Label = i18n.Tf(key, map[string]any{"Attribution": attribution})
+		}
+		mItems.ArtistMenuItem.Action = func() {
+			wp.ViewCurrentImageOnWeb(monitorID)
 		}
 
 		// Update Favorite State
