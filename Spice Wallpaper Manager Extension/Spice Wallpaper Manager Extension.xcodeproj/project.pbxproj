@@ -45,6 +45,8 @@
 		FA9732F22EF2E652006E8432 /* icon_16.png in Resources */ = {isa = PBXBuildFile; fileRef = FA9732E22EF2E652006E8432 /* icon_16.png */; };
 		FA9732F32EF2E652006E8432 /* manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = FA9732E32EF2E652006E8432 /* manifest.json */; };
 		FA9732F42EF2E652006E8432 /* icon_48.png in Resources */ = {isa = PBXBuildFile; fileRef = FA9732E42EF2E652006E8432 /* icon_48.png */; };
+		BB9732FB2EF2E652006E8432 /* _locales in Resources */ = {isa = PBXBuildFile; fileRef = BB9732FA2EF2E652006E8432 /* _locales */; };
+		BB9732FC2EF2E652006E8432 /* _locales in Resources */ = {isa = PBXBuildFile; fileRef = BB9732FA2EF2E652006E8432 /* _locales */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -121,6 +123,7 @@
 		FA9732E22EF2E652006E8432 /* icon_16.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = icon_16.png; path = ../../extension/icon_16.png; sourceTree = "<group>"; };
 		FA9732E32EF2E652006E8432 /* manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = manifest.json; path = ../../extension/manifest.json; sourceTree = "<group>"; };
 		FA9732E42EF2E652006E8432 /* icon_48.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = icon_48.png; path = ../../extension/icon_48.png; sourceTree = "<group>"; };
+		BB9732FA2EF2E652006E8432 /* _locales */ = {isa = PBXFileReference; lastKnownFileType = folder; name = _locales; path = ../../extension/_locales; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -260,6 +263,7 @@
 				FA9732E22EF2E652006E8432 /* icon_16.png */,
 				FA9732E32EF2E652006E8432 /* manifest.json */,
 				FA9732E42EF2E652006E8432 /* icon_48.png */,
+				BB9732FA2EF2E652006E8432 /* _locales */,
 			);
 			name = Resources;
 			path = "Shared (Extension)";
@@ -434,6 +438,7 @@
 				FA9732F12EF2E652006E8432 /* icon_anim_128.png in Resources */,
 				FA9732F02EF2E652006E8432 /* icon_128.png in Resources */,
 				FA9732ED2EF2E652006E8432 /* popup.js in Resources */,
+				BB9732FB2EF2E652006E8432 /* _locales in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -449,6 +454,7 @@
 				FA9732E92EF2E652006E8432 /* icon_anim_128.png in Resources */,
 				FA9732E82EF2E652006E8432 /* icon_128.png in Resources */,
 				FA9732E52EF2E652006E8432 /* popup.js in Resources */,
+				BB9732FC2EF2E652006E8432 /* _locales in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
