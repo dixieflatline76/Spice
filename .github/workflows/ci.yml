@@ -54,6 +54,14 @@ jobs:
         if: runner.os == 'Windows'
         run: make build-win-amd64
 
+      - name: Dry Run macOS App Build
+        if: runner.os == 'macOS'
+        run: |
+          brew install create-dmg
+          go install fyne.io/tools/cmd/fyne@v1.6.2
+          make build-extension
+          SKIP_EXTENSION_BUILD=1 make build-darwin-arm64
+
   build-win:
     name: Build Windows
     runs-on: windows-latest
