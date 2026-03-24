@@ -114,11 +114,9 @@ func (wp *Plugin) checkAndRunRefresh(now time.Time, lastRefreshDay int, isInitia
 		wp.SyncWallhavenCollections()
 
 		log.Print("Running nightly refresh action...") // Clarify log message
-		wp.downloadMutex.Lock()
-		for id := range wp.queryPages {
-			wp.queryPages[id].Set(1)
-		}
-		wp.downloadMutex.Unlock()
+		// Forward-Scanning Logic: We no longer force a reset to Page 1 every night.
+		// Instead, we let the system naturally "drift" forward.
+		// Safe Page Wrapping (in fetch_logic.go) will handle looping back only when a query is exhausted.
 		wp.FetchNewImages(false)
 
 		log.Print("Nightly refresh action finished.")

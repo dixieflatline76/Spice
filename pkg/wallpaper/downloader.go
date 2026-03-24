@@ -52,7 +52,7 @@ func (wp *Plugin) ProcessImageJob(ctx context.Context, job DownloadJob) (resultI
 	// 2. Ensure Master (Raw Image)
 	// (Download pacing is automatically handled upstream by the Fair Scheduler Dispatcher)
 	if downloadProvider != nil {
-		log.Debugf("Downloading raw master image %s...", img.ID)
+		log.Debugf("Downloading/Ensuring raw master image %s...", img.ID)
 	}
 	masterPath, err := wp.ensureMaster(ctx, img, downloadProvider)
 	if err != nil {
@@ -63,28 +63,76 @@ func (wp *Plugin) ProcessImageJob(ctx context.Context, job DownloadJob) (resultI
 		return provider.Image{}, fmt.Errorf("failed to ensure master (%s): %w", providerName, err)
 	}
 
+	// 2.5 Resolution Probing & Persistence (Fixes "Ghost Dimensions")
+	if img.Width == 0 || img.Height == 0 {
+		w, h, err := wp.probeDimensions(masterPath)
+		if err == nil {
+			img.Width = w
+			img.Height = h
+			log.Debugf("Probed dimensions for %s: %dx%d. Persisting...", img.ID, w, h)
+			// Save back to store permanently so we never have to probe again
+			wp.store.Update(img)
+		} else {
+			log.Printf("Warning: Failed to probe dimensions for %s: %v", img.ID, err)
+		}
+	}
+
+	// 2.7 Multi-Monitor Compatibility & Rejection Tagging
+	// We check again now that we have REAL dimensions (either from API or Probing)
+	resolutions := wp.getResolutionsForDerivatives()
+	incompatibleCount := 0
+	for _, res := range resolutions {
+		resKey := fmt.Sprintf("%dx%d", res.Width, res.Height)
+		tagKey := "incompatible:" + resKey
+
+		// Check if it was already tagged as incompatible.
+		if img.ProcessingFlags[tagKey] {
+			incompatibleCount++
+			continue
+		}
+
+		// Perform actual check
+		if err := wp.imgProcessor.CheckCompatibility(img.Width, img.Height, res.Width, res.Height); err != nil {
+			log.Debugf("Image %s is incompatible with %s: %v. Tagging.", img.ID, resKey, err)
+			if img.ProcessingFlags == nil {
+				img.ProcessingFlags = make(map[string]bool)
+			}
+			img.ProcessingFlags[tagKey] = true
+			incompatibleCount++
+		}
+	}
+
+	// Persist the rejection tags
+	wp.store.Update(img)
+
+	if incompatibleCount == len(resolutions) && len(resolutions) > 0 {
+		return img, fmt.Errorf("incompatible image skipped (fits zero monitors)")
+	}
+
 	// 3. Ensure Derivative (Processed Image)
 	mode := wp.cfg.GetSmartFitMode()
 	isFlex := mode == SmartFitAggressive
 	isQuality := mode == SmartFitNormal
 
-	processingFlags := map[string]bool{
-		"SmartFit":       wp.cfg.GetSmartFit(),
-		"FitFlexibility": isFlex,
-		"FitQuality":     isQuality,
-		"FaceCrop":       wp.cfg.GetFaceCropEnabled(),
-		"FaceBoost":      wp.cfg.GetFaceBoostEnabled(),
+	if img.ProcessingFlags == nil {
+		img.ProcessingFlags = make(map[string]bool)
 	}
+
+	// Update flags with current session settings
+	img.ProcessingFlags["SmartFit"] = wp.cfg.GetSmartFit()
+	img.ProcessingFlags["FitFlexibility"] = isFlex
+	img.ProcessingFlags["FitQuality"] = isQuality
+	img.ProcessingFlags["FaceCrop"] = wp.cfg.GetFaceCropEnabled()
+	img.ProcessingFlags["FaceBoost"] = wp.cfg.GetFaceBoostEnabled()
 
 	derivativePaths, err := wp.ensureDerivative(ctx, img, masterPath)
 	if err != nil {
-		return provider.Image{}, fmt.Errorf("failed to ensure derivative: %w", err)
+		return img, fmt.Errorf("failed to ensure derivative: %w", err)
 	}
 
 	// Return updated image pointing to the derivative (for display)
 	// but flagged with how it was processed.
 	img.DerivativePaths = derivativePaths
-	img.ProcessingFlags = processingFlags
 
 	// Set a default FilePath for legacy compatibility (Monitor 0)
 	if path, ok := derivativePaths["primary"]; ok {
@@ -124,19 +172,42 @@ func (wp *Plugin) checkImageCompatibility(img provider.Image) error {
 	}
 
 	// Check all candidate resolutions.
-	// Synced Mode: Fail if ANY are incompatible.
-	// Independent Mode: Fail only if ALL are incompatible.
 	incompatibleCount := 0
 	for _, res := range resolutions {
+		resKey := fmt.Sprintf("%dx%d", res.Width, res.Height)
+		tagKey := "incompatible:" + resKey
+
+		// Check rejection tag first
+		if img.ProcessingFlags[tagKey] {
+			incompatibleCount++
+			continue
+		}
+
 		if err := wp.imgProcessor.CheckCompatibility(img.Width, img.Height, res.Width, res.Height); err != nil {
 			incompatibleCount++
 		}
 	}
 
-	if incompatibleCount == len(resolutions) {
+	if incompatibleCount == len(resolutions) && len(resolutions) > 0 {
 		return fmt.Errorf("incompatible image skipped (fits zero monitors)")
 	}
 	return nil
+}
+
+// probeDimensions uses DecodeConfig to get image dimensions without loading the whole file.
+func (wp *Plugin) probeDimensions(path string) (int, int, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return 0, 0, err
+	}
+	defer file.Close()
+
+	cfg, _, err := image.DecodeConfig(file)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	return cfg.Width, cfg.Height, nil
 }
 
 func (wp *Plugin) enrichImage(ctx context.Context, img provider.Image, p provider.ImageProvider) provider.Image {
