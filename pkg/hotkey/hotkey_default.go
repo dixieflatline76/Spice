@@ -138,6 +138,7 @@ func doStartListeners(mgr ui.PluginManager) {
 	hkTargetedTrash := hotkey.New([]hotkey.Modifier{modBase}, keyDown)
 	hkTargetedFav := hotkey.New([]hotkey.Modifier{modBase}, keyUp)
 	hkTargetedPause := hotkey.New([]hotkey.Modifier{modBase}, keyP)
+	hkGlobalPause := hotkey.New([]hotkey.Modifier{modBase, modExtra}, keyP)
 
 	// Register Targeted listeners
 	registerAndListenTargeted(hkTargetedNext, "Targeted Next", func() {
@@ -211,6 +212,12 @@ func doStartListeners(mgr ui.PluginManager) {
 	registerAndListen(hkGlobalSync, "Sync Monitors", func() {
 		if wp != nil {
 			wp.SyncMonitors(true)
+		}
+	})
+
+	registerAndListen(hkGlobalPause, "Global Pause", func() {
+		if wp != nil {
+			wp.TogglePauseMonitorAction(-1)
 		}
 	})
 }

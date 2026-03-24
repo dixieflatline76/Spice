@@ -53,7 +53,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/harry1453/go-common-file-dialog v1.2.1-0.20250428222125-566edcc205d7
-	github.com/zalando/go-keyring v0.2.7
+	github.com/zalando/go-keyring v0.2.8
 	golang.design/x/hotkey v0.4.1
 	golang.org/x/image v0.36.0
 	golang.org/x/mod v0.33.0

@@ -48,6 +48,7 @@ type Config struct {
 	FavoritesClearedCallback func()               `json:"-"`
 	ShortcutsDisabled        bool                 `json:"shortcuts_disabled"`
 	WallhavenSyncEnabled     bool                 `json:"wallhaven_sync_enabled"`
+	MonitorPauseStates       map[string]bool      `json:"monitor_pause_states"`
 }
 
 // ImageQuery struct to hold the URL of an image and whether it is active
@@ -1060,6 +1061,14 @@ func (c *Config) save() {
 	clone.PexelsQueries = make([]ImageQuery, len(c.PexelsQueries))
 	copy(clone.PexelsQueries, c.PexelsQueries)
 
+	// Deep copy MonitorPauseStates map
+	if c.MonitorPauseStates != nil {
+		clone.MonitorPauseStates = make(map[string]bool)
+		for k, v := range c.MonitorPauseStates {
+			clone.MonitorPauseStates[k] = v
+		}
+	}
+
 	// Fast-path: spin off the actual 5-second marshaling/saving to a goroutine so the
 	// caller's defer c.mu.Unlock() executes instantly and Fyne isn't blocked!
 	go func(cfgClone *Config) {
@@ -1072,6 +1081,33 @@ func (c *Config) save() {
 		// SetString might internally lock Fyne preferences, but it's safe outside our own c.mu
 		c.SetString(wallhavenConfigPrefKey, string(data))
 	}(&clone)
+}
+
+// IsMonitorPaused returns true if the specified monitor is paused.
+func (c *Config) IsMonitorPaused(devicePath string) bool {
+	if devicePath == "" {
+		return false
+	}
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.MonitorPauseStates == nil {
+		return false
+	}
+	return c.MonitorPauseStates[devicePath]
+}
+
+// SetMonitorPaused sets the pause state for a specific monitor.
+func (c *Config) SetMonitorPaused(devicePath string, paused bool) {
+	if devicePath == "" {
+		return
+	}
+	c.mu.Lock()
+	if c.MonitorPauseStates == nil {
+		c.MonitorPauseStates = make(map[string]bool)
+	}
+	c.MonitorPauseStates[devicePath] = paused
+	c.mu.Unlock()
+	c.save()
 }
 
 // GetImageQueries returns a copy of the Wallhaven queries in a thread-safe manner.

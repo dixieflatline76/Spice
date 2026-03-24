@@ -105,6 +105,11 @@ type MonitorController struct {
 
 // NewMonitorController creates a new actor for managing a specific monitor's state.
 func NewMonitorController(id int, m Monitor, store StoreInterface, fm *FileManager, os OS, cfg *Config, processor ImageProcessor) *MonitorController {
+	paused := false
+	if cfg != nil {
+		paused = cfg.IsMonitorPaused(m.DevicePath)
+	}
+
 	return &MonitorController{
 		ID:        id,
 		Monitor:   m,
@@ -119,6 +124,7 @@ func NewMonitorController(id int, m Monitor, store StoreInterface, fm *FileManag
 			History:    make([]string, 0),
 			RandomPos:  0,
 			ShuffleIDs: make([]string, 0),
+			Paused:     paused,
 		},
 	}
 }
@@ -195,6 +201,9 @@ func (mc *MonitorController) handleCommand(cmd Command) {
 
 func (mc *MonitorController) togglePause() {
 	mc.State.Paused = !mc.State.Paused
+	if mc.cfg != nil {
+		mc.cfg.SetMonitorPaused(mc.Monitor.DevicePath, mc.State.Paused)
+	}
 	log.Printf("[Monitor %d] Pause set to %v", mc.ID, mc.State.Paused)
 	if mc.OnWallpaperChanged != nil {
 		mc.OnWallpaperChanged(mc.State.CurrentImage, mc.ID)

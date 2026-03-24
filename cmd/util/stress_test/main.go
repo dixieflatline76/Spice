@@ -76,7 +76,7 @@ func CheckCompatibility(imgWidth, imgHeight, systemWidth, systemHeight int, mode
 func main() {
 	// 1. Setup
 	srcDir := `C:\Users\karlk\AppData\Local\Temp\spice\wallpaper_downloads`
-	
+
 	// User settings
 	targetWidth := 3440
 	targetHeight := 1440
@@ -113,14 +113,14 @@ func main() {
 		}
 
 		path := filepath.Join(srcDir, f.Name())
-		
+
 		// Probing dimensions
 		file, err := os.Open(path)
 		if err != nil {
 			errorCount++
 			continue
 		}
-		
+
 		config, _, err := image.DecodeConfig(file)
 		file.Close()
 		if err != nil {
