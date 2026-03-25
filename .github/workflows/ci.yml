@@ -58,7 +58,7 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           brew install create-dmg
-          go install fyne.io/tools/cmd/fyne@v1.6.2
+          go install fyne.io/fyne/v2/cmd/fyne@v2.7.3
           SKIP_EXTENSION_BUILD=1 make build-extension
           SKIP_EXTENSION_BUILD=1 make build-darwin-arm64
 
@@ -128,7 +128,7 @@ jobs:
       - name: Install Dependencies
         run: |
           brew install create-dmg
-          go install fyne.io/tools/cmd/fyne@v1.6.2
+          go install fyne.io/fyne/v2/cmd/fyne@v2.7.3
 
       - name: Update version.txt
         run: echo "${{ github.event.release.tag_name }}" > version.txt

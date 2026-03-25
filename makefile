@@ -123,10 +123,10 @@ build-darwin-appstore-arm64: build-extension
 	@echo "Packaging signed .pkg for App Store..."
 	@if [ -f "embedded.provisionprofile" ]; then \
 		echo "Using provided provisioning profile..."; \
-		fyne release -os darwin -appStore -executable ./bin/Spice-darwin-appstore-arm64 -icon asset/icons/tray.png -name Spice -app-id com.dixieflatline76.spice -profile embedded.provisionprofile; \
+		fyne release -os darwin -category utilities -executable ./bin/Spice-darwin-appstore-arm64 -icon asset/icons/tray.png -name Spice -app-id com.dixieflatline76.spice -profile embedded.provisionprofile; \
 	else \
 		echo "No provisioning profile found, proceeding without it..."; \
-		fyne release -os darwin -appStore -executable ./bin/Spice-darwin-appstore-arm64 -icon asset/icons/tray.png -name Spice -app-id com.dixieflatline76.spice; \
+		fyne release -os darwin -category utilities -executable ./bin/Spice-darwin-appstore-arm64 -icon asset/icons/tray.png -name Spice -app-id com.dixieflatline76.spice; \
 	fi
 
 	@echo "Moving final Spice.pkg to ./dist/..."
