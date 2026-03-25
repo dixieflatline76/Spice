@@ -147,7 +147,8 @@ jobs:
           if [ -f app_cert.p12 ]; then security import app_cert.p12 -k build.keychain -P "${{ secrets.MAC_APP_CERTIFICATE_PASSWORD }}" -T /usr/bin/codesign -T /usr/bin/productbuild; fi
           if [ -f installer_cert.p12 ]; then security import installer_cert.p12 -k build.keychain -P "${{ secrets.MAC_INSTALLER_CERTIFICATE_PASSWORD }}" -T /usr/bin/codesign -T /usr/bin/productbuild; fi
           
-          security set-key-partition-list -S apple-tool:,apple: -k "${{ runner.temp }}" -s build.keychain
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -k "${{ runner.temp }}" -s build.keychain
+          security set-keychain-settings -t 3600 -u build.keychain
           
           echo "Listing identities in keychain:"
           security find-identity -v -p codesigning build.keychain

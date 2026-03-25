@@ -80,7 +80,9 @@ ifneq ($(SIGNING_IDENTITY),)
 	@echo "Signing image processor binary..."
 	codesign --force --options=runtime --sign "$(SIGNING_IDENTITY)" --timestamp bin/Spice-darwin-arm64
 	@echo "Signing the application bundle..."
-	codesign --force --deep --options=runtime --sign "$(SIGNING_IDENTITY)" --timestamp Spice.app
+	codesign --force --options=runtime --sign "$(SIGNING_IDENTITY)" --timestamp Spice.app
+	@echo "Verifying application bundle signature..."
+	codesign -dv --verbose=4 Spice.app
 else
 	@echo "No SIGNING_IDENTITY set, skipping code signing."
 endif
