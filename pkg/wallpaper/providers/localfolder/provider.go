@@ -165,7 +165,7 @@ func (p *Provider) FetchImages(ctx context.Context, folderPath string, page int)
 	images := make([]provider.Image, len(respData))
 	for i, d := range respData {
 		images[i] = provider.Image{
-			ID:            d.ID,
+			ID:            fmt.Sprintf("LocalFolder_%s_%s", collectionID, d.ID),
 			Path:          d.URL,
 			Attribution:   d.Attribution,
 			ViewURL:       d.ProductURL,

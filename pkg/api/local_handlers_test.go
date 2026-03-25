@@ -170,8 +170,8 @@ func TestLocalHandler_Pagination(t *testing.T) {
 	err = json.Unmarshal(w1.Body.Bytes(), &images1)
 	assert.NoError(t, err)
 	assert.Len(t, images1, 4)
-	assert.Equal(t, "img0", images1[0].ID)
-	assert.Equal(t, "img3", images1[3].ID)
+	assert.Equal(t, "LocalFolder_many_images_img0", images1[0].ID)
+	assert.Equal(t, "LocalFolder_many_images_img3", images1[3].ID)
 
 	// Page 2, PerPage 4 -> should get img4, img5, img6, img7
 	req2 := httptest.NewRequest("GET", "/local/listing_test/many_images/images?page=2&per_page=4", nil)
@@ -183,7 +183,7 @@ func TestLocalHandler_Pagination(t *testing.T) {
 	err = json.Unmarshal(w2.Body.Bytes(), &images2)
 	assert.NoError(t, err)
 	assert.Len(t, images2, 4)
-	assert.Equal(t, "img4", images2[0].ID)
+	assert.Equal(t, "LocalFolder_many_images_img4", images2[0].ID)
 
 	// Page 3, PerPage 4 -> should get img8, img9 (only 2 left)
 	req3 := httptest.NewRequest("GET", "/local/listing_test/many_images/images?page=3&per_page=4", nil)
@@ -195,8 +195,8 @@ func TestLocalHandler_Pagination(t *testing.T) {
 	err = json.Unmarshal(w3.Body.Bytes(), &images3)
 	assert.NoError(t, err)
 	assert.Len(t, images3, 2)
-	assert.Equal(t, "img8", images3[0].ID)
-	assert.Equal(t, "img9", images3[1].ID)
+	assert.Equal(t, "LocalFolder_many_images_img8", images3[0].ID)
+	assert.Equal(t, "LocalFolder_many_images_img9", images3[1].ID)
 
 	// Page 4 -> Empty
 	req4 := httptest.NewRequest("GET", "/local/listing_test/many_images/images?page=4&per_page=4", nil)

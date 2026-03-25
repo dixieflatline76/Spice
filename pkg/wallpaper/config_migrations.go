@@ -2,7 +2,6 @@ package wallpaper
 
 import (
 	"log"
-	"strings"
 )
 
 // MigrationFunc defines a single migration step.
@@ -85,15 +84,26 @@ func LoadAvoidSetStep(cfg *Config) (bool, error) {
 		return false, nil
 	}
 	changed := false
-	for k, v := range cfg.AvoidSet {
-		if !strings.Contains(k, "_") {
-			// Legacy un-namespaced ID — drop it
-			log.Printf("Migration: Removing legacy blocklist entry: %s", k)
+	for k := range cfg.AvoidSet {
+		// Only purge strictly numeric legacy IDs (e.g. "24645").
+		// These caused collisions between different providers in older versions.
+		// Modern namespaced IDs and local file paths are spared.
+		isLegacyNumeric := true
+		for _, char := range k {
+			if char < '0' || char > '9' {
+				isLegacyNumeric = false
+				break
+			}
+		}
+
+		if isLegacyNumeric {
+			log.Printf("Migration: Removing legacy un-namespaced numeric blocklist entry: %s", k)
 			delete(cfg.AvoidSet, k)
 			changed = true
 			continue
 		}
-		cfg.avoidMap.Store(k, v)
+		// Hydrate avoidMap as we go (Redundant but safe for direct step callers)
+		cfg.avoidMap.Store(k, true)
 	}
 	return changed, nil
 }

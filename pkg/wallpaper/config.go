@@ -170,16 +170,16 @@ func (c *Config) loadFromPrefs() error {
 		return err
 	}
 
-	// Sync AvoidSet from JSON into the thread-safe avoidMap
-	for id := range c.AvoidSet {
-		c.avoidMap.Store(id, true)
-	}
-
 	// Execute Migration Chain
 	migrations := NewMigrationChain()
 	if err := migrations.Execute(c); err != nil {
 		log.Printf("Error running configuration migrations: %v", err)
 		// We continue even if migration fails, as we have a partial config
+	}
+
+	// Sync AvoidSet from JSON into the thread-safe avoidMap (Post-Migration)
+	for id := range c.AvoidSet {
+		c.avoidMap.Store(id, true)
 	}
 
 	return nil

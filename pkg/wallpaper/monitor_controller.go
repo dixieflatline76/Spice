@@ -258,26 +258,41 @@ func (mc *MonitorController) next(manual bool) {
 	}
 	mc.pendingUpdate = false // Always consume the pending update
 
-	// 4. Pick Next
-	if mc.State.RandomPos >= len(mc.State.ShuffleIDs) {
-		mc.State.RandomPos = 0
-		mc.rebuildShuffle(bucketIDs) // reshuffle when exhausted
-	}
-
-	nextID := mc.State.ShuffleIDs[mc.State.RandomPos]
-	mc.State.RandomPos = (mc.State.RandomPos + 1) % len(mc.State.ShuffleIDs)
-
-	if img, ok := mc.Store.GetByID(nextID); ok {
-		mc.State.CurrentID = nextID
-		mc.State.History = append(mc.State.History, nextID)
-
-		// 5. Cap History (Resource Management)
-		if len(mc.State.History) > 100 {
-			mc.State.History = mc.State.History[1:]
+	// 4. Pick Next (with Skip/Retry Logic for Blocked/Missing images)
+	for attempts := 0; attempts < len(mc.State.ShuffleIDs); attempts++ {
+		if mc.State.RandomPos >= len(mc.State.ShuffleIDs) {
+			mc.State.RandomPos = 0
+			mc.rebuildShuffle(bucketIDs) // reshuffle when exhausted
 		}
 
-		mc.applyImage(img)
+		nextID := mc.State.ShuffleIDs[mc.State.RandomPos]
+		mc.State.RandomPos = (mc.State.RandomPos + 1) % len(mc.State.ShuffleIDs)
+
+		// Layer 2 Defense: Check AvoidSet (Block List)
+		if mc.cfg != nil && mc.cfg.InAvoidSet(nextID) {
+			log.Debugf("[Monitor %d] Skipping blocked image during rotation: %s", mc.ID, nextID)
+			continue
+		}
+
+		if img, ok := mc.Store.GetByID(nextID); ok {
+			mc.State.CurrentID = nextID
+			mc.State.History = append(mc.State.History, nextID)
+
+			// 5. Cap History (Resource Management)
+			if len(mc.State.History) > 100 {
+				mc.State.History = mc.State.History[1:]
+			}
+
+			mc.applyImage(img)
+			return // Successfully found and applied an image
+		} else {
+			log.Debugf("[Monitor %d] Skipping image missing from store (likely recently deleted): %s", mc.ID, nextID)
+		}
 	}
+
+	log.Printf("[Monitor %d] All images in shuffle list are blocked or missing. Waiting for fetch...", mc.ID)
+	mc.State.WaitingForImages = true
+	mc.State.ManualRecovery = manual
 }
 
 func (mc *MonitorController) rebuildShuffle(ids []string) {
