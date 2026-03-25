@@ -130,16 +130,13 @@ endif
 	rm -rf ./bin/Spice.app && mv Spice.app ./bin/
 
 build-darwin-appstore-arm64: build-extension
-	@echo "Building Go executable for macOS App Store (arm64)..."
-	GOOS=darwin GOARCH=arm64 go build -tags release -o bin/Spice-darwin-appstore-arm64 -ldflags "$(LDFLAGS_COMMON)" ./cmd/spice
-
-	@echo "Packaging signed .pkg for App Store..."
+	@echo "Packaging signed .pkg for App Store (building from source)..."
 	@if [ -f "embedded.provisionprofile" ]; then \
 		echo "Using provided provisioning profile..."; \
-		fyne release -os darwin -category utilities -executable ./bin/Spice-darwin-appstore-arm64 -icon asset/icons/tray.png -name Spice -appID com.dixieflatline76.spice -profile embedded.provisionprofile; \
+		fyne release -os darwin -category utilities -icon asset/icons/tray.png -name Spice -appID com.dixieflatline76.spice -profile embedded.provisionprofile -tags release ./cmd/spice; \
 	else \
 		echo "No provisioning profile found, proceeding without it..."; \
-		fyne release -os darwin -category utilities -executable ./bin/Spice-darwin-appstore-arm64 -icon asset/icons/tray.png -name Spice -appID com.dixieflatline76.spice; \
+		fyne release -os darwin -category utilities -icon asset/icons/tray.png -name Spice -appID com.dixieflatline76.spice -tags release ./cmd/spice; \
 	fi
 
 	@echo "Moving final Spice.pkg to ./dist/..."
