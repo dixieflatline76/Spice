@@ -2,6 +2,7 @@ package wallpaper
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -200,12 +201,12 @@ func (wp *Plugin) fetchFromProvider(fetchCtx context.Context, q ImageQuery, p pr
 	}
 	if len(images) == 0 {
 		log.Printf("Provider %s returned no new images for query %s.", q.Provider, q.ID)
-		// Auto-reset to page 1 for local providers to ensure they cycle through content correctly.
-		// For online providers, we stay on the last page to avoid redundant scanning.
-		if page > 1 && p.Type() == provider.TypeLocal {
+		// Safe Page Wrapping: Auto-reset to page 1 for all providers to ensure they cycle through content correctly.
+		// This ensures that "Nightly Refresh" and "Starvation Fetches" eventually see new content or loop back to favorites.
+		if page > 1 {
 			pg.Set(1)
 			wp.saveQueryPages()
-			log.Debugf("Query %s: End of local content reached. Resetting to page 1.", q.ID)
+			log.Debugf("Query %s: End of content reached on page %d. Wrapping back to page 1.", q.ID, page)
 		}
 		return
 	}
@@ -241,10 +242,23 @@ func (wp *Plugin) fetchFromProvider(fetchCtx context.Context, q ImageQuery, p pr
 		}
 
 		// Pattern: Deduplication (At-the-Gate)
-		// Skip images we already have in the store to save bandwidth and API calls.
-		if wp.store.Exists(img.ID) {
-			log.Debugf("Skipping image already in store: %s", img.ID)
-			continue
+		// Deadlock Break: We only skip an image if it exists AND already has derivatives for your current monitors.
+		// This allow "Backlog Healing": if you have 1000 images but 0 derivatives, this allows them back into the pipeline.
+		if existing, exists := wp.store.GetByID(img.ID); exists {
+			if wp.allMonitorDerivativesExist(existing) {
+				log.Debugf("Skipping image already in store with all derivatives: %s", img.ID)
+				continue
+			}
+			log.Debugf("Image %s exists but is missing derivatives. Allowing re-processing for backlog healing.", img.ID)
+			// Merge existing metadata (like already probed dimensions) into the fetch-result image
+			img.Width = existing.Width
+			img.Height = existing.Height
+			if img.ProcessingFlags == nil {
+				img.ProcessingFlags = make(map[string]bool)
+			}
+			for k, v := range existing.ProcessingFlags {
+				img.ProcessingFlags[k] = v
+			}
 		}
 		job := DownloadJob{
 			Ctx:      queryCtx,
@@ -268,4 +282,30 @@ func (wp *Plugin) fetchFromProvider(fetchCtx context.Context, q ImageQuery, p pr
 		wp.saveQueryPages() // Persist pagination state
 		log.Debugf("Query %s: Successfully processed page %d (Found: %d, Queued: %d). Incrementing to page %d", q.ID, page, len(images), queuedForThisQuery, pg.Value())
 	}
+}
+
+// allMonitorDerivativesExist checks if the image has a processed file for every unique monitor resolution.
+func (wp *Plugin) allMonitorDerivativesExist(img provider.Image) bool {
+	if len(img.DerivativePaths) == 0 {
+		return false
+	}
+
+	resolutions := wp.getResolutionsForDerivatives()
+	if len(resolutions) == 0 {
+		return true // No monitors to satisfy
+	}
+
+	for _, res := range resolutions {
+		resKey := fmt.Sprintf("%dx%d", res.Width, res.Height)
+		if _, ok := img.DerivativePaths[resKey]; !ok {
+			// Also check incompatibility tag correctly
+			tagKey := "incompatible:" + resKey
+			if img.ProcessingFlags[tagKey] {
+				continue // Already verified incompatible for this resolution
+			}
+			return false
+		}
+	}
+
+	return true
 }

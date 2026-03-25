@@ -575,26 +575,40 @@ func (wp *Plugin) TogglePauseMonitorAction(monitorID int) {
 	if wp.IsPaused() {
 		return
 	}
-	// 1. Read state BEFORE dispatch to ensure we capture the 'old' value.
-	// Since dispatch is async, reading it after would be a race with the actor.
-	willBePaused := !wp.IsMonitorPaused(monitorID)
 
-	// 2. Dispatch the toggle command
+	// Case 1: Global Toggle
+	if monitorID == -1 {
+		wp.monMu.RLock()
+		// Determine target state based on monitor 0's status (or first available)
+		targetPaused := true
+		for id := range wp.Monitors {
+			targetPaused = !wp.IsMonitorPaused(id)
+			break
+		}
+		wp.monMu.RUnlock()
+
+		wp.dispatch(-1, CmdPause)
+
+		msg := i18n.T("All Monitors: Resuming Play")
+		if targetPaused {
+			msg = i18n.T("All Monitors: Pausing Play")
+		}
+		wp.manager.NotifyUser(i18n.T("Wallpaper Rotation"), msg)
+		return
+	}
+
+	// Case 2: Targeted Toggle
+	willBePaused := !wp.IsMonitorPaused(monitorID)
 	wp.dispatch(monitorID, CmdPause)
 
-	// 3. Notify based on the deterministic target state
-	state := i18n.T("Resumed Play")
+	msg := i18n.Tf("Display {{.ID}}: Resuming Play", map[string]any{"ID": monitorID + 1})
 	if willBePaused {
-		state = i18n.T("Paused Play")
+		msg = i18n.Tf("Display {{.ID}}: Pausing Play", map[string]any{"ID": monitorID + 1})
 	}
-	wp.manager.NotifyUser(i18n.Tf("Display {{.ID}}", map[string]any{"ID": monitorID + 1}), state)
+	wp.manager.NotifyUser(i18n.T("Wallpaper Rotation"), msg)
 }
 
-func (wp *Plugin) IsPaused() bool {
-	return wp.cfg.GetWallpaperChangeFrequency() == FrequencyNever
-}
-
-// IsMonitorPaused returns whether a specific monitor is paused (locally).
+// IsMonitorPaused returns the current pause state of a specific monitor.
 func (wp *Plugin) IsMonitorPaused(monitorID int) bool {
 	wp.monMu.RLock()
 	defer wp.monMu.RUnlock()
@@ -625,6 +639,12 @@ func (wp *Plugin) SetTargetedShortcutsDisabled(disabled bool) {
 }
 
 func (wp *Plugin) ChangeWallpaperFrequency(newFreq Frequency, silent bool) {
+	if wp.ticker != nil && wp.cfg.GetWallpaperChangeFrequency() == newFreq {
+		// Frequency hasn't changed, do not reset the ticker!
+		// This prevents SyncMonitors from indefinitely delaying rotations.
+		return
+	}
+
 	wp.cfg.SetWallpaperChangeFrequency(newFreq)
 
 	wp.downloadMutex.Lock()
@@ -874,6 +894,10 @@ func (wp *Plugin) dispatch(monitorID int, cmd Command) {
 	}
 }
 
+func (wp *Plugin) IsPaused() bool {
+	return wp.cfg.GetWallpaperChangeFrequency() == FrequencyNever
+}
+
 // SyncMonitors reconciles the current OS display setup with our actor list.
 // If force is false, it only runs a full sync if the number of monitors has changed.
 func (wp *Plugin) SyncMonitors(force bool) {
@@ -918,7 +942,7 @@ func (wp *Plugin) SyncMonitors(force bool) {
 			mc.Start()
 			wp.Monitors[m.ID] = mc
 			changed = true
-			go wp.SetNextWallpaper(m.ID, true)
+			go wp.SetNextWallpaper(m.ID, force)
 
 		case SyncActionUpdate:
 			m := action.Monitor
@@ -926,7 +950,7 @@ func (wp *Plugin) SyncMonitors(force bool) {
 				log.Printf("[Sync] Resolution change for Monitor %d: %v -> %v", m.ID, mc.Monitor.Rect, m.Rect)
 				mc.Monitor = m
 				changed = true
-				go wp.SetNextWallpaper(m.ID, true)
+				go wp.SetNextWallpaper(m.ID, force)
 			}
 
 		case SyncActionRemove:

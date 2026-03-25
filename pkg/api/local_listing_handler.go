@@ -216,7 +216,7 @@ func (h *LocalListingHandler) sendResponse() {
 		}
 
 		result = append(result, LocalImage{
-			ID:          strings.TrimSuffix(name, filepath.Ext(name)),
+			ID:          fmt.Sprintf("LocalFolder_%s_%s", h.collectionID, strings.TrimSuffix(name, filepath.Ext(name))),
 			URL:         url,
 			Attribution: imgAttribution,
 			ProductURL:  pUrl,

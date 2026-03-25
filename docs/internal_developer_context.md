@@ -32,12 +32,26 @@ Spice is designed to remain responsive (60fps UI) even while downloading 50MB 8K
     *   `ClearCache`: Calls `store.Wipe()`.
     *   These are all protected by the store's `sync.RWMutex` and do not contend with the hot path in practice.
 
-### 1.2 pagination & Anti-Thrashing Logic
+### 1.2 Pagination & Anti-Thrashing Logic
 In `pkg/wallpaper/wallpaper.go`:
 *   **The Trigger**: `applyWallpaper` checks `seenCount / totalCount`. If > 70%, it triggers a fetch.
 *   **Protection**:
     *   **Atomic Flag**: `fetchingInProgress` (Atomic Bool) acts as a mutex for the *network trigger*, preventing 1000 clicks from spawning 1000 fetch threads.
     *   **Starvation Check**: If the provider returns 0 images (dry source), the system compares `currentTotal` vs `lastTriggerTotal`. If they haven't changed, it enforces a 60s cooldown to prevent API bans.
+
+### 1.3 Persistent Architectural Constraints (Golden Rules)
+⚠️ **Never remove or "refactor away" these mechanisms. They solve recurring production bugs.**
+
+1.  **Safe Page Wrapping (fetch_logic.go)**: 
+    *   **Rule**: When `FetchImages` returns 0 results for a `page > 1`, ALWAYS reset the query to `Page 1`.
+    *   **Rationale**: Most providers (Wallhaven, Wikimedia) have finite pages. Without wrapping, the wallpaper flow dies permanently once the last page is reached.
+    *   **Restriction**: Do NOT wrap if `err != nil`. This distinguishes "EndOfResults" from "NetworkError".
+2.  **Resolution Probing & Persistence (downloader.go)**:
+    *   **Rule**: Once an image is opened (or its header decoded), the discovered `Width` and `Height` MUST be saved back to the `Store`.
+    *   **Rationale**: Fixes the "Ghost Dimension" ($0 \times 0$) bug where lack of persistence forces expensive full-file decodes on every refresh.
+3.  **Deadlock-Free Deduplication (fetch_logic.go)**:
+    *   **Rule**: The fetcher MUST NOT skip an image just because it exists in the store. It must also check if the image is missing a derivative for the *current* monitors.
+    *   **Rationale**: Essential for "Backlog Healing." If a user adds a new monitor, the system must be able to "pull" existing cached originals into the processing pipeline.
 
 ### 2.1 The Registry Pattern (v2.5)
  

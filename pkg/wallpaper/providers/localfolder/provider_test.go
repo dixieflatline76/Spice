@@ -117,7 +117,7 @@ func TestFetchImages(t *testing.T) {
 	images, err := p.FetchImages(context.Background(), tempDir, 1)
 	assert.NoError(t, err)
 	require.Len(t, images, 1)
-	assert.Equal(t, "image1", images[0].ID)
+	assert.Equal(t, fmt.Sprintf("LocalFolder_%s_image1", collectionID), images[0].ID)
 	assert.Equal(t, ProviderName, images[0].Provider)
 }
 

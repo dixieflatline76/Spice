@@ -27,15 +27,19 @@ func TestBulkhead_LaneSeparation(t *testing.T) {
 		queryCancelFuncs:   make(map[string]context.CancelFunc),
 		manager:            &MockPluginManager{},
 		Monitors:           make(map[int]*MonitorController),
+		os:                 &MockOS{},
 	}
 
 	// Mock manager expectations (FetchNewImages calls NotifyUser at the end)
 	mockManager := wp.manager.(*MockPluginManager)
 	mockManager.On("NotifyUser", mock.Anything, mock.Anything).Maybe()
 
-	// Mock Store to return false for Exists (always new images)
+	// Mock Store to return false for GetByID (always new images)
 	mockStore := wp.store.(*MockImageStore)
-	mockStore.On("Exists", mock.Anything).Return(false)
+	mockStore.On("GetByID", mock.Anything).Return(provider.Image{}, false)
+
+	// Mock OS for resolutions
+	wp.os.(*MockOS).On("GetMonitors").Return([]Monitor{}, nil).Maybe()
 
 	// Mock JobSubmitter
 	mockPipeline := &MockPipeline{}
@@ -121,12 +125,16 @@ func TestBulkhead_CircuitBreakerRejection(t *testing.T) {
 		queryCancelFuncs:   make(map[string]context.CancelFunc),
 		manager:            &MockPluginManager{},
 		Monitors:           make(map[int]*MonitorController),
+		os:                 &MockOS{},
 	}
 
 	// Mock manager expectations
 	if mp, ok := wp.manager.(*MockPluginManager); ok {
 		mp.On("NotifyUser", mock.Anything, mock.Anything).Maybe()
 	}
+
+	// Mock OS for resolutions
+	wp.os.(*MockOS).On("GetMonitors").Return([]Monitor{}, nil).Maybe()
 
 	// 1. Setup Provider that implements ThrottledProvider
 	wikimedia := &MockThrottledProvider{}
@@ -163,12 +171,16 @@ func TestBulkhead_Deduplication(t *testing.T) {
 		queryCancelFuncs:   make(map[string]context.CancelFunc),
 		manager:            &MockPluginManager{},
 		Monitors:           make(map[int]*MonitorController),
+		os:                 &MockOS{},
 	}
 
 	// Mock manager expectations
 	if mp, ok := wp.manager.(*MockPluginManager); ok {
 		mp.On("NotifyUser", mock.Anything, mock.Anything).Maybe()
 	}
+
+	// Mock OS for resolutions
+	wp.os.(*MockOS).On("GetMonitors").Return([]Monitor{}, nil).Maybe()
 
 	// 1. Setup Provider and Query
 	wikimedia := &MockImageProvider{}
@@ -180,10 +192,13 @@ func TestBulkhead_Deduplication(t *testing.T) {
 		},
 	}
 
-	// 2. Mock Store: id1 exists, id2 does not (namespaced by provider ID)
+	// 2. Mock Store: id1 exists (with derivatives), id2 does not
 	mockStore := wp.store.(*MockImageStore)
-	mockStore.On("Exists", "Wikimedia_id1").Return(true)
-	mockStore.On("Exists", "Wikimedia_id2").Return(false)
+	mockStore.On("GetByID", "Wikimedia_id1").Return(provider.Image{
+		ID:              "Wikimedia_id1",
+		DerivativePaths: map[string]string{"1920x1080": "path"},
+	}, true)
+	mockStore.On("GetByID", "Wikimedia_id2").Return(provider.Image{}, false)
 
 	// 3. Mock Pipeline
 	mockPipeline := &MockPipeline{}

@@ -90,32 +90,29 @@ func TestConfig_AvoidSetStrictMatch(t *testing.T) {
 	assert.False(t, cfg.InAvoidSet("Wallhaven_1234"), "Partial numeric match should NOT match")
 }
 
-func TestLoadAvoidSetStep_PurgesLegacyIDs(t *testing.T) {
+func TestLoadAvoidSetStep_RefinedPurge(t *testing.T) {
 	cfg := &Config{
 		Preferences: NewMockPreferences(),
 		AvoidSet: map[string]bool{
-			"24645":         true, // Legacy (no underscore) — should be removed
-			"99999":         true, // Legacy — should be removed
+			"24645":         true, // Legacy Numeric (no underscore) — should be removed
+			"landscape":     true, // Legacy Non-Numeric (e.g. Local Path) — should be KEPT
 			"Wallhaven_456": true, // Namespaced — should be kept
-			"Pexels_789":    true, // Namespaced — should be kept
 		},
 	}
 
 	changed, err := LoadAvoidSetStep(cfg)
 	assert.NoError(t, err)
-	assert.True(t, changed, "Should report change since legacy IDs were removed")
+	assert.True(t, changed, "Should report change since numeric ID was removed")
 
-	// Legacy IDs should be gone
+	// Legacy Numeric ID should be gone
 	assert.False(t, cfg.InAvoidSet("24645"))
-	assert.False(t, cfg.InAvoidSet("99999"))
 
-	// Namespaced IDs should be kept
-	assert.True(t, cfg.InAvoidSet("Wallhaven_456"))
-	assert.True(t, cfg.InAvoidSet("Pexels_789"))
+	// Non-numeric and Namespaced IDs should be kept
+	assert.True(t, cfg.InAvoidSet("landscape"), "Non-numeric IDs must survive migration")
+	assert.True(t, cfg.InAvoidSet("Wallhaven_456"), "Namespaced IDs must survive migration")
 
-	// AvoidSet map should also be cleaned
+	// AvoidSet map should match
 	assert.NotContains(t, cfg.AvoidSet, "24645")
-	assert.NotContains(t, cfg.AvoidSet, "99999")
+	assert.Contains(t, cfg.AvoidSet, "landscape")
 	assert.Contains(t, cfg.AvoidSet, "Wallhaven_456")
-	assert.Contains(t, cfg.AvoidSet, "Pexels_789")
 }

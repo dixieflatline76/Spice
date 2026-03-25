@@ -800,16 +800,41 @@ func TestTogglePauseMonitorAction_Notification(t *testing.T) {
 	}
 	wp.Monitors[0] = mon0
 
-	// Expectation: "Paused Play" (the target state)
-	mockPM.On("NotifyUser", "Display 1", "Paused Play").Return()
+	// Expectation: "Display 1: Pausing Play"
+	mockPM.On("NotifyUser", "Wallpaper Rotation", "Display 1: Pausing Play").Return()
 	wp.TogglePauseMonitorAction(0)
 	mockPM.AssertExpectations(t)
 
 	// 2. Test Transition Pause -> Play
 	// Current state: Paused
 	mon0.State.Paused = true
-	// Expectation: "Resumed Play" (the target state)
-	mockPM.On("NotifyUser", "Display 1", "Resumed Play").Return()
+	// Expectation: "Display 1: Resuming Play"
+	mockPM.On("NotifyUser", "Wallpaper Rotation", "Display 1: Resuming Play").Return()
 	wp.TogglePauseMonitorAction(0)
 	mockPM.AssertExpectations(t)
+}
+
+func TestFrequencyChange_RedundancyCheck(t *testing.T) {
+	ResetConfig()
+	mockPM := &MockPluginManager{}
+	mockPM.On("NotifyUser", mock.Anything, mock.Anything).Return().Maybe()
+	mockPM.On("RebuildTrayMenu").Return().Maybe()
+
+	wp := &Plugin{
+		cfg:     GetConfig(NewMockPreferences()),
+		manager: mockPM,
+	}
+
+	// Set initial frequency and start rotation
+	wp.ChangeWallpaperFrequency(FrequencyHourly, false)
+	initialTicker := wp.ticker
+	assert.NotNil(t, initialTicker)
+
+	// Change to same frequency
+	wp.ChangeWallpaperFrequency(FrequencyHourly, false)
+	assert.Equal(t, initialTicker, wp.ticker, "Ticker should not be reset for same frequency")
+
+	// Change to different frequency
+	wp.ChangeWallpaperFrequency(FrequencyDaily, false)
+	assert.NotEqual(t, initialTicker, wp.ticker, "Ticker should be reset for different frequency")
 }
