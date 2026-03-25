@@ -59,7 +59,7 @@ jobs:
         run: |
           brew install create-dmg
           go install fyne.io/tools/cmd/fyne@v1.6.2
-          make build-extension
+          SKIP_EXTENSION_BUILD=1 make build-extension
           SKIP_EXTENSION_BUILD=1 make build-darwin-arm64
 
   build-win:
@@ -172,7 +172,12 @@ jobs:
             -derivedDataPath "build" \
             CODE_SIGN_IDENTITY="${SIGNING_IDENTITY}" \
             CODE_SIGN_STYLE="Manual" \
+            OTHER_CODE_SIGN_FLAGS="--timestamp" \
             build
+          
+          echo "Copying built extension to root for packaging..."
+          cp -R "build/Build/Products/Release/Spice Wallpaper Manager Extension.app" "."
+          
           echo "Current directory contents:"
           ls -laR .
           

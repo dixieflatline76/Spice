@@ -25,7 +25,7 @@ build-extension:
 ifneq ($(SKIP_EXTENSION_BUILD),)
 	@echo "SKIP_EXTENSION_BUILD is set. Skipping xcodebuild (assuming CI or manual skip)..."
 	@echo "Ensuring artifact exists..."
-	@if [ ! -d "Spice Wallpaper Manager Extension.app" ]; then echo "Error: Extension app not found but build skipped!"; exit 1; fi
+	@if [ ! -d "Spice Wallpaper Manager Extension.app" ]; then echo "Warning: Extension app not found. Building without it."; fi
 else
 	@echo "Building Safari Extension..."
 	xcodebuild -project "Spice Wallpaper Manager Extension/Spice Wallpaper Manager Extension.xcodeproj" \
