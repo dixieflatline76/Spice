@@ -76,12 +76,10 @@ build-darwin-arm64: build-extension
 	@echo "Modifying Info.plist to set LSUIElement=true..."
 	plutil -insert LSUIElement -bool true Spice.app/Contents/Info.plist
 
-	@if [ -n "$(SIGNING_IDENTITY)" ]; then \
-		echo "Signing the application bundle..."; \
-		codesign --force --deep --options=runtime --sign "$(SIGNING_IDENTITY)" --timestamp Spice.app; \
-	else \
-		echo "Skipping signing: SIGNING_IDENTITY not set."; \
-	fi
+	@echo "Signing image processor binary..."
+	codesign --force --options=runtime --sign "$(SIGNING_IDENTITY)" --timestamp bin/Spice-darwin-arm64
+	@echo "Signing the application bundle..."
+	codesign --force --deep --options=runtime --sign "$(SIGNING_IDENTITY)" --timestamp Spice.app
 
 	@echo "Creating styled DMG..."
 	mkdir -p dist/dmg-staging
@@ -92,32 +90,28 @@ build-darwin-arm64: build-extension
 
 	# Copy and Sign Extension in Staging if it exists
 	if [ -d "Spice Wallpaper Manager Extension.app" ]; then \
+		echo "Found Safari Extension, verifying paths..."; \
+		ls -la "Spice Wallpaper Manager Extension.app/Contents/"; \
 		cp -R "Spice Wallpaper Manager Extension.app" dist/dmg-staging/; \
-		if [ -n "$(SIGNING_IDENTITY)" ]; then \
+		if [ -d "dist/dmg-staging/Spice Wallpaper Manager Extension.app/Contents/Frameworks" ]; then \
 			echo "Signing Extension Frameworks..."; \
 			codesign --force --options=runtime --sign "$(SIGNING_IDENTITY)" --timestamp "dist/dmg-staging/Spice Wallpaper Manager Extension.app/Contents/Frameworks/"*.dylib; \
-			echo "Signing Extension Appex..."; \
-			codesign --force --options=runtime --entitlements "Spice Wallpaper Manager Extension/macOS (Extension)/Spice Wallpaper Manager Extension.entitlements" --sign "$(SIGNING_IDENTITY)" --timestamp "dist/dmg-staging/Spice Wallpaper Manager Extension.app/Contents/PlugIns/Spice Wallpaper Manager Extension Extension.appex"; \
-			echo "Signing Extension Wrapper..."; \
-			codesign --force --options=runtime --entitlements "Spice Wallpaper Manager Extension/macOS (App)/Spice Wallpaper Manager Extension.entitlements" --sign "$(SIGNING_IDENTITY)" --timestamp "dist/dmg-staging/Spice Wallpaper Manager Extension.app"; \
-		else \
-			echo "Skipping extension signing: SIGNING_IDENTITY not set."; \
-		fi \
+		fi; \
+		echo "Signing Extension Appex..."; \
+		codesign --force --options=runtime --entitlements "Spice Wallpaper Manager Extension/macOS (Extension)/Spice Wallpaper Manager Extension.entitlements" --sign "$(SIGNING_IDENTITY)" --timestamp "dist/dmg-staging/Spice Wallpaper Manager Extension.app/Contents/PlugIns/Spice Wallpaper Manager Extension Extension.appex"; \
+		echo "Signing Extension Wrapper..."; \
+		codesign --force --options=runtime --entitlements "Spice Wallpaper Manager Extension/macOS (App)/Spice Wallpaper Manager Extension.entitlements" --sign "$(SIGNING_IDENTITY)" --timestamp "dist/dmg-staging/Spice Wallpaper Manager Extension.app"; \
 	fi
 	
 	rm -f "dist/Spice-$(VERSION)-arm64.dmg"
-	create-dmg \
-		--volname "Spice Installer" \
-		--background "images/Spice-dmg-bg.png" \
-		--window-pos 200 120 \
-		--window-size 640 480 \
-		--icon-size 130 \
-		--icon "Spice.app" 175 200 \
-		--hide-extension "Spice.app" \
-		--app-drop-link 465 200 \
-		--icon "Spice Wallpaper Manager Extension.app" 175 350 \
-		"dist/Spice-$(VERSION)-arm64.dmg" \
-		"dist/dmg-staging/"
+	
+	@echo "Constructing create-dmg command..."
+	CMD="create-dmg --volname 'Spice Installer' --background 'images/Spice-dmg-bg.png' --window-pos 200 120 --window-size 640 480 --icon-size 130 --icon 'Spice.app' 175 200 --hide-extension 'Spice.app' --app-drop-link 465 200"; \
+	if [ -d "dist/dmg-staging/Spice Wallpaper Manager Extension.app" ]; then \
+		CMD="$$CMD --icon 'Spice Wallpaper Manager Extension.app' 175 350"; \
+	fi; \
+	CMD="$$CMD 'dist/Spice-$(VERSION)-arm64.dmg' 'dist/dmg-staging/'"; \
+	eval $$CMD
 
 	@echo "Moving final Spice.app to ./bin/..."
 	rm -rf ./bin/Spice.app && mv Spice.app ./bin/

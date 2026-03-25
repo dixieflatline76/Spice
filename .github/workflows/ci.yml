@@ -147,7 +147,11 @@ jobs:
           if [ -f app_cert.p12 ]; then security import app_cert.p12 -k build.keychain -P "${{ secrets.MAC_APP_CERTIFICATE_PASSWORD }}" -T /usr/bin/codesign -T /usr/bin/productbuild; fi
           if [ -f installer_cert.p12 ]; then security import installer_cert.p12 -k build.keychain -P "${{ secrets.MAC_INSTALLER_CERTIFICATE_PASSWORD }}" -T /usr/bin/codesign -T /usr/bin/productbuild; fi
           
-          security set-key-partition-list -S apple-tool:,apple: -s -k "${{ runner.temp }}" build.keychain
+          security set-key-partition-list -S apple-tool:,apple: -s "Developer ID Application" -k "${{ runner.temp }}" build.keychain
+          
+          echo "Listing identities in keychain:"
+          security find-identity -v -p codesigning build.keychain
+          
           rm -f certificate.p12 app_cert.p12 installer_cert.p12
           
       - name: Set up notarytool credentials
@@ -169,8 +173,13 @@ jobs:
             CODE_SIGN_IDENTITY="${SIGNING_IDENTITY}" \
             CODE_SIGN_STYLE="Manual" \
             build
-          cp -R "build/Build/Products/Release/Spice Wallpaper Manager Extension.app" .
+          echo "Current directory contents:"
+          ls -laR .
+          
           SKIP_EXTENSION_BUILD=1 make build-darwin-arm64
+          
+          echo "Dist directory contents after build:"
+          ls -laR dist/
         
       - name: Notarize macOS App
         run: make notarize-mac-arm64
