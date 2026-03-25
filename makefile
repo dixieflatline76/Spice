@@ -130,13 +130,32 @@ endif
 	rm -rf ./bin/Spice.app && mv Spice.app ./bin/
 
 build-darwin-appstore-arm64: build-extension
-	@echo "Packaging signed .pkg for App Store (building from source)..."
+	@echo "Building Go executable for macOS App Store (arm64)..."
+	GOOS=darwin GOARCH=arm64 go build -tags release -o bin/Spice-darwin-appstore-arm64 -ldflags "$(LDFLAGS_COMMON)" ./cmd/spice
+	
+	@echo "Packaging .app for App Store..."
+	fyne package -os darwin --executable ./bin/Spice-darwin-appstore-arm64 -icon asset/icons/tray.png -name Spice -appID com.dixieflatline76.spice
+	
+	@echo "Modifying Info.plist to set LSUIElement=true..."
+	@if [ -f "Spice.app/Contents/Info.plist" ]; then \
+		plutil -insert LSUIElement -bool true Spice.app/Contents/Info.plist; \
+	fi
+
 	@if [ -f "embedded.provisionprofile" ]; then \
-		echo "Using provided provisioning profile..."; \
-		fyne release -os darwin -category utilities -icon asset/icons/tray.png -name Spice -appID com.dixieflatline76.spice -profile embedded.provisionprofile -tags release ./cmd/spice; \
+		echo "Embedding provisioning profile..."; \
+		cp embedded.provisionprofile "Spice.app/Contents/embedded.provisionprofile"; \
+	fi
+
+	@if [ -n "$(SIGNING_IDENTITY)" ]; then \
+		echo "Signing the application bundle for App Store..."; \
+		codesign --force --options=runtime --sign "$(SIGNING_IDENTITY)" --timestamp Spice.app; \
+	fi
+
+	@echo "Creating final .pkg for App Store..."
+	@if [ -n "$(INSTALLER_IDENTITY)" ]; then \
+		productbuild --component Spice.app /Applications --sign "$(INSTALLER_IDENTITY)" --product Spice.app/Contents/Info.plist Spice.pkg; \
 	else \
-		echo "No provisioning profile found, proceeding without it..."; \
-		fyne release -os darwin -category utilities -icon asset/icons/tray.png -name Spice -appID com.dixieflatline76.spice -tags release ./cmd/spice; \
+		productbuild --component Spice.app /Applications Spice.pkg; \
 	fi
 
 	@echo "Moving final Spice.pkg to ./dist/..."

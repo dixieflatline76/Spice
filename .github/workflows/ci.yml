@@ -192,6 +192,8 @@ jobs:
         
       - name: Build macOS App Store Package
         env:
+          SIGNING_IDENTITY: "3rd Party Mac Developer Application: Karl Kwong (${{ secrets.APPLE_TEAM_ID }})"
+          INSTALLER_IDENTITY: "3rd Party Mac Developer Installer: Karl Kwong (${{ secrets.APPLE_TEAM_ID }})"
           UNSPLASH_CLIENT_ID: ${{ secrets.UNSPLASH_CLIENT_ID }}
           UNSPLASH_CLIENT_SECRET: ${{ secrets.UNSPLASH_CLIENT_SECRET }}
           GOOGLE_PHOTOS_CLIENT_ID: ${{ secrets.GOOGLE_PHOTOS_CLIENT_ID }}
