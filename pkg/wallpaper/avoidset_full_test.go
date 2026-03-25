@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
 	util_log "github.com/dixieflatline76/Spice/v2/util/log"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
@@ -22,6 +24,10 @@ func init() {
 
 // helper to create a correctly initialized controller for testing
 func newTestMC_AvoidSet(id int, cfg *Config, store StoreInterface) *MonitorController {
+	mockOS := &MockOS{}
+	mockOS.On("SetWallpaper", mock.Anything, mock.Anything).Return(nil)
+	mockOS.On("Stat", mock.Anything).Return(nil, nil) // Satisfy Stat checks for temp files
+
 	return &MonitorController{
 		ID:    id,
 		cfg:   cfg,
@@ -30,7 +36,7 @@ func newTestMC_AvoidSet(id int, cfg *Config, store StoreInterface) *MonitorContr
 			Rect: image.Rect(0, 0, 1920, 1080),
 		},
 		State: &MonitorState{},
-		os:    getOS(), // Use actual OS but we'll provide real temp files
+		os:    mockOS,
 	}
 }
 
@@ -49,19 +55,24 @@ func TestAvoidSet_Persistence_FullCycle(t *testing.T) {
 
 	localID := "LocalFolder_abc123_photo"
 	wallhavenID := "Wallhaven_456"
-	numericID := "789" // Should be purged
+	legacyID := "789" // 4. Update AvoidSet
 
 	cfg.AddToAvoidSet(localID)
 	cfg.AddToAvoidSet(wallhavenID)
-	cfg.AddToAvoidSet(numericID)
+	cfg.AddToAvoidSet(legacyID)
 
-	// Ensure persistence (Background save takes time)
-	time.Sleep(500 * time.Millisecond)
-
-	// Verify it was actually written to the isolated preferences
-	jsonText := prefs.String(wallhavenConfigPrefKey)
-	assert.Contains(t, jsonText, localID, "Preference must contain the local ID before reloading")
-	assert.Contains(t, jsonText, wallhavenID, "Preference must contain the wallhaven ID before reloading")
+	// Wait for async save (with retry/poll for robustness on CI)
+	var prefJSON string
+	success := false
+	for i := 0; i < 20; i++ {
+		prefJSON = prefs.String(wallhavenConfigPrefKey)
+		if strings.Contains(prefJSON, localID) && strings.Contains(prefJSON, wallhavenID) {
+			success = true
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	assert.True(t, success, "Preference must contain the IDs before reloading. JSON: %s", prefJSON)
 
 	// 2. Simulate Restart: Load fresh isolated config from the same shared preferences
 	cfg2 := &Config{
@@ -76,7 +87,7 @@ func TestAvoidSet_Persistence_FullCycle(t *testing.T) {
 	// 3. Verify
 	assert.True(t, cfg2.InAvoidSet(localID), "Local namespaced ID must survive")
 	assert.True(t, cfg2.InAvoidSet(wallhavenID), "Online namespaced ID must survive")
-	assert.False(t, cfg2.InAvoidSet(numericID), "Legacy numeric ID must be purged")
+	assert.False(t, cfg2.InAvoidSet(legacyID), "Legacy numeric ID should have been purged")
 }
 
 // TestAvoidSet_SessionWide_Enforcement verifies that blocking an image on one monitor

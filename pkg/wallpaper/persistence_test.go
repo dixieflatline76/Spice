@@ -3,6 +3,7 @@
 package wallpaper
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -48,7 +49,20 @@ func TestMonitorPausePersistence(t *testing.T) {
 
 	// Set to Paused
 	cfg.SetMonitorPaused(devicePath, true)
-	time.Sleep(1 * time.Second) // Force a long wait for background save
+
+	// Wait for async save (Polling is more robust than fixed sleep)
+	var prefJSON string
+	success := false
+	for i := 0; i < 20; i++ {
+		prefJSON = prefs.String(wallhavenConfigPrefKey)
+		// Specifically look for the monitor ID followed by true
+		if strings.Contains(prefJSON, "\""+devicePath+"\": true") || strings.Contains(prefJSON, "\""+devicePath+"\":true") {
+			success = true
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	assert.True(t, success, "Monitor pause state should be written to preferences. JSON: %s", prefJSON)
 	assert.True(t, cfg.IsMonitorPaused(devicePath))
 
 	// Verify Persistence
@@ -61,7 +75,20 @@ func TestMonitorPausePersistence(t *testing.T) {
 
 	// Unpause
 	newCfg.SetMonitorPaused(devicePath, false)
-	time.Sleep(1 * time.Second) // Force a long wait for background save
+
+	// Wait for async save
+	success = false
+	for i := 0; i < 20; i++ {
+		prefJSON = prefs.String(wallhavenConfigPrefKey)
+		// Specifically look for the monitor ID followed by false
+		if strings.Contains(prefJSON, "\""+devicePath+"\": false") || strings.Contains(prefJSON, "\""+devicePath+"\":false") {
+			success = true
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	assert.True(t, success, "Monitor unpause state should be written to preferences. JSON: %s", prefJSON)
+
 	assert.False(t, newCfg.IsMonitorPaused(devicePath))
 
 	// Verify Persistence Again

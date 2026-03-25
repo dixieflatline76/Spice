@@ -119,14 +119,15 @@ func GetConfig(p fyne.Preferences) *Config {
 			log.Fatalf("failed to initialize %s: %s", config.AppName, e)
 		}
 		cfgInstance = &Config{
-			Preferences:   p,
-			Queries:       make([]ImageQuery, 0),
-			ImageQueries:  make([]ImageQuery, 0),
-			PexelsQueries: make([]ImageQuery, 0), // Initialize PexelsQueries
-			assetMgr:      asset.NewManager(),
-			AvoidSet:      make(map[string]bool),
-			userid:        u.Uid,
-			Tuning:        DefaultTuningConfig(),
+			Preferences:        p,
+			Queries:            make([]ImageQuery, 0),
+			ImageQueries:       make([]ImageQuery, 0),
+			PexelsQueries:      make([]ImageQuery, 0),
+			assetMgr:           asset.NewManager(),
+			AvoidSet:           make(map[string]bool),
+			MonitorPauseStates: make(map[string]bool),
+			userid:             u.Uid,
+			Tuning:             DefaultTuningConfig(),
 		}
 		// Load config from file
 		if err := cfgInstance.loadFromPrefs(); err != nil {
@@ -466,6 +467,10 @@ func (c *Config) AddToAvoidSet(id string) {
 	c.avoidMap.Store(id, true)
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if c.AvoidSet == nil {
+		c.AvoidSet = make(map[string]bool)
+	}
+	c.AvoidSet[id] = true
 	c.save()
 }
 
@@ -477,6 +482,7 @@ func (c *Config) ResetAvoidSet() {
 	})
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.AvoidSet = make(map[string]bool)
 	c.save()
 }
 
@@ -1031,20 +1037,21 @@ func (c *Config) GetUnlockAspectRatio() bool {
 func (c *Config) save() {
 	// Don't lock the mutex here because we're already holding it in all calling functions
 	// However, we MUST NOT block the calling functions (and Fyne's RLock polling) for the duration
-	// of a massive JSON marshal. So we clone the struct while under the current lock,
-	// and then marshal the clone.
+	// of a massive JSON marshal. So we build a serialization object while under the current lock,
+	// and then marshal that object.
 
-	// Create a fresh struct to avoid copying the sync.RWMutex and sync.Map by value (copylocks)
-	var clone Config
-	clone.WallhavenAPIKey = c.WallhavenAPIKey
-	clone.WallhavenUsername = c.WallhavenUsername
-	clone.LogLevel = c.LogLevel
-	clone.MaxConcurrentProcessors = c.MaxConcurrentProcessors
-	clone.Tuning = c.Tuning
-	clone.ShortcutsDisabled = c.ShortcutsDisabled
-	clone.WallhavenSyncEnabled = c.WallhavenSyncEnabled
+	// Build a clean clone for serialization to avoid copying sync primitives (copylocks)
+	clone := &Config{
+		WallhavenAPIKey:         c.WallhavenAPIKey,
+		WallhavenUsername:       c.WallhavenUsername,
+		LogLevel:                c.LogLevel,
+		MaxConcurrentProcessors: c.MaxConcurrentProcessors,
+		Tuning:                  c.Tuning,
+		ShortcutsDisabled:       c.ShortcutsDisabled,
+		WallhavenSyncEnabled:    c.WallhavenSyncEnabled,
+	}
 
-	// Sync avoidMap to AvoidSet for JSON marshaling (doing this into the clone)
+	// Sync avoidMap to AvoidSet for JSON marshaling
 	clone.AvoidSet = make(map[string]bool)
 	c.avoidMap.Range(func(key, value interface{}) bool {
 		clone.AvoidSet[key.(string)] = true
@@ -1052,14 +1059,20 @@ func (c *Config) save() {
 	})
 
 	// Deep copy slices to avoid data races when marshaling in the background
-	clone.Queries = make([]ImageQuery, len(c.Queries))
-	copy(clone.Queries, c.Queries)
+	if c.Queries != nil {
+		clone.Queries = make([]ImageQuery, len(c.Queries))
+		copy(clone.Queries, c.Queries)
+	}
 
-	clone.ImageQueries = make([]ImageQuery, len(c.ImageQueries))
-	copy(clone.ImageQueries, c.ImageQueries)
+	if c.ImageQueries != nil {
+		clone.ImageQueries = make([]ImageQuery, len(c.ImageQueries))
+		copy(clone.ImageQueries, c.ImageQueries)
+	}
 
-	clone.PexelsQueries = make([]ImageQuery, len(c.PexelsQueries))
-	copy(clone.PexelsQueries, c.PexelsQueries)
+	if c.PexelsQueries != nil {
+		clone.PexelsQueries = make([]ImageQuery, len(c.PexelsQueries))
+		copy(clone.PexelsQueries, c.PexelsQueries)
+	}
 
 	// Deep copy MonitorPauseStates map
 	if c.MonitorPauseStates != nil {
@@ -1069,18 +1082,18 @@ func (c *Config) save() {
 		}
 	}
 
-	// Fast-path: spin off the actual 5-second marshaling/saving to a goroutine so the
+	// Fast-path: spin off the actual marshaling/saving to a goroutine so the
 	// caller's defer c.mu.Unlock() executes instantly and Fyne isn't blocked!
-	go func(cfgClone *Config) {
-		data, err := json.MarshalIndent(cfgClone, "", "  ") // Use indentation for readability
-		if err != nil {
-			log.Fatalf("Error encoding config data: %v", err)
-			return
-		}
+	// UPDATE: Removing goroutine to prevent "Stale Overwrite" race conditions where
+	// multiple saves race to Preferences. Synchronous save is safe and fast here.
+	data, err := json.MarshalIndent(clone, "", "  ") // Use indentation for readability
+	if err != nil {
+		log.Printf("Error encoding config data: %v", err)
+		return
+	}
 
-		// SetString might internally lock Fyne preferences, but it's safe outside our own c.mu
-		c.SetString(wallhavenConfigPrefKey, string(data))
-	}(&clone)
+	// SetString might internally lock Fyne preferences, but it's safe outside our own c.mu
+	c.SetString(wallhavenConfigPrefKey, string(data))
 }
 
 // IsMonitorPaused returns true if the specified monitor is paused.
@@ -1102,11 +1115,11 @@ func (c *Config) SetMonitorPaused(devicePath string, paused bool) {
 		return
 	}
 	c.mu.Lock()
+	defer c.mu.Unlock()
 	if c.MonitorPauseStates == nil {
 		c.MonitorPauseStates = make(map[string]bool)
 	}
 	c.MonitorPauseStates[devicePath] = paused
-	c.mu.Unlock()
 	c.save()
 }
 
