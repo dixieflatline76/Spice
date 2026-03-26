@@ -324,4 +324,3 @@ jobs:
             dist/${{ steps.filenames.outputs.FIREFOX_NAME }}.sha256
             dist/${{ steps.filenames.outputs.DMG_NAME }}
             dist/${{ steps.filenames.outputs.DMG_NAME }}.sha256
-            dist/*-AppStore.pkg
