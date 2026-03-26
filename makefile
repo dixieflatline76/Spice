@@ -4,6 +4,7 @@ VERSION := $(shell sh -c "cat version.txt" 2> /dev/null || cmd /c "type version.
 # --- Build flags ---
 LDFLAGS_SECRETS := $(shell go run cmd/util/load_secrets/main.go)
 LDFLAGS_COMMON := -X main.version=$(VERSION) $(LDFLAGS_SECRETS)
+BUILD_NUMBER ?= 1
 
 # --- Extension Utils ---
 sync-extension:
@@ -140,6 +141,7 @@ build-darwin-appstore-arm64: build-extension
 	@if [ -f "Spice.app/Contents/Info.plist" ]; then \
 		plutil -replace LSApplicationCategoryType -string "public.app-category.utilities" Spice.app/Contents/Info.plist; \
 		plutil -replace LSMinimumSystemVersion -string "12.0" Spice.app/Contents/Info.plist; \
+		plutil -replace CFBundleVersion -string "$(BUILD_NUMBER)" Spice.app/Contents/Info.plist; \
 		plutil -insert LSUIElement -bool true Spice.app/Contents/Info.plist || true; \
 	fi
 

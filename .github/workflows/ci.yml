@@ -203,7 +203,7 @@ jobs:
             echo "Decoding provisioning profile..."
             echo "${{ secrets.MAC_PROVISIONING_PROFILE_BASE64 }}" | base64 --decode > embedded.provisionprofile
           fi
-          SKIP_EXTENSION_BUILD=1 make build-darwin-appstore-arm64
+          SKIP_EXTENSION_BUILD=1 make build-darwin-appstore-arm64 BUILD_NUMBER=${{ github.run_number }}
           rm -f embedded.provisionprofile
           
       - name: Upload to Mac App Store
