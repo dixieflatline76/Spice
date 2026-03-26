@@ -148,10 +148,10 @@ build-darwin-appstore-arm64: build-extension
 
 	@echo "Injecting identifiers into entitlements..."
 	@if [ -n "$(APPLE_TEAM_ID)" ]; then \
-		plutil -replace com.apple.application-identifier -string "$(APPLE_TEAM_ID).com.dixieflatline76.spice" Spice-AppStore.entitlements || \
-		plutil -insert com.apple.application-identifier -string "$(APPLE_TEAM_ID).com.dixieflatline76.spice" Spice-AppStore.entitlements; \
-		plutil -replace com.apple.developer.team-identifier -string "$(APPLE_TEAM_ID)" Spice-AppStore.entitlements || \
-		plutil -insert com.apple.developer.team-identifier -string "$(APPLE_TEAM_ID)" Spice-AppStore.entitlements; \
+		/usr/libexec/PlistBuddy -c "Set :com.apple.application-identifier $(APPLE_TEAM_ID).com.dixieflatline76.spice" Spice-AppStore.entitlements || \
+		/usr/libexec/PlistBuddy -c "Add :com.apple.application-identifier string $(APPLE_TEAM_ID).com.dixieflatline76.spice" Spice-AppStore.entitlements; \
+		/usr/libexec/PlistBuddy -c "Set :com.apple.developer.team-identifier $(APPLE_TEAM_ID)" Spice-AppStore.entitlements || \
+		/usr/libexec/PlistBuddy -c "Add :com.apple.developer.team-identifier string $(APPLE_TEAM_ID)" Spice-AppStore.entitlements; \
 	fi
 
 	@if [ -f "embedded.provisionprofile" ]; then \
@@ -168,7 +168,7 @@ build-darwin-appstore-arm64: build-extension
 
 	@echo "Creating final .pkg for App Store..."
 	@if [ -n "$(INSTALLER_IDENTITY)" ]; then \
-		productbuild --component Spice.app /Applications --sign "$(INSTALLER_IDENTITY)" --product Spice.app/Contents/Info.plist Spice.pkg; \
+		productbuild --component Spice.app /Applications --sign "$(INSTALLER_IDENTITY)" Spice.pkg; \
 	else \
 		productbuild --component Spice.app /Applications Spice.pkg; \
 	fi
