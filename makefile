@@ -142,7 +142,16 @@ build-darwin-appstore-arm64: build-extension
 		plutil -replace LSApplicationCategoryType -string "public.app-category.utilities" Spice.app/Contents/Info.plist; \
 		plutil -replace LSMinimumSystemVersion -string "12.0" Spice.app/Contents/Info.plist; \
 		plutil -replace CFBundleVersion -string "$(BUILD_NUMBER)" Spice.app/Contents/Info.plist; \
+		plutil -replace CFBundleShortVersionString -string "$(shell echo $(VERSION) | sed 's/^v//')" Spice.app/Contents/Info.plist; \
 		plutil -insert LSUIElement -bool true Spice.app/Contents/Info.plist || true; \
+	fi
+
+	@echo "Injecting identifiers into entitlements..."
+	@if [ -n "$(APPLE_TEAM_ID)" ]; then \
+		plutil -replace com.apple.application-identifier -string "$(APPLE_TEAM_ID).com.dixieflatline76.spice" Spice-AppStore.entitlements || \
+		plutil -insert com.apple.application-identifier -string "$(APPLE_TEAM_ID).com.dixieflatline76.spice" Spice-AppStore.entitlements; \
+		plutil -replace com.apple.developer.team-identifier -string "$(APPLE_TEAM_ID)" Spice-AppStore.entitlements || \
+		plutil -insert com.apple.developer.team-identifier -string "$(APPLE_TEAM_ID)" Spice-AppStore.entitlements; \
 	fi
 
 	@if [ -f "embedded.provisionprofile" ]; then \
