@@ -131,14 +131,16 @@ endif
 
 build-darwin-appstore-arm64: build-extension
 	@echo "Building Go executable for macOS App Store (arm64)..."
-	GOOS=darwin GOARCH=arm64 go build -tags release -o bin/Spice-darwin-appstore-arm64 -ldflags "$(LDFLAGS_COMMON)" ./cmd/spice
+	export MACOSX_DEPLOYMENT_TARGET=12.0; GOOS=darwin GOARCH=arm64 go build -tags release -o bin/Spice-darwin-appstore-arm64 -ldflags "$(LDFLAGS_COMMON)" ./cmd/spice
 	
 	@echo "Packaging .app for App Store..."
 	fyne package -os darwin --executable ./bin/Spice-darwin-appstore-arm64 -icon asset/icons/tray.png -name Spice -appID com.dixieflatline76.spice
 	
-	@echo "Modifying Info.plist to set LSUIElement=true..."
+	@echo "Modifying Info.plist for App Store compliance..."
 	@if [ -f "Spice.app/Contents/Info.plist" ]; then \
-		plutil -insert LSUIElement -bool true Spice.app/Contents/Info.plist; \
+		plutil -replace LSApplicationCategoryType -string "public.app-category.utilities" Spice.app/Contents/Info.plist; \
+		plutil -replace LSMinimumSystemVersion -string "12.0" Spice.app/Contents/Info.plist; \
+		plutil -insert LSUIElement -bool true Spice.app/Contents/Info.plist || true; \
 	fi
 
 	@if [ -f "embedded.provisionprofile" ]; then \
@@ -147,8 +149,10 @@ build-darwin-appstore-arm64: build-extension
 	fi
 
 	@if [ -n "$(SIGNING_IDENTITY)" ]; then \
-		echo "Signing the application bundle for App Store..."; \
-		codesign --force --options=runtime --sign "$(SIGNING_IDENTITY)" --timestamp Spice.app; \
+		echo "Signing the inner binary with sandbox..."; \
+		codesign --force --options=runtime --entitlements Spice-AppStore.entitlements --sign "$(SIGNING_IDENTITY)" --timestamp Spice.app/Contents/MacOS/Spice-darwin-appstore-arm64; \
+		echo "Signing the application bundle with sandbox..."; \
+		codesign --force --options=runtime --entitlements Spice-AppStore.entitlements --sign "$(SIGNING_IDENTITY)" --timestamp Spice.app; \
 	fi
 
 	@echo "Creating final .pkg for App Store..."
