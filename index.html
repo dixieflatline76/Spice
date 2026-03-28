@@ -48,11 +48,15 @@
     </header>
 
     <main>
-        <!-- Product Screenshot — the most compelling visual, shown first -->
+        <!-- Product Screenshot Carousel — auto-cycles like Spice rotates wallpapers -->
         <section class="screenshot-preview">
             <div class="browser-frame glass">
                 <div class="frame-dots"><span></span><span></span><span></span></div>
-                <img src="images/screen3.png" alt="Spice in action: Wallhaven browser integration and preferences panel with a beautiful wallpaper applied">
+                <div class="carousel">
+                    <img src="images/screen1-colosseum.png" alt="Spice on macOS: Colosseum at night wallpaper with tray menu" class="carousel-slide active">
+                    <img src="images/screen2-fuji.png" alt="Spice on macOS: Red Mount Fuji masterpiece with museum info" class="carousel-slide">
+                    <img src="images/screen3-redcoat.png" alt="Spice on Windows: Vibrant park scene with tray controls" class="carousel-slide">
+                </div>
             </div>
         </section>
 
@@ -167,6 +171,15 @@
         }, { threshold: 0.1 });
 
         document.querySelectorAll('.feature-card, .browser-frame, .video-showcase, .step, .ext-badge').forEach(el => observer.observe(el));
+
+        // Auto-cycling screenshot carousel
+        const slides = document.querySelectorAll('.carousel-slide');
+        let currentSlide = 0;
+        setInterval(() => {
+            slides[currentSlide].classList.remove('active');
+            currentSlide = (currentSlide + 1) % slides.length;
+            slides[currentSlide].classList.add('active');
+        }, 4000);
 
         // Dynamic Windows Download Link
         async function updateWindowsDownload() {

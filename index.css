@@ -222,9 +222,27 @@ main {
     background: rgba(255, 255, 255, 0.2);
 }
 
-.browser-frame img {
+.carousel {
+    position: relative;
     width: 100%;
-    display: block;
+    aspect-ratio: 21/9;
+    overflow: hidden;
+}
+
+.carousel-slide {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center right;
+    opacity: 0;
+    transition: opacity 1.2s ease-in-out;
+}
+
+.carousel-slide.active {
+    opacity: 1;
 }
 
 /* How It Works */
