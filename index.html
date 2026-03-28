@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Spice - Spice Up Your Desktop 🌶️</title>
-    <meta name="description" content="A premium wallpaper manager for macOS and Windows. Cycle through Wallhaven, Pexels, Museum collections, and Google Photos effortlessly.">
+    <meta name="description" content="Spice automatically rotates your desktop wallpaper using 8+ sources including Wallhaven, Pexels, museum collections, and Google Photos. Available on Mac App Store and Windows.">
     <link rel="stylesheet" href="index.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -29,8 +29,9 @@
         <div class="hero-content">
             <img src="images/readme-banner.png" alt="Spice Banner" class="hero-banner">
             <h1>Spice Up Your Desktop</h1>
-            <p class="subtitle">The premium wallpaper manager for creators, curators, and collectors.</p>
-            
+            <p class="subtitle">The premium wallpaper manager for macOS and Windows.</p>
+            <p class="explainer">Spice automatically rotates your desktop wallpaper using images from Wallhaven, Pexels, museum collections, Google Photos, or your own folders. Set it once, enjoy forever.</p>
+
             <div class="cta-group">
                 <a href="https://apps.apple.com/app/spice-wallpaper-manager/id6478950000" class="btn-appstore">
                     <img src="https://tools.applemediaservices.com/api/badges/download-on-the-app-store/black/en-us?size=250x83&amp;releaseDate=1711670400" alt="Download on the App Store">
@@ -47,42 +48,113 @@
     </header>
 
     <main>
-        <section class="features">
-            <div class="feature-card glass">
-                <h3>🖼️ Infinite Variety</h3>
-                <p>Access millions of high-res wallpapers from Wallhaven, Pexels, and Wikimedia.</p>
-            </div>
-            <div class="feature-card glass">
-                <h3>🏛️ Fine Art</h3>
-                <p>Bring the world's greatest museums to your desktop with collections from the Met and more.</p>
-            </div>
-            <div class="feature-card glass">
-                <h3>📸 Personal Touch</h3>
-                <p>Seamlessly integrate your private albums from Google Photos into your cycle.</p>
-            </div>
-            <div class="feature-card glass">
-                <h3>⚡ Lightweight</h3>
-                <p>Native performance on macOS Arm64 and Windows, running silently in the tray.</p>
-            </div>
-        </section>
-
-        <section class="video-showcase">
-            <h2 class="section-title">Experience Spice</h2>
-            <div class="video-container glass">
-                <iframe width="100%" height="100%" src="https://www.youtube.com/embed/DqUOtsUe3p8" title="Spice v0.2.0 Demo" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
-            </div>
-        </section>
-
+        <!-- Product Screenshot — the most compelling visual, shown first -->
         <section class="screenshot-preview">
             <div class="browser-frame glass">
                 <div class="frame-dots"><span></span><span></span><span></span></div>
-                <img src="images/screen3.png" alt="Spice Interface Screenshot">
+                <img src="images/screen3.png" alt="Spice in action: Wallhaven browser integration and preferences panel with a beautiful wallpaper applied">
+            </div>
+        </section>
+
+        <!-- How It Works — clear 3-step narrative -->
+        <section class="how-it-works">
+            <h2 class="section-title">How It Works</h2>
+            <div class="steps">
+                <div class="step glass">
+                    <div class="step-number">1</div>
+                    <h3>Choose Your Sources</h3>
+                    <p>Pick from 8+ providers — Wallhaven, Pexels, Google Photos, The Met, Art Institute of Chicago, Wikimedia, local folders, or your favorites collection.</p>
+                </div>
+                <div class="step glass">
+                    <div class="step-number">2</div>
+                    <h3>Set Your Schedule</h3>
+                    <p>Rotate every 15 minutes, hourly, daily — or skip the timer and change wallpapers on-demand with global keyboard shortcuts.</p>
+                </div>
+                <div class="step glass">
+                    <div class="step-number">3</div>
+                    <h3>Enjoy</h3>
+                    <p>Spice runs silently in your macOS menu bar or Windows system tray. Your desktop stays fresh without lifting a finger.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Feature Cards — rewritten for user benefits -->
+        <section class="features">
+            <div class="feature-card glass">
+                <h3>🔄 Auto-Cycling</h3>
+                <p>Set your interval and Spice rotates wallpapers automatically. Your desktop stays fresh without lifting a finger.</p>
+            </div>
+            <div class="feature-card glass">
+                <h3>🖥️ Multi-Monitor</h3>
+                <p>Independent wallpapers for every display. Portrait monitors get portrait art. Ultrawide gets ultrawide compositions.</p>
+            </div>
+            <div class="feature-card glass">
+                <h3>🔗 Browser Extension</h3>
+                <p>See a wallpaper you love online? One click sends it straight to your desktop via Chrome, Firefox, or Safari.</p>
+            </div>
+            <div class="feature-card glass">
+                <h3>📸 8+ Sources</h3>
+                <p>Wallhaven, Pexels, Google Photos, The Met, Art Institute of Chicago, Wikimedia Commons, local folders, and favorites.</p>
+            </div>
+            <div class="feature-card glass">
+                <h3>🧠 Smart Fit</h3>
+                <p>Intelligent cropping detects faces and compositions, ensuring every wallpaper looks perfect on your exact screen resolution.</p>
+            </div>
+            <div class="feature-card glass">
+                <h3>⌨️ Global Hotkeys</h3>
+                <p>Next, previous, favorite, or block — control your wallpapers from anywhere with customizable keyboard shortcuts.</p>
+            </div>
+        </section>
+
+        <!-- Smart Fit Visual Showcase -->
+        <section class="smart-fit-showcase">
+            <h2 class="section-title">Smart Fit Technology</h2>
+            <p class="showcase-desc">Spice intelligently crops wallpapers to match your exact display — even ultrawide 21:9 monitors.</p>
+            <div class="showcase-image glass">
+                <img src="images/smart-crop-comparison.webp" alt="Smart Crop comparison: Full canvas 4:3 original vs Smart Crop 21:9 ultrawide perspective">
+            </div>
+        </section>
+
+        <!-- Browser Extension Badges -->
+        <section class="extensions">
+            <h2 class="section-title">Companion Browser Extension</h2>
+            <p class="extension-desc">One-click any image online and send it straight to your desktop.</p>
+            <div class="extension-badges">
+                <a href="https://chromewebstore.google.com/detail/ekodikedjmhnganfcfleabcfohdjkoeb" class="ext-badge glass">
+                    <span class="ext-icon">🌐</span>
+                    <div>
+                        <span>Available on</span>
+                        <strong>Chrome Web Store</strong>
+                    </div>
+                </a>
+                <a href="https://addons.mozilla.org/en-US/firefox/addon/spice-wallpaper-manager/" class="ext-badge glass">
+                    <span class="ext-icon">🦊</span>
+                    <div>
+                        <span>Available on</span>
+                        <strong>Firefox Add-ons</strong>
+                    </div>
+                </a>
+                <div class="ext-badge glass">
+                    <span class="ext-icon">🧭</span>
+                    <div>
+                        <span>Included in</span>
+                        <strong>macOS App</strong>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Video Showcase -->
+        <section class="video-showcase">
+            <h2 class="section-title">See It In Action</h2>
+            <div class="video-container glass">
+                <iframe width="100%" height="100%" src="https://www.youtube.com/embed/DqUOtsUe3p8" title="Spice v0.2.0 Demo" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
             </div>
         </section>
     </main>
 
     <footer>
-        <p>© 2024 Spice Project. <a href="https://youtube.com/@dixieflatline76" style="color: #ff4d00; font-weight: 600;">Visit our YouTube Channel</a></p>
+        <p>© 2024 Spice Project. <a href="https://youtube.com/@dixieflatline76" style="color: #ff4d00; font-weight: 600;">YouTube</a> · <a href="https://github.com/dixieflatline76/Spice" style="color: #ff4d00; font-weight: 600;">GitHub</a></p>
     </footer>
 
     <script>
@@ -94,7 +166,7 @@
             });
         }, { threshold: 0.1 });
 
-        document.querySelectorAll('.feature-card, .browser-frame, .video-showcase').forEach(el => observer.observe(el));
+        document.querySelectorAll('.feature-card, .browser-frame, .video-showcase, .step, .ext-badge').forEach(el => observer.observe(el));
 
         // Dynamic Windows Download Link
         async function updateWindowsDownload() {
@@ -108,7 +180,6 @@
                     const winBtn = document.querySelector('.btn-windows');
                     if (winBtn) {
                         winBtn.href = windowsAsset.browser_download_url;
-                        console.log('Updated Windows download to:', winBtn.href);
                     }
                 }
             } catch (err) {
