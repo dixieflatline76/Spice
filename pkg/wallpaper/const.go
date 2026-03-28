@@ -31,7 +31,6 @@ const (
 	TargetedShortcutsDisabledPrefKey = pluginPrefix + "targeted_shortcuts_disabled_key" // TargetedShortcutsDisabledPrefKey is used to set and retrieve the boolean flag for disabling targeted hotkeys
 
 	// Provider keys (Shared)
-	UnsplashTokenPrefKey            = "unsplash_access_token"
 	GooglePhotosTokenPrefKey        = "google_photos_access_token"
 	GooglePhotosRefreshTokenPrefKey = "google_photos_refresh_token"
 	GooglePhotosTokenExpiryPrefKey  = "google_photos_token_expiry"

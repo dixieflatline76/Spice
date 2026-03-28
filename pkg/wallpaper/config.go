@@ -548,31 +548,6 @@ func (c *Config) SetImgShuffle(enabled bool) {
 	// No-op: Permanent Shuffle is active
 }
 
-// GetUnsplashToken returns the Unsplash Access Token from the keyring.
-func (c *Config) GetUnsplashToken() string {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	token, err := keyring.Get(UnsplashTokenPrefKey, c.userid)
-	if err != nil {
-		// Log only if it's not a "not found" error to avoid noise on first run
-		if !errors.Is(err, keyring.ErrNotFound) {
-			log.Printf("failed to retrieve Unsplash token from keyring: %v", err)
-		}
-		return ""
-	}
-	return token
-}
-
-// SetUnsplashToken sets the Unsplash Access Token in the keyring.
-func (c *Config) SetUnsplashToken(token string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	err := keyring.Set(UnsplashTokenPrefKey, c.userid, token)
-	if err != nil {
-		log.Printf("failed to save Unsplash token to keyring: %v", err)
-	}
-}
-
 // GetWallhavenAPIKey returns the Wallhaven API key from the config.
 func (c *Config) GetWallhavenAPIKey() string {
 	c.mu.RLock()

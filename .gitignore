@@ -34,6 +34,9 @@ coverage*
 !docs/coverage_report.md
 *.out
 *.html
+!index.html
+!privacy.html
+!support.html
 !extension/*.html
 *.test
 test_output_*.txt
