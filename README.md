@@ -12,7 +12,7 @@
   <a href="https://addons.mozilla.org/en-US/firefox/addon/spice-wallpaper-manager/"><img src="https://img.shields.io/amo/v/spice-wallpaper-manager?style=flat&color=orange&label=Firefox%20Add-ons" alt="Firefox Add-ons"></a>
 </p>
 
-Spice is a minimalist wallpaper manager that automatically cycles high-quality wallpapers from Wallhaven, Pexels, curated museum collections, your personal Google Photos, and Wikimedia Commons. It runs quietly in the background, keeping your workspace fresh without interrupting your flow.
+Spice is a premium wallpaper manager that automatically cycles high-quality wallpapers from Wallhaven, Pexels, curated museum collections, your personal Google Photos, and Wikimedia Commons. It is available on the **Mac App Store** and runs quietly in the background, keeping your workspace fresh without interrupting your flow.
 
 **Note:** Spice lives in your **Windows system tray** or **macOS menu bar**, giving you instant control over your desktop environment.
 

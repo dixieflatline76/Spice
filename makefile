@@ -143,6 +143,7 @@ build-darwin-appstore-arm64: build-extension
 		plutil -replace LSMinimumSystemVersion -string "12.0" Spice.app/Contents/Info.plist; \
 		plutil -replace CFBundleVersion -string "$(BUILD_NUMBER)" Spice.app/Contents/Info.plist; \
 		plutil -replace CFBundleShortVersionString -string "$(shell echo $(VERSION) | sed 's/^v//')" Spice.app/Contents/Info.plist; \
+		plutil -replace ITSAppUsesNonExemptEncryption -bool false Spice.app/Contents/Info.plist; \
 		plutil -insert LSUIElement -bool true Spice.app/Contents/Info.plist || true; \
 	fi
 
