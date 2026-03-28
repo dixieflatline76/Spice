@@ -95,6 +95,27 @@
         }, { threshold: 0.1 });
 
         document.querySelectorAll('.feature-card, .browser-frame, .video-showcase').forEach(el => observer.observe(el));
+
+        // Dynamic Windows Download Link
+        async function updateWindowsDownload() {
+            try {
+                const response = await fetch('https://api.github.com/repos/dixieflatline76/Spice/releases/latest');
+                const data = await response.json();
+                const windowsAsset = data.assets.find(asset => 
+                    asset.name.includes('Setup') && asset.name.endsWith('.exe')
+                );
+                if (windowsAsset) {
+                    const winBtn = document.querySelector('.btn-windows');
+                    if (winBtn) {
+                        winBtn.href = windowsAsset.browser_download_url;
+                        console.log('Updated Windows download to:', winBtn.href);
+                    }
+                }
+            } catch (err) {
+                console.error('Failed to fetch latest release:', err);
+            }
+        }
+        updateWindowsDownload();
     </script>
 </body>
 </html>
