@@ -89,8 +89,6 @@ jobs:
 
       - name: Build Application
         env:
-          UNSPLASH_CLIENT_ID: ${{ secrets.UNSPLASH_CLIENT_ID }}
-          UNSPLASH_CLIENT_SECRET: ${{ secrets.UNSPLASH_CLIENT_SECRET }}
           GOOGLE_PHOTOS_CLIENT_ID: ${{ secrets.GOOGLE_PHOTOS_CLIENT_ID }}
           GOOGLE_PHOTOS_CLIENT_SECRET: ${{ secrets.GOOGLE_PHOTOS_CLIENT_SECRET }}
         run: make build-win-amd64
@@ -162,8 +160,6 @@ jobs:
       - name: Build and Sign macOS App
         env:
           SIGNING_IDENTITY: "Developer ID Application: Karl Kwong (T96W95GY4U)"
-          UNSPLASH_CLIENT_ID: ${{ secrets.UNSPLASH_CLIENT_ID }}
-          UNSPLASH_CLIENT_SECRET: ${{ secrets.UNSPLASH_CLIENT_SECRET }}
           GOOGLE_PHOTOS_CLIENT_ID: ${{ secrets.GOOGLE_PHOTOS_CLIENT_ID }}
           GOOGLE_PHOTOS_CLIENT_SECRET: ${{ secrets.GOOGLE_PHOTOS_CLIENT_SECRET }}
         run: |
@@ -194,8 +190,6 @@ jobs:
         env:
           SIGNING_IDENTITY: "3rd Party Mac Developer Application: Karl Kwong (${{ secrets.APPLE_TEAM_ID }})"
           INSTALLER_IDENTITY: "3rd Party Mac Developer Installer: Karl Kwong (${{ secrets.APPLE_TEAM_ID }})"
-          UNSPLASH_CLIENT_ID: ${{ secrets.UNSPLASH_CLIENT_ID }}
-          UNSPLASH_CLIENT_SECRET: ${{ secrets.UNSPLASH_CLIENT_SECRET }}
           GOOGLE_PHOTOS_CLIENT_ID: ${{ secrets.GOOGLE_PHOTOS_CLIENT_ID }}
           GOOGLE_PHOTOS_CLIENT_SECRET: ${{ secrets.GOOGLE_PHOTOS_CLIENT_SECRET }}
         run: |

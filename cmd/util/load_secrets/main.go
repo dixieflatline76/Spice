@@ -12,10 +12,8 @@ func main() {
 
 	// Mapping from .spice_secrets keys to Go package paths
 	keyMap := map[string]string{
-		"GOOGLE_PHOTOS_CLIENT_ID":     "github.com/dixieflatline76/Spice/v2/pkg/wallpaper/providers/googlephotos.GooglePhotosClientID",
-		"GOOGLE_PHOTOS_CLIENT_SECRET": "github.com/dixieflatline76/Spice/v2/pkg/wallpaper/providers/googlephotos.GooglePhotosClientSecret",
-		"UNSPLASH_CLIENT_ID":          "github.com/dixieflatline76/Spice/v2/pkg/wallpaper/providers/unsplash.UnsplashClientID",
-		"UNSPLASH_CLIENT_SECRET":      "github.com/dixieflatline76/Spice/v2/pkg/wallpaper/providers/unsplash.UnsplashClientSecret",
+		"GOOGLE_PHOTOS_CLIENT_ID":     "github.com/dixieflatline76/Spice/v2/pkg/wallpaper/providers/googlephotos.GoogleClientID",
+		"GOOGLE_PHOTOS_CLIENT_SECRET": "github.com/dixieflatline76/Spice/v2/pkg/wallpaper/providers/googlephotos.GoogleClientSecret",
 	}
 
 	collected := make(map[string]string)
