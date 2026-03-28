@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spice - Spice Up Your Desktop 🌶️</title>
+    <meta name="description" content="A premium wallpaper manager for macOS and Windows. Cycle through Wallhaven, Pexels, Museum collections, and Google Photos effortlessly.">
+    <link rel="stylesheet" href="index.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/png" href="images/Spice.bmp"> <!-- Using existing icon asset -->
+</head>
+<body>
+    <nav class="glass">
+        <div class="nav-content">
+            <div class="logo">
+                <span class="emoji">🌶️</span> Spice
+            </div>
+            <div class="links">
+                <a href="https://github.com/dixieflatline76/Spice">GitHub</a>
+                <a href="support.html">Support</a>
+                <a href="privacy.html">Privacy</a></div>
+        </div>
+    </nav>
+
+    <header class="hero">
+        <div class="hero-content">
+            <img src="images/readme-banner.png" alt="Spice Banner" class="hero-banner">
+            <h1>Spice Up Your Desktop</h1>
+            <p class="subtitle">The premium wallpaper manager for creators, curators, and collectors.</p>
+            
+            <div class="cta-group">
+                <a href="https://apps.apple.com/app/spice-wallpaper-manager/id6478950000" class="btn-appstore">
+                    <img src="https://tools.applemediaservices.com/api/badges/download-on-the-app-store/black/en-us?size=250x83&amp;releaseDate=1711670400" alt="Download on the App Store">
+                </a>
+                <a href="https://github.com/dixieflatline76/Spice/releases/latest" class="btn-windows">
+                    <div class="win-icon">🪟</div>
+                    <div class="win-text">
+                        <span>Download for</span>
+                        <strong>Windows</strong>
+                    </div>
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <section class="features">
+            <div class="feature-card glass">
+                <h3>🖼️ Infinite Variety</h3>
+                <p>Access millions of high-res wallpapers from Wallhaven, Pexels, and Wikimedia.</p>
+            </div>
+            <div class="feature-card glass">
+                <h3>🏛️ Fine Art</h3>
+                <p>Bring the world's greatest museums to your desktop with collections from the Met and more.</p>
+            </div>
+            <div class="feature-card glass">
+                <h3>📸 Personal Touch</h3>
+                <p>Seamlessly integrate your private albums from Google Photos into your cycle.</p>
+            </div>
+            <div class="feature-card glass">
+                <h3>⚡ Lightweight</h3>
+                <p>Native performance on macOS Arm64 and Windows, running silently in the tray.</p>
+            </div>
+        </section>
+
+        <section class="screenshot-preview">
+            <div class="browser-frame glass">
+                <div class="frame-dots"><span></span><span></span><span></span></div>
+                <img src="images/screen3.png" alt="Spice Interface Screenshot">
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <p>© 2024 Spice Project. Open source and premium.</p>
+    </footer>
+
+    <script>
+        // Smooth reveal on scroll
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('visible');
+                }
+            });
+        }, { threshold: 0.1 });
+
+        document.querySelectorAll('.feature-card, .browser-frame').forEach(el => observer.observe(el));
+    </script>
+</body>
+</html>
