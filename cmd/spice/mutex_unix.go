@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 
 	"github.com/dixieflatline76/Spice/v2/config"
@@ -18,7 +19,17 @@ var (
 
 // acquireLock tries to acquire a single-instance lock (file lock on Unix).
 func acquireLock() (bool, error) {
-	lockFilePath := filepath.Join(os.TempDir(), config.AppName+".lock") // Use a lock file in /tmp
+	cacheDir, err := os.UserCacheDir()
+	if err != nil {
+		cacheDir = os.TempDir() // Fallback
+	} else {
+		cacheDir = filepath.Join(cacheDir, strings.ToLower(config.AppName))
+		if err := os.MkdirAll(cacheDir, 0755); err != nil {
+			cacheDir = os.TempDir()
+		}
+	}
+
+	lockFilePath := filepath.Join(cacheDir, config.AppName+".lock")
 	file, err := os.OpenFile(lockFilePath, os.O_RDWR|os.O_CREATE, 0666)
 	if err != nil {
 		return false, errors.New("another instance is already running")
