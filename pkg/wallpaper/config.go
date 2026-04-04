@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -149,6 +150,14 @@ func GetConfigInstance() *Config {
 
 // GetPath returns the path to the user's config directory
 func GetPath() string {
+	if runtime.GOOS == "darwin" {
+		// macOS: use standard Application Support for sandbox compliance
+		configDir, err := os.UserConfigDir()
+		if err == nil {
+			return filepath.Join(configDir, config.AppName)
+		}
+	}
+
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		log.Fatalf("Error getting user home directory: %v", err)
