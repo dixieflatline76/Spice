@@ -135,7 +135,7 @@ build-darwin-appstore-arm64: build-extension
 	export MACOSX_DEPLOYMENT_TARGET=12.0; GOOS=darwin GOARCH=arm64 go build -tags release -o bin/Spice-darwin-appstore-arm64 -ldflags "$(LDFLAGS_COMMON)" ./cmd/spice
 	
 	@echo "Packaging .app for App Store..."
-	fyne package -os darwin --executable ./bin/Spice-darwin-appstore-arm64 -icon asset/icons/tray.png -name Spice -appID com.dixieflatline76.spice
+	fyne package -os darwin --executable ./bin/Spice-darwin-appstore-arm64 -icon asset/icons/tray.png -name Spice --app-id com.dixieflatline76.spice
 	
 	@echo "Modifying Info.plist for App Store compliance..."
 	@if [ -f "Spice.app/Contents/Info.plist" ]; then \
@@ -196,7 +196,7 @@ build-darwin-amd64-dev:
 	GOOS=darwin GOARCH=amd64 go build -o bin/Spice-darwin-amd64 -ldflags "$(LDFLAGS_COMMON)" ./cmd/spice
 
 	@echo "Packaging Spice.app..."
-	fyne package -os darwin --executable ./bin/Spice-darwin-amd64 -icon asset/icons/tray.png -name Spice -appID com.dixieflatline76.spice
+	fyne package -os darwin --executable ./bin/Spice-darwin-amd64 -icon asset/icons/tray.png -name Spice --app-id com.dixieflatline76.spice
 
 	@echo "Modifying Info.plist to set LSUIElement=true..."
 	plutil -insert LSUIElement -bool true Spice.app/Contents/Info.plist
@@ -209,7 +209,7 @@ build-darwin-arm64-dev:
 	GOOS=darwin GOARCH=arm64 go build -o bin/Spice-darwin-arm64 -ldflags "$(LDFLAGS_COMMON)" ./cmd/spice
 
 	@echo "Packaging Spice.app..."
-	fyne package -os darwin --executable ./bin/Spice-darwin-arm64 -icon asset/icons/tray.png -name Spice -appID com.dixieflatline76.spice
+	fyne package -os darwin --executable ./bin/Spice-darwin-arm64 -icon asset/icons/tray.png -name Spice --app-id com.dixieflatline76.spice
 
 	@echo "Modifying Info.plist to set LSUIElement=true..."
 	plutil -insert LSUIElement -bool true Spice.app/Contents/Info.plist
