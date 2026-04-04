@@ -24,7 +24,9 @@ func acquireLock() (bool, error) {
 		cacheDir = os.TempDir() // Fallback
 	} else {
 		cacheDir = filepath.Join(cacheDir, strings.ToLower(config.AppName))
-		os.MkdirAll(cacheDir, 0755)
+		if err := os.MkdirAll(cacheDir, 0755); err != nil {
+			cacheDir = os.TempDir()
+		}
 	}
 
 	lockFilePath := filepath.Join(cacheDir, config.AppName+".lock")
