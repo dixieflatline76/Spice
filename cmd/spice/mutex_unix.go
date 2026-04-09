@@ -68,6 +68,6 @@ func releaseLock() {
 			Len:    0, // Lock the entire file
 		})
 		lockFile.Close()           // Close the file
-		os.Remove(lockFile.Name()) //remove lock file
+		_ = os.Remove(lockFile.Name()) //remove lock file
 	}
 }
