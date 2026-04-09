@@ -149,15 +149,15 @@ build-darwin-appstore-arm64: build-extension
 	fyne package -os darwin --executable ./bin/Spice-darwin-appstore-arm64 -icon asset/icons/tray.png -name Spice --app-id com.dixieflatline76.spice
 	
 	@echo "Modifying Info.plist for App Store compliance..."
-	@if [ -f "Spice.app/Contents/Info.plist" ]; then \
-		plutil -replace LSApplicationCategoryType -string "public.app-category.utilities" Spice.app/Contents/Info.plist; \
-		plutil -replace LSMinimumSystemVersion -string "12.0" Spice.app/Contents/Info.plist; \
-		plutil -replace CFBundleVersion -string "$(BUILD_NUMBER)" Spice.app/Contents/Info.plist; \
-		plutil -replace CFBundleShortVersionString -string "$(shell echo $(VERSION) | sed 's/^v//')" Spice.app/Contents/Info.plist; \
-		plutil -replace ITSAppUsesNonExemptEncryption -bool false Spice.app/Contents/Info.plist; \
-		plutil -replace NSAppleEventsUsageDescription -string "Spice requires permission to send Apple Events to System Events in order to actively change your desktop wallpaper." Spice.app/Contents/Info.plist; \
-		plutil -insert LSUIElement -bool true Spice.app/Contents/Info.plist || true; \
-	fi
+	go run cmd/util/plist_modify/main.go Spice.app/Contents/Info.plist \
+		"LSApplicationCategoryType=string:public.app-category.utilities" \
+		"LSMinimumSystemVersion=string:12.0" \
+		"CFBundleVersion=string:$(BUILD_NUMBER)" \
+		"CFBundleShortVersionString=string:$(shell echo $(VERSION) | sed 's/^v//')" \
+		"ITSAppUsesNonExemptEncryption=bool:false" \
+		"NSAppleEventsUsageDescription=string:Spice requires permission to send Apple Events to System Events in order to actively change your desktop wallpaper." \
+		"LSUIElement=bool:true"
+
 
 	@echo "Injecting identifiers into entitlements..."
 	@if [ -n "$(APPLE_TEAM_ID)" ]; then \
