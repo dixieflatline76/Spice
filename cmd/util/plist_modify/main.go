@@ -37,18 +37,20 @@ func main() {
 	// Parse the modifications
 	mods := make(map[string]xmlItem)
 	for _, arg := range os.Args[2:] {
+		// Strip any stray carriage returns from CRLF line ending issues
+		arg = strings.TrimRight(arg, "\r")
 		parts := strings.SplitN(arg, "=", 2)
 		if len(parts) != 2 {
-			fmt.Fprintf(os.Stderr, "Invalid argument: %s\n", arg)
+			fmt.Fprintf(os.Stderr, "Invalid argument: %q\n", arg)
 			os.Exit(1)
 		}
-		key := parts[0]
+		key := strings.TrimSpace(parts[0])
 		typeVal := strings.SplitN(parts[1], ":", 2)
 		if len(typeVal) != 2 {
 			fmt.Fprintf(os.Stderr, "Invalid type:value: %s\n", parts[1])
 			os.Exit(1)
 		}
-		mods[key] = xmlItem{Key: key, Type: typeVal[0], Value: typeVal[1]}
+		mods[key] = xmlItem{Key: key, Type: typeVal[0], Value: strings.TrimRight(typeVal[1], "\r")}
 	}
 
 	// Read the plist as raw text (preserving format as much as possible)
@@ -58,7 +60,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	content := string(data)
+	// Normalize line endings — strip \r so string searches work regardless of encoding
+	content := strings.ReplaceAll(string(data), "\r\n", "\n")
+	content = strings.ReplaceAll(content, "\r", "\n")
 
 	// For each modification, either replace existing key or insert before </dict>
 	for key, mod := range mods {
@@ -76,13 +80,17 @@ func main() {
 			if valueEnd > 0 {
 				// Calculate positions in original content
 				valueStart := idx + len(keyTag) + (len(afterKey) - len(trimmed))
-				content = content[:valueStart] + "\n\t" + valueXML + content[valueStart+len(afterKey)-len(trimmed)+valueEnd:]
+				content = content[:valueStart] + "\n\t" + valueXML + content[valueStart+valueEnd:]
 			}
 		} else {
 			// Insert before </dict>
 			dictEnd := strings.LastIndex(content, "</dict>")
 			if dictEnd == -1 {
-				fmt.Fprintf(os.Stderr, "Could not find </dict> in plist\n")
+				preview := content
+				if len(preview) > 500 {
+					preview = preview[:500]
+				}
+				fmt.Fprintf(os.Stderr, "Could not find </dict> in plist. File length: %d bytes. Preview:\n%s\n", len(content), preview)
 				os.Exit(1)
 			}
 			insert := fmt.Sprintf("\t%s\n\t%s\n", keyTag, valueXML)

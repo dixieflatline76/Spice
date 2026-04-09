@@ -1,0 +1,5 @@
+# Force LF line endings for files that must work on Unix (macOS CI runners, shell scripts)
+makefile text eol=lf
+Makefile text eol=lf
+*.sh text eol=lf
+*.entitlements text eol=lf
