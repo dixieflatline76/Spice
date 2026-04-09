@@ -11,6 +11,9 @@ SIGNTOOL := "C:\Program Files (x86)\Windows Kits\10\bin\$(WIN_SDK_VERSION)\x64\s
 PFX_PATH ?= 
 PFX_PASSWORD ?= SpicePassword123
 
+# Prevent MSYS2/Git-for-Windows bash from converting /d to D:/ etc.
+export MSYS_NO_PATHCONV := 1
+
 # --- Extension Utils ---
 sync-extension:
 	go run cmd/util/sync_regex/main.go
@@ -205,7 +208,7 @@ build-msix: build-win-amd64
 	
 	@echo "Creating MSIX package..."
 	pwsh -Command "if (Test-Path dist/Spice.msix) { Remove-Item -Force dist/Spice.msix }"
-	pwsh -Command "& '$(MAKEAPPX)' pack /d dist/msix-staging /p dist/Spice.msix /nv"
+	$(MAKEAPPX) pack /d dist/msix-staging /p dist/Spice.msix /nv
 	
 	@echo "MSIX package created: dist/Spice.msix"
 
@@ -213,7 +216,7 @@ build-msix-dev: build-msix create-test-cert sign-msix
 
 sign-msix:
 	@echo "Signing MSIX package with local test cert..."
-	pwsh -Command "& '$(SIGNTOOL)' sign /f SpiceTestCert.pfx /p $(PFX_PASSWORD) /fd SHA256 /v dist/Spice.msix"
+	$(SIGNTOOL) sign /f SpiceTestCert.pfx /p $(PFX_PASSWORD) /fd SHA256 /v dist/Spice.msix
 
 create-test-cert:
 	@echo "Creating self-signed certificate for MSIX testing..."
