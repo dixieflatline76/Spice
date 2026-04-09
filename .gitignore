@@ -51,3 +51,6 @@ report_output/
 
 # Unignore implementation of the mac extension
 !Spice Wallpaper Manager Extension/**
+# Certificates and Packages
+*.pfx
+*.msix

@@ -5,6 +5,11 @@ VERSION := $(shell sh -c "cat version.txt" 2> /dev/null || cmd /c "type version.
 LDFLAGS_SECRETS := $(shell go run cmd/util/load_secrets/main.go)
 LDFLAGS_COMMON := -X main.version=$(VERSION) $(LDFLAGS_SECRETS)
 BUILD_NUMBER ?= 1
+WIN_SDK_VERSION := 10.0.28000.0
+MAKEAPPX := "C:\Program Files (x86)\Windows Kits\10\bin\$(WIN_SDK_VERSION)\x64\makeappx.exe"
+SIGNTOOL := "C:\Program Files (x86)\Windows Kits\10\bin\$(WIN_SDK_VERSION)\x64\signtool.exe"
+PFX_PATH ?= 
+PFX_PASSWORD ?= SpicePassword123
 
 # --- Extension Utils ---
 sync-extension:
@@ -178,6 +183,41 @@ build-darwin-appstore-arm64: build-extension
 	@echo "Moving final Spice.pkg to ./dist/..."
 	mkdir -p dist
 	mv Spice.pkg dist/Spice-$(VERSION)-macos-arm64-AppStore.pkg
+
+build-msix: build-win-amd64
+	@echo "Preparing MSIX staging directory..."
+	pwsh -Command "if (Test-Path dist/msix-staging) { Remove-Item -Recurse -Force dist/msix-staging }"
+	pwsh -Command "New-Item -ItemType Directory -Force -Path dist/msix-staging/Assets"
+	
+	@echo "Copying application and assets..."
+	pwsh -Command "Copy-Item bin/Spice.exe dist/msix-staging/"
+	pwsh -Command "Copy-Item msix/AppxManifest.xml dist/msix-staging/"
+	pwsh -Command "Copy-Item msix/Assets/* dist/msix-staging/Assets/"
+	
+	@echo "Injecting Dynamic Version and Build Number into AppxManifest..."
+	go run cmd/util/bump_msix/main.go $(VERSION) $(BUILD_NUMBER) dist/msix-staging/AppxManifest.xml
+	
+	@echo "Creating MSIX package..."
+	pwsh -Command "if (Test-Path dist/Spice.msix) { Remove-Item -Force dist/Spice.msix }"
+	$(MAKEAPPX) pack /d dist/msix-staging /p dist/Spice.msix /nv
+	
+	@echo "MSIX package created: dist/Spice.msix"
+
+build-msix-dev: build-msix create-test-cert sign-msix
+
+sign-msix:
+	@echo "Signing MSIX package with local test cert..."
+	$(SIGNTOOL) sign /f SpiceTestCert.pfx /p $(PFX_PASSWORD) /fd SHA256 /v dist/Spice.msix
+
+create-test-cert:
+	@echo "Creating self-signed certificate for MSIX testing..."
+	pwsh -Command "if (-not (Test-Path 'SpiceTestCert.pfx')) { $$cert = New-SelfSignedCertificate -Type Custom -Subject 'CN=5F50AF71-B542-4430-94AC-30B112715346' -KeyUsage DigitalSignature -FriendlyName 'Spice MSIX Test Cert' -CertStoreLocation 'Cert:\CurrentUser\My'; $$password = ConvertTo-SecureString -String '$(PFX_PASSWORD)' -Force -AsPlainText; Export-PfxCertificate -Cert $$cert -FilePath 'SpiceTestCert.pfx' -Password $$password; Write-Host 'Certificate created: SpiceTestCert.pfx'; Write-Host 'IMPORTANT: You must double-click SpiceTestCert.pfx and install it to \"Trusted Root Certification Authorities\" before sideloading.' } else { Write-Host 'SpiceTestCert.pfx already exists, skipping creation.' }"
+
+upload-ms-store:
+	@echo "Installing Microsoft Store CLI..."
+	pwsh -Command "dotnet tool install --global Microsoft.Store.PartnerCenter.CLI" || true
+	@echo "Uploading MSIX to Microsoft Store..."
+	msstore publish --app-id 9NPBQ3C91WPF --package-path dist/Spice.msix
 
 # --- Development build targets ---
 build-win-amd64-dev:
