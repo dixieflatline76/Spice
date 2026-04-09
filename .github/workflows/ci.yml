@@ -320,7 +320,6 @@ jobs:
         run: |
           certutil -hashfile "bin\${{ steps.filenames.outputs.EXE_NAME }}" SHA256 | findstr /V /B /C:"CertUtil" /C:"SHA256" > "bin\${{ steps.filenames.outputs.EXE_NAME }}.sha256"
           certutil -hashfile "bin\${{ steps.filenames.outputs.SETUP_NAME }}" SHA256 | findstr /V /B /C:"CertUtil" /C:"SHA256" > "bin\${{ steps.filenames.outputs.SETUP_NAME }}.sha256"
-          certutil -hashfile "dist\${{ steps.filenames.outputs.MSIX_NAME }}" SHA256 | findstr /V /B /C:"CertUtil" /C:"SHA256" > "dist\${{ steps.filenames.outputs.MSIX_NAME }}.sha256"
           certutil -hashfile "dist\${{ steps.filenames.outputs.CHROME_NAME }}" SHA256 | findstr /V /B /C:"CertUtil" /C:"SHA256" > "dist\${{ steps.filenames.outputs.CHROME_NAME }}.sha256"
           certutil -hashfile "dist\${{ steps.filenames.outputs.FIREFOX_NAME }}" SHA256 | findstr /V /B /C:"CertUtil" /C:"SHA256" > "dist\${{ steps.filenames.outputs.FIREFOX_NAME }}.sha256"
           certutil -hashfile "dist\${{ steps.filenames.outputs.DMG_NAME }}" SHA256 | findstr /V /B /C:"CertUtil" /C:"SHA256" > "dist\${{ steps.filenames.outputs.DMG_NAME }}.sha256"
@@ -334,8 +333,6 @@ jobs:
             bin/${{ steps.filenames.outputs.EXE_NAME }}.sha256
             bin/${{ steps.filenames.outputs.SETUP_NAME }}
             bin/${{ steps.filenames.outputs.SETUP_NAME }}.sha256
-            dist/${{ steps.filenames.outputs.MSIX_NAME }}
-            dist/${{ steps.filenames.outputs.MSIX_NAME }}.sha256
             dist/${{ steps.filenames.outputs.CHROME_NAME }}
             dist/${{ steps.filenames.outputs.CHROME_NAME }}.sha256
             dist/${{ steps.filenames.outputs.FIREFOX_NAME }}
