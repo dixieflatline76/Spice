@@ -205,7 +205,7 @@ build-msix: build-win-amd64
 	
 	@echo "Creating MSIX package..."
 	pwsh -Command "if (Test-Path dist/Spice.msix) { Remove-Item -Force dist/Spice.msix }"
-	$(MAKEAPPX) pack /d dist/msix-staging /p dist/Spice.msix /nv
+	pwsh -Command "& '$(MAKEAPPX)' pack /d dist/msix-staging /p dist/Spice.msix /nv"
 	
 	@echo "MSIX package created: dist/Spice.msix"
 
@@ -213,7 +213,7 @@ build-msix-dev: build-msix create-test-cert sign-msix
 
 sign-msix:
 	@echo "Signing MSIX package with local test cert..."
-	$(SIGNTOOL) sign /f SpiceTestCert.pfx /p $(PFX_PASSWORD) /fd SHA256 /v dist/Spice.msix
+	pwsh -Command "& '$(SIGNTOOL)' sign /f SpiceTestCert.pfx /p $(PFX_PASSWORD) /fd SHA256 /v dist/Spice.msix"
 
 create-test-cert:
 	@echo "Creating self-signed certificate for MSIX testing..."
