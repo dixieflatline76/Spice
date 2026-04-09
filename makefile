@@ -63,6 +63,8 @@ build-darwin-amd64: build-extension
 	@echo "Building Go executable for darwin/amd64..."
 	GOOS=darwin GOARCH=amd64 go build -tags release -o bin/Spice-darwin-amd64 -ldflags "$(LDFLAGS_COMMON)" ./cmd/spice
 
+	@echo "Cleaning previous Spice.app bundle..."
+	rm -rf Spice.app
 	@echo "Packaging Spice.app..."
 	fyne package --os darwin --executable ./bin/Spice-darwin-amd64 --icon asset/icons/tray.png --name Spice --app-id com.dixieflatline76.spice
 
@@ -76,6 +78,8 @@ build-darwin-arm64: build-extension
 	@echo "Building Go executable for darwin/arm64..."
 	GOOS=darwin GOARCH=arm64 go build -tags release -o bin/Spice-darwin-arm64 -ldflags "$(LDFLAGS_COMMON)" ./cmd/spice
 
+	@echo "Cleaning previous Spice.app bundle..."
+	rm -rf Spice.app
 	@echo "Packaging Spice.app..."
 	fyne package --os darwin --executable ./bin/Spice-darwin-arm64 --icon asset/icons/tray.png --name Spice --app-id com.dixieflatline76.spice
 
@@ -139,6 +143,8 @@ build-darwin-appstore-arm64: build-extension
 	@echo "Building Go executable for macOS App Store (arm64)..."
 	export MACOSX_DEPLOYMENT_TARGET=12.0; GOOS=darwin GOARCH=arm64 go build -tags release -o bin/Spice-darwin-appstore-arm64 -ldflags "$(LDFLAGS_COMMON)" ./cmd/spice
 	
+	@echo "Cleaning previous Spice.app bundle..."
+	rm -rf Spice.app
 	@echo "Packaging .app for App Store..."
 	fyne package -os darwin --executable ./bin/Spice-darwin-appstore-arm64 -icon asset/icons/tray.png -name Spice --app-id com.dixieflatline76.spice
 	
