@@ -3,6 +3,43 @@
 
 package wallpaper
 
+/*
+#cgo LDFLAGS: -framework AppKit -framework Foundation
+
+#import <AppKit/AppKit.h>
+#import <Foundation/Foundation.h>
+
+static int setWallpaperNative(const char* path, int screenIndex) {
+    __block int result = 0;
+    // NSWorkspace calls must be made on the main thread
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        @autoreleasepool {
+            NSString *imagePath = [NSString stringWithUTF8String:path];
+            NSURL *imageURL = [NSURL fileURLWithPath:imagePath];
+            NSArray *screens = [NSScreen screens];
+
+            if (screenIndex < 0 || screenIndex >= [screens count]) {
+                result = -1; // Index out of bounds
+                return;
+            }
+
+            NSScreen *screen = [screens objectAtIndex:screenIndex];
+            NSError *error = nil;
+            BOOL success = [[NSWorkspace sharedWorkspace] setDesktopImageURL:imageURL
+                                                                  forScreen:screen
+                                                                    options:@{}
+                                                                      error:&error];
+            if (!success) {
+                NSLog(@"Spice: Native wallpaper set failed: %@", [error localizedDescription]);
+                result = -2; // Execution failed
+            }
+        }
+    });
+    return result;
+}
+*/
+import "C"
+
 import (
 	"encoding/json"
 	"fmt"
@@ -11,6 +48,7 @@ import (
 	"os/exec"
 	"regexp"
 	"strconv"
+	"unsafe"
 
 	"github.com/dixieflatline76/Spice/v2/pkg/sysinfo"
 	"github.com/dixieflatline76/Spice/v2/util/log"
@@ -91,7 +129,7 @@ func (m *macOSOS) parseSystemProfiler(jsonOutput string) ([]Monitor, error) {
 }
 
 // SetWallpaper sets the desktop wallpaper on macOS.
-// Uses AppleScript via osascript to target specific desktops.
+// Uses native NSWorkspace via CGO for sandbox compliance.
 func (m *macOSOS) SetWallpaper(imagePath string, monitorID int) error {
 	// 1. Mock Support
 	if os.Getenv("MOCK_MACOS_OUTPUT") != "" {
@@ -100,20 +138,23 @@ func (m *macOSOS) SetWallpaper(imagePath string, monitorID int) error {
 	}
 
 	// 2. Real Implementation
-	// AppleScript desktops are 1-indexed.
-	// "tell application \"System Events\" to set picture of desktop %d to \"%s\""
-	script := fmt.Sprintf(`
-		tell application "System Events"
-			set picture of desktop %d to "%s"
-		end tell
-	`, monitorID+1, imagePath)
+	log.Debugf("Executing native NSWorkspace to set wallpaper for monitor %d: %s", monitorID, imagePath)
+	
+	cPath := C.CString(imagePath)
+	defer C.free(unsafe.Pointer(cPath))
 
-	cmd := exec.Command("osascript", "-e", script)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("osascript failed: %v, output: %s", err, string(out))
+	res := C.setWallpaperNative(cPath, C.int(monitorID))
+	
+	switch res {
+	case 0:
+		return nil
+	case -1:
+		return fmt.Errorf("monitor index %d out of bounds (NSScreen count mismatch)", monitorID)
+	case -2:
+		return fmt.Errorf("NSWorkspace failed to set desktop image (check system logs)")
+	default:
+		return fmt.Errorf("unknown error from native wallpaper engine: %d", res)
 	}
-
-	return nil
 }
 
 // GetDesktopDimension returns the primary desktop dimensions on macOS.
