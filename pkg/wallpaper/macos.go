@@ -3,14 +3,21 @@
 
 package wallpaper
 
+/*
+#cgo LDFLAGS: -framework AppKit -framework Foundation
+#include "wallpaper_native.h"
+#include <stdlib.h>
+*/
+import "C"
+
 import (
 	"encoding/json"
 	"fmt"
 	"image"
 	"os"
-	"os/exec"
 	"regexp"
 	"strconv"
+	"unsafe"
 
 	"github.com/dixieflatline76/Spice/v2/pkg/sysinfo"
 	"github.com/dixieflatline76/Spice/v2/util/log"
@@ -19,9 +26,11 @@ import (
 // macOSOS implements the OS interface for macOS.
 type macOSOS struct{}
 
+// ---- JSON types for system_profiler (kept for test mock support) ----
+
 type spDisplay struct {
 	Name       string `json:"_name"`
-	Resolution string `json:"_spdisplays_pixels"` // Changed from _spdisplays_resolution to _spdisplays_pixels for actual resolution
+	Resolution string `json:"_spdisplays_pixels"`
 }
 
 type spGPU struct {
@@ -32,28 +41,12 @@ type spDataType struct {
 	GPUs []spGPU `json:"SPDisplaysDataType"`
 }
 
-// GetMonitors returns information about all connected monitors on macOS.
-func (m *macOSOS) GetMonitors() ([]Monitor, error) {
-	// 1. Mock Support for Windows Testing
-	if output := os.Getenv("MOCK_MACOS_OUTPUT"); output != "" {
-		return m.parseSystemProfiler(output)
-	}
-
-	// 2. Real Implementation
-	cmd := exec.Command("system_profiler", "SPDisplaysDataType", "-json")
-	out, err := cmd.Output()
-	if err != nil {
-		return nil, fmt.Errorf("getting display info: %w", err)
-	}
-
-	return m.parseSystemProfiler(string(out))
-}
-
 var (
-	// resolutionRegex matches strings like "3456 x 2234"
 	resolutionRegex = regexp.MustCompile(`(\d+)\s*x\s*(\d+)`)
 )
 
+// parseSystemProfiler parses system_profiler JSON output into Monitor structs.
+// Retained for unit test mock support (see macos_test.go).
 func (m *macOSOS) parseSystemProfiler(jsonOutput string) ([]Monitor, error) {
 	var data spDataType
 	if err := json.Unmarshal([]byte(jsonOutput), &data); err != nil {
@@ -76,7 +69,7 @@ func (m *macOSOS) parseSystemProfiler(jsonOutput string) ([]Monitor, error) {
 			monitors = append(monitors, Monitor{
 				ID:         monitorIdx,
 				Name:       d.Name,
-				DevicePath: d.Name, // macOS stable identifier fallback
+				DevicePath: d.Name,
 				Rect:       image.Rect(0, 0, w, h),
 			})
 			monitorIdx++
@@ -90,30 +83,70 @@ func (m *macOSOS) parseSystemProfiler(jsonOutput string) ([]Monitor, error) {
 	return monitors, nil
 }
 
+// ---- Production implementation using NSScreen via CGO ----
+
+// GetMonitors returns information about all connected monitors on macOS.
+// Uses NSScreen (via native CGO) so indices are guaranteed to match SetWallpaper.
+func (m *macOSOS) GetMonitors() ([]Monitor, error) {
+	// Mock support for cross-platform testing
+	if output := os.Getenv("MOCK_MACOS_OUTPUT"); output != "" {
+		return m.parseSystemProfiler(output)
+	}
+
+	count := int(C.nativeGetScreenCount())
+	if count == 0 {
+		return nil, fmt.Errorf("no displays found via NSScreen")
+	}
+
+	var monitors []Monitor
+	for i := 0; i < count; i++ {
+		var info C.NativeMonitorInfo
+		if C.nativeGetScreenInfo(C.int(i), &info) != 0 {
+			log.Printf("[macOS] Failed to get info for screen index %d, skipping", i)
+			continue
+		}
+		monitors = append(monitors, Monitor{
+			ID:         i,
+			Name:       C.GoString(&info.name[0]),
+			DevicePath: C.GoString(&info.name[0]),
+			Rect:       image.Rect(0, 0, int(info.width), int(info.height)),
+		})
+	}
+
+	if len(monitors) == 0 {
+		return nil, fmt.Errorf("no displays found")
+	}
+
+	return monitors, nil
+}
+
 // SetWallpaper sets the desktop wallpaper on macOS.
-// Uses AppleScript via osascript to target specific desktops.
+// Uses native NSWorkspace via CGO for sandbox compliance.
+// Monitor indices are guaranteed to match GetMonitors (both use NSScreen).
 func (m *macOSOS) SetWallpaper(imagePath string, monitorID int) error {
-	// 1. Mock Support
+	// Mock support
 	if os.Getenv("MOCK_MACOS_OUTPUT") != "" {
 		log.Printf("[MOCK] Setting Wallpaper for Monitor %d: %s", monitorID, imagePath)
 		return nil
 	}
 
-	// 2. Real Implementation
-	// AppleScript desktops are 1-indexed.
-	// "tell application \"System Events\" to set picture of desktop %d to \"%s\""
-	script := fmt.Sprintf(`
-		tell application "System Events"
-			set picture of desktop %d to "%s"
-		end tell
-	`, monitorID+1, imagePath)
+	log.Debugf("[macOS] Setting wallpaper via NSWorkspace for monitor %d: %s", monitorID, imagePath)
 
-	cmd := exec.Command("osascript", "-e", script)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("osascript failed: %v, output: %s", err, string(out))
+	cPath := C.CString(imagePath)
+	defer C.free(unsafe.Pointer(cPath))
+
+	res := C.nativeSetWallpaper(cPath, C.int(monitorID))
+
+	switch res {
+	case 0:
+		return nil
+	case -1:
+		return fmt.Errorf("monitor index %d out of bounds (NSScreen count mismatch)", monitorID)
+	case -2:
+		return fmt.Errorf("NSWorkspace failed to set desktop image (check Console.app for details)")
+	default:
+		return fmt.Errorf("unknown native wallpaper error: %d", res)
 	}
-
-	return nil
 }
 
 // GetDesktopDimension returns the primary desktop dimensions on macOS.

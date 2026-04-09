@@ -63,6 +63,8 @@ build-darwin-amd64: build-extension
 	@echo "Building Go executable for darwin/amd64..."
 	GOOS=darwin GOARCH=amd64 go build -tags release -o bin/Spice-darwin-amd64 -ldflags "$(LDFLAGS_COMMON)" ./cmd/spice
 
+	@echo "Cleaning previous Spice.app bundle..."
+	rm -rf Spice.app
 	@echo "Packaging Spice.app..."
 	fyne package --os darwin --executable ./bin/Spice-darwin-amd64 --icon asset/icons/tray.png --name Spice --app-id com.dixieflatline76.spice
 
@@ -76,6 +78,8 @@ build-darwin-arm64: build-extension
 	@echo "Building Go executable for darwin/arm64..."
 	GOOS=darwin GOARCH=arm64 go build -tags release -o bin/Spice-darwin-arm64 -ldflags "$(LDFLAGS_COMMON)" ./cmd/spice
 
+	@echo "Cleaning previous Spice.app bundle..."
+	rm -rf Spice.app
 	@echo "Packaging Spice.app..."
 	fyne package --os darwin --executable ./bin/Spice-darwin-arm64 --icon asset/icons/tray.png --name Spice --app-id com.dixieflatline76.spice
 
@@ -139,19 +143,21 @@ build-darwin-appstore-arm64: build-extension
 	@echo "Building Go executable for macOS App Store (arm64)..."
 	export MACOSX_DEPLOYMENT_TARGET=12.0; GOOS=darwin GOARCH=arm64 go build -tags release -o bin/Spice-darwin-appstore-arm64 -ldflags "$(LDFLAGS_COMMON)" ./cmd/spice
 	
+	@echo "Cleaning previous Spice.app bundle..."
+	rm -rf Spice.app
 	@echo "Packaging .app for App Store..."
 	fyne package -os darwin --executable ./bin/Spice-darwin-appstore-arm64 -icon asset/icons/tray.png -name Spice --app-id com.dixieflatline76.spice
 	
 	@echo "Modifying Info.plist for App Store compliance..."
-	@if [ -f "Spice.app/Contents/Info.plist" ]; then \
-		plutil -replace LSApplicationCategoryType -string "public.app-category.utilities" Spice.app/Contents/Info.plist; \
-		plutil -replace LSMinimumSystemVersion -string "12.0" Spice.app/Contents/Info.plist; \
-		plutil -replace CFBundleVersion -string "$(BUILD_NUMBER)" Spice.app/Contents/Info.plist; \
-		plutil -replace CFBundleShortVersionString -string "$(shell echo $(VERSION) | sed 's/^v//')" Spice.app/Contents/Info.plist; \
-		plutil -replace ITSAppUsesNonExemptEncryption -bool false Spice.app/Contents/Info.plist; \
-		plutil -replace NSAppleEventsUsageDescription -string "Spice requires permission to send Apple Events to System Events in order to actively change your desktop wallpaper." Spice.app/Contents/Info.plist; \
-		plutil -insert LSUIElement -bool true Spice.app/Contents/Info.plist || true; \
-	fi
+	go run cmd/util/plist_modify/main.go Spice.app/Contents/Info.plist \
+		"LSApplicationCategoryType=string:public.app-category.utilities" \
+		"LSMinimumSystemVersion=string:12.0" \
+		"CFBundleVersion=string:$(BUILD_NUMBER)" \
+		"CFBundleShortVersionString=string:$(shell echo $(VERSION) | sed 's/^v//')" \
+		"ITSAppUsesNonExemptEncryption=bool:false" \
+		"NSAppleEventsUsageDescription=string:Spice requires permission to send Apple Events to System Events in order to actively change your desktop wallpaper." \
+		"LSUIElement=bool:true"
+
 
 	@echo "Injecting identifiers into entitlements..."
 	@if [ -n "$(APPLE_TEAM_ID)" ]; then \

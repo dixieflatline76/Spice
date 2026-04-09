@@ -33,14 +33,26 @@ func init() {
 	if runtime.GOOS == "windows" {
 		userCacheDir, _ := os.UserCacheDir()
 		appDir = filepath.Join(userCacheDir, AppName)
+	} else if runtime.GOOS == "darwin" {
+		// macOS: Use standard Application Support for sandbox compliance.
+		// os.UserConfigDir() correctly points to the sandbox container when enabled.
+		configDir, err := os.UserConfigDir()
+		if err == nil {
+			appDir = filepath.Join(configDir, AppName)
+		} else {
+			// Fallback to home dir if config dir is unavailable
+			userHomeDir, _ := os.UserHomeDir()
+			appDir = filepath.Join(userHomeDir, "."+strings.ToLower(AppName))
+		}
 	} else {
 		userHomeDir, _ := os.UserHomeDir()
 		appDir = filepath.Join(userHomeDir, "."+strings.ToLower(AppName))
 	}
-	if err := os.MkdirAll(appDir, 0755); err != nil {
-		// We use standard library log here because util/log depends on this package
-		panic("failed to create application directory: " + err.Error())
-	}
+
+	// We don't panic here because it crashes the app before logging starts.
+	// We'll attempt to create it, but failures will be handled/logged later
+	// when the app tries to actually write to it.
+	_ = os.MkdirAll(appDir, 0755)
 }
 
 // GetAppDir returns the persistent application directory for config and logs.
