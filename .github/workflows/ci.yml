@@ -312,7 +312,6 @@ jobs:
           files: |
             ${{ github.workspace }}\bin\${{ steps.filenames.outputs.EXE_NAME }}
             ${{ github.workspace }}\bin\${{ steps.filenames.outputs.SETUP_NAME }}
-            ${{ github.workspace }}\dist\${{ steps.filenames.outputs.MSIX_NAME }}
           file-digest: SHA256
           timestamp-rfc3161: http://timestamp.acs.microsoft.com
           timestamp-digest: SHA256
