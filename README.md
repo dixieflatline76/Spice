@@ -91,30 +91,25 @@ These actions affect all displays simultaneously.
 
 ## 📦 Installation
 
-Head to the [**Releases Page**](https://github.com/dixieflatline76/Spice/releases/latest) to download the installer for your OS.
+### For macOS
+The easiest way to install Spice is via Homebrew:
+```bash
+brew install --cask spice
+```
+*Alternatively, download the `.dmg` from the [Releases Page](https://github.com/dixieflatline76/Spice/releases/latest).*
+
+### For Windows
+Install silently via Winget:
+```powershell
+winget install DixieFlatline76.Spice
+```
+*Alternatively, download the `.exe` installer from the [Releases Page](https://github.com/dixieflatline76/Spice/releases/latest).*
 
 ### 🌐 Browser Companion Extension
 
 *   **Chrome / Brave / Edge:** [**Install from Chrome Web Store**](https://chromewebstore.google.com/detail/ekodikedjmhnganfcfleabcfohdjkoeb)
 *   **Firefox:** [**Install from Firefox Add-ons**](https://addons.mozilla.org/en-US/firefox/addon/spice-wallpaper-manager/)
 *   **Safari:** Included in the macOS App.
-
-### For Windows
-
-1.  Download `Spice-Setup-x.y.z-windows-amd64.exe`.
-2.  Double-click to install.
-3.  *(Optional)* Find the **Spice Chrome Extension** on the [**Chrome Web Store**](https://chromewebstore.google.com/detail/ekodikedjmhnganfcfleabcfohdjkoeb) and click **Add to Chrome**.
-
-### For macOS (Apple Silicon)
-
-1.  Download `Spice-x.y.z-macos-arm64.dmg`.
-2.  Open the `.dmg`.
-3.  Drag **Spice.app** into your **Applications** folder.
-4.  *(Optional)* Drag **Spice Wallpaper Manager Extension.app** into your **Applications** folder if you want Safari support.
-5.  **Enable the Safari Extension:**
-    *   Open Safari Settings > Extensions.
-    *   Check the box for **Spice Wallpaper Manager**.
-    *   Click "Always Allow on Every Website" to ensure seamless detection.
 
 ## 🚀 Usage
 
