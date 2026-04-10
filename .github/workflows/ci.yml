@@ -316,26 +316,36 @@ jobs:
           timestamp-rfc3161: http://timestamp.acs.microsoft.com
           timestamp-digest: SHA256
 
-      - name: Calculate checksums
+      - name: Prepare GoReleaser Artifacts
         run: |
-          certutil -hashfile "bin\${{ steps.filenames.outputs.EXE_NAME }}" SHA256 | findstr /V /B /C:"CertUtil" /C:"SHA256" > "bin\${{ steps.filenames.outputs.EXE_NAME }}.sha256"
-          certutil -hashfile "bin\${{ steps.filenames.outputs.SETUP_NAME }}" SHA256 | findstr /V /B /C:"CertUtil" /C:"SHA256" > "bin\${{ steps.filenames.outputs.SETUP_NAME }}.sha256"
-          certutil -hashfile "dist\${{ steps.filenames.outputs.CHROME_NAME }}" SHA256 | findstr /V /B /C:"CertUtil" /C:"SHA256" > "dist\${{ steps.filenames.outputs.CHROME_NAME }}.sha256"
-          certutil -hashfile "dist\${{ steps.filenames.outputs.FIREFOX_NAME }}" SHA256 | findstr /V /B /C:"CertUtil" /C:"SHA256" > "dist\${{ steps.filenames.outputs.FIREFOX_NAME }}.sha256"
-          certutil -hashfile "dist\${{ steps.filenames.outputs.DMG_NAME }}" SHA256 | findstr /V /B /C:"CertUtil" /C:"SHA256" > "dist\${{ steps.filenames.outputs.DMG_NAME }}.sha256"
-        shell: cmd
+          # GoReleaser expects artifacts in dist/<id>_<os>_<arch>/ for its internal model
+          $version = '${{ steps.filenames.outputs.EXE_NAME }}' -replace '^Spice-', '' -replace '-windows-amd64.exe$', ''
+          
+          # 1. Map win-raw-exe
+          mkdir -p dist/win-raw-exe_windows_amd64
+          cp bin/${{ steps.filenames.outputs.EXE_NAME }} dist/win-raw-exe_windows_amd64/
+          
+          # 2. Map win-setup-exe
+          mkdir -p dist/win-setup-exe_windows_amd64
+          cp bin/${{ steps.filenames.outputs.SETUP_NAME }} dist/win-setup-exe_windows_amd64/
+          
+          # 3. Map mac-dmg
+          mkdir -p dist/mac-dmg_darwin_arm64
+          cp dist/${{ steps.filenames.outputs.DMG_NAME }} dist/mac-dmg_darwin_arm64/
+          
+          # 4. Filter Extensions for 'extra_files' globbing
+          # We move them to the dist/ root so GoReleaser finds them via glob
+          cp dist/${{ steps.filenames.outputs.CHROME_NAME }} dist/
+          cp dist/${{ steps.filenames.outputs.FIREFOX_NAME }} dist/
+          
+          # NOTE: .msix and .pkg are EXCLUDED from dist/ to keep them out of checksums
+        shell: pwsh
 
-      - name: Upload to GitHub Release
-        uses: softprops/action-gh-release@v2
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v6
         with:
-          files: |
-            bin/${{ steps.filenames.outputs.EXE_NAME }}
-            bin/${{ steps.filenames.outputs.EXE_NAME }}.sha256
-            bin/${{ steps.filenames.outputs.SETUP_NAME }}
-            bin/${{ steps.filenames.outputs.SETUP_NAME }}.sha256
-            dist/${{ steps.filenames.outputs.CHROME_NAME }}
-            dist/${{ steps.filenames.outputs.CHROME_NAME }}.sha256
-            dist/${{ steps.filenames.outputs.FIREFOX_NAME }}
-            dist/${{ steps.filenames.outputs.FIREFOX_NAME }}.sha256
-            dist/${{ steps.filenames.outputs.DMG_NAME }}
-            dist/${{ steps.filenames.outputs.DMG_NAME }}.sha256
+          distribution: goreleaser
+          version: latest
+          args: release --clean --skip=build
+        env:
+          GITHUB_TOKEN: ${{ secrets.GORELEASER_GITHUB_TOKEN }}
