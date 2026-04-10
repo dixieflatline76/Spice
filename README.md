@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD033 MD041 -->
 <p align="center"><img src="images/readme-banner.png" height="400" alt="Spice logo" /></p>
 
-<h1 align="center">Spice - Spice Up Your Desktop 🌶️</h1>
+<h1 align="center">Spice 🌶️ | A highly-concurrent, plugin-driven desktop environment engine for macOS and Windows, written in Go.</h1>
 
 <p align="center">
   <a href="https://github.com/dixieflatline76/Spice/actions/workflows/ci.yml"><img src="https://github.com/dixieflatline76/Spice/actions/workflows/ci.yml/badge.svg" alt="Build Status"></a>
@@ -20,6 +20,14 @@ Spice is a premium wallpaper manager that automatically cycles high-quality wall
   <img src="images/screen3.png" alt="Spice Screenshot" width="1000">
 </p>
 
+## ⚙️ Why Spice? (A Modular Desktop Engine)
+
+Spice is more than a utility; it's a high-performance framework for desktop environment management.
+
+*   **Lock-free UI Pipeline:** Separates heavy 4K I/O operations from the Fyne UI thread using a hybrid-concurrency pipeline and O(1) state stores.
+*   **Actor-Model Multi-Monitor:** Independent goroutines manage each connected display autonomously without synchronous blocking.
+*   **Plugin Ecosystem:** Exposes a robust `ui.Plugin` interface allowing developers to inject custom Fyne preference panels and system tray menus safely into the host engine.
+
 ## ✨ Key Features
 
 ### 🌎 Infinite Sources
@@ -31,14 +39,14 @@ Spice is a premium wallpaper manager that automatically cycles high-quality wall
 *   **❤️ Local Favorites:** Build your own curated collection that works offline.
 
 ### 🧠 Smart Technology
-*   **📏 Smart Fit 2.0:**
+*   **📏 Smart Fit 2.0:** A custom heuristic pipeline utilizing `pigo` cascade detection and luminance entropy calculations to override strict aspect-ratio gates.
     *   **Quality Mode (Strict):** Ensures perfect composition by rejecting images that don't fit your screen, unless a clear face is detected.
     *   **Flexibility Mode:** Accepts high-res images with a "Safe Fallback" for ultrawide monitors.
-    *   **Face Boost:** Ensures people are perfectly framed.
+*   **🧑‍🤝‍🧑 Face Boost:** Uses confidence-weighted scaling to ensure subjects are perfectly framed without zooming in on phantom shadows or knees.
 *   **⚡ Ultra-Responsive:** Engineered for zero-lag performance, ensuring the UI stays snappy even while handling high-resolution 4K content.
 *   **🖥️ Independent Multi-Monitor Suite:** Spice v2.0 detects every connected display and assigns it an autonomous controller. Every monitor can be controlled individually via dedicated hotkeys.
 *   **📐 Orientation Intelligence:** Spice understands the difference between landscape and portrait monitors. It picks images that match your screen's orientation before applying **SmartCrop**, so your vertical monitors get true portrait compositions.
-*   **🍃 Organic Staggering:** Optionally stagger wallpaper updates with randomized delays to prevent a sudden "flash" across all your monitors simultaneously.
+*   **🍃 Organic Staggering:** Handled via decentralized monitor Actor loops to prevent sudden CPU spikes across all displays.
 
 ### 🎮 Control & Experience
 *   **⌨️ Global Hotkeys:** Control Spice instantly from anywhere.
@@ -111,6 +119,10 @@ Head to the [**Releases Page**](https://github.com/dixieflatline76/Spice/release
 ## 🚀 Usage
 
 For a comprehensive walkthrough of all features, keyboard shortcuts, and configuration options, please refer to the [**Detailed User Guide**](docs/user_guide.md).
+
+### 🔑 Developer Setup & Secrets
+
+Note: The compiled App Store releases include production OAuth credentials. If you are building from source, you must provide your own API keys (e.g., Google GCP, Unsplash) via a `.spice_secrets` file. See the included `load_secrets` scripts for details.
 
 ### Tips
 
