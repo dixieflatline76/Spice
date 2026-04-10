@@ -1,0 +1,21 @@
+PackageIdentifier: DixieFlatline76.Spice
+PackageVersion: 2.2.5
+PackageName: Spice
+Publisher: Karl Kwong
+License: PolyForm Noncommercial 1.0.0
+ShortDescription: A highly-concurrent, plugin-driven desktop environment engine.
+Moniker: spice
+Tags:
+  - wallpaper
+  - desktop
+  - customization
+  - go
+  - engine
+Installers:
+  - Architecture: x64
+    InstallerType: exe
+    InstallerUrl: https://github.com/dixieflatline76/Spice/releases/download/v2.2.5/Spice-Setup-2.2.5-windows-amd64.exe
+    InstallerSha256: 0 # To be updated during release process
+    UpgradeBehavior: install
+ManifestType: singleton
+ManifestVersion: 1.5.0
