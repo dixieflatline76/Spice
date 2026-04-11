@@ -316,32 +316,7 @@ jobs:
           timestamp-rfc3161: http://timestamp.acs.microsoft.com
           timestamp-digest: SHA256
 
-      - name: Prepare GoReleaser Artifacts
-        run: |
-          # GoReleaser expects artifacts in dist/<id>_<os>_<arch>/ for its internal model
-          $version = '${{ steps.filenames.outputs.EXE_NAME }}' -replace '^Spice-', '' -replace '-windows-amd64.exe$', ''
-          
-          # 1. Map win-raw-exe
-          mkdir -p dist/win-raw-exe_windows_amd64
-          cp bin/${{ steps.filenames.outputs.EXE_NAME }} dist/win-raw-exe_windows_amd64/
-          
-          # 2. Map win-setup-exe
-          mkdir -p dist/win-setup-exe_windows_amd64
-          cp bin/${{ steps.filenames.outputs.SETUP_NAME }} dist/win-setup-exe_windows_amd64/
-          
-          # 3. Map mac-dmg
-          mkdir -p dist/mac-dmg_darwin_arm64
-          cp dist/${{ steps.filenames.outputs.DMG_NAME }} dist/mac-dmg_darwin_arm64/
-          
-          # 4. Extensions are already in dist/ from the download/rename steps.
-          # NOTE: .msix and .pkg are EXCLUDED from dist/ to keep them out of checksums
-        shell: pwsh
-
-      - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v6
-        with:
-          distribution: goreleaser
-          version: latest
-          args: release --clean
+      - name: Run Spice Releaser
+        run: go run tools/releaser/main.go
         env:
-          GITHUB_TOKEN: ${{ secrets.GORELEASER_GITHUB_TOKEN }}
+          SPICE_RELEASER_TOKEN: ${{ secrets.GORELEASER_GITHUB_TOKEN }}
