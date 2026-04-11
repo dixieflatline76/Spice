@@ -342,6 +342,6 @@ jobs:
         with:
           distribution: goreleaser
           version: latest
-          args: release --clean --skip=build
+          args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GORELEASER_GITHUB_TOKEN }}
