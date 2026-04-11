@@ -53,6 +53,8 @@ release:
 # Automated Homebrew Cask generation
 homebrew_casks:
   - name: spice
+    ids: [mac-dmg] # Force it to recognize our binary ID
+    url_template: "https://github.com/dixieflatline76/Spice/releases/download/{{ .Tag }}/Spice-{{ .Version }}-macos-arm64.dmg"
     repository:
       owner: dixieflatline76
       name: homebrew-spice
@@ -61,6 +63,7 @@ homebrew_casks:
     custom_block: |
       app "Spice.app"
       app "Spice Wallpaper Manager Extension.app"
+    binaries: []
     zap:
       trash:
         - "~/Library/Application Support/Spice"
@@ -70,6 +73,10 @@ homebrew_casks:
 # Automated Winget manifest generation
 winget:
   - package_identifier: DixieFlatline76.Spice
+    # V2 requires you to explicitly declare your fork repository here:
+    repository:
+      owner: dixieflatline76
+      name: winget-pkgs
     package_name: Spice
     publisher: Karl Kwong
     publisher_url: "https://spicebox.dev"
