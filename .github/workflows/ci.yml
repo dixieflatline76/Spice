@@ -333,11 +333,7 @@ jobs:
           mkdir -p dist/mac-dmg_darwin_arm64
           cp dist/${{ steps.filenames.outputs.DMG_NAME }} dist/mac-dmg_darwin_arm64/
           
-          # 4. Filter Extensions for 'extra_files' globbing
-          # We move them to the dist/ root so GoReleaser finds them via glob
-          cp dist/${{ steps.filenames.outputs.CHROME_NAME }} dist/
-          cp dist/${{ steps.filenames.outputs.FIREFOX_NAME }} dist/
-          
+          # 4. Extensions are already in dist/ from the download/rename steps.
           # NOTE: .msix and .pkg are EXCLUDED from dist/ to keep them out of checksums
         shell: pwsh
 

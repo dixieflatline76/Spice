@@ -31,12 +31,15 @@ archives:
   - id: win-raw-exe
     builds: [win-raw-exe]
     format: binary
+    name_template: "Spice-{{ .Version }}-windows-amd64"
   - id: win-setup-exe
     builds: [win-setup-exe]
     format: binary
+    name_template: "Spice-Setup-{{ .Version }}-windows-amd64"
   - id: mac-dmg
     builds: [mac-dmg]
     format: binary
+    name_template: "Spice-{{ .Version }}-macos-arm64"
 
 # Include browser extensions in the release and checksums.
 # .msix and .pkg are EXPLICITLY excluded to keep them for Store distribution only.
