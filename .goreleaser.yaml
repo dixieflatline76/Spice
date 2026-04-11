@@ -29,16 +29,16 @@ builds:
 # picking up the already-renamed files from the CI staging area.
 archives:
   - id: win-raw-exe
-    builds: [win-raw-exe]
-    format: binary
+    ids: [win-raw-exe]
+    formats: [binary]
     name_template: "Spice-{{ .Version }}-windows-amd64"
   - id: win-setup-exe
-    builds: [win-setup-exe]
-    format: binary
+    ids: [win-setup-exe]
+    formats: [binary]
     name_template: "Spice-Setup-{{ .Version }}-windows-amd64"
   - id: mac-dmg
-    builds: [mac-dmg]
-    format: binary
+    ids: [mac-dmg]
+    formats: [binary]
     name_template: "Spice-{{ .Version }}-macos-arm64"
 
 # Include browser extensions in the release and checksums.
@@ -58,9 +58,9 @@ homebrew_casks:
       name: homebrew-spice
     homepage: "https://spicebox.dev"
     description: "Highly-concurrent, plugin-driven desktop environment engine"
-    app:
-      - "Spice.app"
-      - "Spice Wallpaper Manager Extension.app"
+    custom_block: |
+      app "Spice.app"
+      app "Spice Wallpaper Manager Extension.app"
     zap:
       trash:
         - "~/Library/Application Support/Spice"
@@ -75,26 +75,19 @@ winget:
     publisher_url: "https://spicebox.dev"
     license: PolyForm Noncommercial 1.0.0
     short_description: "A highly-concurrent, plugin-driven desktop environment engine."
-    moniker: spice
     tags:
       - wallpaper
       - desktop
       - customization
       - go
       - engine
-    installers:
-      - architecture: x64
-        type: exe
-        installer_switches:
-          silent: /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
-          silent_with_progress: /SILENT /SUPPRESSMSGBOXES /NORESTART
 
 checksum:
   name_template: "checksums.txt"
   algorithm: sha256
 
 snapshot:
-  name_template: "{{ .Tag }}-snapshot"
+  version_template: "{{ .Tag }}-snapshot"
 
 changelog:
   sort: asc
