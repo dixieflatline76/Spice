@@ -76,7 +76,7 @@ func main() {
 	}
 
 	checksumBytes := checksumData.Bytes()
-	err := os.WriteFile("checksums.txt", checksumBytes, 0644)
+	err := os.WriteFile("checksums.txt", checksumBytes, 0600)
 	if err != nil {
 		log.Fatalf("Failed to write checksums.txt: %v", err)
 	}
