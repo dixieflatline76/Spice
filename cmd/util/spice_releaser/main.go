@@ -142,21 +142,19 @@ end
 		DMGHash string
 	}{version, dmgHash}, fmt.Sprintf("Bump spice to %s", version))
 
-	// 4. Winget Manifest Automation
-	wingetTmpl := `PackageIdentifier: dixieflatline76.Spice
+	// 4. Winget Manifest Automation (Multi-File Format)
+	// Microsoft winget-pkgs pipeline dropped support for singleton manifests.
+	// We must now generate a 3-part multi-file manifest (Version, Installer, DefaultLocale).
+	
+	wingetVersionTmpl := `PackageIdentifier: dixieflatline76.Spice
 PackageVersion: {{.Version}}
-PackageLocale: en-US
-PackageName: Spice
-Publisher: dixieflatline76
-License: PolyForm Noncommercial 1.0.0
-ShortDescription: A highly-concurrent, plugin-driven desktop environment engine.
-Moniker: spice
-Tags:
-  - wallpaper
-  - desktop
-  - customization
-  - go
-  - engine
+DefaultLocale: en-US
+ManifestType: version
+ManifestVersion: 1.5.0
+`
+
+	wingetInstallerTmpl := `PackageIdentifier: dixieflatline76.Spice
+PackageVersion: {{.Version}}
 Installers:
   - Architecture: x64
     InstallerType: exe
@@ -166,14 +164,41 @@ Installers:
     InstallerSwitches:
       Silent: /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
       SilentWithProgress: /SILENT /SUPPRESSMSGBOXES /NORESTART
-ManifestType: singleton
+ManifestType: installer
 ManifestVersion: 1.5.0
 `
-	wingetPath := fmt.Sprintf("manifests/d/dixieflatline76/Spice/%s/dixieflatline76.Spice.yaml", version)
-	updateRepoFile(ctx, client, wingetRepo, wingetPath, wingetTmpl, struct {
+
+	wingetLocaleTmpl := `PackageIdentifier: dixieflatline76.Spice
+PackageVersion: {{.Version}}
+PackageLocale: en-US
+Publisher: dixieflatline76
+PackageName: Spice
+License: PolyForm Noncommercial 1.0.0
+ShortDescription: A highly-concurrent, plugin-driven desktop environment engine.
+Moniker: spice
+Tags:
+  - wallpaper
+  - desktop
+  - customization
+  - go
+  - engine
+ManifestType: defaultLocale
+ManifestVersion: 1.5.0
+`
+
+	// Define paths
+	baseManifestPath := fmt.Sprintf("manifests/d/dixieflatline76/Spice/%s", version)
+	
+	// Create the data payload for the templates
+	wingetData := struct {
 		Version   string
 		SetupHash string
-	}{version, strings.ToUpper(setupHash)}, fmt.Sprintf("Update Spice manifest to %s", version))
+	}{version, strings.ToUpper(setupHash)}
+	
+	// Push all three files dynamically
+	updateRepoFile(ctx, client, wingetRepo, fmt.Sprintf("%s/dixieflatline76.Spice.yaml", baseManifestPath), wingetVersionTmpl, wingetData, fmt.Sprintf("Bump spice (version manifest) to %s", version))
+	updateRepoFile(ctx, client, wingetRepo, fmt.Sprintf("%s/dixieflatline76.Spice.installer.yaml", baseManifestPath), wingetInstallerTmpl, wingetData, fmt.Sprintf("Bump spice (installer manifest) to %s", version))
+	updateRepoFile(ctx, client, wingetRepo, fmt.Sprintf("%s/dixieflatline76.Spice.locale.en-US.yaml", baseManifestPath), wingetLocaleTmpl, wingetData, fmt.Sprintf("Bump spice (locale manifest) to %s", version))
 
 	log.Println("Release process completed successfully! 🚀")
 }
