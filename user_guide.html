@@ -18,6 +18,8 @@
         @media (max-width: 1000px) { .toc-sidebar { display: none !important; } }
         #table-of-contents, #table-of-contents + ol, #table-of-contents + ul { display: none; }
         .content-card { flex: 1; padding: 3rem; border-radius: 24px; line-height: 1.8; overflow-x: hidden; min-width: 0; }
+        html { scroll-behavior: smooth; }
+        h1, h2, h3, h4 { scroll-margin-top: 140px; }
         h1 { margin-bottom: 2rem; font-size: 2.5rem; }
         h2 { margin: 2rem 0 1rem; color: var(--accent-color); font-size: 1.6rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0.5rem; }
         h3 { margin: 1.5rem 0 0.5rem; font-size: 1.2rem; color: var(--text-primary); }
@@ -99,6 +101,11 @@
                     tocSidebar.style.display = 'block';
                     headings.forEach(heading => {
                         if (heading.textContent.trim() === 'Table of Contents') return;
+                        
+                        if (!heading.id) {
+                            heading.id = heading.textContent.toLowerCase().trim().replace(/[\s\W-]+/g, '-').replace(/^-|-$/g, '');
+                        }
+                        
                         const a = document.createElement('a');
                         a.href = '#' + heading.id;
                         a.textContent = heading.textContent;
