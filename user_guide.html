@@ -8,8 +8,16 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
-        .content-page { padding-top: 120px; max-width: 900px; margin: 0 auto 100px; }
-        .content-card { padding: 3rem; border-radius: 24px; line-height: 1.8; overflow-x: hidden;}
+        .guide-layout { display: flex; gap: 2rem; align-items: flex-start; max-width: 1200px; margin: 0 auto; padding-top: 120px; padding-bottom: 100px; padding-left: 20px; padding-right: 20px;}
+        .toc-sidebar { width: 300px; position: sticky; top: 120px; padding: 2rem; border-radius: 24px; max-height: calc(100vh - 140px); overflow-y: auto; }
+        .toc-sidebar h3 { margin-top: 0; font-size: 1.1rem; color: var(--text-primary); border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0.5rem; margin-bottom: 1rem; }
+        .toc-sidebar a { display: block; color: var(--text-secondary); margin-bottom: 0.8rem; font-size: 0.9em; transition: color 0.2s; line-height: 1.4; }
+        .toc-sidebar a:hover { color: var(--accent-color); }
+        .toc-sidebar .toc-h2 { font-weight: 600; margin-top: 1.5rem; color: var(--text-primary); }
+        .toc-sidebar .toc-h3 { padding-left: 1rem; }
+        @media (max-width: 1000px) { .toc-sidebar { display: none !important; } }
+        #table-of-contents, #table-of-contents + ol, #table-of-contents + ul { display: none; }
+        .content-card { flex: 1; padding: 3rem; border-radius: 24px; line-height: 1.8; overflow-x: hidden; min-width: 0; }
         h1 { margin-bottom: 2rem; font-size: 2.5rem; }
         h2 { margin: 2rem 0 1rem; color: var(--accent-color); font-size: 1.6rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0.5rem; }
         h3 { margin: 1.5rem 0 0.5rem; font-size: 1.2rem; color: var(--text-primary); }
@@ -43,7 +51,12 @@
         </div>
     </nav>
 
-    <main class="content-page">
+    <main class="guide-layout">
+        <aside class="toc-sidebar glass" id="toc-sidebar" style="display: none;">
+            <h3>On this page</h3>
+            <div id="toc-links"></div>
+        </aside>
+
         <div class="content-card glass">
             
             <div id="loading" class="loading">Fetching the latest User Guide...</div>
@@ -77,6 +90,22 @@
                 document.getElementById('markdown-content').innerHTML = marked.parse(markdown);
                 document.getElementById('loading').style.display = 'none';
                 document.getElementById('markdown-content').style.display = 'block';
+                
+                const tocSidebar = document.getElementById('toc-sidebar');
+                const tocLinks = document.getElementById('toc-links');
+                const headings = document.getElementById('markdown-content').querySelectorAll('h2, h3');
+                
+                if (headings.length > 0) {
+                    tocSidebar.style.display = 'block';
+                    headings.forEach(heading => {
+                        if (heading.textContent.trim() === 'Table of Contents') return;
+                        const a = document.createElement('a');
+                        a.href = '#' + heading.id;
+                        a.textContent = heading.textContent;
+                        a.className = 'toc-' + heading.tagName.toLowerCase();
+                        tocLinks.appendChild(a);
+                    });
+                }
                 
             } catch (err) {
                 document.getElementById('loading').innerHTML = 'Error loading documentation. Please view it directly on <a href="https://github.com/dixieflatline76/Spice/blob/main/docs/user_guide.md">GitHub</a>.';
