@@ -14,7 +14,7 @@
    - [Local Sources](#local-sources)
 5. [Favorites](#favorites)
 6. [Multi-Display Setup](#multi-display-setup)
-7. [Browser Extension](#browser-extension)
+7. [Browser Extensions](#browser-extensions)
 
 ---
 
