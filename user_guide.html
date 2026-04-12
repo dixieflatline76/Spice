@@ -15,6 +15,7 @@
         .toc-sidebar a:hover { color: var(--accent-color); }
         .toc-sidebar .toc-h2 { font-weight: 600; margin-top: 1.5rem; color: var(--text-primary); }
         .toc-sidebar .toc-h3 { padding-left: 1rem; }
+        .toc-sidebar .toc-h4 { padding-left: 1.8rem; font-size: 0.85em; opacity: 0.85; margin-bottom: 0.5rem; }
         @media (max-width: 1000px) { .toc-sidebar { display: none !important; } }
         #table-of-contents, #table-of-contents + ol, #table-of-contents + ul { display: none; }
         .content-card { flex: 1; padding: 3rem; border-radius: 24px; line-height: 1.8; overflow-x: hidden; min-width: 0; }
@@ -95,7 +96,7 @@
                 
                 const tocSidebar = document.getElementById('toc-sidebar');
                 const tocLinks = document.getElementById('toc-links');
-                const headings = document.getElementById('markdown-content').querySelectorAll('h2, h3');
+                const headings = document.getElementById('markdown-content').querySelectorAll('h2, h3, h4');
                 
                 if (headings.length > 0) {
                     tocSidebar.style.display = 'block';

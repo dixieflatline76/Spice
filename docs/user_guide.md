@@ -12,9 +12,9 @@
    - [General](#general-settings)
    - [Online Sources](#online-sources)
    - [Local Sources](#local-sources)
-5. [Favorites](#favorites)
-6. [Multi-Display Setup](#multi-display-setup)
-7. [Browser Extensions](#browser-extensions)
+     - [Local Favorites](#local-favorites)
+5. [Multi-Display Setup](#multi-display-setup)
+6. [Browser Extensions](#browser-extensions)
 
 ---
 
