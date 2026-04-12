@@ -145,6 +145,7 @@ end
 	// 4. Winget Manifest Automation
 	wingetTmpl := `PackageIdentifier: DixieFlatline76.Spice
 PackageVersion: {{.Version}}
+PackageLocale: en-US
 PackageName: Spice
 Publisher: Karl Kwong
 License: PolyForm Noncommercial 1.0.0
