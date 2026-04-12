@@ -228,6 +228,11 @@ func (sa *SpiceApp) CreateTrayMenu() {
 		}
 	}
 
+	items = append(items, sa.CreateMenuItem(i18n.T("Online User Guide"), func() {
+		u, _ := url.Parse("https://github.com/dixieflatline76/Spice/blob/main/docs/user_guide.md")
+		_ = sa.OpenURL(u)
+	}, ""))
+
 	items = append(items, fyne.NewMenuItemSeparator())
 	items = append(items, sa.CreateMenuItem(i18n.T("Preferences"), func() {
 		sa.CreatePreferencesWindow("")
