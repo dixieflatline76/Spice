@@ -37,6 +37,7 @@ coverage*
 !index.html
 !privacy.html
 !support.html
+!user_guide.html
 !extension/*.html
 *.test
 test_output_*.txt
