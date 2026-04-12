@@ -317,6 +317,6 @@ jobs:
           timestamp-digest: SHA256
 
       - name: Run Spice Releaser
-        run: go run tools/releaser/main.go
+        run: go run cmd/util/spice_releaser/main.go
         env:
           SPICE_RELEASER_TOKEN: ${{ secrets.GORELEASER_GITHUB_TOKEN }}
