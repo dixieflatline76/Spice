@@ -147,7 +147,7 @@ end
 PackageVersion: {{.Version}}
 PackageLocale: en-US
 PackageName: Spice
-Publisher: Karl Kwong
+Publisher: DixieFlatline76
 License: PolyForm Noncommercial 1.0.0
 ShortDescription: A highly-concurrent, plugin-driven desktop environment engine.
 Moniker: spice
