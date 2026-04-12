@@ -94,6 +94,8 @@ Spice gives you granular control over how hotkeys interact with your system. If 
 
 > **macOS Permissions**: Targeted shortcuts require Accessibility permissions. macOS will prompt you once when Spice first detects a number key press. If shortcuts stop working, ensure Spice is still enabled in **System Settings → Privacy & Security → Accessibility**.
 
+> **Mac App Store Limitation**: Targeted (per-monitor) shortcuts are **not available** in the Mac App Store version of Spice. This is a platform restriction — the App Sandbox prevents Spice from detecting which number key is held simultaneously. Global shortcuts (`Cmd` + `Ctrl` + `Arrow`) work normally. If you need per-monitor control, use the tray menu submenus or download the DMG version from [GitHub](https://github.com/dixieflatline76/Spice/releases).
+
 ---
 
 ## Preferences: App Tab
