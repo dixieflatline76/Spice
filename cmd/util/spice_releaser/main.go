@@ -143,11 +143,11 @@ end
 	}{version, dmgHash}, fmt.Sprintf("Bump spice to %s", version))
 
 	// 4. Winget Manifest Automation
-	wingetTmpl := `PackageIdentifier: DixieFlatline76.Spice
+	wingetTmpl := `PackageIdentifier: dixieflatline76.Spice
 PackageVersion: {{.Version}}
 PackageLocale: en-US
 PackageName: Spice
-Publisher: DixieFlatline76
+Publisher: dixieflatline76
 License: PolyForm Noncommercial 1.0.0
 ShortDescription: A highly-concurrent, plugin-driven desktop environment engine.
 Moniker: spice
@@ -169,7 +169,7 @@ Installers:
 ManifestType: singleton
 ManifestVersion: 1.5.0
 `
-	wingetPath := fmt.Sprintf("manifests/d/DixieFlatline76/Spice/%s/DixieFlatline76.Spice.yaml", version)
+	wingetPath := fmt.Sprintf("manifests/d/dixieflatline76/Spice/%s/dixieflatline76.Spice.yaml", version)
 	updateRepoFile(ctx, client, wingetRepo, wingetPath, wingetTmpl, struct {
 		Version   string
 		SetupHash string
