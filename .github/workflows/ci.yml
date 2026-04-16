@@ -8,6 +8,9 @@ on:
   release:
     types: [published]
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 permissions:
   contents: write # Needed for softprops/action-gh-release
 
@@ -18,8 +21,6 @@ jobs:
       matrix:
         os: [windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
     if: github.event_name == 'pull_request' || github.event_name == 'push'
     steps:
       - name: Checkout code
@@ -93,6 +94,21 @@ jobs:
           GOOGLE_PHOTOS_CLIENT_SECRET: ${{ secrets.GOOGLE_PHOTOS_CLIENT_SECRET }}
         run: make build-win-amd64
 
+      - name: Sign Inner Executable
+        uses: azure/artifact-signing-action@v1
+        with:
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          endpoint: https://weu.codesigning.azure.net/
+          signing-account-name: SpiceOSS
+          certificate-profile-name: Spice
+          files: |
+            ${{ github.workspace }}\bin\Spice.exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
       - name: Build MSIX Package
         run: make build-msix
 
@@ -114,7 +130,6 @@ jobs:
         #   CLIENT_SECRET: ${{ secrets.MS_STORE_CLIENT_SECRET }}
         #   SELLER_ID: ${{ secrets.MS_STORE_SELLER_ID }}
         # run: make upload-ms-store
-
 
       - name: Upload Windows Artifacts
         uses: actions/upload-artifact@v4
@@ -273,7 +288,7 @@ jobs:
           
           $rawDmg = "Spice-${tagName}-arm64.dmg"
           $newDmg = "Spice-${version}-macos-arm64.dmg"
-
+ 
           $rawMsix = "Spice.msix"
           $newMsix = "Spice-${version}-windows-amd64.msix"
 
