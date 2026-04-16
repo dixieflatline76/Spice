@@ -6,7 +6,7 @@ on:
   pull_request:
     branches: [ main ]
   release:
-    types: [created]
+    types: [created, published, released]
 
 permissions:
   contents: write # Needed for softprops/action-gh-release
