@@ -144,7 +144,7 @@ endif
 
 build-darwin-appstore-arm64: build-extension
 	@echo "Building Go executable for macOS App Store (arm64)..."
-	export MACOSX_DEPLOYMENT_TARGET=12.0; GOOS=darwin GOARCH=arm64 go build -tags release -o bin/Spice-darwin-appstore-arm64 -ldflags "$(LDFLAGS_COMMON)" ./cmd/spice
+	export MACOSX_DEPLOYMENT_TARGET=12.0; GOOS=darwin GOARCH=arm64 go build -tags "release appstore" -o bin/Spice-darwin-appstore-arm64 -ldflags "$(LDFLAGS_COMMON)" ./cmd/spice
 	
 	@echo "Cleaning previous Spice.app bundle..."
 	rm -rf Spice.app

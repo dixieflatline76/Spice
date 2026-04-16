@@ -145,7 +145,7 @@ end
 	// 4. Winget Manifest Automation (Multi-File Format)
 	// Microsoft winget-pkgs pipeline dropped support for singleton manifests.
 	// We must now generate a 3-part multi-file manifest (Version, Installer, DefaultLocale).
-	
+
 	wingetVersionTmpl := `PackageIdentifier: dixieflatline76.Spice
 PackageVersion: {{.Version}}
 DefaultLocale: en-US
@@ -188,13 +188,13 @@ ManifestVersion: 1.5.0
 
 	// Define paths
 	baseManifestPath := fmt.Sprintf("manifests/d/dixieflatline76/Spice/%s", version)
-	
+
 	// Create the data payload for the templates
 	wingetData := struct {
 		Version   string
 		SetupHash string
 	}{version, strings.ToUpper(setupHash)}
-	
+
 	// Push all three files dynamically
 	updateRepoFile(ctx, client, wingetRepo, fmt.Sprintf("%s/dixieflatline76.Spice.yaml", baseManifestPath), wingetVersionTmpl, wingetData, fmt.Sprintf("Bump spice (version manifest) to %s", version))
 	updateRepoFile(ctx, client, wingetRepo, fmt.Sprintf("%s/dixieflatline76.Spice.installer.yaml", baseManifestPath), wingetInstallerTmpl, wingetData, fmt.Sprintf("Bump spice (installer manifest) to %s", version))

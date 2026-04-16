@@ -23,7 +23,6 @@ import (
 	"golang.org/x/image/math/fixed"
 
 	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/driver/desktop"
 	"github.com/disintegration/imaging"
 	"github.com/dixieflatline76/Spice/v2/asset"
@@ -370,6 +369,16 @@ func (sa *SpiceApp) addVersionWatermark(img image.Image) (image.Image, error) {
 
 // CreateSplashScreen creates a splash screen for the application
 func (sa *SpiceApp) CreateSplashScreen(seconds int) {
+	defer func() {
+		if r := recover(); r != nil {
+			errStr := fmt.Sprintf("%v", r)
+			utilLog.Printf("Recovered from splash screen creation panic: %v", errStr)
+			if strings.Contains(strings.ToLower(errStr), "apiunavailable") || strings.Contains(strings.ToLower(errStr), "wgl") || strings.Contains(strings.ToLower(errStr), "opengl") {
+				ShowNativeFallbackAlert(i18n.T("Graphics Error"), i18n.T("Spice requires OpenGL 2.0+ or hardware acceleration to show windows. The application will continue to run in the background, but the user interface may be unavailable."))
+			}
+		}
+	}()
+
 	if sa.splash == nil {
 		// Create a splash screen with the application icon
 		drv, ok := sa.Driver().(desktop.Driver)
@@ -379,6 +388,11 @@ func (sa *SpiceApp) CreateSplashScreen(seconds int) {
 		}
 
 		splashWindow := drv.CreateSplashWindow()
+		if splashWindow == nil {
+			utilLog.Println("Failed to create splash window (driver returned nil)")
+			ShowNativeFallbackAlert(i18n.T("Graphics Error"), i18n.T("Spice requires OpenGL 2.0+ or hardware acceleration to show windows. The application will continue to run in the background, but the user interface may be unavailable."))
+			return
+		}
 
 		// Load the splash image
 		splashImg, err := sa.assetMgr.GetImage("splash.png")
@@ -439,7 +453,26 @@ func (sa *SpiceApp) CreatePreferencesWindow(initialTab string) {
 	}
 
 	// Create a new window for the preferences
-	prefsWindow := sa.NewWindow(fmt.Sprintf("%s %s", config.AppName, i18n.T("Preferences")))
+	var prefsWindow fyne.Window
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				errStr := fmt.Sprintf("%v", r)
+				utilLog.Printf("Recovered from preferences window creation panic: %v", errStr)
+				if strings.Contains(strings.ToLower(errStr), "apiunavailable") || strings.Contains(strings.ToLower(errStr), "wgl") || strings.Contains(strings.ToLower(errStr), "opengl") {
+					ShowNativeFallbackAlert(i18n.T("Graphics Error"), i18n.T("Spice requires OpenGL 2.0+ or hardware acceleration to show windows. The application will continue to run in the background, but the user interface may be unavailable."))
+				}
+			}
+		}()
+		prefsWindow = sa.NewWindow(fmt.Sprintf("%s %s", config.AppName, i18n.T("Preferences")))
+	}()
+
+	if prefsWindow == nil {
+		utilLog.Println("Preferences window creation failed (returned nil or recovered)")
+		ShowNativeFallbackAlert(i18n.T("Graphics Error"), i18n.T("Spice requires OpenGL 2.0+ or hardware acceleration to show windows. The application will continue to run in the background, but the user interface may be unavailable."))
+		return
+	}
+
 	sa.prefsWindow = prefsWindow // Store reference
 
 	// Build and bind the UI contents first, so the layout engine knows existing elements.
@@ -751,57 +784,6 @@ func (t *forcedVariantTheme) Color(name fyne.ThemeColorName, _ fyne.ThemeVariant
 	return t.Theme.Color(name, t.variant)
 }
 
-// verifyEULA checks if the End User License Agreement has been accepted. If not, it will show the EULA and prompt the user to accept it.
-// If the user declines, the application will quit.
-// If the EULA has been accepted, the application will proceed to setup.
-func (sa *SpiceApp) verifyEULA() {
-	// Check if the EULA has been accepted
-	if util.HasAcceptedEULA(sa.Preferences()) {
-		sa.CreateSplashScreen(startupSplashTime) // Show the splash screen if the EULA has been accepted
-	} else {
-		sa.displayEULAAcceptance() // Show the EULA if it hasn't been accepted
-	}
-}
-
-// displayEULAAcceptance displays the End User License Agreement and prompts the user
-// to accept it. If the user declines, the application will quit.
-func (sa *SpiceApp) displayEULAAcceptance() {
-	eulaText, err := sa.assetMgr.GetText("eula.txt")
-	if err != nil {
-		utilLog.Fatalf("Error loading EULA: %v", err)
-	}
-
-	// Create a new window for the EULA
-	sa.os.TransformToForeground() // Ensure the app is in the foreground before showing the EULA
-	eulaWindow := sa.NewWindow(i18n.T("Spice EULA"))
-	eulaWindow.SetOnClosed(sa.os.TransformToBackground) // Set the close action to transform to background
-	eulaWindow.Resize(fyne.NewSize(800, 600))
-	eulaWindow.CenterOnScreen()
-	eulaWindow.SetCloseIntercept(func() {
-		// Prevent the window from being closed
-	})
-
-	// Create a scrollable text widget for the EULA content
-	eulaWdgt := widget.NewRichTextWithText(eulaText)
-	eulaWdgt.Wrapping = fyne.TextWrapWord
-	eulaScroll := container.NewVScroll(eulaWdgt)
-	eulaDialog := dialog.NewCustomConfirm(i18n.T("To continue using Spice, please review and accept the End User License Agreement."), i18n.T("Accept"), i18n.T("Decline"), eulaScroll, func(accepted bool) {
-		if accepted {
-			// Mark the EULA as accepted
-			util.MarkEULAAccepted(sa.Preferences())
-			eulaWindow.Close()
-			sa.CreateSplashScreen(startupSplashTime) // Show the splash screen after user accepts the EULA
-		} else {
-			// Stop the service before quitting the application
-			sa.Quit()
-		}
-	}, eulaWindow)
-
-	eulaDialog.Resize(fyne.NewSize(795, 595)) // Resize the dialog to fit the window
-	eulaDialog.Show()
-	eulaWindow.Show()
-}
-
 // Start activates all plugins and runs the Fyne application
 func (sa *SpiceApp) Start() {
 
@@ -1007,7 +989,11 @@ func decodeGifToFrames(data []byte) ([]image.Image, []time.Duration, error) {
 func (sa *SpiceApp) CreateAboutSplash() {
 	defer func() {
 		if r := recover(); r != nil {
-			utilLog.Printf("ERROR: PANIC in CreateAboutSplash (likely stale GLFW context): %v", r)
+			errStr := fmt.Sprintf("%v", r)
+			utilLog.Printf("ERROR: PANIC in CreateAboutSplash (likely stale GLFW context): %v", errStr)
+			if strings.Contains(strings.ToLower(errStr), "apiunavailable") || strings.Contains(strings.ToLower(errStr), "wgl") || strings.Contains(strings.ToLower(errStr), "opengl") {
+				ShowNativeFallbackAlert(i18n.T("Graphics Error"), i18n.T("Spice requires OpenGL 2.0+ or hardware acceleration to show windows. The application will continue to run in the background, but the user interface may be unavailable."))
+			}
 		}
 	}()
 	if sa.splash != nil {
