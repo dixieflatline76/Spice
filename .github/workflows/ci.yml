@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ main, fix/opengl-fallback-appstore ]
+    branches: [ main ]
   pull_request:
-    branches: [ main, fix/opengl-fallback-appstore ]
+    branches: [ main ]
   release:
     types: [created]
 
