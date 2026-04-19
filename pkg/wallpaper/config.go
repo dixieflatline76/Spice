@@ -45,6 +45,7 @@ type Config struct {
 	QueryDisabledCallback    func(queryID string) `json:"-"`
 	FavoritesClearedCallback func()               `json:"-"`
 	ShortcutsDisabled        bool                 `json:"shortcuts_disabled"`
+	TargetedShortcutsDisabled bool                 `json:"targeted_shortcuts_disabled"`
 	WallhavenSyncEnabled     bool                 `json:"wallhaven_sync_enabled"`
 	MonitorPauseStates       map[string]bool      `json:"monitor_pause_states"`
 }
@@ -126,6 +127,8 @@ func GetConfig(p fyne.Preferences) *Config {
 			MonitorPauseStates: make(map[string]bool),
 			userid:             u.Uid,
 			Tuning:             DefaultTuningConfig(),
+			ShortcutsDisabled:         false,
+			TargetedShortcutsDisabled: true,
 		}
 		// Load config from file
 		if err := cfgInstance.loadFromPrefs(); err != nil {
@@ -925,28 +928,30 @@ func (c *Config) GetFaceCropEnabled() bool {
 func (c *Config) GetShortcutsDisabled() bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return c.BoolWithFallback(ShortcutsDisabledPrefKey, false) // Default: active
+	return c.ShortcutsDisabled
 }
 
 // SetShortcutsDisabled sets the hotkey disabled preference.
 func (c *Config) SetShortcutsDisabled(disabled bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.SetBool(ShortcutsDisabledPrefKey, disabled)
+	c.ShortcutsDisabled = disabled
+	c.save()
 }
 
 // GetTargetedShortcutsDisabled returns the targeted hotkey disabled preference.
 func (c *Config) GetTargetedShortcutsDisabled() bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return c.BoolWithFallback(TargetedShortcutsDisabledPrefKey, true) // Default: disabled
+	return c.TargetedShortcutsDisabled
 }
 
 // SetTargetedShortcutsDisabled sets the targeted hotkey disabled preference.
 func (c *Config) SetTargetedShortcutsDisabled(disabled bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.SetBool(TargetedShortcutsDisabledPrefKey, disabled)
+	c.TargetedShortcutsDisabled = disabled
+	c.save()
 }
 
 // GetAssetManager returns the asset manager
@@ -1017,6 +1022,7 @@ func (c *Config) save() {
 		MaxConcurrentProcessors: c.MaxConcurrentProcessors,
 		Tuning:                  c.Tuning,
 		ShortcutsDisabled:       c.ShortcutsDisabled,
+		TargetedShortcutsDisabled: c.TargetedShortcutsDisabled,
 		WallhavenSyncEnabled:    c.WallhavenSyncEnabled,
 	}
 
