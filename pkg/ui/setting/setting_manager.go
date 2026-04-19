@@ -26,6 +26,7 @@ type SelectConfig struct {
 	ApplyFunc    func(interface{})
 	NeedsRefresh bool        // Whether the UI needs a full refresh after applying
 	EnabledIf    func() bool // Optional: function to determine if the widget should be enabled
+	VisibleIf    func() bool // Optional: function to determine if the widget should be visible
 }
 
 // BoolConfig holds configuration for a generic boolean check widget.
@@ -38,6 +39,7 @@ type BoolConfig struct {
 	ApplyFunc    func(bool)
 	NeedsRefresh bool
 	EnabledIf    func() bool // Optional: function to determine if the widget should be enabled
+	VisibleIf    func() bool // Optional: function to determine if the widget should be visible
 }
 
 // TextEntrySettingConfig holds configuration for a generic text entry widget.
@@ -55,6 +57,7 @@ type TextEntrySettingConfig struct {
 	DisplayStatus      bool          // Whether to display the value status next to the entry
 	IsPassword         bool          // Whether to mask the input (e.g. for API keys)
 	EnabledIf          func() bool   // Optional: function to determine if the widget should be enabled
+	VisibleIf          func() bool   // Optional: function to determine if the widget should be visible
 	ValidationDebounce time.Duration // Optional: delay before running PostValidateCheck (0 = synchronous)
 }
 
@@ -67,6 +70,28 @@ type ButtonWithConfirmationConfig struct {
 	ConfirmTitle   string
 	ConfirmMessage string
 	OnPressed      func()
+	EnabledIf      func() bool // Optional: function to determine if the widget should be enabled
+	VisibleIf      func() bool // Optional: function to determine if the widget should be visible
+}
+
+// AsyncButtonConfig holds configuration for a background/network task button.
+type AsyncButtonConfig struct {
+	Name            string
+	ButtonText      string
+	LoadingText     string
+	Importance      widget.Importance
+	OnPressed       func() error // Executed in background thread
+	OnCompleted     func(error)  // Executed in UI thread after OnPressed completes
+	TargetStatusKey string       // Optional: name of a setting whose status label should be updated on completion
+	NeedsRefresh    bool         // Whether the UI needs a full refresh after completion
+	EnabledIf       func() bool  // Optional: function to determine if the widget should be enabled
+	VisibleIf       func() bool  // Optional: function to determine if the widget should be visible
+}
+
+// SettingReset holds the payload for an atomic state reset.
+type SettingReset struct {
+	Name  string
+	Value interface{}
 }
 
 // StringOptions converts a slice of fmt.Stringer to a slice of strings.
@@ -86,6 +111,7 @@ type SettingsManager interface {
 	CreateBoolSetting(cfg *BoolConfig, header *fyne.Container) *widget.Check                       // Create a boolean setting widget.
 	CreateTextEntrySetting(cfg *TextEntrySettingConfig, header *fyne.Container) *widget.Entry      // Create a text entry setting widget.
 	CreateButtonWithConfirmationSetting(cfg *ButtonWithConfirmationConfig, header *fyne.Container) // Create a button setting with confirmation dialog widget.
+	CreateAsyncButton(cfg *AsyncButtonConfig, header *fyne.Container) *widget.Button               // Create a button that handles background tasks and UI thread transitions.
 
 	GetApplySettingsButton() *widget.Button                        //GetApplySettingsButton returns the Apply Changes button from the SettingsManager to be used in the UI.
 	SetSettingChangedCallback(settingName string, callback func()) // Set a callback function to be called when a setting changes.
@@ -110,4 +136,11 @@ type SettingsManager interface {
 	HasPendingChange(name string) bool
 	// Refresh triggers all registered refresh functions immediately.
 	Refresh()
+	// CommitSetting atomically reads the current UI value, applies it to the native setter, and updates the baseline.
+	CommitSetting(name string)
+	// ResetSettings atomically clears multiple settings, updates native getters, and resyncs baselines.
+	ResetSettings(resets ...SettingReset)
+
+	// SetSettingStatus programmatically updates a setting's status label (thread-safe).
+	SetSettingStatus(name string, message string, importance widget.Importance)
 }

@@ -16,8 +16,9 @@ import (
 )
 
 type managedMockWidget struct {
-	widget    fyne.Disableable
+	widget    fyne.CanvasObject
 	enabledIf func() bool
+	visibleIf func() bool
 }
 
 // MockSettingsManager implements setting.SettingsManager for testing
@@ -28,6 +29,7 @@ type MockSettingsManager struct {
 	checkWidgets   map[string]*widget.Check
 	managedWidgets []managedMockWidget
 	pendingChanges map[string]bool
+	statusLabels   map[string]string // NEW: Mock status tracking
 	refreshFuncs   []func()
 }
 
@@ -37,6 +39,7 @@ func NewMockSettingsManager() *MockSettingsManager {
 		checkWidgets:   make(map[string]*widget.Check),
 		managedWidgets: make([]managedMockWidget, 0),
 		pendingChanges: make(map[string]bool),
+		statusLabels:   make(map[string]string),
 	}
 }
 
@@ -55,12 +58,13 @@ func (m *MockSettingsManager) CreateSettingDescriptionLabel(desc string) fyne.Ca
 func (m *MockSettingsManager) CreateSelectSetting(cfg *setting.SelectConfig, header *fyne.Container) {
 	m.selectWidgets[cfg.Name] = cfg
 	// We don't have a real select widget in the mock yet, but let's track the EnabledIf
-	if cfg.EnabledIf != nil {
+	if cfg.EnabledIf != nil || cfg.VisibleIf != nil {
 		// Mock select widget just to have something to Disable/Enable
 		w := widget.NewSelect(cfg.Options, nil)
 		m.managedWidgets = append(m.managedWidgets, managedMockWidget{
 			widget:    w,
 			enabledIf: cfg.EnabledIf,
+			visibleIf: cfg.VisibleIf,
 		})
 	}
 }
@@ -73,10 +77,11 @@ func (m *MockSettingsManager) CreateBoolSetting(cfg *setting.BoolConfig, header 
 	// We need to store the check widget associated with the config name to retrieve it later
 	m.checkWidgets[cfg.Name] = check
 
-	if cfg.EnabledIf != nil {
+	if cfg.EnabledIf != nil || cfg.VisibleIf != nil {
 		m.managedWidgets = append(m.managedWidgets, managedMockWidget{
 			widget:    check,
 			enabledIf: cfg.EnabledIf,
+			visibleIf: cfg.VisibleIf,
 		})
 	}
 	return check
@@ -85,17 +90,37 @@ func (m *MockSettingsManager) CreateBoolSetting(cfg *setting.BoolConfig, header 
 func (m *MockSettingsManager) CreateTextEntrySetting(cfg *setting.TextEntrySettingConfig, header *fyne.Container) *widget.Entry {
 	// Return a stub entry for tests
 	entry := widget.NewEntry()
-	if cfg.EnabledIf != nil {
+	if cfg.EnabledIf != nil || cfg.VisibleIf != nil {
 		m.managedWidgets = append(m.managedWidgets, managedMockWidget{
 			widget:    entry,
 			enabledIf: cfg.EnabledIf,
+			visibleIf: cfg.VisibleIf,
 		})
 	}
 	return entry
 }
 
 func (m *MockSettingsManager) CreateButtonWithConfirmationSetting(cfg *setting.ButtonWithConfirmationConfig, header *fyne.Container) {
-	// No-op for regression test
+	btn := widget.NewButton("Button", nil)
+	if cfg.EnabledIf != nil || cfg.VisibleIf != nil {
+		m.managedWidgets = append(m.managedWidgets, managedMockWidget{
+			widget:    btn,
+			enabledIf: cfg.EnabledIf,
+			visibleIf: cfg.VisibleIf,
+		})
+	}
+}
+
+func (m *MockSettingsManager) CreateAsyncButton(cfg *setting.AsyncButtonConfig, header *fyne.Container) *widget.Button {
+	btn := widget.NewButton(cfg.ButtonText, nil)
+	if cfg.EnabledIf != nil || cfg.VisibleIf != nil {
+		m.managedWidgets = append(m.managedWidgets, managedMockWidget{
+			widget:    btn,
+			enabledIf: cfg.EnabledIf,
+			visibleIf: cfg.VisibleIf,
+		})
+	}
+	return btn
 }
 
 func (m *MockSettingsManager) GetApplySettingsButton() *widget.Button {
@@ -180,17 +205,45 @@ func (m *MockSettingsManager) SetPendingChange(name string, pending bool) {
 }
 
 func (m *MockSettingsManager) Refresh() {
+	m.refreshWidgetStates()
 	for _, f := range m.refreshFuncs {
 		f()
 	}
 }
 
+func (m *MockSettingsManager) CommitSetting(name string) {
+	// Mock: just clear pending change
+	m.pendingChanges[name] = false
+}
+
+func (m *MockSettingsManager) ResetSettings(resets ...setting.SettingReset) {
+	for _, r := range resets {
+		m.SetValue(r.Name, r.Value)
+		m.pendingChanges[r.Name] = false
+	}
+}
+
+func (m *MockSettingsManager) SetSettingStatus(name string, message string, importance widget.Importance) {
+	m.statusLabels[name] = message
+}
+
 func (m *MockSettingsManager) refreshWidgetStates() {
 	for _, mw := range m.managedWidgets {
-		if mw.enabledIf() {
-			mw.widget.Enable()
-		} else {
-			mw.widget.Disable()
+		if mw.visibleIf != nil {
+			if mw.visibleIf() {
+				mw.widget.Show()
+			} else {
+				mw.widget.Hide()
+			}
+		}
+		if mw.enabledIf != nil {
+			if d, ok := mw.widget.(fyne.Disableable); ok {
+				if mw.enabledIf() {
+					d.Enable()
+				} else {
+					d.Disable()
+				}
+			}
 		}
 	}
 }

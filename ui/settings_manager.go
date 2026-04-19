@@ -24,11 +24,14 @@ type SettingsManager struct {
 	onSettingsSaved     []func()
 	managedWidgets      []managedWidget // Track widgets with EnabledIf conditions
 	widgets             map[string]fyne.CanvasObject
+	statusLabels        map[string]*widget.Label     // NEW: Maps setting names to their status labels
+	applyFuncs          map[string]func(interface{}) // Type-safe wrappers for native apply functions
 }
 
 type managedWidget struct {
-	widget    fyne.Disableable
+	widget    fyne.CanvasObject
 	enabledIf func() bool
+	visibleIf func() bool
 }
 
 // NewSettingsManager creates a new SettingsManager.
@@ -46,8 +49,11 @@ func NewSettingsManager(window fyne.Window) setting.SettingsManager {
 		checkAndEnableApply: nil,
 		applyButton:         nil,
 		prefsWindow:         window,
+		onSettingsSaved:     make([]func(), 0),
 		managedWidgets:      make([]managedWidget, 0),
 		widgets:             make(map[string]fyne.CanvasObject),
+		statusLabels:        make(map[string]*widget.Label),
+		applyFuncs:          make(map[string]func(interface{})),
 	}
 
 	sm.applyButton = createApplyButton(sm)
@@ -71,14 +77,26 @@ func (sm *SettingsManager) SeedBaseline(name string, val interface{}) {
 	sm.registry[name] = val
 }
 
-// refreshWidgetStates evaluates all EnabledIf conditions and updates widget states.
+// refreshWidgetStates evaluates all EnabledIf and VisibleIf conditions and updates widget states.
 func (sm *SettingsManager) refreshWidgetStates() {
 	for _, mw := range sm.managedWidgets {
-		if mw.enabledIf != nil {
-			if mw.enabledIf() {
-				mw.widget.Enable()
+		// Handle Visibility
+		if mw.visibleIf != nil {
+			if mw.visibleIf() {
+				mw.widget.Show()
 			} else {
-				mw.widget.Disable()
+				mw.widget.Hide()
+			}
+		}
+
+		// Handle Enabling (requires fyne.Disableable)
+		if mw.enabledIf != nil {
+			if d, ok := mw.widget.(fyne.Disableable); ok {
+				if mw.enabledIf() {
+					d.Enable()
+				} else {
+					d.Disable()
+				}
 			}
 		}
 	}
@@ -166,10 +184,9 @@ func createApplyButton(sm *SettingsManager) *widget.Button {
 				sm.chgPrefsCallbacks = make(map[string]func())
 			}
 
-			if len(sm.refreshFlags) > 0 && len(sm.refreshFuncs) > 0 {
-				for _, rf := range sm.refreshFuncs {
-					rf()
-				}
+			// Conditional refresh based on dirty flags (evaluated during ApplyFuncs above)
+			if len(sm.refreshFlags) > 0 {
+				sm.Refresh()
 				sm.refreshFlags = make(map[string]bool)
 			}
 		})
@@ -188,6 +205,9 @@ func (sm *SettingsManager) CreateSelectSetting(cfg *setting.SelectConfig, header
 	selectWidget := widget.NewSelect(cfg.Options, func(selected string) {})
 	selectWidget.SetSelectedIndex(cfg.InitialValue.(int))
 	sm.registry[cfg.Name] = cfg.InitialValue.(int)
+	sm.applyFuncs[cfg.Name] = func(val interface{}) {
+		cfg.ApplyFunc(val.(int))
+	}
 	sm.valueGetters[cfg.Name] = func() interface{} {
 		return selectWidget.SelectedIndex()
 	}
@@ -237,11 +257,12 @@ func (sm *SettingsManager) CreateSelectSetting(cfg *setting.SelectConfig, header
 		return -1
 	}
 
-	// Track if it has an EnabledIf condition
-	if cfg.EnabledIf != nil {
+	// Track if it has an EnabledIf or VisibleIf condition
+	if cfg.EnabledIf != nil || cfg.VisibleIf != nil {
 		sm.managedWidgets = append(sm.managedWidgets, managedWidget{
 			widget:    selectWidget,
 			enabledIf: cfg.EnabledIf,
+			visibleIf: cfg.VisibleIf,
 		})
 	}
 
@@ -253,6 +274,9 @@ func (sm *SettingsManager) CreateBoolSetting(cfg *setting.BoolConfig, header *fy
 	check := widget.NewCheck("", nil) // Use empty string, label is CanvasObject
 	check.SetChecked(cfg.InitialValue)
 	sm.registry[cfg.Name] = cfg.InitialValue
+	sm.applyFuncs[cfg.Name] = func(val interface{}) {
+		cfg.ApplyFunc(val.(bool))
+	}
 
 	label := cfg.Label
 	if label == nil {
@@ -288,11 +312,12 @@ func (sm *SettingsManager) CreateBoolSetting(cfg *setting.BoolConfig, header *fy
 		return check.Checked
 	}
 
-	// Track if it has an EnabledIf condition
-	if cfg.EnabledIf != nil {
+	// Track if it has an EnabledIf or VisibleIf condition
+	if cfg.EnabledIf != nil || cfg.VisibleIf != nil {
 		sm.managedWidgets = append(sm.managedWidgets, managedWidget{
 			widget:    check,
 			enabledIf: cfg.EnabledIf,
+			visibleIf: cfg.VisibleIf,
 		})
 	}
 
@@ -306,6 +331,9 @@ func (sm *SettingsManager) CreateTextEntrySetting(cfg *setting.TextEntrySettingC
 	entry.SetPlaceHolder(cfg.PlaceHolder)
 	entry.SetText(cfg.InitialValue)
 	sm.registry[cfg.Name] = cfg.InitialValue
+	sm.applyFuncs[cfg.Name] = func(val interface{}) {
+		cfg.ApplyFunc(val.(string))
+	}
 	sm.valueGetters[cfg.Name] = func() interface{} {
 		return entry.Text
 	}
@@ -325,6 +353,7 @@ func (sm *SettingsManager) CreateTextEntrySetting(cfg *setting.TextEntrySettingC
 	}
 
 	statusLabel := widget.NewLabel("")
+	sm.statusLabels[cfg.Name] = statusLabel
 
 	header.Add(NewSplitRow(label, entry, SplitProportion.OneThird))
 	if cfg.HelpContent != nil {
@@ -338,11 +367,12 @@ func (sm *SettingsManager) CreateTextEntrySetting(cfg *setting.TextEntrySettingC
 		sm.handleTextEntryChanged(s, cfg, entry, statusLabel, &debounceTimer)
 	}
 
-	// Track if it has an EnabledIf condition
-	if cfg.EnabledIf != nil {
+	// Track if it has an EnabledIf or VisibleIf condition
+	if cfg.EnabledIf != nil || cfg.VisibleIf != nil {
 		sm.managedWidgets = append(sm.managedWidgets, managedWidget{
 			widget:    entry,
 			enabledIf: cfg.EnabledIf,
+			visibleIf: cfg.VisibleIf,
 		})
 	}
 
@@ -424,7 +454,8 @@ func (sm *SettingsManager) runTextEntryPostCheck(val string, cfg *setting.TextEn
 				statusLabel.Importance = widget.LowImportance
 			}
 
-			if val != sm.registry[cfg.Name].(string) {
+			baseline, _ := sm.registry[cfg.Name].(string)
+			if val != baseline {
 				sm.SetSettingChangedCallback(cfg.Name, func() {
 					enteredTxt := entry.Text
 					if enteredTxt != sm.registry[cfg.Name].(string) {
@@ -469,6 +500,15 @@ func (sm *SettingsManager) CreateButtonWithConfirmationSetting(cfg *setting.Butt
 
 	if cfg.HelpContent != nil {
 		header.Add(cfg.HelpContent)
+	}
+
+	// Track if it has an EnabledIf or VisibleIf condition
+	if cfg.EnabledIf != nil || cfg.VisibleIf != nil {
+		sm.managedWidgets = append(sm.managedWidgets, managedWidget{
+			widget:    button,
+			enabledIf: cfg.EnabledIf,
+			visibleIf: cfg.VisibleIf,
+		})
 	}
 }
 
@@ -533,4 +573,112 @@ func (sm *SettingsManager) Refresh() {
 	for _, w := range sm.widgets {
 		w.Refresh()
 	}
+}
+
+// CreateAsyncButton creates a button that handles background tasks and UI thread transitions.
+func (sm *SettingsManager) CreateAsyncButton(cfg *setting.AsyncButtonConfig, header *fyne.Container) *widget.Button {
+	btn := widget.NewButton(cfg.ButtonText, nil)
+	btn.Importance = cfg.Importance
+
+	// Define the handler to capture 'btn' properly
+	btn.OnTapped = func() {
+		originalText := btn.Text
+		btn.Disable()
+		sm.applyButton.Disable()
+		btn.SetText(cfg.LoadingText)
+		btn.Refresh()
+
+		go func() {
+			err := cfg.OnPressed()
+			fyne.Do(func() {
+				btn.Enable()
+				btn.SetText(originalText)
+				sm.applyButton.Enable()
+
+				// NEW: Automatic framework-managed status update
+				if cfg.TargetStatusKey != "" {
+					if err != nil {
+						sm.SetSettingStatus(cfg.TargetStatusKey, err.Error(), widget.DangerImportance)
+					} else {
+						sm.SetSettingStatus(cfg.TargetStatusKey, i18n.T("Success"), widget.SuccessImportance)
+					}
+				}
+
+				cfg.OnCompleted(err)
+				if cfg.NeedsRefresh {
+					sm.Refresh()
+				} else {
+					sm.refreshWidgetStates()
+				}
+				sm.checkAndEnableApply()
+			})
+		}()
+	}
+
+	header.Add(btn)
+	sm.widgets[cfg.Name] = btn
+
+	// Track if it has an EnabledIf or VisibleIf condition
+	if cfg.EnabledIf != nil || cfg.VisibleIf != nil {
+		sm.managedWidgets = append(sm.managedWidgets, managedWidget{
+			widget:    btn,
+			enabledIf: cfg.EnabledIf,
+			visibleIf: cfg.VisibleIf,
+		})
+	}
+
+	return btn
+}
+
+// CommitSetting atomically reads the current UI value, applies it to the native setter, and updates the baseline.
+func (sm *SettingsManager) CommitSetting(name string) {
+	val := sm.GetValue(name)
+	if val == nil {
+		return
+	}
+
+	if apply, ok := sm.applyFuncs[name]; ok {
+		apply(val)
+	}
+
+	sm.SeedBaseline(name, val)
+	sm.RemoveSettingChangedCallback(name)
+
+	// Since Commit is usually triggered by a successful verification/on-press,
+	// we always refresh to catch the visibility state change.
+	sm.Refresh()
+	sm.checkAndEnableApply()
+}
+
+// ResetSettings atomically clears multiple settings, updates native getters, and resyncs baselines.
+func (sm *SettingsManager) ResetSettings(resets ...setting.SettingReset) {
+	for _, r := range resets {
+		// 1. Update native Fyne preference
+		if apply, ok := sm.applyFuncs[r.Name]; ok {
+			apply(r.Value)
+		}
+		// 2. Update Baseline
+		sm.SeedBaseline(r.Name, r.Value)
+		// 3. Update UI
+		sm.SetValue(r.Name, r.Value)
+		// 4. Remove pending
+		sm.RemoveSettingChangedCallback(r.Name)
+	}
+
+	sm.Refresh()
+	sm.checkAndEnableApply()
+}
+
+// SetSettingStatus programmatically updates a setting's status label (thread-safe).
+func (sm *SettingsManager) SetSettingStatus(name string, message string, importance widget.Importance) {
+	label, ok := sm.statusLabels[name]
+	if !ok || label == nil {
+		return
+	}
+
+	fyne.Do(func() {
+		label.SetText(message)
+		label.Importance = importance
+		label.Refresh()
+	})
 }
