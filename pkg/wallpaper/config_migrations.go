@@ -179,7 +179,7 @@ func SanitizeFaceSettingsStep(cfg *Config) (bool, error) {
 		// This modifies preference store directly, but doesn't necessarily dirty the struct fields unless we re-read.
 		// However, loadFromPrefs doesn't set struct fields for these prefs, getters read directly.
 		// So this is a side-effect. We return false because `cfg.save()` might not save preferences, only struct JSON?
-		// Wait, `cfg.save()` marshals `Config` to JSON string and stores in `wallhavenConfigPrefKey`.
+		// Wait, `cfg.save()` marshals `Config` to JSON string and stores in `WallhavenConfigPrefKey`.
 		// Face settings are separate keys.
 		// So `cfg.save()` won't help persist Face settings changes if they are separate prefs.
 		// But `SetBool` saves immediately to Fyne prefs.

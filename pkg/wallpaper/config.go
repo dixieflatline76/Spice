@@ -25,28 +25,29 @@ import (
 // Config struct to hold all configuration data
 type Config struct {
 	fyne.Preferences  `json:"-"`      // DO NOT serialize the Fyne interface to JSON (prevents "null" unmarshal panics)
-	WallhavenAPIKey   string          `json:"wallhaven_api_key"`
-	Queries           []ImageQuery    `json:"queries"`            // Unified list of image queries
-	ImageQueries      []ImageQuery    `json:"query_urls"`         // Legacy: List of image queries (Wallhaven)
-	PexelsQueries     []ImageQuery    `json:"pexels_queries"`     // Legacy: List of Pexels image queries
-	WallhavenUsername string          `json:"wallhaven_username"` // Wallhaven username for sync
+	WallhavenAPIKey   string          `json:"-"`
+	Queries           []ImageQuery    `json:"queries"`        // Unified list of image queries
+	ImageQueries      []ImageQuery    `json:"query_urls"`     // Legacy: List of image queries (Wallhaven)
+	PexelsQueries     []ImageQuery    `json:"pexels_queries"` // Legacy: List of Pexels image queries
+	WallhavenUsername string          `json:"-"`              // Wallhaven username for sync
 	assetMgr          *asset.Manager  // Asset manager
 	AvoidSet          map[string]bool `json:"avoid_set"` // Set of image URLs to avoid
 	avoidMap          sync.Map        // Thread-safe map for InAvoidSet checks
 	userid            string
 	mu                sync.RWMutex // Mutex for thread-safe access
 	// Advanced
-	LogLevel                string       `json:"logLevel"`
-	MaxConcurrentProcessors int          `json:"maxConcurrentProcessors"`
+	LogLevel                string       `json:"-"`
+	MaxConcurrentProcessors int          `json:"-"`
 	Tuning                  TuningConfig `json:"tuning"`
 
 	// Callbacks
-	QueryRemovedCallback     func(queryID string) `json:"-"`
-	QueryDisabledCallback    func(queryID string) `json:"-"`
-	FavoritesClearedCallback func()               `json:"-"`
-	ShortcutsDisabled        bool                 `json:"shortcuts_disabled"`
-	WallhavenSyncEnabled     bool                 `json:"wallhaven_sync_enabled"`
-	MonitorPauseStates       map[string]bool      `json:"monitor_pause_states"`
+	QueryRemovedCallback      func(queryID string) `json:"-"`
+	QueryDisabledCallback     func(queryID string) `json:"-"`
+	FavoritesClearedCallback  func()               `json:"-"`
+	ShortcutsDisabled         bool                 `json:"-"`
+	TargetedShortcutsDisabled bool                 `json:"-"`
+	WallhavenSyncEnabled      bool                 `json:"-"`
+	MonitorPauseStates        map[string]bool      `json:"monitor_pause_states"`
 }
 
 // ImageQuery struct to hold the URL of an image and whether it is active
@@ -159,7 +160,7 @@ func (c *Config) loadFromPrefs() error {
 	if err != nil {
 		return err
 	}
-	cfgText := c.StringWithFallback(wallhavenConfigPrefKey, defaultCfg)
+	cfgText := c.StringWithFallback(WallhavenConfigPrefKey, defaultCfg)
 
 	if err := json.Unmarshal([]byte(cfgText), c); err != nil {
 		return err
@@ -928,25 +929,25 @@ func (c *Config) GetShortcutsDisabled() bool {
 	return c.BoolWithFallback(ShortcutsDisabledPrefKey, false) // Default: active
 }
 
-// SetShortcutsDisabled sets the hotkey disabled preference.
+// SetShortcutsDisabled sets whether hotkeys are disabled.
 func (c *Config) SetShortcutsDisabled(disabled bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.SetBool(ShortcutsDisabledPrefKey, disabled)
 }
 
-// GetTargetedShortcutsDisabled returns the targeted hotkey disabled preference.
-func (c *Config) GetTargetedShortcutsDisabled() bool {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.BoolWithFallback(TargetedShortcutsDisabledPrefKey, true) // Default: disabled
-}
-
-// SetTargetedShortcutsDisabled sets the targeted hotkey disabled preference.
+// SetTargetedShortcutsDisabled sets whether targeted hotkeys are disabled.
 func (c *Config) SetTargetedShortcutsDisabled(disabled bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.SetBool(TargetedShortcutsDisabledPrefKey, disabled)
+}
+
+// GetTargetedShortcutsDisabled returns whether targeted hotkeys are disabled.
+func (c *Config) GetTargetedShortcutsDisabled() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.BoolWithFallback(TargetedShortcutsDisabledPrefKey, true) // Default: disabled
 }
 
 // GetAssetManager returns the asset manager
@@ -1011,13 +1012,7 @@ func (c *Config) save() {
 
 	// Build a clean clone for serialization to avoid copying sync primitives (copylocks)
 	clone := &Config{
-		WallhavenAPIKey:         c.WallhavenAPIKey,
-		WallhavenUsername:       c.WallhavenUsername,
-		LogLevel:                c.LogLevel,
-		MaxConcurrentProcessors: c.MaxConcurrentProcessors,
-		Tuning:                  c.Tuning,
-		ShortcutsDisabled:       c.ShortcutsDisabled,
-		WallhavenSyncEnabled:    c.WallhavenSyncEnabled,
+		Tuning: c.Tuning,
 	}
 
 	// Sync avoidMap to AvoidSet for JSON marshaling
@@ -1062,7 +1057,7 @@ func (c *Config) save() {
 	}
 
 	// SetString might internally lock Fyne preferences, but it's safe outside our own c.mu
-	c.SetString(wallhavenConfigPrefKey, string(data))
+	c.SetString(WallhavenConfigPrefKey, string(data))
 }
 
 // IsMonitorPaused returns true if the specified monitor is paused.
@@ -1219,15 +1214,14 @@ func (c *Config) SetWallhavenSyncEnabled(enabled bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	log.Debugf("Config: Setting WallhavenSyncEnabled to: %v", enabled)
-	c.WallhavenSyncEnabled = enabled
-	c.save()
+	c.SetBool(WallhavenSyncEnabledPrefKey, enabled)
 }
 
 // GetWallhavenSyncEnabled returns whether Wallhaven sync is enabled.
 func (c *Config) GetWallhavenSyncEnabled() bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return c.WallhavenSyncEnabled
+	return c.BoolWithFallback(WallhavenSyncEnabledPrefKey, false)
 }
 
 // SetWallhavenUsername sets the Wallhaven username for sync.
@@ -1235,13 +1229,40 @@ func (c *Config) SetWallhavenUsername(username string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	log.Debugf("Config: Setting WallhavenUsername to: '%s'", username)
-	c.WallhavenUsername = username
-	c.save()
+	c.SetString(WallhavenUsernamePrefKey, username)
 }
 
 // GetWallhavenUsername returns the Wallhaven username for sync.
 func (c *Config) GetWallhavenUsername() string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return c.WallhavenUsername
+	return c.StringWithFallback(WallhavenUsernamePrefKey, "")
+}
+
+// SetLogLevel sets the log level for the application.
+func (c *Config) SetLogLevel(level string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.SetString(LogLevelPrefKey, level)
+}
+
+// GetLogLevel returns the log level for the application.
+func (c *Config) GetLogLevel() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.StringWithFallback(LogLevelPrefKey, "info")
+}
+
+// SetMaxConcurrentProcessors sets the maximum number of concurrent processors.
+func (c *Config) SetMaxConcurrentProcessors(max int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.SetInt(MaxConcurrentProcessorsPrefKey, max)
+}
+
+// GetMaxConcurrentProcessors returns the maximum number of concurrent processors.
+func (c *Config) GetMaxConcurrentProcessors() int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.IntWithFallback(MaxConcurrentProcessorsPrefKey, 0)
 }

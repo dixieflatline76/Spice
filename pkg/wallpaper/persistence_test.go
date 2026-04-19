@@ -54,7 +54,7 @@ func TestMonitorPausePersistence(t *testing.T) {
 	var prefJSON string
 	success := false
 	for i := 0; i < 20; i++ {
-		prefJSON = prefs.String(wallhavenConfigPrefKey)
+		prefJSON = prefs.String(WallhavenConfigPrefKey)
 		// Specifically look for the monitor ID followed by true
 		if strings.Contains(prefJSON, "\""+devicePath+"\": true") || strings.Contains(prefJSON, "\""+devicePath+"\":true") {
 			success = true
@@ -79,7 +79,7 @@ func TestMonitorPausePersistence(t *testing.T) {
 	// Wait for async save
 	success = false
 	for i := 0; i < 20; i++ {
-		prefJSON = prefs.String(wallhavenConfigPrefKey)
+		prefJSON = prefs.String(WallhavenConfigPrefKey)
 		// Specifically look for the monitor ID followed by false
 		if strings.Contains(prefJSON, "\""+devicePath+"\": false") || strings.Contains(prefJSON, "\""+devicePath+"\":false") {
 			success = true
