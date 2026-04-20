@@ -278,7 +278,7 @@ func TestSetSettingStatusThreadSafety(t *testing.T) {
 	// Launch background status update
 	done := make(chan bool)
 	go func() {
-		sm.SetSettingStatus("safetyTarget", "External Update", widget.WarningImportance)
+		sm.SetSettingStatus("safetyTarget", "External Update", setting.ImportanceHigh)
 		done <- true
 	}()
 
@@ -287,7 +287,7 @@ func TestSetSettingStatusThreadSafety(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	assert.Equal(t, "External Update", statusLabel.Text)
-	assert.Equal(t, widget.WarningImportance, statusLabel.Importance)
+	assert.Equal(t, widget.HighImportance, statusLabel.Importance)
 }
 
 func TestSchemaRendering(t *testing.T) {

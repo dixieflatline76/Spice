@@ -223,7 +223,7 @@ func (m *MockSettingsManager) ResetSettings(resets ...setting.SettingReset) {
 	}
 }
 
-func (m *MockSettingsManager) SetSettingStatus(name string, message string, importance widget.Importance) {
+func (m *MockSettingsManager) SetSettingStatus(name string, message string, importance setting.Importance) {
 	m.statusLabels[name] = message
 }
 

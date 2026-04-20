@@ -13,11 +13,6 @@ import (
 
 	_ "embed"
 
-	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/data/validation"
-	"fyne.io/fyne/v2/dialog"
-	"fyne.io/fyne/v2/widget"
 	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
@@ -474,292 +469,189 @@ type Collection struct {
 
 // --- UI Integration ---
 
+// --- UI Implementation (Pure Go) ---
+
 func (p *WallhavenProvider) Title() string {
 	return "Wallhaven"
 }
 
-func (p *WallhavenProvider) CreateSettingsPanel(sm setting.SettingsManager) fyne.CanvasObject {
-	whHeader := container.NewVBox()
+// CreateSettingsSchema returns the declarative UI for Wallhaven settings.
+func (p *WallhavenProvider) CreateSettingsSchema(sm setting.SettingsManager) setting.PanelSchema {
+	const apiKeyIdent = "wallhavenAPIKey"
+	const userIdent = "Wallhaven Username"
+	const syncIdent = "WallhavenSyncEnabled"
 
-	p.buildAPIKeySection(sm, whHeader)
-	p.buildUsernameSection(sm, whHeader)
+	return setting.PanelSchema{
+		Sections: []setting.SectionSchema{
+			{
+				Title:       i18n.T("wallhaven API Key"),
+				Description: i18n.T("Restricted content requires an API key."),
+				Items: []setting.ItemSchema{
+					setting.TextItem{
+						Name:         apiKeyIdent,
+						Label:        i18n.T("wallhaven API Key:"),
+						InitialValue: p.cfg.GetWallhavenAPIKey(),
+						PlaceHolder:  i18n.T("Enter your wallhaven.cc API Key"),
+						IsPassword:   true,
+						NeedsRefresh: true,
+						EnabledIf: func() bool {
+							currKey, _ := sm.GetValue(apiKeyIdent).(string)
+							baseKey, _ := sm.GetBaseline(apiKeyIdent).(string)
+							// Visible (Editable) if user typed something new OR if currently unconfigured
+							return currKey != baseKey || currKey == ""
+						},
+						ApplyFunc: func(s string) {
+							p.cfg.SetWallhavenAPIKey(s)
+						},
+					},
+					setting.HyperlinkItem{
+						Text: i18n.T("Restricted content requires an API key. Get one here."),
+						URL:  "https://wallhaven.cc/settings/account",
+					},
+					// Button 1: The Async Verify Button
+					setting.AsyncButtonItem{
+						Name:        "wallhavenVerifyBtn",
+						ButtonText:  i18n.T("Verify & Connect"),
+						LoadingText: i18n.T("Verifying..."),
+						Style:       setting.ButtonStylePrimary,
+						VisibleIf: func() bool {
+							currKey, _ := sm.GetValue(apiKeyIdent).(string)
+							baseKey, _ := sm.GetBaseline(apiKeyIdent).(string)
+							// Visible if user typed something new OR if currently unconfigured
+							return currKey != baseKey || currKey == ""
+						},
+						OnPressed: func() error {
+							currKey, _ := sm.GetValue(apiKeyIdent).(string)
+							ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+							defer cancel()
+							return CheckWallhavenAPIKeyWithContext(ctx, currKey)
+						},
+						NeedsRefresh: true,
+						OnCompleted: func(err error) {
+							if err == nil {
+								sm.CommitSetting(apiKeyIdent)
+							}
+						},
+					},
+					// Button 2: The Synchronous Clear Button
+					setting.ConfirmButtonItem{
+						Name:           "wallhavenClearBtn",
+						ButtonText:     i18n.T("Clear API Key"),
+						ConfirmTitle:   i18n.T("Clear API Key"),
+						ConfirmMessage: i18n.T("Are you sure you want to clear the Wallhaven API Key, Username, and all synced collections?"),
+						Importance:     setting.ImportanceDanger,
+						VisibleIf: func() bool {
+							currKey, _ := sm.GetValue(apiKeyIdent).(string)
+							baseKey, _ := sm.GetBaseline(apiKeyIdent).(string)
+							// Visible only if the current entry matches the verified baseline and is not empty
+							return currKey == baseKey && currKey != ""
+						},
+						OnPressed: func() {
+							p.validatedUsername = ""
+							sm.ResetSettings(
+								setting.SettingReset{Name: apiKeyIdent, Value: ""},
+								setting.SettingReset{Name: userIdent, Value: ""},
+								setting.SettingReset{Name: syncIdent, Value: false},
+							)
+							p.cfg.SyncManagedQueries("Wallhaven", nil)
+						},
+					},
+				},
+			},
+			{
+				Title:       i18n.T("Wallhaven Sync"),
+				Description: i18n.T("Synchronize your Wallhaven collections with Spice."),
+				Items: []setting.ItemSchema{
+					setting.TextItem{
+						Name:          userIdent,
+						Label:         i18n.T("Wallhaven Username:"),
+						InitialValue:  p.cfg.GetWallhavenUsername(),
+						PlaceHolder:   i18n.T("Please enter your wallhaven.cc username"),
+						DisplayStatus: true,
+						NeedsRefresh:  true,
+						EnabledIf: func() bool {
+							val := sm.GetValue(syncIdent)
+							if val == nil {
+								return true
+							}
+							return !val.(bool)
+						},
+						ApplyFunc: func(s string) {
+							p.cfg.SetWallhavenUsername(s)
+						},
+					},
+					setting.AsyncButtonItem{
+						Name:            "VerifyUsername",
+						ButtonText:      i18n.T("Verify Username"),
+						LoadingText:     i18n.T("Verifying..."),
+						Style:           setting.ButtonStylePrimary,
+						TargetStatusKey: userIdent,
+						VisibleIf: func() bool {
+							curr := sm.GetValue(userIdent)
+							base := sm.GetBaseline(userIdent)
+							if curr == nil || base == nil {
+								return false
+							}
+							currStr := curr.(string)
+							baseStr := base.(string)
 
-	// Keep Synced Checkbox
-	syncConfig := setting.BoolConfig{
-		Name:         "WallhavenSyncEnabled",
-		InitialValue: p.cfg.GetWallhavenSyncEnabled(),
-		Label:        sm.CreateSettingTitleLabel(i18n.T("Keep Favorites (collections) Synced:")),
-		HelpContent:  sm.CreateSettingDescriptionLabel(i18n.T("Automatically synchronize your Wallhaven collections with Spice. New collections will be added as inactive queries.")),
-		EnabledIf: func() bool {
-			currentUsername := sm.GetValue("Wallhaven Username")
-			if currentUsername == nil {
-				return false
-			}
-			// Only enable if the current text matches our successfully validated username
-			return p.validatedUsername == currentUsername.(string) && p.validatedUsername != ""
-		},
-		NeedsRefresh: true,
-		ApplyFunc: func(b bool) {
-			p.cfg.SetWallhavenSyncEnabled(b)
+							// Show verify if there is text, AND it doesn't match the in-memory validation, AND it doesn't match the saved persistent baseline.
+							return currStr != "" && currStr != p.validatedUsername && currStr != baseStr
+						},
+						OnPressed: func() error {
+							currUser, _ := sm.GetValue(userIdent).(string)
+							apiKeyVal, _ := sm.GetValue(apiKeyIdent).(string)
 
-			// Perform sync/cleanup on Apply
-			if b && p.cfg.GetWallhavenUsername() == "" {
-				dialog.ShowError(errors.New(i18n.T("Please enter your wallhaven.cc username")), sm.GetSettingsWindow())
-			}
+							if apiKeyVal == "" {
+								return errors.New(i18n.T("API Key required for verification"))
+							}
 
-			// Trigger sync in background.
-			go func() {
-				_ = p.Sync(context.Background())
-				sm.SetSettingStatus("WallhavenSyncEnabled", i18n.T("Favorites Synced"), widget.SuccessImportance)
-				sm.Refresh()
-			}()
-		},
-	}
-	sm.CreateBoolSetting(&syncConfig, whHeader)
+							ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+							defer cancel()
+							return CheckWallhavenUsername(ctx, currUser, apiKeyVal)
+						},
+						NeedsRefresh: true,
+						OnCompleted: func(err error) {
+							if err == nil {
+								p.validatedUsername, _ = sm.GetValue(userIdent).(string)
+								sm.CommitSetting(userIdent)
+							}
+						},
+					},
+					// Keep Synced Checkbox
+					setting.BoolItem{
+						Name:         syncIdent,
+						Label:        i18n.T("Keep Favorites (collections) Synced:"),
+						Help:         i18n.T("Automatically synchronize your Wallhaven collections with Spice. New collections will be added as inactive queries."),
+						InitialValue: p.cfg.GetWallhavenSyncEnabled(),
+						NeedsRefresh: true,
+						EnabledIf: func() bool {
+							curr := sm.GetValue(userIdent)
+							base := sm.GetBaseline(userIdent)
+							if curr == nil || base == nil {
+								return false
+							}
+							currStr := curr.(string)
+							baseStr := base.(string)
 
-	return whHeader
-}
+							// Enable if the text is not empty AND it matches EITHER our active validation OR the previously saved persistent baseline.
+							return currStr != "" && (currStr == p.validatedUsername || currStr == baseStr)
+						},
+						ApplyFunc: func(b bool) {
+							p.cfg.SetWallhavenSyncEnabled(b)
 
-func (p *WallhavenProvider) buildAPIKeySection(sm setting.SettingsManager, whHeader *fyne.Container) {
-	whURL, _ := url.Parse("https://wallhaven.cc/settings/account")
-	wallhavenAPIKeyConfig := setting.TextEntrySettingConfig{
-		Name:          "wallhavenAPIKey",
-		InitialValue:  p.cfg.GetWallhavenAPIKey(),
-		PlaceHolder:   i18n.T("Enter your wallhaven.cc API Key"),
-		Label:         sm.CreateSettingTitleLabel(i18n.T("wallhaven API Key:")),
-		HelpContent:   widget.NewHyperlink(i18n.T("Restricted content requires an API key. Get one here."), whURL),
-		Validator:     validation.NewRegexp(WallhavenAPIKeyRegexp, i18n.T("32 alphanumeric characters required")),
-		NeedsRefresh:  true,
-		DisplayStatus: true,
-		IsPassword:    true,
-		ApplyFunc: func(s string) {
-			p.cfg.SetWallhavenAPIKey(s)
-		},
-	}
-	sm.CreateTextEntrySetting(&wallhavenAPIKeyConfig, whHeader)
-
-	// Button 1: The Async Verify Button
-	sm.CreateAsyncButton(&setting.AsyncButtonConfig{
-		Name:        "wallhavenVerifyBtn",
-		ButtonText:  i18n.T("Verify & Connect"),
-		LoadingText: i18n.T("Verifying..."),
-		Importance:  widget.HighImportance,
-		VisibleIf: func() bool {
-			currKey := sm.GetValue("wallhavenAPIKey").(string)
-			baseKey := sm.GetBaseline("wallhavenAPIKey").(string)
-			// Visible if user typed something new OR if currently unconfigured
-			return currKey != baseKey || currKey == ""
-		},
-		OnPressed: func() error {
-			currKey := sm.GetValue("wallhavenAPIKey").(string)
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-			return CheckWallhavenAPIKeyWithContext(ctx, currKey)
-		},
-		NeedsRefresh: true,
-		OnCompleted: func(err error) {
-			if err != nil {
-				dialog.ShowError(err, sm.GetSettingsWindow())
-			} else {
-				dialog.ShowInformation(i18n.T("Success"), i18n.T("Wallhaven API Key verified and connected sample successfully."), sm.GetSettingsWindow())
-				sm.CommitSetting("wallhavenAPIKey")
-			}
-		},
-	}, whHeader)
-
-	// Button 2: The Synchronous Clear Button
-	sm.CreateButtonWithConfirmationSetting(&setting.ButtonWithConfirmationConfig{
-		Name:           "wallhavenClearBtn",
-		ButtonText:     i18n.T("Clear API Key"),
-		ConfirmTitle:   i18n.T("Clear API Key"),
-		ConfirmMessage: i18n.T("Are you sure you want to clear the Wallhaven API Key, Username, and all synced collections?"),
-		VisibleIf: func() bool {
-			currKey := sm.GetValue("wallhavenAPIKey").(string)
-			baseKey := sm.GetBaseline("wallhavenAPIKey").(string)
-			// Visible only if the current entry matches the verified baseline and is not empty
-			return currKey == baseKey && currKey != ""
-		},
-		OnPressed: func() {
-			p.validatedUsername = ""
-			sm.ResetSettings(
-				setting.SettingReset{Name: "wallhavenAPIKey", Value: ""},
-				setting.SettingReset{Name: "Wallhaven Username", Value: ""},
-				setting.SettingReset{Name: "WallhavenSyncEnabled", Value: false},
-			)
-			p.cfg.SyncManagedQueries("Wallhaven", nil)
-		},
-	}, whHeader)
-}
-
-func (p *WallhavenProvider) buildUsernameSection(sm setting.SettingsManager, whHeader *fyne.Container) {
-	whUsernameConfig := setting.TextEntrySettingConfig{
-		Name:          "Wallhaven Username",
-		InitialValue:  p.cfg.GetWallhavenUsername(),
-		PlaceHolder:   i18n.T("Please enter your wallhaven.cc username"),
-		Label:         sm.CreateSettingTitleLabel(i18n.T("Wallhaven Username:")),
-		Validator:     validation.NewRegexp(WallhavenUsernameRegexp, i18n.T("3 to 20 alphanumeric characters (or -_) required")),
-		NeedsRefresh:  true,
-		DisplayStatus: true,
-		EnabledIf: func() bool {
-			val := sm.GetValue("WallhavenSyncEnabled")
-			if val == nil {
-				return true
-			}
-			return !val.(bool)
-		},
-		ApplyFunc: func(s string) {
-			p.cfg.SetWallhavenUsername(s)
-		},
-	}
-	sm.CreateTextEntrySetting(&whUsernameConfig, whHeader)
-
-	sm.CreateAsyncButton(&setting.AsyncButtonConfig{
-		Name:            "VerifyUsername",
-		ButtonText:      i18n.T("Verify Username"),
-		LoadingText:     i18n.T("Verifying..."),
-		Importance:      widget.HighImportance,
-		TargetStatusKey: "Wallhaven Username",
-		VisibleIf: func() bool {
-			currUser, _ := sm.GetValue("Wallhaven Username").(string)
-			// Hidden if empty OR matches the successfully validated username
-			return currUser != "" && currUser != p.validatedUsername
-		},
-		OnPressed: func() error {
-			currUser, _ := sm.GetValue("Wallhaven Username").(string)
-			apiKeyVal, _ := sm.GetValue("wallhavenAPIKey").(string)
-
-			if apiKeyVal == "" {
-				return errors.New(i18n.T("API Key required for verification"))
-			}
-
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-			return CheckWallhavenUsername(ctx, currUser, apiKeyVal)
-		},
-		NeedsRefresh: true,
-		OnCompleted: func(err error) {
-			if err == nil {
-				p.validatedUsername, _ = sm.GetValue("Wallhaven Username").(string)
-				sm.CommitSetting("Wallhaven Username")
-			}
-		},
-	}, whHeader)
-}
-
-func (p *WallhavenProvider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl string) fyne.CanvasObject {
-	imgQueryList := p.createImgQueryList(sm)
-	sm.RegisterRefreshFunc(imgQueryList.Refresh)
-
-	// Configuration for the Add Query Dialog
-	addCfg := wallpaper.AddQueryConfig{
-		Title:           i18n.T("New Image Query"),
-		URLPlaceholder:  i18n.T("Paste your Wallhaven Search or Collection (Favorites) URL"),
-		URLValidator:    WallhavenURLRegexp,
-		URLErrorMsg:     i18n.T("Invalid wallhaven image query URL pattern"),
-		DescPlaceholder: i18n.T("Add a description"),
-		DescValidator:   WallhavenDescRegexp,
-		DescErrorMsg:    fmt.Sprintf(i18n.T("Description must be between 5 and %d alpha numeric characters long"), wallpaper.MaxDescLength),
-		ValidateFunc: func(url, desc string) error {
-			// Wallhaven specific logic: we need to convert the Web URL to API URL
-			apiURL, _, err := CovertWebToAPIURL(url)
-			if err != nil {
-				return fmt.Errorf("URL conversion error: %v", err)
-			}
-
-			// Check for duplicates
-			queryID := wallpaper.GenerateQueryID(p.ID() + ":" + apiURL)
-			if p.cfg.IsDuplicateID(queryID) {
-				return errors.New(i18n.T("Duplicate query: this URL already exists"))
-			}
-			return nil
-		},
-		AddHandler: func(desc, url string, active bool) (string, error) {
-			// Convert to API URL again (safe as validation passed)
-			apiURL, _, _ := CovertWebToAPIURL(url)
-			return p.cfg.AddImageQuery(desc, apiURL, active)
+							// Trigger sync in background.
+							go func() {
+								_ = p.Sync(context.Background())
+								sm.SetSettingStatus(syncIdent, i18n.T("Favorites Synced"), setting.ImportanceSuccess)
+								sm.Refresh()
+							}()
+						},
+					},
+				},
+			},
 		},
 	}
-
-	// Create "Add" Button using standardized helper
-	addButton := wallpaper.CreateAddQueryButton(
-		i18n.T("Add Wallhaven URL"),
-		sm,
-		addCfg,
-		func() {
-			imgQueryList.Refresh()
-		},
-	)
-
-	// Check for pending URL to auto-open dialog
-	if pendingUrl != "" {
-		// Verify URL is valid for this provider (Double check)
-		if _, err := p.ParseURL(pendingUrl); err == nil {
-			// Trigger the dialog
-			// We delay slightly to ensure the parent container is effectively part of the window tree if that matters,
-			// though Fyne usually handles dialogs fine if window exists.
-			fyne.Do(func() {
-				wallpaper.OpenAddQueryDialog(sm, addCfg, pendingUrl, "", func() {
-					imgQueryList.Refresh()
-				})
-			})
-		}
-	}
-
-	header := container.NewVBox()
-	header.Add(sm.CreateSettingTitleLabel(i18n.T("Wallhaven Queries and Collections (Favorites)")))
-	header.Add(sm.CreateSettingDescriptionLabel(i18n.T("Manage your wallhaven.cc image queries and collections here. Paste your image search or collection URL and Spice will take care of the rest.")))
-	header.Add(addButton)
-	qpContainer := container.NewBorder(header, nil, nil, nil, imgQueryList)
-	return qpContainer
-}
-
-func (p *WallhavenProvider) createImgQueryList(sm setting.SettingsManager) *widget.List {
-	return wallpaper.CreateQueryList(sm, wallpaper.QueryListConfig{
-		GetQueries:    p.cfg.GetImageQueries,
-		EnableQuery:   p.cfg.EnableImageQuery,
-		DisableQuery:  p.cfg.DisableImageQuery,
-		RemoveQuery:   p.cfg.RemoveImageQuery,
-		GetDisplayURL: p.getWebURL,
-	})
-}
-
-// GetProviderIcon returns the provider's icon for the tray menu.
-func (p *WallhavenProvider) GetProviderIcon() fyne.Resource {
-	return fyne.NewStaticResource("Wallhaven", iconData)
-}
-
-func (p *WallhavenProvider) getWebURL(q wallpaper.ImageQuery) *url.URL {
-	apiURL := q.URL
-	// 1. Handle Search URLs
-	if strings.Contains(apiURL, "/api/v1/search") {
-		urlStr := strings.Replace(apiURL, "https://wallhaven.cc/api/v1/search", "https://wallhaven.cc/search", 1)
-		u, err := url.Parse(urlStr)
-		if err != nil {
-			return nil
-		}
-		return u
-	}
-
-	// 2. Handle Collection URLs
-	if APICollectionIDRegex.MatchString(apiURL) {
-		matches := APICollectionIDRegex.FindStringSubmatch(apiURL)
-		if len(matches) >= 3 {
-			// matches[1]=Username, matches[2]=ID
-			urlStr := fmt.Sprintf("https://wallhaven.cc/user/%s/favorites/%s", matches[1], matches[2])
-			u, err := url.Parse(urlStr)
-			if err != nil {
-				return nil
-			}
-			return u
-		}
-	}
-
-	// Fallback/Default
-	u, err := url.Parse(apiURL)
-	if err != nil {
-		return nil
-	}
-	return u
 }
 
 // GetAPIPacing implements the PacedProvider interface to space out API calls.

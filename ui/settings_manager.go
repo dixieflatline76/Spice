@@ -495,6 +495,7 @@ func (sm *SettingsManager) CreateButtonWithConfirmationSetting(cfg *setting.Butt
 			cfg.OnPressed()
 		}
 	})
+	button.Importance = cfg.Importance
 
 	if cfg.Label != nil {
 		header.Add(NewSplitRow(cfg.Label, button, SplitProportion.OneThird))
@@ -602,9 +603,9 @@ func (sm *SettingsManager) CreateAsyncButton(cfg *setting.AsyncButtonConfig, hea
 				// NEW: Automatic framework-managed status update
 				if cfg.TargetStatusKey != "" {
 					if err != nil {
-						sm.SetSettingStatus(cfg.TargetStatusKey, err.Error(), widget.DangerImportance)
+						sm.SetSettingStatus(cfg.TargetStatusKey, err.Error(), setting.ImportanceDanger)
 					} else {
-						sm.SetSettingStatus(cfg.TargetStatusKey, i18n.T("Success"), widget.SuccessImportance)
+						sm.SetSettingStatus(cfg.TargetStatusKey, i18n.T("Success"), setting.ImportanceSuccess)
 					}
 				}
 
@@ -674,15 +675,29 @@ func (sm *SettingsManager) ResetSettings(resets ...setting.SettingReset) {
 }
 
 // SetSettingStatus programmatically updates a setting's status label (thread-safe).
-func (sm *SettingsManager) SetSettingStatus(name string, message string, importance widget.Importance) {
+func (sm *SettingsManager) SetSettingStatus(name string, message string, importance setting.Importance) {
 	label, ok := sm.statusLabels[name]
 	if !ok || label == nil {
 		return
 	}
 
+	fyneImportance := widget.LowImportance
+	switch importance {
+	case setting.ImportanceHigh:
+		fyneImportance = widget.HighImportance
+	case setting.ImportanceMedium:
+		fyneImportance = widget.MediumImportance
+	case setting.ImportanceLow:
+		fyneImportance = widget.LowImportance
+	case setting.ImportanceSuccess:
+		fyneImportance = widget.SuccessImportance
+	case setting.ImportanceDanger:
+		fyneImportance = widget.DangerImportance
+	}
+
 	fyne.Do(func() {
 		label.SetText(message)
-		label.Importance = importance
+		label.Importance = fyneImportance
 		label.Refresh()
 	})
 }
@@ -707,7 +722,7 @@ func (sm *SettingsManager) RenderSchema(schema setting.PanelSchema) fyne.CanvasO
 					Name:         v.Name,
 					InitialValue: v.InitialValue,
 					Label:        sm.CreateSettingTitleLabel(v.Label),
-					HelpContent:  widget.NewLabel(v.Help),
+					HelpContent:  sm.CreateSettingDescriptionLabel(v.Help),
 					OnChanged:    v.OnChanged,
 					ApplyFunc:    v.ApplyFunc,
 					NeedsRefresh: v.NeedsRefresh,
@@ -726,7 +741,7 @@ func (sm *SettingsManager) RenderSchema(schema setting.PanelSchema) fyne.CanvasO
 					InitialValue:       v.InitialValue,
 					PlaceHolder:        v.PlaceHolder,
 					Label:              sm.CreateSettingTitleLabel(v.Label),
-					HelpContent:        widget.NewLabel(v.Help),
+					HelpContent:        sm.CreateSettingDescriptionLabel(v.Help),
 					Validator:          fyneValidator,
 					OnChanged:          v.OnChanged,
 					PostValidateCheck:  v.PostValidateCheck,
@@ -745,7 +760,7 @@ func (sm *SettingsManager) RenderSchema(schema setting.PanelSchema) fyne.CanvasO
 					Options:      v.Options,
 					InitialValue: v.InitialValue,
 					Label:        sm.CreateSettingTitleLabel(v.Label),
-					HelpContent:  widget.NewLabel(v.Help),
+					HelpContent:  sm.CreateSettingDescriptionLabel(v.Help),
 					OnChanged:    v.OnChanged,
 					ApplyFunc:    v.ApplyFunc,
 					NeedsRefresh: v.NeedsRefresh,
@@ -775,6 +790,32 @@ func (sm *SettingsManager) RenderSchema(schema setting.PanelSchema) fyne.CanvasO
 					NeedsRefresh:    v.NeedsRefresh,
 					EnabledIf:       v.EnabledIf,
 					VisibleIf:       v.VisibleIf,
+				}, sectionContainer)
+
+			case setting.ConfirmButtonItem:
+				fyneImportance := widget.LowImportance
+				switch v.Importance {
+				case setting.ImportanceHigh:
+					fyneImportance = widget.HighImportance
+				case setting.ImportanceMedium:
+					fyneImportance = widget.MediumImportance
+				case setting.ImportanceLow:
+					fyneImportance = widget.LowImportance
+				case setting.ImportanceSuccess:
+					fyneImportance = widget.SuccessImportance
+				case setting.ImportanceDanger:
+					fyneImportance = widget.DangerImportance
+				}
+
+				sm.CreateButtonWithConfirmationSetting(&setting.ButtonWithConfirmationConfig{
+					Name:           v.Name,
+					ButtonText:     v.ButtonText,
+					ConfirmTitle:   v.ConfirmTitle,
+					ConfirmMessage: v.ConfirmMessage,
+					Importance:     fyneImportance,
+					OnPressed:      v.OnPressed,
+					EnabledIf:      v.EnabledIf,
+					VisibleIf:      v.VisibleIf,
 				}, sectionContainer)
 
 			case setting.HyperlinkItem:

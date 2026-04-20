@@ -22,9 +22,11 @@ const (
 type Importance string
 
 const (
-	ImportanceHigh   Importance = "high"
-	ImportanceMedium Importance = "medium"
-	ImportanceLow    Importance = "low"
+	ImportanceHigh    Importance = "high"
+	ImportanceMedium  Importance = "medium"
+	ImportanceLow     Importance = "low"
+	ImportanceSuccess Importance = "success"
+	ImportanceDanger  Importance = "danger"
 )
 
 // ItemSchema is the common interface for all declarative UI elements.
@@ -93,6 +95,7 @@ type ButtonWithConfirmationConfig struct {
 	ButtonText     string
 	ConfirmTitle   string
 	ConfirmMessage string
+	Importance     widget.Importance
 	OnPressed      func()
 	EnabledIf      func() bool // Optional: function to determine if the widget should be enabled
 	VisibleIf      func() bool // Optional: function to determine if the widget should be visible
@@ -166,7 +169,7 @@ type SettingsManager interface {
 	ResetSettings(resets ...SettingReset)
 
 	// SetSettingStatus programmatically updates a setting's status label (thread-safe).
-	SetSettingStatus(name string, message string, importance widget.Importance)
+	SetSettingStatus(name string, message string, importance Importance)
 
 	// RenderSchema takes a pure Go UI definition and renders it to a Fyne container.
 	RenderSchema(schema PanelSchema) fyne.CanvasObject
@@ -251,6 +254,20 @@ type AsyncButtonItem struct {
 }
 
 func (a AsyncButtonItem) isItemSchema() {}
+
+// ConfirmButtonItem represents a button that requires confirmation before execution.
+type ConfirmButtonItem struct {
+	Name           string
+	ButtonText     string
+	ConfirmTitle   string
+	ConfirmMessage string
+	Importance     Importance
+	OnPressed      func()
+	EnabledIf      func() bool
+	VisibleIf      func() bool
+}
+
+func (c ConfirmButtonItem) isItemSchema() {}
 
 // HyperlinkItem represents a clickable URL.
 type HyperlinkItem struct {
