@@ -40,9 +40,10 @@ func (sm *SettingsManager) CreateSettingDescriptionLabel(desc string) fyne.Canva
 		}
 	}
 
-	// Indent the description
+	// Standardized Indentation: matching the schema-driven standard
+	padding := theme.Padding() * 3
 	indent := canvas.NewRectangle(color.Transparent)
-	indent.SetMinSize(fyne.NewSize(20, 0)) // 20px indentation
+	indent.SetMinSize(fyne.NewSize(padding, 0))
 
 	return container.NewBorder(nil, nil, indent, nil, rich)
 }

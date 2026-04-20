@@ -227,6 +227,10 @@ func (m *MockSettingsManager) SetSettingStatus(name string, message string, impo
 	m.statusLabels[name] = message
 }
 
+func (m *MockSettingsManager) RenderSchema(schema setting.PanelSchema) fyne.CanvasObject {
+	return nil
+}
+
 func (m *MockSettingsManager) refreshWidgetStates() {
 	for _, mw := range m.managedWidgets {
 		if mw.visibleIf != nil {

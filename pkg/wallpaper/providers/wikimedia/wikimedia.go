@@ -14,15 +14,10 @@ import (
 	"sync"
 	"time"
 
-	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/widget"
-
 	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
 	"github.com/dixieflatline76/Spice/v2/pkg/wallpaper"
-	"github.com/dixieflatline76/Spice/v2/util/log"
 )
 
 //go:embed Wikimedia.png
@@ -60,9 +55,6 @@ func (cb *CircuitBreaker) GetCooldownTime() time.Duration {
 	}
 	return time.Until(cb.openUntil)
 }
-
-// Removed global state to ensure test isolation.
-// CircuitBreaker and semaphores are now managed per-provider instance.
 
 // WikimediaProvider implements ImageProvider for Wikimedia Commons
 type WikimediaProvider struct {
@@ -127,7 +119,6 @@ func (p *WikimediaProvider) IsThrottled() bool {
 }
 
 // ParseURL determines if the input is a Search term, a Category, or a direct URL.
-// It normalizes it into a "search URL" for the API.
 func (p *WikimediaProvider) ParseURL(input string) (string, error) {
 	input = strings.TrimSpace(input)
 	if input == "" {
@@ -138,17 +129,14 @@ func (p *WikimediaProvider) ParseURL(input string) (string, error) {
 		return normalized, nil
 	}
 
-	// 1. Check for Category Match (explicit "Category:" prefix via regex)
 	if normalized, ok, err := p.handleCategoryInput(input); ok || err != nil {
 		return normalized, err
 	}
 
-	// 2. Check for Validation of commons.wikimedia.org domain if http is used
 	if strings.HasPrefix(input, "http") {
 		return p.handleHttpInput(input)
 	}
 
-	// 3. Fallback: Treat as Search Term
 	return "search:" + input, nil
 }
 
@@ -163,10 +151,7 @@ func (p *WikimediaProvider) checkPrefixNormalization(input string) (string, bool
 	if strings.HasPrefix(lowerInput, "page:") {
 		return "page:" + input[5:], true
 	}
-	// Treat "File:" explicitly as a direct file lookup
 	if strings.HasPrefix(lowerInput, "file:") {
-		// Fix idempotency: If input is already normalized (e.g. "file:File:Name"), return as is.
-		// "file:File:" becomes "file:file:" in lowerInput.
 		if strings.HasPrefix(lowerInput, "file:file:") {
 			return input, true
 		}
@@ -181,21 +166,16 @@ func (p *WikimediaProvider) handleCategoryInput(input string) (string, bool, err
 		return "", false, nil
 	}
 
-	// It's a category. Extract proper title if it's a full URL.
 	if strings.HasPrefix(input, "http") {
-		// e.g. https://commons.wikimedia.org/wiki/Category:Nature
 		u, err := url.Parse(input)
 		if err != nil {
 			return "", false, err
 		}
-		// Path is usually /wiki/Category:Name
 		parts := strings.Split(u.Path, "/")
 		if len(parts) > 0 {
-			input = parts[len(parts)-1] // Category:Nature
+			input = parts[len(parts)-1]
 		}
 	}
-	// Return internal scheme for category
-	// Handle case-insensitive removal of "Category:" or "Category%3A"
 	lowerInput := strings.ToLower(input)
 	if strings.HasPrefix(lowerInput, "category:") {
 		return "category:" + input[9:], true, nil
@@ -203,7 +183,6 @@ func (p *WikimediaProvider) handleCategoryInput(input string) (string, bool, err
 	if strings.HasPrefix(lowerInput, "category%3a") {
 		return "category:" + input[11:], true, nil
 	}
-	// Should not happen if regex matched but check just in case
 	return "category:" + strings.TrimPrefix(input, "Category:"), true, nil
 }
 
@@ -213,8 +192,6 @@ func (p *WikimediaProvider) handleHttpInput(input string) (string, error) {
 		return "", errors.New("invalid Wikimedia URL: must be commons.wikimedia.org")
 	}
 
-	// Parse standard Search URLs
-	// e.g. https://commons.wikimedia.org/w/index.php?search=dachshund&title=Special%3AMediaSearch&type=image
 	u, err := url.Parse(input)
 	if err != nil {
 		return "", err
@@ -227,7 +204,6 @@ func (p *WikimediaProvider) handleHttpInput(input string) (string, error) {
 		}
 	}
 
-	// If the user pasted a direct file URL like "https://commons.wikimedia.org/wiki/File:Foo.jpg"
 	if strings.Contains(u.Path, "/wiki/File:") {
 		parts := strings.Split(u.Path, "/wiki/")
 		if len(parts) > 1 {
@@ -235,16 +211,13 @@ func (p *WikimediaProvider) handleHttpInput(input string) (string, error) {
 		}
 	}
 
-	// If the user pasted a generic wiki URL like "https://commons.wikimedia.org/wiki/Commons:Featured_pictures/Astronomy"
 	if strings.Contains(u.Path, "/wiki/") {
 		parts := strings.Split(u.Path, "/wiki/")
 		if len(parts) > 1 {
-			// For generic wiki pages, treat as a "Gallery" collection
 			return "page:" + parts[1], nil
 		}
 	}
 
-	// Fallback for unhandled full URLs
 	return "", errors.New(i18n.T("only 'Category:', 'File:' or component Search URLs are currently supported directly"))
 }
 
@@ -261,7 +234,7 @@ type wikimediaResponse struct {
 			PageID    int    `json:"pageid"`
 			Title     string `json:"title"`
 			ImageInfo []struct {
-				URL         string `json:"url"` // Original URL
+				URL         string `json:"url"`
 				Width       int    `json:"width"`
 				Height      int    `json:"height"`
 				ExtMetadata struct {
@@ -269,7 +242,7 @@ type wikimediaResponse struct {
 						Value string `json:"value"`
 					} `json:"ObjectName"`
 					Artist struct {
-						Value string `json:"value"` // HTML often
+						Value string `json:"value"`
 					} `json:"Artist"`
 					LicenseShortName struct {
 						Value string `json:"value"`
@@ -284,37 +257,18 @@ type wikimediaResponse struct {
 	} `json:"error"`
 }
 
-// WithResolution adds resolution constraints to the query using CirrusSearch syntax.
-// Reference: https://www.mediawiki.org/wiki/Help:CirrusSearch
 func (p *WikimediaProvider) WithResolution(query string, width, height int) string {
-	// Format constraints: filew:>WIDTH fileh:>HEIGHT
 	constraint := fmt.Sprintf(" filew:>%d fileh:>%d", width, height)
-
-	// Case 1: Search Query -> Just append
 	if strings.HasPrefix(query, "search:") {
 		return query + constraint
 	}
-
-	// Case 2: Category Query -> Convert to Search with incategory:""
-	// Categories using "categorymembers" generator don't support filew/fileh filtering easily.
-	// We convert to a search query which does.
 	if strings.HasPrefix(query, "category:") {
 		catName := strings.TrimPrefix(query, "category:")
-		// Quote the category name to handle spaces safely
 		return fmt.Sprintf("search:incategory:\"%s\"%s", catName, constraint)
 	}
-
-	// Case 3: File/Page Query -> No resolution constraint needed
-	if strings.HasPrefix(query, "file:") || strings.HasPrefix(query, "page:") {
-		return query
-	}
-
-	// Fallback (unknown format)
 	return query
 }
 
-// FetchImages fetches images from the API based on the parsed URL.
-// It now supports pagination, extension filtering, landscape orientation filtering, and order preservation.
 func (p *WikimediaProvider) FetchImages(ctx context.Context, query string, page int) ([]provider.Image, error) {
 	var allImages []provider.Image
 	isPageQuery := strings.HasPrefix(query, "page:")
@@ -329,7 +283,6 @@ func (p *WikimediaProvider) FetchImages(ctx context.Context, query string, page 
 		tokens, ok := p.queryTokens[query][page]
 		if !ok {
 			p.mu.Unlock()
-			log.Debugf("Wikimedia (Page %d): No continuation tokens found for query %s. End of results.", page, query)
 			return nil, nil
 		}
 		continueParams = tokens
@@ -387,39 +340,22 @@ func (p *WikimediaProvider) FetchImages(ctx context.Context, query string, page 
 		return nil, errors.New("unknown query format")
 	}
 
-	// Apply pagination tokens
 	for k, v := range continueParams {
 		params.Set(k, v[0])
 	}
 
 	fullURL := apiURL + "?" + params.Encode()
-	log.Debugf("Fetching Wikimedia API (Page %d): %s", page, fullURL)
-
 	var result wikimediaResponse
 	err := p.doWithRetry(ctx, fullURL, &result)
 	if err != nil {
-		log.Printf("Wikimedia API Request Failed after retries: %v", err)
 		return nil, err
 	}
 
-	// Extract pages into a stable order (API usually returns them in a map,
-	// but generator=images generally follows page order in search results or list results).
-	// We'll process them in the order they appear in the result map keys if sorted,
-	// but more importantly, we keep the batch-to-batch order.
-
-	// To be safe and mimic visual order, we process the pages.
-	// Note: Go map iteration is random, so we should collect and sort by some key or rely on API.
-	// However, for generator queries, 'index' or 'sortkey' is often available.
-	// Let's at least keep this batch's images together.
-
-	batchCount := 0
 	for _, pageData := range result.Query.Pages {
 		if len(pageData.ImageInfo) == 0 {
 			continue
 		}
 		info := pageData.ImageInfo[0]
-
-		// Extension Filtering
 		lowerURL := strings.ToLower(info.URL)
 		if strings.HasSuffix(lowerURL, ".svg") || strings.HasSuffix(lowerURL, ".gif") ||
 			strings.HasSuffix(lowerURL, ".pdf") || strings.HasSuffix(lowerURL, ".ogg") ||
@@ -428,11 +364,9 @@ func (p *WikimediaProvider) FetchImages(ctx context.Context, query string, page 
 			continue
 		}
 
-		// Orientation Filtering (Landscape only for Gallery Mode)
 		if isPageQuery && info.Width > 0 && info.Height > 0 {
 			aspect := float64(info.Width) / float64(info.Height)
-			if aspect < 1.1 { // Portrait or Square: skip
-				log.Debugf("Skipping non-landscape image: %s (Aspect: %.2f)", info.URL, aspect)
+			if aspect < 1.1 {
 				continue
 			}
 		}
@@ -453,12 +387,8 @@ func (p *WikimediaProvider) FetchImages(ctx context.Context, query string, page 
 			Width:       info.Width,
 			Height:      info.Height,
 		})
-		batchCount++
 	}
 
-	log.Debugf("Page %d: Found %d valid images", page, batchCount)
-
-	// Prepare next page parameters
 	if result.Continue.Continue != "" {
 		nextParams := url.Values{}
 		nextParams.Set("continue", result.Continue.Continue)
@@ -477,14 +407,6 @@ func (p *WikimediaProvider) FetchImages(ctx context.Context, query string, page 
 		p.mu.Unlock()
 	}
 
-	log.Debugf("Total valid images gathered: %d", len(allImages))
-
-	if len(allImages) == 0 {
-		return nil, nil
-	}
-
-	// Do not artificially hardcap the batch size to 30 anymore,
-	// since we are fetching exactly 1 page of results natively as instructed by generic crawler.
 	return allImages, nil
 }
 
@@ -493,7 +415,6 @@ func (p *WikimediaProvider) doWithRetry(ctx context.Context, fullURL string, tar
 }
 
 func (p *WikimediaProvider) doRequest(ctx context.Context, fullURL string, target interface{}) error {
-
 	req, err := http.NewRequestWithContext(ctx, "GET", fullURL, nil)
 	if err != nil {
 		return err
@@ -513,17 +434,9 @@ func (p *WikimediaProvider) doRequest(ctx context.Context, fullURL string, targe
 	if err := json.NewDecoder(resp.Body).Decode(target); err != nil {
 		return err
 	}
-
-	// Check for Wikimedia API level errors
-	if res, ok := target.(*wikimediaResponse); ok && res.Error != nil {
-		log.Printf("Wikimedia API Error: %s - %s", res.Error.Code, res.Error.Info)
-		return fmt.Errorf("wikimedia api error: %s", res.Error.Info)
-	}
-
 	return nil
 }
 
-// GetClient returns our specialized throttled client for downloads.
 func (p *WikimediaProvider) GetClient() *http.Client {
 	return p.httpClient
 }
@@ -534,8 +447,6 @@ const (
 	WikimediaDefaultCooldown = 15 * time.Minute
 )
 
-// CircuitBreakerRoundTripper handles Wikimedia 429 rate limits defensively.
-// (Normal fair concurrent pacing is successfully handled by the global Job Dispatcher).
 type CircuitBreakerRoundTripper struct {
 	Base http.RoundTripper
 	CB   *CircuitBreaker
@@ -543,9 +454,7 @@ type CircuitBreakerRoundTripper struct {
 
 func (t *CircuitBreakerRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	if t.CB.IsOpen() {
-		cooldown := t.CB.GetCooldownTime().Round(time.Second)
-		log.Printf("Wikimedia CircuitBreaker: OPEN. Skipping request. (Cooldown: %v)", cooldown)
-		return nil, fmt.Errorf("wikimedia circuit breaker: open (%v remaining)", cooldown)
+		return nil, fmt.Errorf("wikimedia circuit breaker: open")
 	}
 
 	var resp *http.Response
@@ -563,36 +472,31 @@ func (t *CircuitBreakerRoundTripper) RoundTrip(req *http.Request) (*http.Respons
 
 	if resp.StatusCode == 429 {
 		resp.Body.Close()
-		coolDown := WikimediaDefaultCooldown // Default long cooldown for 429
+		coolDown := WikimediaDefaultCooldown
 		if ra := resp.Header.Get("Retry-After"); ra != "" {
 			if seconds, err := strconv.Atoi(ra); err == nil {
 				coolDown = time.Duration(seconds) * time.Second
 			}
 		}
-		log.Printf("Wikimedia CircuitBreaker: Rate limited (429). Tripping for %v.", coolDown)
 		t.CB.Trip(coolDown)
-		return nil, fmt.Errorf("wikimedia circuit breaker: rate limited (429), tripped for %v", coolDown)
+		return nil, fmt.Errorf("wikimedia circuit breaker: rate limited (429)")
 	}
 
 	return resp, nil
 }
 
-// GetAPIPacing guarantees fair global API throttling via the central Dispatcher
 func (p *WikimediaProvider) GetAPIPacing() time.Duration {
 	return WikimediaAPIPacing
 }
 
-// GetProcessPacing guarantees fair global Media fetching throttling via the central Dispatcher
 func (p *WikimediaProvider) GetProcessPacing() time.Duration {
 	return WikimediaMediaPacing
 }
 
-// EnrichImage returns the image as is since we fetch full metadata in search
 func (p *WikimediaProvider) EnrichImage(ctx context.Context, img provider.Image) (provider.Image, error) {
 	return img, nil
 }
 
-// GetDownloadHeaders returns the necessary headers for downloading images.
 func (p *WikimediaProvider) GetDownloadHeaders() map[string]string {
 	return map[string]string{
 		"User-Agent": WikimediaUserAgent,
@@ -600,97 +504,50 @@ func (p *WikimediaProvider) GetDownloadHeaders() map[string]string {
 	}
 }
 
-// --- UI Integration ---
+// --- UI Integration (Pure Go) ---
 
 func (p *WikimediaProvider) Title() string {
 	return "Wikimedia"
 }
 
-func (p *WikimediaProvider) CreateSettingsPanel(sm setting.SettingsManager) fyne.CanvasObject {
-	donationURL, _ := url.Parse("https://donate.wikimedia.org/")
-
-	return container.NewVBox(
-		sm.CreateSettingTitleLabel(i18n.T("Wikimedia Commons")),
-		sm.CreateSettingDescriptionLabel(i18n.T("Wikimedia Commons is a media file repository making public domain and freely-licensed educational media content available to everyone.")),
-		widget.NewHyperlink(i18n.T("Donate to Wikimedia"), donationURL),
-	)
-}
-
-func (p *WikimediaProvider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl string) fyne.CanvasObject {
-	imgQueryList := p.createImgQueryList(sm)
-	sm.RegisterRefreshFunc(imgQueryList.Refresh)
-
-	// Create standardized Add Query Config
-	onAdded := func() {
-		imgQueryList.Refresh()
-	}
-
-	addQueryCfg := wallpaper.AddQueryConfig{
-		Title:           i18n.T("New Wikimedia Query"),
-		URLPlaceholder:  i18n.T("Enter Category URL, Search URL, or plain 'category:Name'"),
-		URLValidator:    "", // Custom validation used in ValidateFunc
-		URLErrorMsg:     "",
-		DescPlaceholder: i18n.T("Add a description"),
-		DescValidator:   "", // Basic length validation only
-		DescErrorMsg:    "",
-		ValidateFunc: func(term, desc string) error {
-			if len(desc) < 5 {
-				return errors.New(i18n.T("description too short"))
-			}
-			if len(desc) > wallpaper.MaxDescLength {
-				return errors.New(i18n.T("description too long"))
-			}
-			normalized, err := p.ParseURL(term)
-			if err != nil {
-				return err
-			}
-			id := wallpaper.GenerateQueryID(p.ID() + ":" + normalized)
-			if p.cfg.IsDuplicateID(id) {
-				return errors.New(i18n.T("duplicate query"))
-			}
-			return nil
-		},
-		AddHandler: func(desc, term string, active bool) (string, error) {
-			// Parse/Normalize again to be safe
-			normalized, err := p.ParseURL(term)
-			if err != nil {
-				return "", err
-			}
-			return p.cfg.AddWikimediaQuery(desc, normalized, active)
+// CreateSettingsSchema returns the declarative UI definition for the Wikimedia provider.
+func (p *WikimediaProvider) CreateSettingsSchema() setting.PanelSchema {
+	return setting.PanelSchema{
+		Sections: []setting.SectionSchema{
+			{
+				Title: i18n.T("Wikimedia Commons"),
+				Items: []setting.ItemSchema{
+					setting.LabelItem{
+						Text:       i18n.T("Wikimedia Commons is a media file repository making public domain and freely-licensed educational media content available to everyone."),
+						Importance: setting.ImportanceLow,
+					},
+					setting.HyperlinkItem{
+						Text: i18n.T("Donate to Wikimedia"),
+						URL:  "https://donate.wikimedia.org/",
+					},
+				},
+			},
 		},
 	}
-	addButton := wallpaper.CreateAddQueryButton(
-		i18n.T("Add Wikimedia Query"),
-		sm,
-		addQueryCfg,
-		onAdded,
-	)
-
-	header := container.NewVBox()
-	header.Add(sm.CreateSettingTitleLabel(i18n.T("Wikimedia Commons Queries")))
-	header.Add(sm.CreateSettingDescriptionLabel(i18n.T("Add queries for Wikimedia Commons categories or search results.")))
-	header.Add(addButton)
-
-	// Auto-open if pending URL exists
-	if pendingUrl != "" {
-		fyne.Do(func() {
-			// Delay slightly to ensure window is fully ready/shown
-			time.Sleep(50 * time.Millisecond)
-			wallpaper.OpenAddQueryDialog(sm, addQueryCfg, pendingUrl, "", onAdded)
-		})
-	}
-
-	return container.NewBorder(header, nil, nil, nil, imgQueryList)
 }
 
-func (p *WikimediaProvider) createImgQueryList(sm setting.SettingsManager) *widget.List {
-	return wallpaper.CreateQueryList(sm, wallpaper.QueryListConfig{
-		GetQueries:    p.cfg.GetWikimediaQueries,
-		EnableQuery:   p.cfg.EnableImageQuery,
-		DisableQuery:  p.cfg.DisableImageQuery,
-		RemoveQuery:   p.cfg.RemoveImageQuery,
-		GetDisplayURL: p.getDisplayURL,
-	})
+// Internal helper for use by the Fyne shim
+func (p *WikimediaProvider) validateQueryInternal(term, desc string) error {
+	if len(desc) < 5 {
+		return errors.New(i18n.T("description too short"))
+	}
+	if len(desc) > wallpaper.MaxDescLength {
+		return errors.New(i18n.T("description too long"))
+	}
+	normalized, err := p.ParseURL(term)
+	if err != nil {
+		return err
+	}
+	id := wallpaper.GenerateQueryID(p.ID() + ":" + normalized)
+	if p.cfg.IsDuplicateID(id) {
+		return errors.New(i18n.T("duplicate query"))
+	}
+	return nil
 }
 
 func (p *WikimediaProvider) getDisplayURL(q wallpaper.ImageQuery) *url.URL {
@@ -720,21 +577,10 @@ func init() {
 	})
 }
 
-// sanitizeAttribution removes HTML tags and collapses whitespace.
-// It ensures that weird source strings (like those with newlines or tabs) don't break the UI.
 func sanitizeAttribution(input string) string {
-	// 1. Strip HTML tags
 	re := regexp.MustCompile("<[^>]*>")
 	output := re.ReplaceAllString(input, "")
-
-	// 2. Replace multiple whitespace characters (including newlines and tabs) with a single space
 	reSpace := regexp.MustCompile(`\s+`)
 	output = reSpace.ReplaceAllString(output, " ")
-
 	return strings.TrimSpace(output)
-}
-
-// GetProviderIcon returns the provider's icon for the tray menu.
-func (p *WikimediaProvider) GetProviderIcon() fyne.Resource {
-	return fyne.NewStaticResource("Wikimedia", iconData)
 }

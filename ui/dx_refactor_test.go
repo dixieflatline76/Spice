@@ -1,10 +1,12 @@
 package ui
 
 import (
+	"fmt"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/widget"
@@ -286,4 +288,89 @@ func TestSetSettingStatusThreadSafety(t *testing.T) {
 
 	assert.Equal(t, "External Update", statusLabel.Text)
 	assert.Equal(t, widget.WarningImportance, statusLabel.Importance)
+}
+
+func TestSchemaRendering(t *testing.T) {
+	app := test.NewApp()
+	testWin := app.NewWindow("Test Schema Rendering")
+	sm := NewSettingsManager(testWin)
+
+	// 1. Define a pure Go schema (No Fyne dependencies here!)
+	schema := setting.PanelSchema{
+		Sections: []setting.SectionSchema{
+			{
+				Title:       "General Settings",
+				Description: "Configure basic app behavior",
+				Items: []setting.ItemSchema{
+					setting.BoolItem{
+						Name:         "enableNotifications",
+						Label:        "Enable Notifications",
+						InitialValue: true,
+					},
+					setting.TextItem{
+						Name:         "username",
+						Label:        "Username",
+						InitialValue: "Karl",
+						Validator: func(s string) error {
+							if len(s) < 3 {
+								return fmt.Errorf("too short")
+							}
+							return nil
+						},
+					},
+					setting.HyperlinkItem{
+						Text: "Help",
+						URL:  "https://example.com",
+					},
+					setting.LabelItem{
+						Text: "Static description",
+					},
+					setting.LabelItem{
+						Text:    "Sub Header",
+						IsTitle: true,
+					},
+				},
+			},
+			{
+				Title: "Advanced",
+				Items: []setting.ItemSchema{
+					setting.AsyncButtonItem{
+						Name:       "resetDatabase",
+						ButtonText: "Reset DB",
+						Style:      setting.ButtonStyleDanger,
+					},
+				},
+			},
+		},
+	}
+
+	// 2. Render the schema
+	rendered := sm.RenderSchema(schema)
+
+	// 3. Verify the generated tree
+	assert.NotNil(t, rendered)
+
+	// We expect a main VBox containing 2 sections (VBoxes)
+	mainBox, ok := rendered.(*fyne.Container)
+	assert.True(t, ok)
+	assert.Equal(t, 2, len(mainBox.Objects), "Should have 2 sections")
+
+	// Check registry: The RenderSchema should have registered the widgets
+	assert.NotNil(t, sm.(*SettingsManager).widgets["enableNotifications"])
+	assert.NotNil(t, sm.(*SettingsManager).widgets["username"])
+	assert.NotNil(t, sm.(*SettingsManager).widgets["resetDatabase"])
+
+	// Check widget types
+	check := sm.(*SettingsManager).widgets["enableNotifications"].(*widget.Check)
+	assert.True(t, check.Checked)
+
+	entry := sm.(*SettingsManager).widgets["username"].(*widget.Entry)
+	assert.Equal(t, "Karl", entry.Text)
+
+	// Verify Validator translation
+	assert.NoError(t, entry.Validator("ValidName"))
+	assert.Error(t, entry.Validator("Hi")) // Too short
+
+	btn := sm.(*SettingsManager).widgets["resetDatabase"].(*widget.Button)
+	assert.Equal(t, widget.DangerImportance, btn.Importance)
 }

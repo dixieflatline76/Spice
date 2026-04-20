@@ -2,10 +2,14 @@ package ui
 
 import (
 	"fmt"
+	"net/url"
 	"time"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
+	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
@@ -681,4 +685,136 @@ func (sm *SettingsManager) SetSettingStatus(name string, message string, importa
 		label.Importance = importance
 		label.Refresh()
 	})
+}
+
+// RenderSchema takes a pure Go UI definition and renders it to a Fyne container.
+func (sm *SettingsManager) RenderSchema(schema setting.PanelSchema) fyne.CanvasObject {
+	mainBox := container.NewVBox()
+
+	for _, section := range schema.Sections {
+		sectionContainer := container.NewVBox()
+		if section.Title != "" {
+			sectionContainer.Add(sm.CreateSectionTitleLabel(section.Title))
+		}
+		if section.Description != "" {
+			sectionContainer.Add(sm.CreateSettingDescriptionLabel(section.Description))
+		}
+
+		for _, item := range section.Items {
+			switch v := item.(type) {
+			case setting.BoolItem:
+				sm.CreateBoolSetting(&setting.BoolConfig{
+					Name:         v.Name,
+					InitialValue: v.InitialValue,
+					Label:        sm.CreateSettingTitleLabel(v.Label),
+					HelpContent:  widget.NewLabel(v.Help),
+					OnChanged:    v.OnChanged,
+					ApplyFunc:    v.ApplyFunc,
+					NeedsRefresh: v.NeedsRefresh,
+					EnabledIf:    v.EnabledIf,
+					VisibleIf:    v.VisibleIf,
+				}, sectionContainer)
+
+			case setting.TextItem:
+				var fyneValidator fyne.StringValidator
+				if v.Validator != nil {
+					fyneValidator = v.Validator
+				}
+
+				sm.CreateTextEntrySetting(&setting.TextEntrySettingConfig{
+					Name:               v.Name,
+					InitialValue:       v.InitialValue,
+					PlaceHolder:        v.PlaceHolder,
+					Label:              sm.CreateSettingTitleLabel(v.Label),
+					HelpContent:        widget.NewLabel(v.Help),
+					Validator:          fyneValidator,
+					OnChanged:          v.OnChanged,
+					PostValidateCheck:  v.PostValidateCheck,
+					ApplyFunc:          v.ApplyFunc,
+					NeedsRefresh:       v.NeedsRefresh,
+					DisplayStatus:      v.DisplayStatus,
+					IsPassword:         v.IsPassword,
+					EnabledIf:          v.EnabledIf,
+					VisibleIf:          v.VisibleIf,
+					ValidationDebounce: v.ValidationDebounce,
+				}, sectionContainer)
+
+			case setting.SelectItem:
+				sm.CreateSelectSetting(&setting.SelectConfig{
+					Name:         v.Name,
+					Options:      v.Options,
+					InitialValue: v.InitialValue,
+					Label:        sm.CreateSettingTitleLabel(v.Label),
+					HelpContent:  widget.NewLabel(v.Help),
+					OnChanged:    v.OnChanged,
+					ApplyFunc:    v.ApplyFunc,
+					NeedsRefresh: v.NeedsRefresh,
+					EnabledIf:    v.EnabledIf,
+					VisibleIf:    v.VisibleIf,
+				}, sectionContainer)
+
+			case setting.AsyncButtonItem:
+				importance := widget.LowImportance
+				switch v.Style {
+				case setting.ButtonStylePrimary:
+					importance = widget.HighImportance
+				case setting.ButtonStyleDanger:
+					importance = widget.DangerImportance
+				case setting.ButtonStyleSuccess:
+					importance = widget.SuccessImportance
+				}
+
+				sm.CreateAsyncButton(&setting.AsyncButtonConfig{
+					Name:            v.Name,
+					ButtonText:      v.ButtonText,
+					LoadingText:     v.LoadingText,
+					Importance:      importance,
+					OnPressed:       v.OnPressed,
+					OnCompleted:     v.OnCompleted,
+					TargetStatusKey: v.TargetStatusKey,
+					NeedsRefresh:    v.NeedsRefresh,
+					EnabledIf:       v.EnabledIf,
+					VisibleIf:       v.VisibleIf,
+				}, sectionContainer)
+
+			case setting.HyperlinkItem:
+				u, err := url.Parse(v.URL)
+				if err == nil {
+					sectionContainer.Add(widget.NewHyperlink(v.Text, u))
+				} else {
+					// Fallback for invalid URLs in schema: just show text
+					sectionContainer.Add(widget.NewLabel(v.Text + " (" + v.URL + ")"))
+				}
+
+			case setting.LabelItem:
+				if v.IsTitle {
+					sectionContainer.Add(widget.NewLabelWithStyle(v.Text, fyne.TextAlignLeading, fyne.TextStyle{Bold: true}))
+				} else {
+					var content fyne.CanvasObject
+					if v.Importance == setting.ImportanceLow {
+						// Description style: Muted color using RichText
+						rich := widget.NewRichTextWithText(v.Text)
+						rich.Segments[0].(*widget.TextSegment).Style.ColorName = theme.ColorNamePlaceHolder
+						rich.Wrapping = fyne.TextWrapWord
+						content = rich
+					} else {
+						lbl := widget.NewLabel(v.Text)
+						lbl.Wrapping = fyne.TextWrapWord
+						content = lbl
+					}
+
+					// Standardized Indentation: matching Karl's preference for consistency
+					padding := theme.Padding() * 3 // Normalized to 3x for consistency with legacy descriptions
+					spacer := canvas.NewRectangle(nil)
+					spacer.SetMinSize(fyne.NewSize(padding, 0))
+
+					sectionContainer.Add(container.NewBorder(nil, nil, spacer, nil, content))
+				}
+			}
+		}
+
+		mainBox.Add(sectionContainer)
+	}
+
+	return mainBox
 }

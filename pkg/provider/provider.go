@@ -95,6 +95,14 @@ type ImageProvider interface {
 	CreateQueryPanel(sm setting.SettingsManager, pendingUrl string) fyne.CanvasObject
 }
 
+// SchemaProvider is an optional interface for providers that return a pure-data UI schema
+// instead of a Fyne-dependent CanvasObject.
+type SchemaProvider interface {
+	ImageProvider
+	// CreateSettingsSchema returns the declarative UI definition for the provider's settings.
+	CreateSettingsSchema() setting.PanelSchema
+}
+
 // ResolutionAwareProvider is an optional interface for providers that can filter images based on screen resolution.
 type ResolutionAwareProvider interface {
 	ImageProvider

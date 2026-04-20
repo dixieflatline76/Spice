@@ -8,6 +8,30 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
+// ButtonStyle represents the visual priority of a button in a pure Go way.
+type ButtonStyle string
+
+const (
+	ButtonStyleDefault ButtonStyle = "default"
+	ButtonStylePrimary ButtonStyle = "primary"
+	ButtonStyleDanger  ButtonStyle = "danger"
+	ButtonStyleSuccess ButtonStyle = "success"
+)
+
+// Importance defines the visual weight of a UI element.
+type Importance string
+
+const (
+	ImportanceHigh   Importance = "high"
+	ImportanceMedium Importance = "medium"
+	ImportanceLow    Importance = "low"
+)
+
+// ItemSchema is the common interface for all declarative UI elements.
+type ItemSchema interface {
+	isItemSchema() // Private marker method to ensure only our types implement the interface
+}
+
 // SettingsHelper is the interface that must be implemented by all settings helpers.
 type SettingsHelper interface {
 	CreateSectionTitleLabel(desc string) *widget.Label           // Creates a section title label.
@@ -143,4 +167,104 @@ type SettingsManager interface {
 
 	// SetSettingStatus programmatically updates a setting's status label (thread-safe).
 	SetSettingStatus(name string, message string, importance widget.Importance)
+
+	// RenderSchema takes a pure Go UI definition and renders it to a Fyne container.
+	RenderSchema(schema PanelSchema) fyne.CanvasObject
 }
+
+// PanelSchema is the root of the declarative UI definition.
+type PanelSchema struct {
+	Sections []SectionSchema
+}
+
+// SectionSchema represents a logical grouping of settings.
+type SectionSchema struct {
+	Title       string
+	Description string
+	Items       []ItemSchema
+}
+
+// BoolItem represents a checkbox/toggle.
+type BoolItem struct {
+	Name         string
+	Label        string
+	Help         string
+	InitialValue bool
+	OnChanged    func(bool)
+	ApplyFunc    func(bool)
+	NeedsRefresh bool
+	EnabledIf    func() bool
+	VisibleIf    func() bool
+}
+
+func (b BoolItem) isItemSchema() {}
+
+// TextItem represents a text entry field.
+type TextItem struct {
+	Name               string
+	Label              string
+	Help               string
+	InitialValue       string
+	PlaceHolder        string
+	IsPassword         bool
+	DisplayStatus      bool
+	ValidationDebounce time.Duration
+	Validator          func(string) error // Pure Go validator
+	PostValidateCheck  func(string) error
+	OnChanged          func(string)
+	ApplyFunc          func(string)
+	NeedsRefresh       bool
+	EnabledIf          func() bool
+	VisibleIf          func() bool
+}
+
+func (t TextItem) isItemSchema() {}
+
+// SelectItem represents a dropdown/select field.
+type SelectItem struct {
+	Name         string
+	Label        string
+	Help         string
+	Options      []string
+	InitialValue interface{}
+	OnChanged    func(string, interface{})
+	ApplyFunc    func(interface{})
+	NeedsRefresh bool
+	EnabledIf    func() bool
+	VisibleIf    func() bool
+}
+
+func (s SelectItem) isItemSchema() {}
+
+// AsyncButtonItem represents a button that performs a background task.
+type AsyncButtonItem struct {
+	Name            string
+	ButtonText      string
+	LoadingText     string
+	Style           ButtonStyle
+	TargetStatusKey string
+	OnPressed       func() error
+	OnCompleted     func(error)
+	NeedsRefresh    bool
+	EnabledIf       func() bool
+	VisibleIf       func() bool
+}
+
+func (a AsyncButtonItem) isItemSchema() {}
+
+// HyperlinkItem represents a clickable URL.
+type HyperlinkItem struct {
+	Text string
+	URL  string
+}
+
+func (h HyperlinkItem) isItemSchema() {}
+
+// LabelItem represents static text or a sub-title.
+type LabelItem struct {
+	Text       string
+	IsTitle    bool
+	Importance Importance // Low importance maps to muted description style
+}
+
+func (l LabelItem) isItemSchema() {}
