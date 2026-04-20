@@ -510,8 +510,8 @@ func (p *WikimediaProvider) Title() string {
 	return "Wikimedia"
 }
 
-// CreateSettingsSchema returns the declarative UI definition for the Wikimedia provider.
-func (p *WikimediaProvider) CreateSettingsSchema() setting.PanelSchema {
+// CreateSettingsSchema returns the declarative UI for Wikimedia settings.
+func (p *WikimediaProvider) CreateSettingsSchema(_ setting.SettingsManager) setting.PanelSchema {
 	return setting.PanelSchema{
 		Sections: []setting.SectionSchema{
 			{

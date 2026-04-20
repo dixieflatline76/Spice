@@ -611,8 +611,8 @@ func (p *Provider) FetchImages(ctx context.Context, apiURL string, page int) ([]
 
 // --- UI Implementation (Pure Go) ---
 
-// CreateSettingsSchema returns the favorites management settings layout.
-func (p *Provider) CreateSettingsSchema() setting.PanelSchema {
+// CreateSettingsSchema returns the declarative UI for favorites management.
+func (p *Provider) CreateSettingsSchema(_ setting.SettingsManager) setting.PanelSchema {
 	return setting.PanelSchema{
 		Sections: []setting.SectionSchema{
 			{

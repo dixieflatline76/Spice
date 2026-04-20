@@ -437,7 +437,7 @@ func getIIIFURL(imageID string, width, height int) string {
 
 // --- UI Implementation (Pure Go) ---
 
-// CreateSettingsSchema returns the empty settings definition for the ArtIC provider.
-func (p *Provider) CreateSettingsSchema() setting.PanelSchema {
+// CreateSettingsSchema returns the declarative UI for ArtIC settings.
+func (p *Provider) CreateSettingsSchema(_ setting.SettingsManager) setting.PanelSchema {
 	return setting.PanelSchema{}
 }

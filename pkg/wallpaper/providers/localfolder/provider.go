@@ -167,8 +167,8 @@ func (p *Provider) FetchImages(ctx context.Context, folderPath string, page int)
 	return images, nil
 }
 
-// CreateSettingsSchema returns the declarative UI definition for the Local Folder provider.
-func (p *Provider) CreateSettingsSchema() setting.PanelSchema {
+// CreateSettingsSchema returns the declarative UI for Local Folder settings.
+func (p *Provider) CreateSettingsSchema(_ setting.SettingsManager) setting.PanelSchema {
 	items := []setting.ItemSchema{
 		setting.LabelItem{
 			Text:    i18n.T("Local Folders"),

@@ -507,7 +507,7 @@ func (p *Provider) EnrichImage(ctx context.Context, img provider.Image) (provide
 
 // --- UI Implementation (Pure Go) ---
 
-// CreateSettingsSchema returns the empty settings definition for the MetMuseum provider.
-func (p *Provider) CreateSettingsSchema() setting.PanelSchema {
+// CreateSettingsSchema returns the declarative UI for MetMuseum settings.
+func (p *Provider) CreateSettingsSchema(_ setting.SettingsManager) setting.PanelSchema {
 	return setting.PanelSchema{}
 }

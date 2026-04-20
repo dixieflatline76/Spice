@@ -100,7 +100,7 @@ type ImageProvider interface {
 type SchemaProvider interface {
 	ImageProvider
 	// CreateSettingsSchema returns the declarative UI definition for the provider's settings.
-	CreateSettingsSchema() setting.PanelSchema
+	CreateSettingsSchema(sm setting.SettingsManager) setting.PanelSchema
 }
 
 // ResolutionAwareProvider is an optional interface for providers that can filter images based on screen resolution.

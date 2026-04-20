@@ -350,7 +350,7 @@ func (b *PrefsPanelBuilder) createProviderAccordionItem(p provider.ImageProvider
 func (b *PrefsPanelBuilder) buildProviderContent(p provider.ImageProvider, pendingURL string) fyne.CanvasObject {
 	var settingsPanel fyne.CanvasObject
 	if sp, ok := p.(provider.SchemaProvider); ok {
-		schema := sp.CreateSettingsSchema()
+		schema := sp.CreateSettingsSchema(b.sm)
 		settingsPanel = b.sm.RenderSchema(schema)
 	} else {
 		settingsPanel = p.CreateSettingsPanel(b.sm)

@@ -3,7 +3,6 @@ package pexels
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -15,11 +14,6 @@ import (
 
 	_ "embed"
 
-	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/data/validation"
-	"fyne.io/fyne/v2/dialog"
-	"fyne.io/fyne/v2/widget"
 	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
@@ -365,7 +359,6 @@ func (p *PexelsProvider) mapPexelsImage(photo PexelsPhoto) provider.Image {
 		Attribution: photo.Photographer,
 		Provider:    p.ID(),
 		FileType:    "image/jpeg", // Pexels primarily serves JPEGs
-		// Pexels doesn't require a specific download trigger URL like Unsplash
 	}
 }
 
@@ -408,211 +401,96 @@ type PexelsSrc struct {
 // --- UI Integration ---
 
 func (p *PexelsProvider) Title() string {
-	return "Pexels"
+	return i18n.T("Pexels")
 }
 
-func (p *PexelsProvider) CreateSettingsPanel(sm setting.SettingsManager) fyne.CanvasObject {
-	pexHeader := container.NewVBox()
+// CreateSettingsSchema returns the declarative UI for Pexels settings.
+func (p *PexelsProvider) CreateSettingsSchema(sm setting.SettingsManager) setting.PanelSchema {
+	const pexAPIIdent = "pexelsAPIKey"
 
-	var pexKeyBtn *widget.Button
-
-	// Pexels API Key
-	pexURL, _ := url.Parse("https://www.pexels.com/api/key/")
-	pexelsAPIKeyConfig := setting.TextEntrySettingConfig{
-		Name:          "pexelsAPIKey",
-		InitialValue:  p.cfg.GetPexelsAPIKey(),
-		PlaceHolder:   i18n.T("Enter your Pexels API Key"),
-		Label:         sm.CreateSettingTitleLabel(i18n.T("Pexels API Key:")),
-		HelpContent:   widget.NewHyperlink(i18n.T("Get a free API key from Pexels."), pexURL),
-		Validator:     validation.NewRegexp(wallpaper.PexelsAPIKeyRegexp, i18n.T("Invalid API Key format (56 characters)")),
-		NeedsRefresh:  true,
-		DisplayStatus: true,
-		IsPassword:    true,
-		EnabledIf: func() bool {
-			currentValue := sm.GetValue("pexelsAPIKey")
-			if currentValue == nil {
-				return true
-			}
-			baselineValue := sm.GetBaseline("pexelsAPIKey")
-			if baselineValue == nil {
-				baselineValue = ""
-			}
-
-			curr := currentValue.(string)
-			base := baselineValue.(string)
-
-			// Enabled if empty OR if we're currently editing/clearing (diff from baseline)
-			return curr == "" || curr != base
-		},
-		OnChanged: func(s string) {
-			if pexKeyBtn == nil {
-				return
-			}
-			base := sm.GetBaseline("pexelsAPIKey").(string)
-			if s == base {
-				if s == "" {
-					pexKeyBtn.Hide()
-				} else {
-					pexKeyBtn.SetText(i18n.T("Clear API Key"))
-					pexKeyBtn.Importance = widget.DangerImportance
-					pexKeyBtn.Show()
-				}
-			} else {
-				pexKeyBtn.SetText(i18n.T("Verify & Connect"))
-				pexKeyBtn.Importance = widget.HighImportance
-				if s == "" {
-					pexKeyBtn.Hide()
-				} else {
-					pexKeyBtn.Show()
-				}
-			}
-			pexKeyBtn.Refresh()
-		},
-	}
-
-	// Dynamic update helper for API key button
-	refreshPexelsUI := func() {
-		curr := sm.GetValue("pexelsAPIKey").(string)
-		pexelsAPIKeyConfig.OnChanged(curr)
-	}
-
-	sm.CreateTextEntrySetting(&pexelsAPIKeyConfig, pexHeader)
-
-	// Pexels API Key Action Button
-	pexKeyBtn = widget.NewButton(i18n.T("Verify & Connect"), func() {
-		currKey := sm.GetValue("pexelsAPIKey").(string)
-		baseKey := sm.GetBaseline("pexelsAPIKey").(string)
-
-		if currKey == baseKey && currKey != "" {
-			// State: Clear
-			dialog.NewConfirm(i18n.T("Clear API Key"), i18n.T("Are you sure you want to clear the Pexels API Key?"), func(b bool) {
-				if b {
-					sm.SetValue("pexelsAPIKey", "")
-					p.cfg.SetPexelsAPIKey("")
-					sm.SeedBaseline("pexelsAPIKey", "")
-					sm.GetCheckAndEnableApplyFunc()()
-					sm.Refresh()
-				}
-			}, sm.GetSettingsWindow()).Show()
-			return
-		}
-
-		// State: Verify & Connect
-		pexKeyBtn.Disable()
-		pexKeyBtn.SetText(i18n.T("Verifying..."))
-		go func() {
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-			err := CheckPexelsAPIKeyWithContext(ctx, currKey)
-			fyne.Do(func() {
-				pexKeyBtn.Enable()
-				if err != nil {
-					dialog.ShowError(err, sm.GetSettingsWindow())
-					pexKeyBtn.SetText(i18n.T("Verify & Connect"))
-					return
-				}
-				// Success! Save immediately and lock
-				p.cfg.SetPexelsAPIKey(currKey)
-				sm.SeedBaseline("pexelsAPIKey", currKey)
-				sm.Refresh()
-				refreshPexelsUI()
-			})
-		}()
-	})
-	pexKeyBtn.Importance = widget.HighImportance
-	// Initial visibility
-	initialKey := p.cfg.GetPexelsAPIKey()
-	if initialKey == "" {
-		pexKeyBtn.Hide()
-	} else {
-		pexKeyBtn.SetText(i18n.T("Clear API Key"))
-		pexKeyBtn.Importance = widget.DangerImportance
-	}
-	pexHeader.Add(pexKeyBtn)
-
-	return pexHeader
-}
-
-func (p *PexelsProvider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl string) fyne.CanvasObject {
-	imgQueryList := p.createImgQueryList(sm)
-	sm.RegisterRefreshFunc(imgQueryList.Refresh)
-
-	// Create standardized Add Query Config
-	onAdded := func() {
-		imgQueryList.Refresh()
-	}
-
-	addQueryCfg := wallpaper.AddQueryConfig{
-		Title:           i18n.T("New Pexels Query"),
-		URLPlaceholder:  i18n.T("Pexels Search URL (e.g. https://www.pexels.com/search/nature/)"),
-		URLValidator:    wallpaper.PexelsURLRegexp,
-		URLErrorMsg:     i18n.T("Invalid Pexels URL (search or collection)"),
-		DescPlaceholder: i18n.T("Add a description"),
-		DescValidator:   wallpaper.PexelsDescRegexp,
-		DescErrorMsg:    fmt.Sprintf(i18n.T("Description must be between 5 and %d alpha numeric characters long"), wallpaper.MaxDescLength),
-		ValidateFunc: func(url, desc string) error {
-			// Validate string using Pexels specific logic
-			// Pexels regex validation happens via InputValidator, so we just check duplicates here
-
-			// Check for duplicates
-			queryID := wallpaper.GenerateQueryID(p.ID() + ":" + url)
-			if p.cfg.IsDuplicateID(queryID) {
-				return errors.New(i18n.T("duplicate query: this URL already exists"))
-			}
-			return nil
-		},
-		AddHandler: func(desc, url string, active bool) (string, error) {
-			// Convert Web URL to API URL before saving
-			apiURL, err := p.ParseURL(url)
-			if err != nil {
-				return "", fmt.Errorf("failed to convert URL: %w", err)
-			}
-			return p.cfg.AddPexelsQuery(desc, apiURL, active)
+	return setting.PanelSchema{
+		Sections: []setting.SectionSchema{
+			{
+				Title:       i18n.T("Pexels API Key"),
+				Description: i18n.T("Enter your Pexels API Key to enable high-quality wallpaper search."),
+				Items: []setting.ItemSchema{
+					setting.TextItem{
+						Name:         pexAPIIdent,
+						Label:        i18n.T("API Key:"),
+						InitialValue: p.cfg.GetPexelsAPIKey(),
+						PlaceHolder:  i18n.T("Enter your Pexels API Key"),
+						IsPassword:   true,
+						NeedsRefresh: true,
+						EnabledIf: func() bool {
+							currentValue := sm.GetValue(pexAPIIdent)
+							if currentValue == nil {
+								return true
+							}
+							baselineValue := sm.GetBaseline(pexAPIIdent)
+							if baselineValue == nil {
+								baselineValue = ""
+							}
+							return currentValue.(string) == "" || currentValue.(string) != baselineValue.(string)
+						},
+						ApplyFunc: func(s string) {
+							// Standard apply handled by CommitSetting in OnCompleted of verify button
+							// But we provide this for the main Apply button as well
+							p.cfg.SetPexelsAPIKey(s)
+						},
+					},
+					setting.HyperlinkItem{
+						Text: i18n.T("Get a free API key from Pexels."),
+						URL:  "https://www.pexels.com/api/key/",
+					},
+					// Button 1: Verify & Connect (Visible if curr != base)
+					setting.AsyncButtonItem{
+						Name:        "verifyPexelsKey",
+						ButtonText:  i18n.T("Verify & Connect"),
+						LoadingText: i18n.T("Verifying..."),
+						Style:       setting.ButtonStylePrimary,
+						VisibleIf: func() bool {
+							currSecret := sm.GetValue(pexAPIIdent).(string)
+							baseSecret := sm.GetBaseline(pexAPIIdent).(string)
+							return currSecret != "" && currSecret != baseSecret
+						},
+						OnPressed: func() error {
+							currKey := sm.GetValue(pexAPIIdent).(string)
+							ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+							defer cancel()
+							return CheckPexelsAPIKeyWithContext(ctx, currKey)
+						},
+						OnCompleted: func(err error) {
+							if err == nil {
+								// Success! Commit locally immediately to block editing and show "Clear" button instead
+								sm := sm
+								sm.CommitSetting(pexAPIIdent)
+							}
+						},
+					},
+					// Button 2: Clear API Key (Visible if curr == base && curr != "")
+					setting.AsyncButtonItem{
+						Name:        "clearPexelsKey",
+						ButtonText:  i18n.T("Clear API Key"),
+						LoadingText: i18n.T("Clearing..."),
+						Style:       setting.ButtonStyleDanger,
+						VisibleIf: func() bool {
+							currSecret := sm.GetValue(pexAPIIdent).(string)
+							baseSecret := sm.GetBaseline(pexAPIIdent).(string)
+							return currSecret != "" && currSecret == baseSecret
+						},
+						OnPressed: func() error {
+							// Async button used here just for symmetry and simplified state refresh
+							return nil
+						},
+						OnCompleted: func(_ error) {
+							sm := sm
+							sm.ResetSettings(setting.SettingReset{Name: pexAPIIdent, Value: ""})
+						},
+					},
+				},
+			},
 		},
 	}
-
-	// Create "Add" Button using standardized helper
-	addButton := wallpaper.CreateAddQueryButton(
-		i18n.T("Add Pexels Search"),
-		sm,
-		addQueryCfg,
-		onAdded,
-	)
-
-	header := container.NewVBox()
-	header.Add(sm.CreateSettingTitleLabel(i18n.T("Pexels Queries")))
-	header.Add(sm.CreateSettingDescriptionLabel(i18n.T("Manage your Pexels image queries here.")))
-
-	header.Add(addButton)
-
-	// Auto-open if pending URL exists
-	if pendingUrl != "" {
-		// Normalize URL before showing in modal
-		normalizedUrl := p.NormalizeURL(pendingUrl)
-
-		fyne.Do(func() {
-			// Delay slightly to ensure window is fully ready/shown
-			time.Sleep(50 * time.Millisecond)
-			// Open dialog with pre-filled URL and empty description
-			wallpaper.OpenAddQueryDialog(sm, addQueryCfg, normalizedUrl, "", onAdded)
-		})
-	}
-
-	return container.NewBorder(header, nil, nil, nil, imgQueryList)
-}
-
-func (p *PexelsProvider) createImgQueryList(sm setting.SettingsManager) *widget.List {
-	return wallpaper.CreateQueryList(sm, wallpaper.QueryListConfig{
-		GetQueries:   p.cfg.GetPexelsQueries,
-		EnableQuery:  p.cfg.EnablePexelsQuery,
-		DisableQuery: p.cfg.DisablePexelsQuery,
-		RemoveQuery:  p.cfg.RemovePexelsQuery,
-	})
-}
-
-// GetProviderIcon returns the provider's icon for the tray menu.
-func (p *PexelsProvider) GetProviderIcon() fyne.Resource {
-	return fyne.NewStaticResource("Pexels", iconData)
 }
 
 // GetAPIPacing implements the PacedProvider interface to space out API calls.
