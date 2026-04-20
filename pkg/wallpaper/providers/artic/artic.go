@@ -8,15 +8,10 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
-	"net/url"
-	"sort"
 	"strings"
 	"sync"
 	"time"
 
-	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/widget"
 	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
@@ -35,6 +30,9 @@ type Config interface {
 	GetArtInstituteChicagoQueries() []wallpaper.ImageQuery
 	EnableArtInstituteChicagoQuery(id string) error
 	DisableArtInstituteChicagoQuery(id string) error
+	EnableImageQuery(id string) error
+	DisableImageQuery(id string) error
+	RemoveImageQuery(id string) error
 }
 
 // Provider implements the Art Institute of Chicago image provider.
@@ -285,11 +283,16 @@ func (p *Provider) resolveQueryToIDs(ctx context.Context, query string) ([]int, 
 	}
 
 	// Stability: Sort -> Shuffle -> Cache
-	sort.Ints(ids)
-	if p.cfg.GetImgShuffle() {
-		rand.Shuffle(len(ids), func(i, j int) {
-			ids[i], ids[j] = ids[j], ids[i]
-		})
+	if len(ids) > 0 {
+		idsCopy := make([]int, len(ids))
+		copy(idsCopy, ids)
+
+		if p.cfg.GetImgShuffle() {
+			rand.Shuffle(len(idsCopy), func(i, j int) {
+				idsCopy[i], idsCopy[j] = idsCopy[j], idsCopy[i]
+			})
+		}
+		ids = idsCopy
 	}
 
 	p.idCacheMu.Lock()
@@ -357,10 +360,6 @@ func (p *Provider) fetchArtworkDetails(ctx context.Context, id int) (*provider.I
 	}, nil
 }
 
-func (p *Provider) GetProviderIcon() fyne.Resource {
-	return fyne.NewStaticResource("artic.png", iconData)
-}
-
 func (p *Provider) EnrichImage(ctx context.Context, img provider.Image) (provider.Image, error) {
 	return img, nil // No enrichment needed for AIC currently
 }
@@ -377,91 +376,8 @@ func (p *Provider) GetDownloadHeaders() map[string]string {
 	}
 }
 
-func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl string) fyne.CanvasObject {
-	header := wallpaper.CreateMuseumHeader(
-		"Art Institute of Chicago",
-		"Chicago, IL • USA",
-		i18n.T("CC0 - Public Domain"),
-		"https://www.artic.edu/open-access/open-access-images",
-		i18n.T("One of the world's great art museums, housing icons like Nighthawks and American Gothic."),
-		"https://www.google.com/maps/search/?api=1&query=Art+Institute+of+Chicago",
-		"https://www.artic.edu",
-		"https://sales.artic.edu/donate",
-		sm,
-	)
-
-	// Collection List (Deferred Save Model)
-	listContainer := container.NewVBox()
-
-	// We iterate through our curated tours
-	keys := make([]string, 0, len(p.curatedList.Tours))
-	for k := range p.curatedList.Tours {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-
-	// Helper to find existing query state
-	getDetails := func(key string) (bool, string) {
-		for _, q := range p.cfg.GetArtInstituteChicagoQueries() {
-			if q.URL == key {
-				return q.Active, q.ID
-			}
-		}
-		return false, ""
-	}
-
-	for _, key := range keys {
-		tour := p.curatedList.Tours[key]
-		key := key // shadow for closure
-		active, _ := getDetails(key)
-
-		sm.SeedBaseline(ProviderName+"_"+key, active)
-		check := widget.NewCheck(tour.Name, func(b bool) {
-			if b != sm.GetBaseline(ProviderName+"_"+key).(bool) {
-				// Deferred save logic
-				sm.SetSettingChangedCallback(ProviderName+"_"+key, func() {
-					_, cid := getDetails(key)
-					if b {
-						if cid != "" {
-							if err := p.cfg.EnableArtInstituteChicagoQuery(cid); err != nil {
-								log.Printf("AIC: Failed to enable query %s: %v", key, err)
-							}
-						} else {
-							if _, err := p.cfg.AddArtInstituteChicagoQuery(tour.Name, key, true); err != nil {
-								log.Printf("AIC: Failed to add query %s: %v", tour.Name, err)
-							}
-						}
-					} else {
-						if cid != "" {
-							if err := p.cfg.DisableArtInstituteChicagoQuery(cid); err != nil {
-								log.Printf("AIC: Failed to disable query %s: %v", key, err)
-							}
-						}
-					}
-				})
-			} else {
-				sm.RemoveSettingChangedCallback(ProviderName + "_" + key)
-			}
-			sm.GetCheckAndEnableApplyFunc()()
-		})
-		check.Checked = active
-		listContainer.Add(check)
-	}
-
-	return container.NewVBox(
-		header,
-		widget.NewSeparator(),
-		widget.NewLabelWithStyle(i18n.T("Curated Tours"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-		listContainer,
-	)
-}
-
-func (p *Provider) CreateSettingsPanel(sm setting.SettingsManager) fyne.CanvasObject {
-	return nil // No specific settings like API keys needed for AIC
-}
-
 func (p *Provider) searchArtworkIDs(ctx context.Context, query string) ([]int, error) {
-	searchURL := fmt.Sprintf("%s/artworks/search?q=%s&fields=id,thumbnail&limit=100", APIBaseURL, url.QueryEscape(query))
+	searchURL := fmt.Sprintf("%s/artworks/search?q=%s&fields=id,thumbnail&limit=100", APIBaseURL, strings.ReplaceAll(query, " ", "%20"))
 
 	req, err := http.NewRequestWithContext(ctx, "GET", searchURL, nil)
 	if err != nil {
@@ -517,4 +433,11 @@ func getIIIFURL(imageID string, width, height int) string {
 	// Format: {scheme}://{server}{/prefix}/{identifier}/{region}/{size}/{rotation}/{quality}.{format}
 	// We use full region, and !w,h for "fit within"
 	return fmt.Sprintf("https://www.artic.edu/iiif/2/%s/full/!%d,%d/0/default.jpg", imageID, width, height)
+}
+
+// --- UI Implementation (Pure Go) ---
+
+// CreateSettingsSchema returns the empty settings definition for the ArtIC provider.
+func (p *Provider) CreateSettingsSchema() setting.PanelSchema {
+	return setting.PanelSchema{}
 }

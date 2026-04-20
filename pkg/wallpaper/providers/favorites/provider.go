@@ -10,14 +10,11 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
 
-	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/storage"
-	"fyne.io/fyne/v2/widget"
 	"github.com/dixieflatline76/Spice/v2/config"
 	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
@@ -175,12 +172,20 @@ func (p *Provider) HomeURL() string {
 		log.Printf("Failed to resolve favorites dir: %v", err)
 		return ""
 	}
-	u := storage.NewFileURI(absPath)
-	return u.String()
-}
 
-func (p *Provider) GetProviderIcon() fyne.Resource {
-	return fyne.NewStaticResource(ProviderName, iconData)
+	// Ensure cross-platform URI slashes
+	slashPath := filepath.ToSlash(absPath)
+
+	// Windows absolute paths need a leading slash for a valid file URI path
+	if runtime.GOOS == "windows" && !strings.HasPrefix(slashPath, "/") {
+		slashPath = "/" + slashPath
+	}
+
+	u := &url.URL{
+		Scheme: "file",
+		Path:   slashPath,
+	}
+	return u.String()
 }
 
 func (p *Provider) ParseURL(webURL string) (string, error) {
@@ -291,6 +296,8 @@ func (p *Provider) runWorker() {
 
 // Close stops the worker goroutine. Safe to call multiple times.
 func (p *Provider) Close() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	select {
 	case <-p.stopChan:
 		// Already closed
@@ -602,56 +609,18 @@ func (p *Provider) FetchImages(ctx context.Context, apiURL string, page int) ([]
 	return images, nil
 }
 
-func (p *Provider) CreateSettingsPanel(sm setting.SettingsManager) fyne.CanvasObject {
-	return container.NewVBox(
-		widget.NewLabelWithStyle(i18n.T("Favorites Management"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-		widget.NewLabel(i18n.T("Local favorites are stored persistently in your Spice application folder.")),
-	)
-}
+// --- UI Implementation (Pure Go) ---
 
-func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, _ string) fyne.CanvasObject {
-	// Ensure the favorites query exists in config
-	if len(p.cfg.GetFavoritesQueries()) == 0 {
-		_, _ = p.cfg.AddFavoritesQuery("Favorite Images", wallpaper.FavoritesQueryID, true)
+// CreateSettingsSchema returns the favorites management settings layout.
+func (p *Provider) CreateSettingsSchema() setting.PanelSchema {
+	return setting.PanelSchema{
+		Sections: []setting.SectionSchema{
+			{
+				Items: []setting.ItemSchema{
+					setting.LabelItem{Text: i18n.T("Favorites Management"), IsTitle: true},
+					setting.LabelItem{Text: i18n.T("Local favorites are stored persistently in your Spice application folder."), Importance: setting.ImportanceLow},
+				},
+			},
+		},
 	}
-
-	queryList := wallpaper.CreateQueryList(sm, wallpaper.QueryListConfig{
-		GetQueries:   p.cfg.GetFavoritesQueries,
-		EnableQuery:  p.cfg.EnableImageQuery,
-		DisableQuery: p.cfg.DisableImageQuery,
-		RemoveQuery: func(id string) error {
-			// Instead of removing the query from config, we wipe the folder (Clear All)
-			path := p.rootDir
-			_ = os.RemoveAll(path)
-			_ = os.MkdirAll(path, 0755)
-			log.Println("[Favorites] Wipe requested via UI: folder cleared.")
-
-			p.mu.Lock()
-			p.favMap = make(map[string]bool)
-			p.mu.Unlock()
-
-			if p.cfg.FavoritesClearedCallback != nil {
-				go p.cfg.FavoritesClearedCallback()
-			}
-			return nil
-		},
-		GetDisplayText: func(q wallpaper.ImageQuery) string {
-			return p.GetFavoritesDisplayName()
-		},
-		GetDisplayURL: func(q wallpaper.ImageQuery) *url.URL {
-			if u, err := url.Parse(p.HomeURL()); err == nil {
-				return u
-			}
-			return nil
-		},
-		DeleteLabel:          i18n.T("Clear"),
-		ForceActionEnabled:   true,
-		DeleteConfirmMessage: i18n.T("Are you sure you want to delete all saved favorites?"),
-	})
-	sm.RegisterRefreshFunc(queryList.Refresh)
-
-	return container.NewVBox(
-		widget.NewLabelWithStyle(i18n.T("Favorites:"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-		queryList,
-	)
 }
