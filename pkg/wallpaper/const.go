@@ -118,6 +118,7 @@ type Frequency int
 // Frequency constants
 const (
 	FrequencyNever Frequency = iota
+	Frequency1Minute
 	Frequency5Minutes
 	Frequency15Minutes
 	Frequency30Minutes
@@ -131,6 +132,7 @@ const (
 // FrequencyDurations maps a Frequency to its time.Duration
 var FrequencyDurations = map[Frequency]time.Duration{
 	FrequencyNever:     time.Duration(math.MaxInt64),
+	Frequency1Minute:   1 * time.Minute,
 	Frequency5Minutes:  5 * time.Minute,
 	Frequency15Minutes: 15 * time.Minute,
 	Frequency30Minutes: 30 * time.Minute,
@@ -145,6 +147,8 @@ func (f Frequency) String() string {
 	switch f {
 	case FrequencyNever:
 		return i18n.T("Never")
+	case Frequency1Minute:
+		return i18n.T("Every Minute")
 	case Frequency5Minutes:
 		return i18n.T("Every 5 Minutes")
 	case Frequency15Minutes:
@@ -173,6 +177,7 @@ func (f Frequency) Duration() time.Duration {
 func GetFrequencies() []fmt.Stringer {
 	frequencies := []Frequency{
 		FrequencyNever,
+		Frequency1Minute,
 		Frequency5Minutes,
 		Frequency15Minutes,
 		Frequency30Minutes,

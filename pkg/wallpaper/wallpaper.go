@@ -115,6 +115,10 @@ type Plugin struct {
 	globalFetchCtx    context.Context
 	globalFetchCancel context.CancelFunc
 	globalFetchMu     sync.Mutex
+
+	// Timer Interrupt
+	resetTimerCh chan struct{}
+	tickerCancel context.CancelFunc
 }
 
 var (
@@ -264,6 +268,8 @@ func (wp *Plugin) Init(manager ui.PluginManager) {
 
 	wp.manager = manager
 	wp.cfg = GetConfig(manager.GetPreferences())
+
+	wp.resetTimerCh = make(chan struct{}, 1)
 
 	// Update processor config now that we have it
 	if sip, ok := wp.imgProcessor.(*SmartImageProcessor); ok {
@@ -513,6 +519,10 @@ func (wp *Plugin) Deactivate() {
 func (wp *Plugin) SetNextWallpaper(monitorID int, forceImmediate bool) {
 	log.Debugf("SetNextWallpaper called for monitor %d (Force immediate: %v)", monitorID, forceImmediate)
 
+	if forceImmediate {
+		wp.resetTimer()
+	}
+
 	if monitorID != -1 {
 		wp.dispatch(monitorID, CmdNext)
 		return
@@ -561,6 +571,11 @@ func (wp *Plugin) SetNextWallpaper(monitorID int, forceImmediate bool) {
 // SetPreviousWallpaper goes back.
 func (wp *Plugin) SetPreviousWallpaper(monitorID int, forceImmediate bool) {
 	log.Debugf("SetPreviousWallpaper called for monitor %d (Force immediate: %v)", monitorID, forceImmediate)
+
+	if forceImmediate {
+		wp.resetTimer()
+	}
+
 	wp.dispatch(monitorID, CmdPrev)
 }
 
@@ -638,6 +653,16 @@ func (wp *Plugin) SetTargetedShortcutsDisabled(disabled bool) {
 	wp.cfg.SetTargetedShortcutsDisabled(disabled)
 }
 
+// resetTimer asynchronously triggers a ticker reset if a background loop is running.
+func (wp *Plugin) resetTimer() {
+	if wp.resetTimerCh != nil {
+		select {
+		case wp.resetTimerCh <- struct{}{}:
+		default:
+		}
+	}
+}
+
 func (wp *Plugin) ChangeWallpaperFrequency(newFreq Frequency, silent bool) {
 	if wp.ticker != nil && wp.cfg.GetWallpaperChangeFrequency() == newFreq {
 		// Frequency hasn't changed, do not reset the ticker!
@@ -653,6 +678,9 @@ func (wp *Plugin) ChangeWallpaperFrequency(newFreq Frequency, silent bool) {
 	if wp.ticker != nil {
 		wp.ticker.Stop()
 	}
+	if wp.tickerCancel != nil {
+		wp.tickerCancel()
+	}
 
 	if newFreq != FrequencyNever {
 		// Notify monitors? Generally they just react to Next commands.
@@ -660,15 +688,38 @@ func (wp *Plugin) ChangeWallpaperFrequency(newFreq Frequency, silent bool) {
 		duration := newFreq.Duration()
 		if duration > 0 {
 			wp.ticker = time.NewTicker(duration)
+
+			var loopCtx context.Context
+			if wp.ctx != nil {
+				loopCtx, wp.tickerCancel = context.WithCancel(wp.ctx)
+			} else {
+				loopCtx, wp.tickerCancel = context.WithCancel(context.Background())
+			}
+
 			// Start ticker loop
 			go func() {
 				// We need to capture the current ticker to stop correctly
 				currentTicker := wp.ticker
-				for range currentTicker.C {
-					if wp.ticker != currentTicker {
+				for {
+					select {
+					case <-currentTicker.C:
+						if wp.ticker != currentTicker {
+							return
+						}
+						wp.SetNextWallpaper(-1, false)
+					case <-wp.resetTimerCh:
+						if wp.ticker != currentTicker {
+							return
+						}
+						// Drain any concurrently delivered tick to avoid immediate double-fire
+						select {
+						case <-currentTicker.C:
+						default:
+						}
+						currentTicker.Reset(duration)
+					case <-loopCtx.Done():
 						return
 					}
-					wp.SetNextWallpaper(-1, false)
 				}
 			}()
 		}

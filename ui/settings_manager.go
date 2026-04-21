@@ -122,22 +122,30 @@ func (sm *SettingsManager) SetValue(name string, val interface{}) {
 		return
 	}
 
-	switch v := w.(type) {
-	case *widget.Check:
-		if b, ok := val.(bool); ok {
-			v.SetChecked(b)
+	fyne.Do(func() {
+		switch v := w.(type) {
+		case *widget.Check:
+			if b, ok := val.(bool); ok {
+				v.SetChecked(b)
+				v.Refresh()
+			}
+		case *widget.Entry:
+			if s, ok := val.(string); ok {
+				v.SetText(s)
+				v.Refresh()
+			}
+		case *widget.Select:
+			if i, ok := val.(int); ok {
+				v.SetSelectedIndex(i)
+				v.Refresh()
+			} else if s, ok := val.(string); ok {
+				v.SetSelected(s)
+				v.Refresh()
+			}
 		}
-	case *widget.Entry:
-		if s, ok := val.(string); ok {
-			v.SetText(s)
-		}
-	case *widget.Select:
-		if i, ok := val.(int); ok {
-			v.SetSelectedIndex(i)
-		}
-	}
 
-	sm.refreshWidgetStates()
+		sm.refreshWidgetStates()
+	})
 }
 
 // GetBaseline returns the initial state for a setting.
@@ -210,7 +218,17 @@ func (sm *SettingsManager) CreateSelectSetting(cfg *setting.SelectConfig, header
 	selectWidget.SetSelectedIndex(cfg.InitialValue.(int))
 	sm.registry[cfg.Name] = cfg.InitialValue.(int)
 	sm.applyFuncs[cfg.Name] = func(val interface{}) {
-		cfg.ApplyFunc(val.(int))
+		switch v := val.(type) {
+		case int:
+			cfg.ApplyFunc(v)
+		case string:
+			for i, opt := range cfg.Options {
+				if opt == v {
+					cfg.ApplyFunc(i)
+					return
+				}
+			}
+		}
 	}
 	sm.valueGetters[cfg.Name] = func() interface{} {
 		return selectWidget.SelectedIndex()
@@ -495,6 +513,31 @@ func (sm *SettingsManager) CreateButtonWithConfirmationSetting(cfg *setting.Butt
 			cfg.OnPressed()
 		}
 	})
+	button.Importance = cfg.Importance
+
+	if cfg.Label != nil {
+		header.Add(NewSplitRow(cfg.Label, button, SplitProportion.OneThird))
+	} else {
+		header.Add(button)
+	}
+
+	if cfg.HelpContent != nil {
+		header.Add(cfg.HelpContent)
+	}
+
+	// Track if it has an EnabledIf or VisibleIf condition
+	if cfg.EnabledIf != nil || cfg.VisibleIf != nil {
+		sm.managedWidgets = append(sm.managedWidgets, managedWidget{
+			widget:    button,
+			enabledIf: cfg.EnabledIf,
+			visibleIf: cfg.VisibleIf,
+		})
+	}
+}
+
+// CreateButtonSetting creates a standard button setting widget.
+func (sm *SettingsManager) CreateButtonSetting(cfg *setting.ButtonConfig, header *fyne.Container) {
+	button := widget.NewButton(cfg.ButtonText, cfg.OnPressed)
 	button.Importance = cfg.Importance
 
 	if cfg.Label != nil {
@@ -816,6 +859,34 @@ func (sm *SettingsManager) RenderSchema(schema setting.PanelSchema) fyne.CanvasO
 					OnPressed:      v.OnPressed,
 					EnabledIf:      v.EnabledIf,
 					VisibleIf:      v.VisibleIf,
+					Label:          sm.CreateSettingTitleLabel(v.Label),
+					HelpContent:    sm.CreateSettingDescriptionLabel(v.Help),
+				}, sectionContainer)
+
+			case setting.ButtonItem:
+				fyneImportance := widget.MediumImportance
+				switch v.Importance {
+				case setting.ImportanceHigh:
+					fyneImportance = widget.HighImportance
+				case setting.ImportanceMedium:
+					fyneImportance = widget.MediumImportance
+				case setting.ImportanceLow:
+					fyneImportance = widget.LowImportance
+				case setting.ImportanceSuccess:
+					fyneImportance = widget.SuccessImportance
+				case setting.ImportanceDanger:
+					fyneImportance = widget.DangerImportance
+				}
+
+				sm.CreateButtonSetting(&setting.ButtonConfig{
+					Name:        v.Name,
+					ButtonText:  v.ButtonText,
+					Importance:  fyneImportance,
+					OnPressed:   v.OnPressed,
+					EnabledIf:   v.EnabledIf,
+					VisibleIf:   v.VisibleIf,
+					Label:       sm.CreateSettingTitleLabel(v.Label),
+					HelpContent: sm.CreateSettingDescriptionLabel(v.Help),
 				}, sectionContainer)
 
 			case setting.HyperlinkItem:

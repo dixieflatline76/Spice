@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/widget"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
@@ -101,6 +102,17 @@ func (m *MockSettingsManager) CreateTextEntrySetting(cfg *setting.TextEntrySetti
 }
 
 func (m *MockSettingsManager) CreateButtonWithConfirmationSetting(cfg *setting.ButtonWithConfirmationConfig, header *fyne.Container) {
+	btn := widget.NewButton("Button", nil)
+	if cfg.EnabledIf != nil || cfg.VisibleIf != nil {
+		m.managedWidgets = append(m.managedWidgets, managedMockWidget{
+			widget:    btn,
+			enabledIf: cfg.EnabledIf,
+			visibleIf: cfg.VisibleIf,
+		})
+	}
+}
+
+func (m *MockSettingsManager) CreateButtonSetting(cfg *setting.ButtonConfig, header *fyne.Container) {
 	btn := widget.NewButton("Button", nil)
 	if cfg.EnabledIf != nil || cfg.VisibleIf != nil {
 		m.managedWidgets = append(m.managedWidgets, managedMockWidget{
@@ -228,7 +240,44 @@ func (m *MockSettingsManager) SetSettingStatus(name string, message string, impo
 }
 
 func (m *MockSettingsManager) RenderSchema(schema setting.PanelSchema) fyne.CanvasObject {
-	return nil
+	box := container.NewVBox()
+	for _, s := range schema.Sections {
+		for _, item := range s.Items {
+			switch v := item.(type) {
+			case setting.BoolItem:
+				m.CreateBoolSetting(&setting.BoolConfig{
+					Name:         v.Name,
+					InitialValue: v.InitialValue,
+					ApplyFunc:    v.ApplyFunc,
+					EnabledIf:    v.EnabledIf,
+					VisibleIf:    v.VisibleIf,
+				}, box)
+			case setting.SelectItem:
+				m.CreateSelectSetting(&setting.SelectConfig{
+					Name:         v.Name,
+					InitialValue: v.InitialValue,
+					ApplyFunc:    v.ApplyFunc,
+					EnabledIf:    v.EnabledIf,
+					VisibleIf:    v.VisibleIf,
+				}, box)
+			case setting.ButtonItem:
+				m.CreateButtonSetting(&setting.ButtonConfig{
+					Name:      v.Name,
+					OnPressed: v.OnPressed,
+					EnabledIf: v.EnabledIf,
+					VisibleIf: v.VisibleIf,
+				}, box)
+			case setting.ConfirmButtonItem:
+				m.CreateButtonWithConfirmationSetting(&setting.ButtonWithConfirmationConfig{
+					Name:      v.Name,
+					OnPressed: v.OnPressed,
+					EnabledIf: v.EnabledIf,
+					VisibleIf: v.VisibleIf,
+				}, box)
+			}
+		}
+	}
+	return box
 }
 
 func (m *MockSettingsManager) refreshWidgetStates() {

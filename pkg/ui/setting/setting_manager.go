@@ -115,6 +115,18 @@ type AsyncButtonConfig struct {
 	VisibleIf       func() bool  // Optional: function to determine if the widget should be visible
 }
 
+// ButtonConfig holds configuration for a standard action button.
+type ButtonConfig struct {
+	Name        string
+	Label       fyne.CanvasObject
+	HelpContent fyne.CanvasObject
+	ButtonText  string
+	Importance  widget.Importance
+	OnPressed   func()
+	EnabledIf   func() bool // Optional: function to determine if the widget should be enabled
+	VisibleIf   func() bool // Optional: function to determine if the widget should be visible
+}
+
 // SettingReset holds the payload for an atomic state reset.
 type SettingReset struct {
 	Name  string
@@ -138,6 +150,7 @@ type SettingsManager interface {
 	CreateBoolSetting(cfg *BoolConfig, header *fyne.Container) *widget.Check                       // Create a boolean setting widget.
 	CreateTextEntrySetting(cfg *TextEntrySettingConfig, header *fyne.Container) *widget.Entry      // Create a text entry setting widget.
 	CreateButtonWithConfirmationSetting(cfg *ButtonWithConfirmationConfig, header *fyne.Container) // Create a button setting with confirmation dialog widget.
+	CreateButtonSetting(cfg *ButtonConfig, header *fyne.Container)                                 // Create a standard button setting widget.
 	CreateAsyncButton(cfg *AsyncButtonConfig, header *fyne.Container) *widget.Button               // Create a button that handles background tasks and UI thread transitions.
 
 	GetApplySettingsButton() *widget.Button                        //GetApplySettingsButton returns the Apply Changes button from the SettingsManager to be used in the UI.
@@ -258,6 +271,8 @@ func (a AsyncButtonItem) isItemSchema() {}
 // ConfirmButtonItem represents a button that requires confirmation before execution.
 type ConfirmButtonItem struct {
 	Name           string
+	Label          string
+	Help           string
 	ButtonText     string
 	ConfirmTitle   string
 	ConfirmMessage string
@@ -268,6 +283,20 @@ type ConfirmButtonItem struct {
 }
 
 func (c ConfirmButtonItem) isItemSchema() {}
+
+// ButtonItem represents a standard action button.
+type ButtonItem struct {
+	Name       string
+	Label      string
+	Help       string
+	ButtonText string
+	Importance Importance
+	OnPressed  func()
+	EnabledIf  func() bool
+	VisibleIf  func() bool
+}
+
+func (b ButtonItem) isItemSchema() {}
 
 // HyperlinkItem represents a clickable URL.
 type HyperlinkItem struct {

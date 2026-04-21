@@ -366,7 +366,8 @@ func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 	sm.RegisterRefreshFunc(wp.RefreshImagesAndPulse)
 
 	// 1. Build General Settings
-	generalTab := builder.BuildGeneralTab()
+	generalSchema := builder.BuildGeneralTabSchema()
+	generalTab := container.NewVScroll(sm.RenderSchema(generalSchema))
 
 	// 2. Build Provider Tabs
 	onlineTab, localTab, targetTabIndex := builder.BuildProviderTabs()
