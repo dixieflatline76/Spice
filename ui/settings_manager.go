@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"time"
@@ -760,6 +761,203 @@ func (sm *SettingsManager) RenderSchema(schema setting.PanelSchema) fyne.CanvasO
 
 		for _, item := range section.Items {
 			switch v := item.(type) {
+			case *setting.OAuthPickerItem:
+				statusLabel := widget.NewLabel(i18n.T("Status: Checking..."))
+				var connectBtn *widget.Button
+				var safeFullRefresh func() // Declared early for closure binding
+
+				updateUI := func() {
+					isAuth, isExpired := v.CheckAuthStatus()
+					if isAuth {
+						statusMsg := i18n.T("Status: Authorized (Ready to Select)")
+						if isExpired {
+							statusMsg += " " + i18n.T("(Token Expired)")
+						}
+						statusLabel.SetText(statusMsg)
+						connectBtn.SetText(i18n.T("Disconnect Authorisation"))
+						connectBtn.Importance = widget.DangerImportance
+						connectBtn.OnTapped = func() {
+							err := v.OnDisconnect()
+							if err != nil {
+								dialog.ShowError(err, sm.GetSettingsWindow())
+							}
+							if safeFullRefresh != nil {
+								safeFullRefresh()
+							}
+						}
+					} else {
+						statusLabel.SetText(i18n.T("Status: Not Authorized"))
+						connectBtn.SetText(i18n.T("Authorize Application"))
+						connectBtn.Importance = widget.MediumImportance
+						connectBtn.OnTapped = func() {
+							err := v.OnAuthorize()
+							if err != nil {
+								dialog.ShowError(err, sm.GetSettingsWindow())
+							} else {
+								dialog.ShowInformation(i18n.T("Success"), i18n.T("Authorized!"), sm.GetSettingsWindow())
+								if safeFullRefresh != nil {
+									safeFullRefresh()
+								}
+							}
+						}
+					}
+					connectBtn.Refresh()
+				}
+
+				connectBtn = widget.NewButton("", nil)
+
+				authContainer := container.NewVBox(
+					sm.CreateSettingTitleLabel(v.Label),
+					sm.CreateSettingDescriptionLabel(v.Help),
+					statusLabel,
+					connectBtn,
+					widget.NewSeparator(),
+				)
+
+				pickerContainer := container.NewVBox()
+
+				progressBar := widget.NewProgressBarInfinite()
+				progressBar.Hide()
+
+				pickerStatus := widget.NewLabel("")
+
+				addBtn := widget.NewButton(i18n.T("Select Photos via Web Picker"), nil)
+				cancelBtn := widget.NewButton(i18n.T("Cancel"), nil)
+				cancelBtn.Importance = widget.LowImportance
+				cancelBtn.Hide()
+
+				var cancelFunc context.CancelFunc
+
+				updateAddBtn := func() {
+					isAuth, _ := v.CheckAuthStatus()
+					if isAuth {
+						addBtn.Enable()
+						pickerStatus.SetText("")
+					} else {
+						addBtn.Disable()
+						pickerStatus.SetText(i18n.T("Please Authorize above first."))
+					}
+				}
+
+				safeFullRefresh = func() {
+					updateUI()
+					updateAddBtn()
+				}
+				// Initial state trigger
+				safeFullRefresh()
+
+				cancelBtn.OnTapped = func() {
+					if cancelFunc != nil {
+						cancelFunc()
+						pickerStatus.SetText(i18n.T("Operation cancelled."))
+					}
+					cancelBtn.Hide()
+					progressBar.Hide()
+					addBtn.Show()
+					addBtn.Enable()
+				}
+
+				addBtn.OnTapped = func() {
+					isAuth, _ := v.CheckAuthStatus()
+					if !isAuth {
+						dialog.ShowError(fmt.Errorf("please authorize first"), sm.GetSettingsWindow())
+						return
+					}
+
+					addBtn.Disable()
+					addBtn.Hide()
+					cancelBtn.Show()
+					progressBar.Show()
+
+					updateStatus := func(msg string) {
+						fyne.Do(func() {
+							pickerStatus.SetText(msg)
+						})
+					}
+					updateStatus(i18n.T("Creating Web Session..."))
+
+					ctx, cancel := context.WithCancel(context.Background())
+					cancelFunc = cancel
+
+					go func() {
+						count, guid, err := v.OnLaunchPicker(ctx, updateStatus)
+
+						fyne.Do(func() {
+							cancelBtn.Hide()
+							addBtn.Show()
+							addBtn.Enable()
+							progressBar.Hide()
+							pickerStatus.SetText("")
+							cancelFunc = nil
+
+							if err != nil {
+								if ctx.Err() != context.Canceled {
+									dialog.ShowError(err, sm.GetSettingsWindow())
+									pickerStatus.SetText(i18n.T("Error: ") + err.Error())
+								}
+								return
+							}
+
+							if count == 0 {
+								dialog.ShowError(fmt.Errorf("no photos selected"), sm.GetSettingsWindow())
+								return
+							}
+
+							urlStr := "googlephotos://" + guid
+							defaultDesc := fmt.Sprintf(i18n.T("Collection %s (%d items)"), time.Now().Format("Jan 02 15:04"), count)
+
+							urlEntry := widget.NewEntry()
+							urlEntry.SetText(urlStr)
+							urlEntry.Disable()
+
+							descEntry := widget.NewEntry()
+							descEntry.SetText(defaultDesc)
+
+							activeCheck := widget.NewCheck(i18n.T("Active"), nil)
+							activeCheck.SetChecked(true)
+
+							form := container.NewVBox(
+								widget.NewLabel(i18n.T("Internal ID:")),
+								urlEntry,
+								widget.NewLabel(i18n.T("Description:")),
+								descEntry,
+								activeCheck,
+							)
+
+							d := dialog.NewCustomConfirm(
+								i18n.T("Save Collection"),
+								i18n.T("Save"),
+								i18n.T("Cancel"),
+								form,
+								func(save bool) {
+									if save {
+										if err := v.OnSaveCollection(guid, descEntry.Text, activeCheck.Checked); err != nil {
+											dialog.ShowError(err, sm.GetSettingsWindow())
+										} else {
+											sm.SetRefreshFlag("queries")
+											sm.GetCheckAndEnableApplyFunc()()
+											sm.Refresh()
+										}
+									} else {
+										if v.OnCancelCollection != nil {
+											v.OnCancelCollection(guid)
+										}
+									}
+								},
+								sm.GetSettingsWindow(),
+							)
+							d.Resize(fyne.NewSize(500, 350))
+							d.Show()
+						})
+					}()
+				}
+
+				pickerContainer.Add(container.NewStack(addBtn, cancelBtn))
+				pickerContainer.Add(progressBar)
+				pickerContainer.Add(pickerStatus)
+
+				sectionContainer.Add(container.NewVBox(authContainer, pickerContainer))
+
 			case setting.BoolItem:
 				sm.CreateBoolSetting(&setting.BoolConfig{
 					Name:         v.Name,

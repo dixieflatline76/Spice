@@ -1,6 +1,7 @@
 package setting
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -126,6 +127,27 @@ type ButtonConfig struct {
 	EnabledIf   func() bool // Optional: function to determine if the widget should be enabled
 	VisibleIf   func() bool // Optional: function to determine if the widget should be visible
 }
+
+// OAuthPickerItem defines the contract for complex OAuth sessions and picker workflows.
+type OAuthPickerItem struct {
+	Name  string
+	Label string
+	Help  string
+
+	// Pure Domain Core Logic
+	CheckAuthStatus func() (isAuth bool, isExpired bool)
+	OnAuthorize     func() error
+	OnDisconnect    func() error
+
+	// Async Polling & Download (Takes a pure string callback for UI stream updates)
+	OnLaunchPicker func(ctx context.Context, updateStatus func(string)) (itemCount int, guid string, err error)
+
+	// Collection Persistence Hooks
+	OnSaveCollection   func(guid string, description string, active bool) error
+	OnCancelCollection func(guid string)
+}
+
+func (*OAuthPickerItem) isItemSchema() {}
 
 // SettingReset holds the payload for an atomic state reset.
 type SettingReset struct {
