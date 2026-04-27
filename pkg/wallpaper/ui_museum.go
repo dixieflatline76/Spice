@@ -90,3 +90,17 @@ func CreateMuseumHeader(name, location, licenseText, licenseURL, description, ma
 		actions,
 	)
 }
+
+// asResource converts a provider's abstract icon (bytes or resource) back to a Fyne resource.
+func asResource(icon interface{}, name string) fyne.Resource {
+	if icon == nil {
+		return nil
+	}
+	switch v := icon.(type) {
+	case fyne.Resource:
+		return v
+	case []byte:
+		return fyne.NewStaticResource(name, v)
+	}
+	return nil
+}

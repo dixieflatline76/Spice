@@ -13,7 +13,9 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
+	"github.com/dixieflatline76/Spice/v2/pkg/ui/schema"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
+	"github.com/dixieflatline76/Spice/v2/pkg/wallpaper"
 )
 
 // SettingsManager handles UI elements for settings.
@@ -719,7 +721,7 @@ func (sm *SettingsManager) ResetSettings(resets ...setting.SettingReset) {
 }
 
 // SetSettingStatus programmatically updates a setting's status label (thread-safe).
-func (sm *SettingsManager) SetSettingStatus(name string, message string, importance setting.Importance) {
+func (sm *SettingsManager) SetSettingStatus(name string, message string, importance schema.Importance) {
 	label, ok := sm.statusLabels[name]
 	if !ok || label == nil {
 		return
@@ -727,15 +729,15 @@ func (sm *SettingsManager) SetSettingStatus(name string, message string, importa
 
 	fyneImportance := widget.LowImportance
 	switch importance {
-	case setting.ImportanceHigh:
+	case schema.ImportanceHigh:
 		fyneImportance = widget.HighImportance
-	case setting.ImportanceMedium:
+	case schema.ImportanceMedium:
 		fyneImportance = widget.MediumImportance
-	case setting.ImportanceLow:
+	case schema.ImportanceLow:
 		fyneImportance = widget.LowImportance
-	case setting.ImportanceSuccess:
+	case schema.ImportanceSuccess:
 		fyneImportance = widget.SuccessImportance
-	case setting.ImportanceDanger:
+	case schema.ImportanceDanger:
 		fyneImportance = widget.DangerImportance
 	}
 
@@ -747,10 +749,10 @@ func (sm *SettingsManager) SetSettingStatus(name string, message string, importa
 }
 
 // RenderSchema takes a pure Go UI definition and renders it to a Fyne container.
-func (sm *SettingsManager) RenderSchema(schema setting.PanelSchema) fyne.CanvasObject {
+func (sm *SettingsManager) RenderSchema(p schema.PanelSchema) fyne.CanvasObject {
 	mainBox := container.NewVBox()
 
-	for _, section := range schema.Sections {
+	for _, section := range p.Sections {
 		sectionContainer := container.NewVBox()
 		if section.Title != "" {
 			sectionContainer.Add(sm.CreateSectionTitleLabel(section.Title))
@@ -761,7 +763,7 @@ func (sm *SettingsManager) RenderSchema(schema setting.PanelSchema) fyne.CanvasO
 
 		for _, item := range section.Items {
 			switch v := item.(type) {
-			case *setting.OAuthPickerItem:
+			case schema.OAuthPickerItem:
 				statusLabel := widget.NewLabel(i18n.T("Status: Checking..."))
 				var connectBtn *widget.Button
 				var safeFullRefresh func() // Declared early for closure binding
@@ -958,7 +960,7 @@ func (sm *SettingsManager) RenderSchema(schema setting.PanelSchema) fyne.CanvasO
 
 				sectionContainer.Add(container.NewVBox(authContainer, pickerContainer))
 
-			case setting.BoolItem:
+			case schema.BoolItem:
 				sm.CreateBoolSetting(&setting.BoolConfig{
 					Name:         v.Name,
 					InitialValue: v.InitialValue,
@@ -971,7 +973,7 @@ func (sm *SettingsManager) RenderSchema(schema setting.PanelSchema) fyne.CanvasO
 					VisibleIf:    v.VisibleIf,
 				}, sectionContainer)
 
-			case setting.TextItem:
+			case schema.TextItem:
 				var fyneValidator fyne.StringValidator
 				if v.Validator != nil {
 					fyneValidator = v.Validator
@@ -995,7 +997,7 @@ func (sm *SettingsManager) RenderSchema(schema setting.PanelSchema) fyne.CanvasO
 					ValidationDebounce: v.ValidationDebounce,
 				}, sectionContainer)
 
-			case setting.SelectItem:
+			case schema.SelectItem:
 				sm.CreateSelectSetting(&setting.SelectConfig{
 					Name:         v.Name,
 					Options:      v.Options,
@@ -1009,14 +1011,14 @@ func (sm *SettingsManager) RenderSchema(schema setting.PanelSchema) fyne.CanvasO
 					VisibleIf:    v.VisibleIf,
 				}, sectionContainer)
 
-			case setting.AsyncButtonItem:
+			case schema.AsyncButtonItem:
 				importance := widget.LowImportance
 				switch v.Style {
-				case setting.ButtonStylePrimary:
+				case schema.ButtonStylePrimary:
 					importance = widget.HighImportance
-				case setting.ButtonStyleDanger:
+				case schema.ButtonStyleDanger:
 					importance = widget.DangerImportance
-				case setting.ButtonStyleSuccess:
+				case schema.ButtonStyleSuccess:
 					importance = widget.SuccessImportance
 				}
 
@@ -1033,18 +1035,18 @@ func (sm *SettingsManager) RenderSchema(schema setting.PanelSchema) fyne.CanvasO
 					VisibleIf:       v.VisibleIf,
 				}, sectionContainer)
 
-			case setting.ConfirmButtonItem:
+			case schema.ConfirmButtonItem:
 				fyneImportance := widget.LowImportance
 				switch v.Importance {
-				case setting.ImportanceHigh:
+				case schema.ImportanceHigh:
 					fyneImportance = widget.HighImportance
-				case setting.ImportanceMedium:
+				case schema.ImportanceMedium:
 					fyneImportance = widget.MediumImportance
-				case setting.ImportanceLow:
+				case schema.ImportanceLow:
 					fyneImportance = widget.LowImportance
-				case setting.ImportanceSuccess:
+				case schema.ImportanceSuccess:
 					fyneImportance = widget.SuccessImportance
-				case setting.ImportanceDanger:
+				case schema.ImportanceDanger:
 					fyneImportance = widget.DangerImportance
 				}
 
@@ -1061,18 +1063,18 @@ func (sm *SettingsManager) RenderSchema(schema setting.PanelSchema) fyne.CanvasO
 					HelpContent:    sm.CreateSettingDescriptionLabel(v.Help),
 				}, sectionContainer)
 
-			case setting.ButtonItem:
+			case schema.ButtonItem:
 				fyneImportance := widget.MediumImportance
 				switch v.Importance {
-				case setting.ImportanceHigh:
+				case schema.ImportanceHigh:
 					fyneImportance = widget.HighImportance
-				case setting.ImportanceMedium:
+				case schema.ImportanceMedium:
 					fyneImportance = widget.MediumImportance
-				case setting.ImportanceLow:
+				case schema.ImportanceLow:
 					fyneImportance = widget.LowImportance
-				case setting.ImportanceSuccess:
+				case schema.ImportanceSuccess:
 					fyneImportance = widget.SuccessImportance
-				case setting.ImportanceDanger:
+				case schema.ImportanceDanger:
 					fyneImportance = widget.DangerImportance
 				}
 
@@ -1087,7 +1089,7 @@ func (sm *SettingsManager) RenderSchema(schema setting.PanelSchema) fyne.CanvasO
 					HelpContent: sm.CreateSettingDescriptionLabel(v.Help),
 				}, sectionContainer)
 
-			case setting.HyperlinkItem:
+			case schema.HyperlinkItem:
 				u, err := url.Parse(v.URL)
 				if err == nil {
 					sectionContainer.Add(widget.NewHyperlink(v.Text, u))
@@ -1096,12 +1098,12 @@ func (sm *SettingsManager) RenderSchema(schema setting.PanelSchema) fyne.CanvasO
 					sectionContainer.Add(widget.NewLabel(v.Text + " (" + v.URL + ")"))
 				}
 
-			case setting.LabelItem:
+			case schema.LabelItem:
 				if v.IsTitle {
 					sectionContainer.Add(widget.NewLabelWithStyle(v.Text, fyne.TextAlignLeading, fyne.TextStyle{Bold: true}))
 				} else {
 					var content fyne.CanvasObject
-					if v.Importance == setting.ImportanceLow {
+					if v.Importance == schema.ImportanceLow {
 						// Description style: Muted color using RichText
 						rich := widget.NewRichTextWithText(v.Text)
 						rich.Segments[0].(*widget.TextSegment).Style.ColorName = theme.ColorNamePlaceHolder
@@ -1120,6 +1122,52 @@ func (sm *SettingsManager) RenderSchema(schema setting.PanelSchema) fyne.CanvasO
 
 					sectionContainer.Add(container.NewBorder(nil, nil, spacer, nil, content))
 				}
+
+			case schema.QueryListItem:
+				listCfg := wallpaper.QueryListConfig{
+					GetQueries: func() []wallpaper.ImageQuery {
+						abstracts := v.GetQueries()
+						queries := make([]wallpaper.ImageQuery, len(abstracts))
+						for i, a := range abstracts {
+							queries[i] = wallpaper.ImageQuery{
+								ID:          a.ID,
+								URL:         a.URL,
+								Description: a.Description,
+								Active:      a.Active,
+							}
+						}
+						return queries
+					},
+					EnableQuery:  v.EnableQuery,
+					DisableQuery: v.DisableQuery,
+					RemoveQuery:  v.RemoveQuery,
+					GetDisplayURL: func(q wallpaper.ImageQuery) *url.URL {
+						if v.GetDisplayURL == nil {
+							return nil
+						}
+						return v.GetDisplayURL(schema.Query{
+							ID:          q.ID,
+							URL:         q.URL,
+							Description: q.Description,
+							Active:      q.Active,
+						})
+					},
+				}
+				list := wallpaper.CreateQueryList(sm, listCfg)
+				sm.RegisterRefreshFunc(func() { list.Refresh() })
+				sectionContainer.Add(list)
+
+			case schema.FolderPickerItem:
+				btn := widget.NewButtonWithIcon(v.ButtonText, theme.FolderOpenIcon(), func() {
+					showOSFolderPicker(sm.GetSettingsWindow(), func(path string, err error) {
+						if err != nil || path == "" {
+							return
+						}
+						_ = v.OnFolderSelected(path)
+						sm.Refresh()
+					})
+				})
+				sectionContainer.Add(btn)
 			}
 		}
 

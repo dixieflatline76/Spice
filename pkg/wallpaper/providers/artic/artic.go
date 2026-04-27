@@ -2,18 +2,20 @@ package artic
 
 import (
 	"context"
-	_ "embed" // For go:embed
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"io"
 	"math/rand"
 	"net/http"
+	"sort"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
+	"github.com/dixieflatline76/Spice/v2/pkg/ui/schema"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
 	"github.com/dixieflatline76/Spice/v2/pkg/wallpaper"
 	"github.com/dixieflatline76/Spice/v2/util/log"
@@ -108,12 +110,12 @@ type TourData struct {
 
 func init() {
 	wallpaper.RegisterProvider(ProviderName, func(cfg *wallpaper.Config, client *http.Client) provider.ImageProvider {
-		return NewArtInstituteChicagoProvider(cfg, client)
+		return NewProvider(cfg, client)
 	})
 }
 
-// NewArtInstituteChicagoProvider creates a new AIC provider.
-func NewArtInstituteChicagoProvider(cfg Config, httpClient *http.Client) *Provider {
+// NewProvider creates a new AIC provider.
+func NewProvider(cfg Config, httpClient *http.Client) *Provider {
 	// We wrap the provided client with our strict serialization logic
 	next := httpClient.Transport
 	if next == nil {
@@ -156,6 +158,10 @@ func (p *Provider) Name() string {
 
 func (p *Provider) Title() string {
 	return ProviderTitle
+}
+
+func (p *Provider) GetProviderIcon() interface{} {
+	return iconData
 }
 
 func (p *Provider) GetClient() *http.Client {
@@ -437,7 +443,90 @@ func getIIIFURL(imageID string, width, height int) string {
 
 // --- UI Implementation (Pure Go) ---
 
-// CreateSettingsSchema returns the declarative UI for ArtIC settings.
-func (p *Provider) CreateSettingsSchema(_ setting.SettingsManager) setting.PanelSchema {
-	return setting.PanelSchema{}
+// CreateSettingsPanel returns the declarative UI for ArtIC settings.
+func (p *Provider) CreateSettingsPanel(_ setting.SettingsManager) *schema.PanelSchema {
+	return &schema.PanelSchema{}
 }
+
+// CreateQueryPanel creates the image query management panel.
+func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, _ string) *schema.PanelSchema {
+	// 1. Header Section
+	headerSection := schema.SectionSchema{
+		Items: []schema.ItemSchema{
+			schema.LabelItem{Text: "Art Institute of Chicago", IsTitle: true},
+			schema.LabelItem{Text: "Chicago, IL • USA", Importance: schema.ImportanceLow},
+			schema.HyperlinkItem{
+				Text: i18n.T("CC0 - Public Domain"),
+				URL:  "https://www.artic.edu/open-access/open-access-images",
+			},
+			schema.LabelItem{
+				Text: i18n.T("One of the world's great art museums, housing icons like Nighthawks and American Gothic."),
+			},
+			schema.ButtonItem{
+				Name:       "aic_web",
+				ButtonText: i18n.T("Visit Website"),
+				OnPressed:  func() { p.OpenBrowser("https://www.artic.edu") },
+			},
+		},
+	}
+
+	// 2. Curated Tours Section
+	keys := make([]string, 0, len(p.curatedList.Tours))
+	for k := range p.curatedList.Tours {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	tourItems := make([]schema.ItemSchema, 0, len(keys))
+	for _, key := range keys {
+		tour := p.curatedList.Tours[key]
+		key := key // shadow for closure
+
+		// Helper to find existing query state
+		getQuery := func(key string) (bool, string) {
+			for _, q := range p.cfg.GetArtInstituteChicagoQueries() {
+				if q.URL == key {
+					return q.Active, q.ID
+				}
+			}
+			return false, ""
+		}
+
+		active, _ := getQuery(key)
+
+		// We use BoolItem for each tour, mimicking the legacy NewCheck approach
+		tourItems = append(tourItems, schema.BoolItem{
+			Name:         ProviderName + "_" + key,
+			Label:        tour.Name,
+			InitialValue: active,
+			ApplyFunc: func(b bool) {
+				_, cid := getQuery(key)
+				if b {
+					if cid != "" {
+						_ = p.cfg.EnableArtInstituteChicagoQuery(cid)
+					} else {
+						_, _ = p.cfg.AddArtInstituteChicagoQuery(tour.Name, key, true)
+					}
+				} else {
+					if cid != "" {
+						_ = p.cfg.DisableArtInstituteChicagoQuery(cid)
+					}
+				}
+			},
+		})
+	}
+
+	toursSection := schema.SectionSchema{
+		Title: i18n.T("Curated Tours"),
+		Items: tourItems,
+	}
+
+	return &schema.PanelSchema{
+		Sections: []schema.SectionSchema{headerSection, toursSection},
+	}
+}
+
+func (p *Provider) OpenBrowser(u string) {
+	// Abstracted
+}
+

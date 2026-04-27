@@ -18,6 +18,7 @@ import (
 	"github.com/dixieflatline76/Spice/v2/config"
 	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
+	"github.com/dixieflatline76/Spice/v2/pkg/ui/schema"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
 	"github.com/dixieflatline76/Spice/v2/pkg/wallpaper"
 	"github.com/dixieflatline76/Spice/v2/util/log"
@@ -144,6 +145,10 @@ func (p *Provider) ID() string {
 
 func (p *Provider) Name() string {
 	return i18n.T("Favorites")
+}
+
+func (p *Provider) GetProviderIcon() interface{} {
+	return iconData
 }
 
 func (p *Provider) GetFavoritesDisplayName() string {
@@ -609,18 +614,49 @@ func (p *Provider) FetchImages(ctx context.Context, apiURL string, page int) ([]
 	return images, nil
 }
 
-// --- UI Implementation (Pure Go) ---
-
-// CreateSettingsSchema returns the declarative UI for favorites management.
-func (p *Provider) CreateSettingsSchema(_ setting.SettingsManager) setting.PanelSchema {
-	return setting.PanelSchema{
-		Sections: []setting.SectionSchema{
+// CreateSettingsPanel returns the declarative UI for favorites management.
+func (p *Provider) CreateSettingsPanel(_ setting.SettingsManager) *schema.PanelSchema {
+	return &schema.PanelSchema{
+		Sections: []schema.SectionSchema{
 			{
-				Items: []setting.ItemSchema{
-					setting.LabelItem{Text: i18n.T("Favorites Management"), IsTitle: true},
-					setting.LabelItem{Text: i18n.T("Local favorites are stored persistently in your Spice application folder."), Importance: setting.ImportanceLow},
+				Items: []schema.ItemSchema{
+					schema.LabelItem{Text: i18n.T("Favorites Management"), IsTitle: true},
+					schema.LabelItem{Text: i18n.T("Local favorites are stored persistently in your Spice application folder."), Importance: schema.ImportanceLow},
 				},
 			},
 		},
 	}
 }
+
+// CreateQueryPanel returns the declarative UI for the favorites list.
+func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, _ string) *schema.PanelSchema {
+	return &schema.PanelSchema{
+		Sections: []schema.SectionSchema{
+			{
+				Title: i18n.T("Manage Favorites"),
+				Items: []schema.ItemSchema{
+					schema.QueryListItem{
+						GetQueries: func() []schema.Query {
+							return []schema.Query{
+								{
+									ID:          wallpaper.FavoritesQueryID,
+									URL:         wallpaper.FavoritesQueryID,
+									Description: i18n.T("Personal Collection"),
+									Active:      true,
+								},
+							}
+						},
+						EnableQuery:  func(_ string) error { return nil },
+						DisableQuery: func(_ string) error { return nil },
+						RemoveQuery:  func(_ string) error { return nil },
+						GetDisplayURL: func(q schema.Query) *url.URL {
+							u, _ := url.Parse(p.HomeURL())
+							return u
+						},
+					},
+				},
+			},
+		},
+	}
+}
+

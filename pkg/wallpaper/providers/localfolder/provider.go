@@ -13,6 +13,7 @@ import (
 
 	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
+	"github.com/dixieflatline76/Spice/v2/pkg/ui/schema"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
 	"github.com/dixieflatline76/Spice/v2/pkg/wallpaper"
 )
@@ -71,6 +72,10 @@ func (p *Provider) Title() string {
 
 func (p *Provider) HomeURL() string {
 	return ""
+}
+
+func (p *Provider) GetProviderIcon() interface{} {
+	return iconData
 }
 
 func (p *Provider) ParseURL(webURL string) (string, error) {
@@ -167,34 +172,78 @@ func (p *Provider) FetchImages(ctx context.Context, folderPath string, page int)
 	return images, nil
 }
 
-// CreateSettingsSchema returns the declarative UI for Local Folder settings.
-func (p *Provider) CreateSettingsSchema(_ setting.SettingsManager) setting.PanelSchema {
-	items := []setting.ItemSchema{
-		setting.LabelItem{
+// CreateSettingsPanel returns the declarative UI for Local Folder settings.
+func (p *Provider) CreateSettingsPanel(_ setting.SettingsManager) *schema.PanelSchema {
+	items := []schema.ItemSchema{
+		schema.LabelItem{
 			Text:    i18n.T("Local Folders"),
 			IsTitle: true,
 		},
-		setting.LabelItem{
+		schema.LabelItem{
 			Text:       i18n.T("Browse to a folder on your computer containing wallpaper images."),
-			Importance: setting.ImportanceLow,
+			Importance: schema.ImportanceLow,
 		},
 	}
 
 	if runtime.GOOS == "windows" {
-		items = append(items, setting.LabelItem{
+		items = append(items, schema.LabelItem{
 			Text:       i18n.T("Note (Windows): Due to OS limitations, to select a folder you must click on any image file inside the desired folder and then click 'Open'. The entire folder containing that image will be added."),
-			Importance: setting.ImportanceLow,
+			Importance: schema.ImportanceLow,
 		})
 	}
 
-	return setting.PanelSchema{
-		Sections: []setting.SectionSchema{
+	return &schema.PanelSchema{
+		Sections: []schema.SectionSchema{
 			{
 				Items: items,
 			},
 		},
 	}
 }
+
+// CreateQueryPanel creates the image query management panel.
+func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, _ string) *schema.PanelSchema {
+	return &schema.PanelSchema{
+		Sections: []schema.SectionSchema{
+			{
+				Title: i18n.T("Local Folder Sources"),
+				Items: []schema.ItemSchema{
+					schema.FolderPickerItem{
+						Name:       "local_folder_add",
+						ButtonText: i18n.T("Add Folder"),
+						OnFolderSelected: func(path string) error {
+							desc := path
+							if len(desc) > 100 {
+								desc = desc[:100]
+							}
+							_, err := p.cfg.AddLocalFolderQuery(desc, path, true)
+							return err
+						},
+					},
+					schema.QueryListItem{
+						GetQueries: func() []schema.Query {
+							queries := p.cfg.GetLocalFolderQueries()
+							abstracts := make([]schema.Query, len(queries))
+							for i, q := range queries {
+								abstracts[i] = schema.Query{
+									ID:          q.ID,
+									URL:         q.URL,
+									Description: q.URL, // Show full path
+									Active:      q.Active,
+								}
+							}
+							return abstracts
+						},
+						EnableQuery:  p.cfg.EnableImageQuery,
+						DisableQuery: p.cfg.DisableImageQuery,
+						RemoveQuery:  p.cfg.RemoveLocalFolderQuery,
+					},
+				},
+			},
+		},
+	}
+}
+
 
 // ResolveNamespace is the DynamicNamespaceResolver callback for the API server.
 // It maps collectionIDs (path hashes) to the actual folder paths from config.

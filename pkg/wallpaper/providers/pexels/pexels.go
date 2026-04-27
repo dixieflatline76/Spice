@@ -16,6 +16,7 @@ import (
 
 	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
+	"github.com/dixieflatline76/Spice/v2/pkg/ui/schema"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
 	"github.com/dixieflatline76/Spice/v2/pkg/wallpaper"
 	"github.com/dixieflatline76/Spice/v2/util/log"
@@ -24,54 +25,62 @@ import (
 //go:embed Pexels.png
 var iconData []byte
 
-// PexelsProvider implements ImageProvider for Pexels.
-type PexelsProvider struct {
+// Provider implements ImageProvider for Pexels.
+type Provider struct {
 	cfg        *wallpaper.Config
 	httpClient *http.Client
 	testToken  string
 }
 
 // SetTokenForTesting sets a token for testing purposes, overriding the config.
-func (p *PexelsProvider) SetTokenForTesting(token string) {
+func (p *Provider) SetTokenForTesting(token string) {
 	p.testToken = token
 }
 
 func init() {
 	wallpaper.RegisterProvider("Pexels", func(cfg *wallpaper.Config, client *http.Client) provider.ImageProvider {
-		return NewPexelsProvider(cfg, client)
+		return NewProvider(cfg, client)
 	})
 }
 
-// NewPexelsProvider creates a new PexelsProvider.
-func NewPexelsProvider(cfg *wallpaper.Config, client *http.Client) *PexelsProvider {
-	return &PexelsProvider{
+// NewProvider creates a new Pexels Provider.
+func NewProvider(cfg *wallpaper.Config, client *http.Client) *Provider {
+	return &Provider{
 		cfg:        cfg,
 		httpClient: client,
 	}
 }
 
-func (p *PexelsProvider) ID() string {
+func (p *Provider) ID() string {
 	return "Pexels"
 }
 
-func (p *PexelsProvider) Name() string {
+func (p *Provider) Name() string {
 	return i18n.T("Pexels")
 }
 
-func (p *PexelsProvider) Type() provider.ProviderType {
+func (p *Provider) Title() string {
+	return "Pexels"
+}
+
+func (p *Provider) GetProviderIcon() interface{} {
+	return iconData
+}
+
+func (p *Provider) Type() provider.ProviderType {
 	return provider.TypeOnline
 }
 
-func (p *PexelsProvider) GetAttributionType() provider.AttributionType {
+func (p *Provider) HomeURL() string {
+	return "https://www.pexels.com"
+}
+
+func (p *Provider) GetAttributionType() provider.AttributionType {
 	return provider.AttributionBy
 }
 
-func (p *PexelsProvider) SupportsUserQueries() bool {
+func (p *Provider) SupportsUserQueries() bool {
 	return true
-}
-
-func (p *PexelsProvider) HomeURL() string {
-	return "https://www.pexels.com"
 }
 
 // Regex patterns for Pexels URLs
@@ -83,7 +92,7 @@ var (
 )
 
 // ParseURL converts a web URL to an API URL.
-func (p *PexelsProvider) ParseURL(webURL string) (string, error) {
+func (p *Provider) ParseURL(webURL string) (string, error) {
 	u, err := url.Parse(webURL)
 	if err != nil {
 		return "", fmt.Errorf("invalid URL: %w", err)
@@ -175,7 +184,7 @@ func parsePexelsSearchURL(webURL string, u *url.URL) (string, error) {
 
 // NormalizeURL converts a Pexels web URL to a more compact/standardized format for Spice.
 // It combines min_width and min_height into a single 'res' parameter.
-func (p *PexelsProvider) NormalizeURL(webURL string) string {
+func (p *Provider) NormalizeURL(webURL string) string {
 	u, err := url.Parse(webURL)
 	if err != nil {
 		return webURL
@@ -200,7 +209,7 @@ func (p *PexelsProvider) NormalizeURL(webURL string) string {
 }
 
 // WithResolution adds resolution constraints to the Pexels API URL.
-func (p *PexelsProvider) WithResolution(apiURL string, width, height int) string {
+func (p *Provider) WithResolution(apiURL string, width, height int) string {
 	u, err := url.Parse(apiURL)
 	if err != nil {
 		return apiURL
@@ -225,7 +234,7 @@ func (p *PexelsProvider) WithResolution(apiURL string, width, height int) string
 }
 
 // FetchImages fetches images from the Pexels API.
-func (p *PexelsProvider) FetchImages(ctx context.Context, apiURL string, page int) ([]provider.Image, error) {
+func (p *Provider) FetchImages(ctx context.Context, apiURL string, page int) ([]provider.Image, error) {
 	// Robustness: Check if we have a web URL and convert it on the fly
 	if strings.Contains(apiURL, "www.pexels.com") || strings.Contains(apiURL, "pexels.com/search") || strings.Contains(apiURL, "pexels.com/collections") {
 		converted, err := p.ParseURL(apiURL)
@@ -272,7 +281,7 @@ func (p *PexelsProvider) FetchImages(ctx context.Context, apiURL string, page in
 	return images, nil
 }
 
-func (p *PexelsProvider) buildAPIURL(apiURL string, page int) (string, error) {
+func (p *Provider) buildAPIURL(apiURL string, page int) (string, error) {
 	u, err := url.Parse(apiURL)
 	if err != nil {
 		return "", fmt.Errorf("invalid API URL: %w", err)
@@ -286,7 +295,7 @@ func (p *PexelsProvider) buildAPIURL(apiURL string, page int) (string, error) {
 	return u.String(), nil
 }
 
-func (p *PexelsProvider) executeRequest(ctx context.Context, fullURL string) (*http.Response, error) {
+func (p *Provider) executeRequest(ctx context.Context, fullURL string) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fullURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -311,7 +320,7 @@ func (p *PexelsProvider) executeRequest(ctx context.Context, fullURL string) (*h
 	return resp, nil
 }
 
-func (p *PexelsProvider) parseResponse(body io.Reader, urlStr string) ([]provider.Image, error) {
+func (p *Provider) parseResponse(body io.Reader, urlStr string) ([]provider.Image, error) {
 	var images []provider.Image
 
 	// Determine response type based on URL path
@@ -341,11 +350,11 @@ func (p *PexelsProvider) parseResponse(body io.Reader, urlStr string) ([]provide
 }
 
 // EnrichImage is a no-op for Pexels as attribution is included in search results.
-func (p *PexelsProvider) EnrichImage(ctx context.Context, img provider.Image) (provider.Image, error) {
+func (p *Provider) EnrichImage(ctx context.Context, img provider.Image) (provider.Image, error) {
 	return img, nil
 }
 
-func (p *PexelsProvider) mapPexelsImage(photo PexelsPhoto) provider.Image {
+func (p *Provider) mapPexelsImage(photo PexelsPhoto) provider.Image {
 	// Prefer 'original' or 'large2x' depending on need. 'original' is best for wallpapers.
 	imagePath := photo.Src.Original
 	if imagePath == "" {
@@ -398,23 +407,19 @@ type PexelsSrc struct {
 	Tiny      string `json:"tiny"`
 }
 
-// --- UI Integration ---
+// --- UI Implementation (Pure Go) ---
 
-func (p *PexelsProvider) Title() string {
-	return i18n.T("Pexels")
-}
+const pexAPIIdent = "pexelsAPIKey"
 
-// CreateSettingsSchema returns the declarative UI for Pexels settings.
-func (p *PexelsProvider) CreateSettingsSchema(sm setting.SettingsManager) setting.PanelSchema {
-	const pexAPIIdent = "pexelsAPIKey"
-
-	return setting.PanelSchema{
-		Sections: []setting.SectionSchema{
+// CreateSettingsPanel returns the declarative UI for Pexels settings.
+func (p *Provider) CreateSettingsPanel(sm setting.SettingsManager) *schema.PanelSchema {
+	return &schema.PanelSchema{
+		Sections: []schema.SectionSchema{
 			{
 				Title:       i18n.T("Pexels API Key"),
 				Description: i18n.T("Enter your Pexels API Key to enable high-quality wallpaper search."),
-				Items: []setting.ItemSchema{
-					setting.TextItem{
+				Items: []schema.ItemSchema{
+					schema.TextItem{
 						Name:         pexAPIIdent,
 						Label:        i18n.T("API Key:"),
 						InitialValue: p.cfg.GetPexelsAPIKey(),
@@ -433,21 +438,18 @@ func (p *PexelsProvider) CreateSettingsSchema(sm setting.SettingsManager) settin
 							return currentValue.(string) == "" || currentValue.(string) != baselineValue.(string)
 						},
 						ApplyFunc: func(s string) {
-							// Standard apply handled by CommitSetting in OnCompleted of verify button
-							// But we provide this for the main Apply button as well
 							p.cfg.SetPexelsAPIKey(s)
 						},
 					},
-					setting.HyperlinkItem{
+					schema.HyperlinkItem{
 						Text: i18n.T("Get a free API key from Pexels."),
 						URL:  "https://www.pexels.com/api/key/",
 					},
-					// Button 1: Verify & Connect (Visible if curr != base)
-					setting.AsyncButtonItem{
+					schema.AsyncButtonItem{
 						Name:        "verifyPexelsKey",
 						ButtonText:  i18n.T("Verify & Connect"),
 						LoadingText: i18n.T("Verifying..."),
-						Style:       setting.ButtonStylePrimary,
+						Style:       schema.ButtonStylePrimary,
 						VisibleIf: func() bool {
 							currSecret := sm.GetValue(pexAPIIdent).(string)
 							baseSecret := sm.GetBaseline(pexAPIIdent).(string)
@@ -461,29 +463,24 @@ func (p *PexelsProvider) CreateSettingsSchema(sm setting.SettingsManager) settin
 						},
 						OnCompleted: func(err error) {
 							if err == nil {
-								// Success! Commit locally immediately to block editing and show "Clear" button instead
-								sm := sm
 								sm.CommitSetting(pexAPIIdent)
 							}
 						},
 					},
-					// Button 2: Clear API Key (Visible if curr == base && curr != "")
-					setting.AsyncButtonItem{
+					schema.AsyncButtonItem{
 						Name:        "clearPexelsKey",
 						ButtonText:  i18n.T("Clear API Key"),
 						LoadingText: i18n.T("Clearing..."),
-						Style:       setting.ButtonStyleDanger,
+						Style:       schema.ButtonStyleDanger,
 						VisibleIf: func() bool {
 							currSecret := sm.GetValue(pexAPIIdent).(string)
 							baseSecret := sm.GetBaseline(pexAPIIdent).(string)
 							return currSecret != "" && currSecret == baseSecret
 						},
 						OnPressed: func() error {
-							// Async button used here just for symmetry and simplified state refresh
 							return nil
 						},
 						OnCompleted: func(_ error) {
-							sm := sm
 							sm.ResetSettings(setting.SettingReset{Name: pexAPIIdent, Value: ""})
 						},
 					},
@@ -493,12 +490,35 @@ func (p *PexelsProvider) CreateSettingsSchema(sm setting.SettingsManager) settin
 	}
 }
 
-// GetAPIPacing implements the PacedProvider interface to space out API calls.
-func (p *PexelsProvider) GetAPIPacing() time.Duration {
-	return 500 * time.Millisecond
-}
-
-// GetProcessPacing implements the PacedProvider interface to space out image downloads.
-func (p *PexelsProvider) GetProcessPacing() time.Duration {
-	return 800 * time.Millisecond
+// CreateQueryPanel creates the image query management panel.
+func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl string) *schema.PanelSchema {
+	return &schema.PanelSchema{
+		Sections: []schema.SectionSchema{
+			{
+				Title:       i18n.T("Pexels Queries"),
+				Description: i18n.T("Manage your Pexels image queries here."),
+				Items: []schema.ItemSchema{
+					schema.QueryListItem{
+						GetQueries: func() []schema.Query {
+							queries := p.cfg.GetPexelsQueries()
+							abstracts := make([]schema.Query, len(queries))
+							for i, q := range queries {
+								abstracts[i] = schema.Query{
+									ID:          q.ID,
+									URL:         q.URL,
+									Description: q.Description,
+									Active:      q.Active,
+								}
+							}
+							return abstracts
+						},
+						EnableQuery:  p.cfg.EnablePexelsQuery,
+						DisableQuery: p.cfg.DisablePexelsQuery,
+						RemoveQuery:  p.cfg.RemovePexelsQuery,
+						// Pexels URLs work directly
+					},
+				},
+			},
+		},
+	}
 }

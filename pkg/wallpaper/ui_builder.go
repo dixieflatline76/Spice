@@ -7,6 +7,7 @@ import (
 	"fyne.io/fyne/v2/container"
 	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
+	"github.com/dixieflatline76/Spice/v2/pkg/ui/schema"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
 )
 
@@ -24,14 +25,14 @@ func NewPrefsPanelBuilder(p *Plugin, sm setting.SettingsManager) *PrefsPanelBuil
 }
 
 // BuildGeneralTabSchema creates the General settings tab schema.
-func (b *PrefsPanelBuilder) BuildGeneralTabSchema() setting.PanelSchema {
-	return setting.PanelSchema{
-		Sections: []setting.SectionSchema{
+func (b *PrefsPanelBuilder) BuildGeneralTabSchema() *schema.PanelSchema {
+	return &schema.PanelSchema{
+		Sections: []schema.SectionSchema{
 			{
 				Title:       i18n.T("Wallpaper Cycle & Cache"),
 				Description: i18n.T("Configure how often wallpapers change and how many images are kept locally."),
-				Items: []setting.ItemSchema{
-					setting.SelectItem{
+				Items: []schema.ItemSchema{
+					schema.SelectItem{
 						Name:         "changeFrequency",
 						Label:        i18n.T("Wallpaper Change Frequency:"),
 						Help:         i18n.T("Set how often the wallpaper changes. Set to \"Never\" to disable wallpaper changes."),
@@ -42,7 +43,7 @@ func (b *PrefsPanelBuilder) BuildGeneralTabSchema() setting.PanelSchema {
 							b.plugin.ChangeWallpaperFrequency(freq, true)
 						},
 					},
-					setting.SelectItem{
+					schema.SelectItem{
 						Name:         "cacheSize",
 						Label:        i18n.T("Cache Size:"),
 						Help:         i18n.T("Set how many images to cache for faster startup and less network usage. Set to \"None\" to disable caching."),
@@ -58,8 +59,8 @@ func (b *PrefsPanelBuilder) BuildGeneralTabSchema() setting.PanelSchema {
 			{
 				Title:       i18n.T("Smart Fit & Face Detection"),
 				Description: i18n.T("Control how images are fitted to your screen and optimized for faces."),
-				Items: []setting.ItemSchema{
-					setting.SelectItem{
+				Items: []schema.ItemSchema{
+					schema.SelectItem{
 						Name:         "smartFitMode",
 						Label:        i18n.T("Smart Fit Mode:"),
 						Help:         i18n.T("Control how images are fitted to your screen:\n- Disabled: Original image.\n- Quality: Rejects images with mismatched aspect ratio.\n- Flexibility: Allows high-res images to crop aggressively."),
@@ -71,7 +72,7 @@ func (b *PrefsPanelBuilder) BuildGeneralTabSchema() setting.PanelSchema {
 						},
 						NeedsRefresh: true,
 					},
-					setting.BoolItem{
+					schema.BoolItem{
 						Name:         "faceCrop",
 						Label:        i18n.T("Enable Face Crop:"),
 						Help:         i18n.T("Aggressively crops the image to center on the largest face found. Good for portraits."),
@@ -96,7 +97,7 @@ func (b *PrefsPanelBuilder) BuildGeneralTabSchema() setting.PanelSchema {
 							}
 						},
 					},
-					setting.BoolItem{
+					schema.BoolItem{
 						Name:         "faceBoost",
 						Label:        i18n.T("Enable Face Boost:"),
 						Help:         i18n.T("Uses face detection to hint the smart cropper. Keeps faces in frame but balances with other image details."),
@@ -126,8 +127,8 @@ func (b *PrefsPanelBuilder) BuildGeneralTabSchema() setting.PanelSchema {
 			{
 				Title:       i18n.T("Toggles"),
 				Description: i18n.T("Miscellaneous behavioral settings."),
-				Items: []setting.ItemSchema{
-					setting.BoolItem{
+				Items: []schema.ItemSchema{
+					schema.BoolItem{
 						Name:         "staggerChanges",
 						Label:        i18n.T("Stagger monitor changes:"),
 						Help:         i18n.T("Introduces a random delay when changing wallpapers across multiple screens to prevent a jarring simultaneous flash."),
@@ -136,7 +137,7 @@ func (b *PrefsPanelBuilder) BuildGeneralTabSchema() setting.PanelSchema {
 							b.plugin.cfg.SetStaggerMonitorChanges(val)
 						},
 					},
-					setting.BoolItem{
+					schema.BoolItem{
 						Name:         "chgImgOnStart",
 						Label:        i18n.T("Change wallpaper on start:"),
 						Help:         i18n.T("Disable if you prefer the wallpaper to change only based on its timer or a manual refresh."),
@@ -145,7 +146,7 @@ func (b *PrefsPanelBuilder) BuildGeneralTabSchema() setting.PanelSchema {
 							b.plugin.cfg.SetChgImgOnStart(val)
 						},
 					},
-					setting.BoolItem{
+					schema.BoolItem{
 						Name:         "nightlyRefresh",
 						Label:        i18n.T("Refresh wallpapers nightly:"),
 						Help:         i18n.T("Useful when using image queries with random elements. Toggling this will start or stop the nightly refresh process."),
@@ -164,8 +165,8 @@ func (b *PrefsPanelBuilder) BuildGeneralTabSchema() setting.PanelSchema {
 			{
 				Title:       i18n.T("Actions"),
 				Description: i18n.T("Manual maintenance and display synchronization."),
-				Items: []setting.ItemSchema{
-					setting.ButtonItem{
+				Items: []schema.ItemSchema{
+					schema.ButtonItem{
 						Name:       "refreshDisplays",
 						Label:      i18n.T("Display Configuration:"),
 						Help:       i18n.T("Synchronize Spice with currently connected monitors. Use this if you plugged or unplugged a monitor while Spice was running."),
@@ -174,23 +175,24 @@ func (b *PrefsPanelBuilder) BuildGeneralTabSchema() setting.PanelSchema {
 							b.plugin.SyncMonitors(true)
 						},
 					},
-					setting.ConfirmButtonItem{
+					schema.ConfirmButtonItem{
 						Name:           "clearCache",
 						Label:          i18n.T("Clear Wallpaper Cache:"),
 						Help:           i18n.T("Delete all downloaded wallpapers (Source and Derivatives). This is a safety feature."),
 						ButtonText:     i18n.T("Clear Cache"),
 						ConfirmTitle:   i18n.T("Clear Cache?"),
 						ConfirmMessage: i18n.T("Are you sure? This will delete ALL downloaded images from disk. You will need internet to see new wallpapers."),
-						Importance:     setting.ImportanceDanger,
+						Importance:     schema.ImportanceDanger,
 						OnPressed:      b.plugin.ClearCache,
 					},
-					setting.ConfirmButtonItem{
+					schema.ConfirmButtonItem{
 						Name:           "resetAvoidSet",
 						Label:          i18n.T("Blocked Images:"),
 						Help:           i18n.T("Clear the blocked images list. Blocked images may be downloaded next time wallpapers are refreshed."),
 						ButtonText:     i18n.T("Reset"),
 						ConfirmTitle:   i18n.T("Please Confirm"),
 						ConfirmMessage: i18n.T("This cannot be undone. Are you sure?"),
+						Importance:     schema.ImportanceMedium,
 						OnPressed:      b.plugin.cfg.ResetAvoidSet,
 					},
 				},
@@ -198,6 +200,7 @@ func (b *PrefsPanelBuilder) BuildGeneralTabSchema() setting.PanelSchema {
 		},
 	}
 }
+
 
 // BuildProviderTabs creates the provider accordions (Online, Local).
 func (b *PrefsPanelBuilder) BuildProviderTabs() (fyne.CanvasObject, fyne.CanvasObject, int) {
@@ -303,19 +306,20 @@ func (b *PrefsPanelBuilder) createProviderAccordionItem(p provider.ImageProvider
 		TitleFunc: titleFunc,
 		Content:   content,
 		Open:      isPending,
-		Icon:      p.GetProviderIcon(),
+		Icon:      asResource(p.GetProviderIcon(), p.ID()),
 	}, tabIndex
 }
 
 func (b *PrefsPanelBuilder) buildProviderContent(p provider.ImageProvider, pendingURL string) fyne.CanvasObject {
 	var settingsPanel fyne.CanvasObject
-	if sp, ok := p.(provider.SchemaProvider); ok {
-		schema := sp.CreateSettingsSchema(b.sm)
-		settingsPanel = b.sm.RenderSchema(schema)
-	} else {
-		settingsPanel = p.CreateSettingsPanel(b.sm)
+	if panelSchema := p.CreateSettingsPanel(b.sm); panelSchema != nil {
+		settingsPanel = b.sm.RenderSchema(*panelSchema)
 	}
-	queryPanel := p.CreateQueryPanel(b.sm, pendingURL)
+
+	var queryPanel fyne.CanvasObject
+	if querySchema := p.CreateQueryPanel(b.sm, pendingURL); querySchema != nil {
+		queryPanel = b.sm.RenderSchema(*querySchema)
+	}
 
 	if settingsPanel != nil && queryPanel != nil {
 		return container.NewBorder(settingsPanel, nil, nil, nil, queryPanel)

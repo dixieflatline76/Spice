@@ -2,7 +2,7 @@ package metmuseum
 
 import (
 	"context"
-	_ "embed" // For go:embed
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"math/rand"
@@ -15,6 +15,7 @@ import (
 
 	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
+	"github.com/dixieflatline76/Spice/v2/pkg/ui/schema"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
 	"github.com/dixieflatline76/Spice/v2/pkg/wallpaper"
 	"github.com/dixieflatline76/Spice/v2/util/log"
@@ -39,11 +40,11 @@ type Provider struct {
 
 func init() {
 	wallpaper.RegisterProvider(ProviderName, func(cfg *wallpaper.Config, client *http.Client) provider.ImageProvider {
-		return NewMetMuseumProvider(cfg, client)
+		return NewProvider(cfg, client)
 	})
 }
 
-func NewMetMuseumProvider(cfg *wallpaper.Config, client *http.Client) *Provider {
+func NewProvider(cfg *wallpaper.Config, client *http.Client) *Provider {
 	p := &Provider{
 		cfg:       cfg,
 		client:    client,
@@ -79,6 +80,10 @@ func (p *Provider) Name() string {
 
 func (p *Provider) Title() string {
 	return ProviderTitle
+}
+
+func (p *Provider) GetProviderIcon() interface{} {
+	return iconData
 }
 
 func (p *Provider) Type() provider.ProviderType {
@@ -507,7 +512,85 @@ func (p *Provider) EnrichImage(ctx context.Context, img provider.Image) (provide
 
 // --- UI Implementation (Pure Go) ---
 
-// CreateSettingsSchema returns the declarative UI for MetMuseum settings.
-func (p *Provider) CreateSettingsSchema(_ setting.SettingsManager) setting.PanelSchema {
-	return setting.PanelSchema{}
+// CreateSettingsPanel returns the declarative UI for MetMuseum settings.
+func (p *Provider) CreateSettingsPanel(_ setting.SettingsManager) *schema.PanelSchema {
+	return &schema.PanelSchema{}
 }
+
+// CreateQueryPanel creates the image query management panel.
+func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, _ string) *schema.PanelSchema {
+	headerSection := schema.SectionSchema{
+		Items: []schema.ItemSchema{
+			schema.LabelItem{Text: "The Metropolitan Museum of Art", IsTitle: true},
+			schema.LabelItem{Text: "New York, NY • USA", Importance: schema.ImportanceLow},
+			schema.HyperlinkItem{
+				Text: i18n.T("CC0 - Public Domain"),
+				URL:  "https://www.metmuseum.org/about-the-met/policies-and-documents/open-access",
+			},
+			schema.LabelItem{
+				Text: i18n.T("One of the world's largest and finest art museums, with collections spanning 5,000 years of world culture."),
+			},
+			schema.ButtonItem{
+				Name:       "met_web",
+				ButtonText: i18n.T("Visit Website"),
+				OnPressed:  func() { p.OpenBrowser("https://www.metmuseum.org") },
+			},
+		},
+	}
+
+	curatedItems := []schema.ItemSchema{
+		p.makeCollectionItem(i18n.T("Spice Melange (Curated)"), CollectionSpiceMelange),
+		p.makeCollectionItem(i18n.T("American Paintings"), CollectionAmerican),
+		p.makeCollectionItem(i18n.T("European Paintings"), CollectionEuropean),
+		p.makeCollectionItem(i18n.T("Asian Art"), CollectionAsian),
+		p.makeCollectionItem(i18n.T("Egyptian Art"), CollectionEgyptian),
+	}
+
+	curatedSection := schema.SectionSchema{
+		Title: i18n.T("Museum Collections"),
+		Items: curatedItems,
+	}
+
+	return &schema.PanelSchema{
+		Sections: []schema.SectionSchema{headerSection, curatedSection},
+	}
+}
+
+func (p *Provider) makeCollectionItem(label, url string) schema.BoolItem {
+	// Helper to find existing query state
+	getQuery := func(url string) (bool, string) {
+		for _, q := range p.cfg.GetQueries() {
+			if q.Provider == p.ID() && q.URL == url {
+				return q.Active, q.ID
+			}
+		}
+		return false, ""
+	}
+
+	active, _ := getQuery(url)
+
+	return schema.BoolItem{
+		Name:         p.ID() + "_" + url,
+		Label:        label,
+		InitialValue: active,
+		ApplyFunc: func(b bool) {
+			_, cid := getQuery(url)
+			if b {
+				if cid != "" {
+					_ = p.cfg.EnableImageQuery(cid)
+				} else {
+					_, _ = p.cfg.AddMetMuseumQuery(label, url, true)
+				}
+			} else {
+				if cid != "" {
+					_ = p.cfg.DisableImageQuery(cid)
+				}
+			}
+		},
+	}
+}
+
+func (p *Provider) OpenBrowser(u string) {
+	// Abstracted
+}
+

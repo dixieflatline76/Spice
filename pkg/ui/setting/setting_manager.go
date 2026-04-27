@@ -1,39 +1,13 @@
 package setting
 
 import (
-	"context"
 	"fmt"
 	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/widget"
+	"github.com/dixieflatline76/Spice/v2/pkg/ui/schema"
 )
-
-// ButtonStyle represents the visual priority of a button in a pure Go way.
-type ButtonStyle string
-
-const (
-	ButtonStyleDefault ButtonStyle = "default"
-	ButtonStylePrimary ButtonStyle = "primary"
-	ButtonStyleDanger  ButtonStyle = "danger"
-	ButtonStyleSuccess ButtonStyle = "success"
-)
-
-// Importance defines the visual weight of a UI element.
-type Importance string
-
-const (
-	ImportanceHigh    Importance = "high"
-	ImportanceMedium  Importance = "medium"
-	ImportanceLow     Importance = "low"
-	ImportanceSuccess Importance = "success"
-	ImportanceDanger  Importance = "danger"
-)
-
-// ItemSchema is the common interface for all declarative UI elements.
-type ItemSchema interface {
-	isItemSchema() // Private marker method to ensure only our types implement the interface
-}
 
 // SettingsHelper is the interface that must be implemented by all settings helpers.
 type SettingsHelper interface {
@@ -41,6 +15,40 @@ type SettingsHelper interface {
 	CreateSettingTitleLabel(desc string) *widget.Label           // Creates a setting title label.
 	CreateSettingDescriptionLabel(desc string) fyne.CanvasObject // Creates a setting description label.
 }
+
+// Backward compatibility aliases for Phase 8 Transition
+type ButtonStyle = schema.ButtonStyle
+type Importance = schema.Importance
+type ItemSchema = schema.ItemSchema
+type PanelSchema = schema.PanelSchema
+type SectionSchema = schema.SectionSchema
+type BoolItem = schema.BoolItem
+type TextItem = schema.TextItem
+type SelectItem = schema.SelectItem
+type AsyncButtonItem = schema.AsyncButtonItem
+type ConfirmButtonItem = schema.ConfirmButtonItem
+type ButtonItem = schema.ButtonItem
+type HyperlinkItem = schema.HyperlinkItem
+type LabelItem = schema.LabelItem
+type OAuthPickerItem = schema.OAuthPickerItem
+type FolderPickerItem = schema.FolderPickerItem
+type Query = schema.Query
+type QueryListItem = schema.QueryListItem
+
+const (
+	ButtonStyleDefault = schema.ButtonStyleDefault
+	ButtonStylePrimary = schema.ButtonStylePrimary
+	ButtonStyleDanger  = schema.ButtonStyleDanger
+	ButtonStyleSuccess = schema.ButtonStyleSuccess
+)
+
+const (
+	ImportanceHigh    = schema.ImportanceHigh
+	ImportanceMedium  = schema.ImportanceMedium
+	ImportanceLow     = schema.ImportanceLow
+	ImportanceSuccess = schema.ImportanceSuccess
+	ImportanceDanger  = schema.ImportanceDanger
+)
 
 // SelectConfig holds the configuration for a generic select widget.
 type SelectConfig struct {
@@ -128,27 +136,6 @@ type ButtonConfig struct {
 	VisibleIf   func() bool // Optional: function to determine if the widget should be visible
 }
 
-// OAuthPickerItem defines the contract for complex OAuth sessions and picker workflows.
-type OAuthPickerItem struct {
-	Name  string
-	Label string
-	Help  string
-
-	// Pure Domain Core Logic
-	CheckAuthStatus func() (isAuth bool, isExpired bool)
-	OnAuthorize     func() error
-	OnDisconnect    func() error
-
-	// Async Polling & Download (Takes a pure string callback for UI stream updates)
-	OnLaunchPicker func(ctx context.Context, updateStatus func(string)) (itemCount int, guid string, err error)
-
-	// Collection Persistence Hooks
-	OnSaveCollection   func(guid string, description string, active bool) error
-	OnCancelCollection func(guid string)
-}
-
-func (*OAuthPickerItem) isItemSchema() {}
-
 // SettingReset holds the payload for an atomic state reset.
 type SettingReset struct {
 	Name  string
@@ -204,135 +191,10 @@ type SettingsManager interface {
 	ResetSettings(resets ...SettingReset)
 
 	// SetSettingStatus programmatically updates a setting's status label (thread-safe).
-	SetSettingStatus(name string, message string, importance Importance)
+	SetSettingStatus(name string, message string, importance schema.Importance)
 
 	// RenderSchema takes a pure Go UI definition and renders it to a Fyne container.
-	RenderSchema(schema PanelSchema) fyne.CanvasObject
+	RenderSchema(p schema.PanelSchema) fyne.CanvasObject
 }
 
-// PanelSchema is the root of the declarative UI definition.
-type PanelSchema struct {
-	Sections []SectionSchema
-}
-
-// SectionSchema represents a logical grouping of settings.
-type SectionSchema struct {
-	Title       string
-	Description string
-	Items       []ItemSchema
-}
-
-// BoolItem represents a checkbox/toggle.
-type BoolItem struct {
-	Name         string
-	Label        string
-	Help         string
-	InitialValue bool
-	OnChanged    func(bool)
-	ApplyFunc    func(bool)
-	NeedsRefresh bool
-	EnabledIf    func() bool
-	VisibleIf    func() bool
-}
-
-func (b BoolItem) isItemSchema() {}
-
-// TextItem represents a text entry field.
-type TextItem struct {
-	Name               string
-	Label              string
-	Help               string
-	InitialValue       string
-	PlaceHolder        string
-	IsPassword         bool
-	DisplayStatus      bool
-	ValidationDebounce time.Duration
-	Validator          func(string) error // Pure Go validator
-	PostValidateCheck  func(string) error
-	OnChanged          func(string)
-	ApplyFunc          func(string)
-	NeedsRefresh       bool
-	EnabledIf          func() bool
-	VisibleIf          func() bool
-}
-
-func (t TextItem) isItemSchema() {}
-
-// SelectItem represents a dropdown/select field.
-type SelectItem struct {
-	Name         string
-	Label        string
-	Help         string
-	Options      []string
-	InitialValue interface{}
-	OnChanged    func(string, interface{})
-	ApplyFunc    func(interface{})
-	NeedsRefresh bool
-	EnabledIf    func() bool
-	VisibleIf    func() bool
-}
-
-func (s SelectItem) isItemSchema() {}
-
-// AsyncButtonItem represents a button that performs a background task.
-type AsyncButtonItem struct {
-	Name            string
-	ButtonText      string
-	LoadingText     string
-	Style           ButtonStyle
-	TargetStatusKey string
-	OnPressed       func() error
-	OnCompleted     func(error)
-	NeedsRefresh    bool
-	EnabledIf       func() bool
-	VisibleIf       func() bool
-}
-
-func (a AsyncButtonItem) isItemSchema() {}
-
-// ConfirmButtonItem represents a button that requires confirmation before execution.
-type ConfirmButtonItem struct {
-	Name           string
-	Label          string
-	Help           string
-	ButtonText     string
-	ConfirmTitle   string
-	ConfirmMessage string
-	Importance     Importance
-	OnPressed      func()
-	EnabledIf      func() bool
-	VisibleIf      func() bool
-}
-
-func (c ConfirmButtonItem) isItemSchema() {}
-
-// ButtonItem represents a standard action button.
-type ButtonItem struct {
-	Name       string
-	Label      string
-	Help       string
-	ButtonText string
-	Importance Importance
-	OnPressed  func()
-	EnabledIf  func() bool
-	VisibleIf  func() bool
-}
-
-func (b ButtonItem) isItemSchema() {}
-
-// HyperlinkItem represents a clickable URL.
-type HyperlinkItem struct {
-	Text string
-	URL  string
-}
-
-func (h HyperlinkItem) isItemSchema() {}
-
-// LabelItem represents static text or a sub-title.
-type LabelItem struct {
-	Text       string
-	IsTitle    bool
-	Importance Importance // Low importance maps to muted description style
-}
-
-func (l LabelItem) isItemSchema() {}
+// SettingReset holds the payload for an atomic state reset.

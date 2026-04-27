@@ -15,6 +15,7 @@ import (
 
 	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
+	"github.com/dixieflatline76/Spice/v2/pkg/ui/schema"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
 	"github.com/dixieflatline76/Spice/v2/pkg/wallpaper"
 	"github.com/dixieflatline76/Spice/v2/util/log"
@@ -23,8 +24,8 @@ import (
 //go:embed wallhaven.png
 var iconData []byte
 
-// WallhavenProvider implements ImageProvider for Wallhaven.
-type WallhavenProvider struct {
+// Provider implements ImageProvider for Wallhaven.
+type Provider struct {
 	cfg               *wallpaper.Config
 	httpClient        *http.Client
 	testAPIKey        string
@@ -32,50 +33,54 @@ type WallhavenProvider struct {
 }
 
 // SetAPIKeyForTesting sets an API key for testing purposes.
-func (p *WallhavenProvider) SetAPIKeyForTesting(key string) {
+func (p *Provider) SetAPIKeyForTesting(key string) {
 	p.testAPIKey = key
 }
 
 func init() {
 	wallpaper.RegisterProvider("Wallhaven", func(cfg *wallpaper.Config, client *http.Client) provider.ImageProvider {
-		return NewWallhavenProvider(cfg, client)
+		return NewProvider(cfg, client)
 	})
 }
 
-// NewWallhavenProvider creates a new WallhavenProvider.
-func NewWallhavenProvider(cfg *wallpaper.Config, client *http.Client) *WallhavenProvider {
-	return &WallhavenProvider{
+// NewProvider creates a new Provider.
+func NewProvider(cfg *wallpaper.Config, client *http.Client) *Provider {
+	return &Provider{
 		cfg:        cfg,
 		httpClient: client,
 	}
 }
 
-func (p *WallhavenProvider) ID() string {
+func (p *Provider) ID() string {
 	return "Wallhaven"
 }
 
-func (p *WallhavenProvider) Name() string {
+func (p *Provider) Name() string {
 	return i18n.T("Wallhaven")
 }
 
-func (p *WallhavenProvider) Type() provider.ProviderType {
+func (p *Provider) Type() provider.ProviderType {
 	return provider.TypeOnline
 }
 
-func (p *WallhavenProvider) GetAttributionType() provider.AttributionType {
+func (p *Provider) GetAttributionType() provider.AttributionType {
 	return provider.AttributionBy
 }
 
-func (p *WallhavenProvider) SupportsUserQueries() bool {
+func (p *Provider) SupportsUserQueries() bool {
 	return true
 }
 
-func (p *WallhavenProvider) HomeURL() string {
+func (p *Provider) HomeURL() string {
 	return "https://wallhaven.cc"
 }
 
+func (p *Provider) GetProviderIcon() interface{} {
+	return iconData
+}
+
 // ParseURL converts a web URL to an API URL.
-func (p *WallhavenProvider) ParseURL(webURL string) (string, error) {
+func (p *Provider) ParseURL(webURL string) (string, error) {
 	log.Debugf("Wallhaven Parsing URL: %s", webURL)
 	trimmedURL := strings.TrimSpace(webURL)
 
@@ -147,7 +152,7 @@ func cleanQueryParams(baseURL string) (string, error) {
 }
 
 // WithResolution adds resolution constraints to the API URL if missing.
-func (p *WallhavenProvider) WithResolution(apiURL string, width, height int) string {
+func (p *Provider) WithResolution(apiURL string, width, height int) string {
 	u, err := url.Parse(apiURL)
 	if err != nil {
 		return apiURL // Return original if parsing fails
@@ -165,7 +170,7 @@ func (p *WallhavenProvider) WithResolution(apiURL string, width, height int) str
 }
 
 // DiscoverCollections fetches all public collections for a given username.
-func (p *WallhavenProvider) DiscoverCollections(ctx context.Context, username string) ([]wallpaper.ImageQuery, error) {
+func (p *Provider) DiscoverCollections(ctx context.Context, username string) ([]wallpaper.ImageQuery, error) {
 	if username == "" {
 		log.Printf("[ERROR] Wallhaven: DiscoverCollections called with empty username")
 		return nil, errors.New("username cannot be empty")
@@ -236,7 +241,7 @@ func (p *WallhavenProvider) DiscoverCollections(ctx context.Context, username st
 }
 
 // Sync performs the actual sync of collections into the config.
-func (p *WallhavenProvider) Sync(ctx context.Context) error {
+func (p *Provider) Sync(ctx context.Context) error {
 	syncEnabled := p.cfg.GetWallhavenSyncEnabled()
 	log.Debugf("Wallhaven: Sync starting. Enabled: %v", syncEnabled)
 
@@ -264,7 +269,7 @@ func (p *WallhavenProvider) Sync(ctx context.Context) error {
 }
 
 // SyncCollections is a legacy wrapper (optional cleanup)
-func (p *WallhavenProvider) SyncCollections(ctx context.Context, username string) error {
+func (p *Provider) SyncCollections(ctx context.Context, username string) error {
 	return p.Sync(ctx)
 }
 
@@ -288,7 +293,7 @@ func mapCategoryToParams(category string) string {
 }
 
 // FetchImages fetches images from Wallhaven.
-func (p *WallhavenProvider) FetchImages(ctx context.Context, apiURL string, page int) ([]provider.Image, error) {
+func (p *Provider) FetchImages(ctx context.Context, apiURL string, page int) ([]provider.Image, error) {
 	u, err := url.Parse(apiURL)
 	if err != nil {
 		return nil, fmt.Errorf("invalid API URL: %w", err)
@@ -303,15 +308,15 @@ func (p *WallhavenProvider) FetchImages(ctx context.Context, apiURL string, page
 	q.Set("page", fmt.Sprint(page))
 
 	// We need desktop dimensions for default query if no resolutions/atleast specified.
-	// WallhavenProvider doesn't have direct access to OS anymore.
+	// Provider doesn't have direct access to OS anymore.
 	// We can skip this optimization or add it back if critical.
 	// For now, I'll skip it to keep it simple and consistent with interface.
-	// If needed, I can add `os` to `WallhavenProvider` struct.
+	// If needed, I can add `os` to `Provider` struct.
 
 	// Actually, let's try to keep it if possible.
 	// But I don't have access to `wp.os` here.
 	// I'll skip it for now. Users can specify resolutions in query if they want.
-	// Or I can add `os` to `NewWallhavenProvider` later.
+	// Or I can add `os` to `NewProvider` later.
 
 	u.RawQuery = q.Encode()
 
@@ -361,7 +366,7 @@ func (p *WallhavenProvider) FetchImages(ctx context.Context, apiURL string, page
 }
 
 // EnrichImage fetches additional details for the image (e.g. attribution) if missing.
-func (p *WallhavenProvider) EnrichImage(ctx context.Context, img provider.Image) (provider.Image, error) {
+func (p *Provider) EnrichImage(ctx context.Context, img provider.Image) (provider.Image, error) {
 	if img.Attribution != "" {
 		return img, nil // Already has attribution
 	}
@@ -471,23 +476,23 @@ type Collection struct {
 
 // --- UI Implementation (Pure Go) ---
 
-func (p *WallhavenProvider) Title() string {
+func (p *Provider) Title() string {
 	return "Wallhaven"
 }
 
-// CreateSettingsSchema returns the declarative UI for Wallhaven settings.
-func (p *WallhavenProvider) CreateSettingsSchema(sm setting.SettingsManager) setting.PanelSchema {
+// CreateSettingsPanel returns the declarative UI for Wallhaven settings.
+func (p *Provider) CreateSettingsPanel(sm setting.SettingsManager) *schema.PanelSchema {
 	const apiKeyIdent = "wallhavenAPIKey"
 	const userIdent = "Wallhaven Username"
 	const syncIdent = "WallhavenSyncEnabled"
 
-	return setting.PanelSchema{
-		Sections: []setting.SectionSchema{
+	return &schema.PanelSchema{
+		Sections: []schema.SectionSchema{
 			{
 				Title:       i18n.T("wallhaven API Key"),
 				Description: i18n.T("Restricted content requires an API key."),
-				Items: []setting.ItemSchema{
-					setting.TextItem{
+				Items: []schema.ItemSchema{
+					schema.TextItem{
 						Name:         apiKeyIdent,
 						Label:        i18n.T("wallhaven API Key:"),
 						InitialValue: p.cfg.GetWallhavenAPIKey(),
@@ -497,27 +502,24 @@ func (p *WallhavenProvider) CreateSettingsSchema(sm setting.SettingsManager) set
 						EnabledIf: func() bool {
 							currKey, _ := sm.GetValue(apiKeyIdent).(string)
 							baseKey, _ := sm.GetBaseline(apiKeyIdent).(string)
-							// Visible (Editable) if user typed something new OR if currently unconfigured
 							return currKey != baseKey || currKey == ""
 						},
 						ApplyFunc: func(s string) {
 							p.cfg.SetWallhavenAPIKey(s)
 						},
 					},
-					setting.HyperlinkItem{
+					schema.HyperlinkItem{
 						Text: i18n.T("Restricted content requires an API key. Get one here."),
 						URL:  "https://wallhaven.cc/settings/account",
 					},
-					// Button 1: The Async Verify Button
-					setting.AsyncButtonItem{
+					schema.AsyncButtonItem{
 						Name:        "wallhavenVerifyBtn",
 						ButtonText:  i18n.T("Verify & Connect"),
 						LoadingText: i18n.T("Verifying..."),
-						Style:       setting.ButtonStylePrimary,
+						Style:       schema.ButtonStylePrimary,
 						VisibleIf: func() bool {
 							currKey, _ := sm.GetValue(apiKeyIdent).(string)
 							baseKey, _ := sm.GetBaseline(apiKeyIdent).(string)
-							// Visible if user typed something new OR if currently unconfigured
 							return currKey != baseKey || currKey == ""
 						},
 						OnPressed: func() error {
@@ -526,24 +528,21 @@ func (p *WallhavenProvider) CreateSettingsSchema(sm setting.SettingsManager) set
 							defer cancel()
 							return CheckWallhavenAPIKeyWithContext(ctx, currKey)
 						},
-						NeedsRefresh: true,
 						OnCompleted: func(err error) {
 							if err == nil {
 								sm.CommitSetting(apiKeyIdent)
 							}
 						},
 					},
-					// Button 2: The Synchronous Clear Button
-					setting.ConfirmButtonItem{
+					schema.ConfirmButtonItem{
 						Name:           "wallhavenClearBtn",
 						ButtonText:     i18n.T("Clear API Key"),
 						ConfirmTitle:   i18n.T("Clear API Key"),
 						ConfirmMessage: i18n.T("Are you sure you want to clear the Wallhaven API Key, Username, and all synced collections?"),
-						Importance:     setting.ImportanceDanger,
+						Importance:     schema.ImportanceDanger,
 						VisibleIf: func() bool {
 							currKey, _ := sm.GetValue(apiKeyIdent).(string)
 							baseKey, _ := sm.GetBaseline(apiKeyIdent).(string)
-							// Visible only if the current entry matches the verified baseline and is not empty
 							return currKey == baseKey && currKey != ""
 						},
 						OnPressed: func() {
@@ -561,8 +560,8 @@ func (p *WallhavenProvider) CreateSettingsSchema(sm setting.SettingsManager) set
 			{
 				Title:       i18n.T("Wallhaven Sync"),
 				Description: i18n.T("Synchronize your Wallhaven collections with Spice."),
-				Items: []setting.ItemSchema{
-					setting.TextItem{
+				Items: []schema.ItemSchema{
+					schema.TextItem{
 						Name:          userIdent,
 						Label:         i18n.T("Wallhaven Username:"),
 						InitialValue:  p.cfg.GetWallhavenUsername(),
@@ -580,11 +579,11 @@ func (p *WallhavenProvider) CreateSettingsSchema(sm setting.SettingsManager) set
 							p.cfg.SetWallhavenUsername(s)
 						},
 					},
-					setting.AsyncButtonItem{
+					schema.AsyncButtonItem{
 						Name:            "VerifyUsername",
 						ButtonText:      i18n.T("Verify Username"),
 						LoadingText:     i18n.T("Verifying..."),
-						Style:           setting.ButtonStylePrimary,
+						Style:           schema.ButtonStylePrimary,
 						TargetStatusKey: userIdent,
 						VisibleIf: func() bool {
 							curr := sm.GetValue(userIdent)
@@ -594,23 +593,18 @@ func (p *WallhavenProvider) CreateSettingsSchema(sm setting.SettingsManager) set
 							}
 							currStr := curr.(string)
 							baseStr := base.(string)
-
-							// Show verify if there is text, AND it doesn't match the in-memory validation, AND it doesn't match the saved persistent baseline.
 							return currStr != "" && currStr != p.validatedUsername && currStr != baseStr
 						},
 						OnPressed: func() error {
 							currUser, _ := sm.GetValue(userIdent).(string)
 							apiKeyVal, _ := sm.GetValue(apiKeyIdent).(string)
-
 							if apiKeyVal == "" {
 								return errors.New(i18n.T("API Key required for verification"))
 							}
-
 							ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 							defer cancel()
 							return CheckWallhavenUsername(ctx, currUser, apiKeyVal)
 						},
-						NeedsRefresh: true,
 						OnCompleted: func(err error) {
 							if err == nil {
 								p.validatedUsername, _ = sm.GetValue(userIdent).(string)
@@ -618,8 +612,7 @@ func (p *WallhavenProvider) CreateSettingsSchema(sm setting.SettingsManager) set
 							}
 						},
 					},
-					// Keep Synced Checkbox
-					setting.BoolItem{
+					schema.BoolItem{
 						Name:         syncIdent,
 						Label:        i18n.T("Keep Favorites (collections) Synced:"),
 						Help:         i18n.T("Automatically synchronize your Wallhaven collections with Spice. New collections will be added as inactive queries."),
@@ -633,17 +626,13 @@ func (p *WallhavenProvider) CreateSettingsSchema(sm setting.SettingsManager) set
 							}
 							currStr := curr.(string)
 							baseStr := base.(string)
-
-							// Enable if the text is not empty AND it matches EITHER our active validation OR the previously saved persistent baseline.
 							return currStr != "" && (currStr == p.validatedUsername || currStr == baseStr)
 						},
 						ApplyFunc: func(b bool) {
 							p.cfg.SetWallhavenSyncEnabled(b)
-
-							// Trigger sync in background.
 							go func() {
 								_ = p.Sync(context.Background())
-								sm.SetSettingStatus(syncIdent, i18n.T("Favorites Synced"), setting.ImportanceSuccess)
+								sm.SetSettingStatus(syncIdent, i18n.T("Favorites Synced"), schema.ImportanceSuccess)
 								sm.Refresh()
 							}()
 						},
@@ -654,12 +643,47 @@ func (p *WallhavenProvider) CreateSettingsSchema(sm setting.SettingsManager) set
 	}
 }
 
+// CreateQueryPanel creates the image query management panel.
+func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, _ string) *schema.PanelSchema {
+	return &schema.PanelSchema{
+		Sections: []schema.SectionSchema{
+			{
+				Title:       i18n.T("Wallhaven Queries"),
+				Description: i18n.T("Manage your Wallhaven image queries here."),
+				Items: []schema.ItemSchema{
+					schema.QueryListItem{
+						GetQueries: func() []schema.Query {
+							queries := p.cfg.GetQueries()
+							var abstracts []schema.Query
+							for _, q := range queries {
+								if q.Provider == p.ID() {
+									abstracts = append(abstracts, schema.Query{
+										ID:          q.ID,
+										URL:         q.URL,
+										Description: q.Description,
+										Active:      q.Active,
+									})
+								}
+							}
+							return abstracts
+						},
+						EnableQuery:  p.cfg.EnableImageQuery,
+						DisableQuery: p.cfg.DisableImageQuery,
+						RemoveQuery:  p.cfg.RemoveImageQuery,
+					},
+				},
+			},
+		},
+	}
+}
+
+
 // GetAPIPacing implements the PacedProvider interface to space out API calls.
-func (p *WallhavenProvider) GetAPIPacing() time.Duration {
+func (p *Provider) GetAPIPacing() time.Duration {
 	return 1500 * time.Millisecond // 1.5 seconds per API call (40 RPM max)
 }
 
 // GetProcessPacing implements the PacedProvider interface to space out image downloads.
-func (p *WallhavenProvider) GetProcessPacing() time.Duration {
+func (p *Provider) GetProcessPacing() time.Duration {
 	return 1500 * time.Millisecond // 1.5 seconds per image download
 }

@@ -78,7 +78,7 @@ func TestSpiceMelangeCollection(t *testing.T) {
 	client := &http.Client{Timeout: 5 * time.Second}
 
 	// 2. Initialize Provider
-	p := NewMetMuseumProvider(cfg, client)
+	p := NewProvider(cfg, client)
 
 	// Wait for async init to complete/fallback (embedded should load fast)
 	time.Sleep(500 * time.Millisecond)

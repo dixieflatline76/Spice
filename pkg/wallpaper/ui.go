@@ -291,7 +291,7 @@ func (wp *Plugin) CreateTrayMenuItems() []*fyne.MenuItem {
 		// Provider Icon
 		if isInitialized {
 			if p, exists := wp.providers[currentImage.Provider]; exists {
-				mItems.ProviderMenuItem.Icon = p.GetProviderIcon()
+				mItems.ProviderMenuItem.Icon = asResource(p.GetProviderIcon(), currentImage.Provider)
 			}
 		}
 
@@ -367,7 +367,7 @@ func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 
 	// 1. Build General Settings
 	generalSchema := builder.BuildGeneralTabSchema()
-	generalTab := container.NewVScroll(sm.RenderSchema(generalSchema))
+	generalTab := container.NewVScroll(sm.RenderSchema(*generalSchema))
 
 	// 2. Build Provider Tabs
 	onlineTab, localTab, targetTabIndex := builder.BuildProviderTabs()

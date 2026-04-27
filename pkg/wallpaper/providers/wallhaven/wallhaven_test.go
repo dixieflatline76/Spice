@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestWallhavenProvider_EnrichImage(t *testing.T) {
+func TestProvider_EnrichImage(t *testing.T) {
 	// Setup mock server
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Check URL
@@ -43,7 +43,7 @@ func TestWallhavenProvider_EnrichImage(t *testing.T) {
 		},
 	}
 
-	proc := &WallhavenProvider{
+	proc := &Provider{
 		httpClient: client,
 		cfg:        &wallpaper.Config{},
 	}
@@ -77,7 +77,7 @@ func TestWallhavenProvider_EnrichImage(t *testing.T) {
 			},
 		},
 	}
-	providerError := &WallhavenProvider{httpClient: clientError, cfg: &wallpaper.Config{}}
+	providerError := &Provider{httpClient: clientError, cfg: &wallpaper.Config{}}
 
 	img3 := provider.Image{ID: "error_id", Attribution: ""}
 	enriched3, err := providerError.EnrichImage(context.Background(), img3)
@@ -101,7 +101,7 @@ func TestWallhavenProvider_EnrichImage(t *testing.T) {
 			},
 		},
 	}
-	providerBadJSON := &WallhavenProvider{httpClient: clientBadJSON, cfg: &wallpaper.Config{}}
+	providerBadJSON := &Provider{httpClient: clientBadJSON, cfg: &wallpaper.Config{}}
 
 	img4 := provider.Image{ID: "bad_json_id", Attribution: ""}
 	enriched4, err := providerBadJSON.EnrichImage(context.Background(), img4)
@@ -110,8 +110,8 @@ func TestWallhavenProvider_EnrichImage(t *testing.T) {
 	assert.Equal(t, "", enriched4.Attribution)
 }
 
-func TestWallhavenProvider_WithResolution(t *testing.T) {
-	p := &WallhavenProvider{}
+func TestProvider_WithResolution(t *testing.T) {
+	p := &Provider{}
 	width, height := 1920, 1080
 
 	tests := []struct {
@@ -149,8 +149,8 @@ func TestWallhavenProvider_WithResolution(t *testing.T) {
 	}
 }
 
-func TestWallhavenProvider_ParseURL(t *testing.T) {
-	p := &WallhavenProvider{}
+func TestProvider_ParseURL(t *testing.T) {
+	p := &Provider{}
 
 	tests := []struct {
 		name      string
@@ -247,7 +247,7 @@ func TestWallhavenProvider_ParseURL(t *testing.T) {
 	}
 }
 
-func TestWallhavenProvider_FetchImages(t *testing.T) {
+func TestProvider_FetchImages(t *testing.T) {
 	// Setup mock server
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Basic validation of injected params
@@ -296,7 +296,7 @@ func TestWallhavenProvider_FetchImages(t *testing.T) {
 	}
 
 	// Create Provider
-	p := NewWallhavenProvider(&wallpaper.Config{}, client)
+	p := NewProvider(&wallpaper.Config{}, client)
 	p.SetAPIKeyForTesting("test-api-key")
 
 	// Test Success
@@ -307,7 +307,7 @@ func TestWallhavenProvider_FetchImages(t *testing.T) {
 	assert.Equal(t, "User1", images[0].Attribution)
 
 	// Test Error Case: Bad API Key (401)
-	pBad := NewWallhavenProvider(&wallpaper.Config{}, client)
+	pBad := NewProvider(&wallpaper.Config{}, client)
 	pBad.SetAPIKeyForTesting("wrong-key")
 	_, err = pBad.FetchImages(context.Background(), "https://wallhaven.cc/api/v1/search", 1)
 	assert.Error(t, err)

@@ -12,14 +12,10 @@ import (
 
 	_ "embed"
 
-	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/storage"
-	"fyne.io/fyne/v2/widget"
-
 	"github.com/dixieflatline76/Spice/v2/config"
 	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
+	"github.com/dixieflatline76/Spice/v2/pkg/ui/schema"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
 	"github.com/dixieflatline76/Spice/v2/pkg/wallpaper"
 	"github.com/dixieflatline76/Spice/v2/util/log"
@@ -95,8 +91,8 @@ func (p *Provider) HomeURL() string {
 //go:embed GooglePhotos.png
 var iconData []byte
 
-func (p *Provider) GetProviderIcon() fyne.Resource {
-	return fyne.NewStaticResource("GooglePhotos", iconData)
+func (p *Provider) GetProviderIcon() interface{} {
+	return iconData
 }
 
 // ParseURL handles internal Google Photos URLs.
@@ -176,19 +172,16 @@ func (p *Provider) FetchImages(ctx context.Context, apiURL string, page int) ([]
 	return images, nil
 }
 
-func (p *Provider) CreateSettingsPanel(sm setting.SettingsManager) fyne.CanvasObject {
+func (p *Provider) CreateSettingsPanel(sm setting.SettingsManager) *schema.PanelSchema {
 	return nil
 }
 
-func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl string) fyne.CanvasObject {
-	imgQueryList := p.createImgQueryList(sm)
-	sm.RegisterRefreshFunc(imgQueryList.Refresh)
-
-	schema := setting.PanelSchema{
-		Sections: []setting.SectionSchema{
+func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl string) *schema.PanelSchema {
+	return &schema.PanelSchema{
+		Sections: []schema.SectionSchema{
 			{
-				Items: []setting.ItemSchema{
-					&setting.OAuthPickerItem{
+				Items: []schema.ItemSchema{
+					&schema.OAuthPickerItem{
 						Name:  "google_photos_picker",
 						Label: i18n.T("Google Photos Extension"),
 						Help:  i18n.T("Authorize your Google account to select and download your personal photo albums directly into Spice."),
@@ -272,16 +265,52 @@ func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl strin
 							p.cleanupDownload(guid)
 						},
 					},
+					schema.QueryListItem{
+						GetQueries: func() []schema.Query {
+							queries := p.cfg.GetGooglePhotosQueries()
+							abstracts := make([]schema.Query, len(queries))
+							for i, q := range queries {
+								abstracts[i] = schema.Query{
+									ID:          q.ID,
+									URL:         q.URL,
+									Description: q.Description,
+									Active:      q.Active,
+								}
+							}
+							return abstracts
+						},
+						EnableQuery:  p.cfg.EnableGooglePhotosQuery,
+						DisableQuery: p.cfg.DisableGooglePhotosQuery,
+						RemoveQuery: func(id string) error {
+							// Cleanup files before removing query
+							queries := p.cfg.GetGooglePhotosQueries()
+							for _, q := range queries {
+								if q.ID == id {
+									u, _ := url.Parse(q.URL)
+									if u != nil && u.Host != "" {
+										p.cleanupDownload(u.Host)
+									}
+									break
+								}
+							}
+							return p.cfg.RemoveGooglePhotosQuery(id)
+						},
+						GetDisplayURL: func(q schema.Query) *url.URL {
+							u, err := url.Parse(q.URL)
+							if err != nil || u.Scheme != "googlephotos" {
+								return nil
+							}
+							guid := u.Host
+							absPath := filepath.Join(p.rootDir, guid)
+							// File URL
+							res, _ := url.Parse("file:///" + filepath.ToSlash(absPath))
+							return res
+						},
+					},
 				},
 			},
 		},
 	}
-
-	return container.NewBorder(
-		sm.RenderSchema(schema),
-		nil, nil, nil,
-		imgQueryList,
-	)
 }
 
 // updateMetadata updates the description in metadata.json while preserving other fields.
@@ -350,38 +379,8 @@ func (p *Provider) cleanupDownload(guid string) {
 	os.RemoveAll(path)
 }
 
-func (p *Provider) createImgQueryList(sm setting.SettingsManager) *widget.List {
-	return wallpaper.CreateQueryList(sm, wallpaper.QueryListConfig{
-		GetQueries:   p.cfg.GetGooglePhotosQueries,
-		EnableQuery:  p.cfg.EnableGooglePhotosQuery,
-		DisableQuery: p.cfg.DisableGooglePhotosQuery,
-		RemoveQuery: func(id string) error {
-			// Google Photos needs file cleanup before removing the query
-			queries := p.cfg.GetGooglePhotosQueries()
-			for _, q := range queries {
-				if q.ID == id {
-					u, _ := url.Parse(q.URL)
-					if u != nil && u.Host != "" {
-						p.cleanupDownload(u.Host)
-					}
-					break
-				}
-			}
-			return p.cfg.RemoveGooglePhotosQuery(id)
-		},
-		GetDisplayURL: func(q wallpaper.ImageQuery) *url.URL {
-			u, err := url.Parse(q.URL)
-			if err != nil || u.Scheme != "googlephotos" {
-				return nil
-			}
-			guid := u.Host
-			absPath := filepath.Join(p.rootDir, guid)
-
-			f := storage.NewFileURI(absPath)
-			res, _ := url.Parse(f.String())
-			return res
-		},
-	})
+func (p *Provider) OpenBrowser(urlStr string) error {
+	return nil // Abstracted
 }
 
 func (p *Provider) migrateOldGooglePhotos() {
@@ -422,7 +421,6 @@ func (p *Provider) migrateOldGooglePhotos() {
 
 		if err := os.Rename(oldPath, newPath); err != nil {
 			log.Printf("[GooglePhotos] Migration error: failed to move collection %s: %v", entry.Name(), err)
-			// Recursive copy-and-delete is complex, so we just log failure here as it's a cache
 		}
 	}
 
@@ -430,9 +428,4 @@ func (p *Provider) migrateOldGooglePhotos() {
 	if entries, err := os.ReadDir(oldDir); err == nil && len(entries) == 0 {
 		_ = os.Remove(oldDir)
 	}
-}
-
-func (p *Provider) OpenBrowser(urlStr string) error {
-	u, _ := url.Parse(urlStr)
-	return fyne.CurrentApp().OpenURL(u)
 }

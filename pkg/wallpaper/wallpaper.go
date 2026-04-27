@@ -1074,7 +1074,7 @@ func (wp *Plugin) updateTrayMenuUI(img provider.Image, monitorID int) {
 
 		// Restore Icons using the provider abstraction
 		if p, exists := wp.providers[img.Provider]; exists {
-			mItems.ProviderMenuItem.Icon = p.GetProviderIcon()
+			mItems.ProviderMenuItem.Icon = asResource(p.GetProviderIcon(), img.Provider)
 		} else {
 			mItems.ProviderMenuItem.Icon = nil
 		}

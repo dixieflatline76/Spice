@@ -16,6 +16,7 @@ import (
 
 	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
+	"github.com/dixieflatline76/Spice/v2/pkg/ui/schema"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
 	"github.com/dixieflatline76/Spice/v2/pkg/wallpaper"
 )
@@ -56,8 +57,8 @@ func (cb *CircuitBreaker) GetCooldownTime() time.Duration {
 	return time.Until(cb.openUntil)
 }
 
-// WikimediaProvider implements ImageProvider for Wikimedia Commons
-type WikimediaProvider struct {
+// Provider implements ImageProvider for Wikimedia Commons
+type Provider struct {
 	cfg        *wallpaper.Config
 	httpClient *http.Client
 	baseURL    string
@@ -67,11 +68,11 @@ type WikimediaProvider struct {
 	mu          sync.Mutex
 }
 
-// NewWikimediaProvider creates a new instance of WikimediaProvider
-func NewWikimediaProvider(cfg *wallpaper.Config, client *http.Client) *WikimediaProvider {
+// NewProvider creates a new instance of Provider
+func NewProvider(cfg *wallpaper.Config, client *http.Client) *Provider {
 	cb := &CircuitBreaker{}
 
-	p := &WikimediaProvider{
+	p := &Provider{
 		cfg:         cfg,
 		baseURL:     WikimediaBaseURL,
 		cb:          cb,
@@ -89,37 +90,45 @@ func NewWikimediaProvider(cfg *wallpaper.Config, client *http.Client) *Wikimedia
 }
 
 // ID returns the provider's unique identifier
-func (p *WikimediaProvider) ID() string {
+func (p *Provider) ID() string {
 	return "Wikimedia"
 }
 
 // Name returns the provider name
-func (p *WikimediaProvider) Name() string {
+func (p *Provider) Name() string {
 	return i18n.T("Wikimedia")
 }
 
-func (p *WikimediaProvider) Type() provider.ProviderType {
+func (p *Provider) Type() provider.ProviderType {
 	return provider.TypeOnline
 }
 
-func (p *WikimediaProvider) GetAttributionType() provider.AttributionType {
+func (p *Provider) GetAttributionType() provider.AttributionType {
 	return provider.AttributionBy
 }
 
-func (p *WikimediaProvider) SupportsUserQueries() bool {
+func (p *Provider) SupportsUserQueries() bool {
 	return true
 }
 
-func (p *WikimediaProvider) HomeURL() string {
+func (p *Provider) HomeURL() string {
 	return "https://commons.wikimedia.org"
 }
 
-func (p *WikimediaProvider) IsThrottled() bool {
+func (p *Provider) Title() string {
+	return "Wikimedia"
+}
+
+func (p *Provider) GetProviderIcon() interface{} {
+	return iconData
+}
+
+func (p *Provider) IsThrottled() bool {
 	return p.cb.IsOpen()
 }
 
 // ParseURL determines if the input is a Search term, a Category, or a direct URL.
-func (p *WikimediaProvider) ParseURL(input string) (string, error) {
+func (p *Provider) ParseURL(input string) (string, error) {
 	input = strings.TrimSpace(input)
 	if input == "" {
 		return "", errors.New("input cannot be empty")
@@ -140,7 +149,7 @@ func (p *WikimediaProvider) ParseURL(input string) (string, error) {
 	return "search:" + input, nil
 }
 
-func (p *WikimediaProvider) checkPrefixNormalization(input string) (string, bool) {
+func (p *Provider) checkPrefixNormalization(input string) (string, bool) {
 	lowerInput := strings.ToLower(input)
 	if strings.HasPrefix(lowerInput, "search:") {
 		return "search:" + input[7:], true
@@ -160,7 +169,7 @@ func (p *WikimediaProvider) checkPrefixNormalization(input string) (string, bool
 	return "", false
 }
 
-func (p *WikimediaProvider) handleCategoryInput(input string) (string, bool, error) {
+func (p *Provider) handleCategoryInput(input string) (string, bool, error) {
 	catRegex := regexp.MustCompile(WikimediaCategoryRegexp)
 	if !catRegex.MatchString(input) {
 		return "", false, nil
@@ -186,7 +195,7 @@ func (p *WikimediaProvider) handleCategoryInput(input string) (string, bool, err
 	return "category:" + strings.TrimPrefix(input, "Category:"), true, nil
 }
 
-func (p *WikimediaProvider) handleHttpInput(input string) (string, error) {
+func (p *Provider) handleHttpInput(input string) (string, error) {
 	domainRegex := regexp.MustCompile(WikimediaDomainRegexp)
 	if !domainRegex.MatchString(input) {
 		return "", errors.New("invalid Wikimedia URL: must be commons.wikimedia.org")
@@ -257,7 +266,7 @@ type wikimediaResponse struct {
 	} `json:"error"`
 }
 
-func (p *WikimediaProvider) WithResolution(query string, width, height int) string {
+func (p *Provider) WithResolution(query string, width, height int) string {
 	constraint := fmt.Sprintf(" filew:>%d fileh:>%d", width, height)
 	if strings.HasPrefix(query, "search:") {
 		return query + constraint
@@ -269,7 +278,7 @@ func (p *WikimediaProvider) WithResolution(query string, width, height int) stri
 	return query
 }
 
-func (p *WikimediaProvider) FetchImages(ctx context.Context, query string, page int) ([]provider.Image, error) {
+func (p *Provider) FetchImages(ctx context.Context, query string, page int) ([]provider.Image, error) {
 	var allImages []provider.Image
 	isPageQuery := strings.HasPrefix(query, "page:")
 
@@ -410,11 +419,11 @@ func (p *WikimediaProvider) FetchImages(ctx context.Context, query string, page 
 	return allImages, nil
 }
 
-func (p *WikimediaProvider) doWithRetry(ctx context.Context, fullURL string, target interface{}) error {
+func (p *Provider) doWithRetry(ctx context.Context, fullURL string, target interface{}) error {
 	return p.doRequest(ctx, fullURL, target)
 }
 
-func (p *WikimediaProvider) doRequest(ctx context.Context, fullURL string, target interface{}) error {
+func (p *Provider) doRequest(ctx context.Context, fullURL string, target interface{}) error {
 	req, err := http.NewRequestWithContext(ctx, "GET", fullURL, nil)
 	if err != nil {
 		return err
@@ -437,7 +446,7 @@ func (p *WikimediaProvider) doRequest(ctx context.Context, fullURL string, targe
 	return nil
 }
 
-func (p *WikimediaProvider) GetClient() *http.Client {
+func (p *Provider) GetClient() *http.Client {
 	return p.httpClient
 }
 
@@ -485,19 +494,19 @@ func (t *CircuitBreakerRoundTripper) RoundTrip(req *http.Request) (*http.Respons
 	return resp, nil
 }
 
-func (p *WikimediaProvider) GetAPIPacing() time.Duration {
+func (p *Provider) GetAPIPacing() time.Duration {
 	return WikimediaAPIPacing
 }
 
-func (p *WikimediaProvider) GetProcessPacing() time.Duration {
+func (p *Provider) GetProcessPacing() time.Duration {
 	return WikimediaMediaPacing
 }
 
-func (p *WikimediaProvider) EnrichImage(ctx context.Context, img provider.Image) (provider.Image, error) {
+func (p *Provider) EnrichImage(ctx context.Context, img provider.Image) (provider.Image, error) {
 	return img, nil
 }
 
-func (p *WikimediaProvider) GetDownloadHeaders() map[string]string {
+func (p *Provider) GetDownloadHeaders() map[string]string {
 	return map[string]string{
 		"User-Agent": WikimediaUserAgent,
 		"Referer":    "https://github.com/dixieflatline76/Spice",
@@ -506,22 +515,18 @@ func (p *WikimediaProvider) GetDownloadHeaders() map[string]string {
 
 // --- UI Integration (Pure Go) ---
 
-func (p *WikimediaProvider) Title() string {
-	return "Wikimedia"
-}
-
-// CreateSettingsSchema returns the declarative UI for Wikimedia settings.
-func (p *WikimediaProvider) CreateSettingsSchema(_ setting.SettingsManager) setting.PanelSchema {
-	return setting.PanelSchema{
-		Sections: []setting.SectionSchema{
+// CreateSettingsPanel returns the declarative UI for Wikimedia settings.
+func (p *Provider) CreateSettingsPanel(_ setting.SettingsManager) *schema.PanelSchema {
+	return &schema.PanelSchema{
+		Sections: []schema.SectionSchema{
 			{
 				Title: i18n.T("Wikimedia Commons"),
-				Items: []setting.ItemSchema{
-					setting.LabelItem{
+				Items: []schema.ItemSchema{
+					schema.LabelItem{
 						Text:       i18n.T("Wikimedia Commons is a media file repository making public domain and freely-licensed educational media content available to everyone."),
-						Importance: setting.ImportanceLow,
+						Importance: schema.ImportanceLow,
 					},
-					setting.HyperlinkItem{
+					schema.HyperlinkItem{
 						Text: i18n.T("Donate to Wikimedia"),
 						URL:  "https://donate.wikimedia.org/",
 					},
@@ -531,8 +536,46 @@ func (p *WikimediaProvider) CreateSettingsSchema(_ setting.SettingsManager) sett
 	}
 }
 
+// CreateQueryPanel creates the image query management panel.
+func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, _ string) *schema.PanelSchema {
+	return &schema.PanelSchema{
+		Sections: []schema.SectionSchema{
+			{
+				Title:       i18n.T("Wikimedia Queries"),
+				Description: i18n.T("Manage your Wikimedia image queries here."),
+				Items: []schema.ItemSchema{
+					schema.QueryListItem{
+						GetQueries: func() []schema.Query {
+							queries := p.cfg.GetQueries()
+							var abstracts []schema.Query
+							for _, q := range queries {
+								if q.Provider == p.ID() {
+									abstracts = append(abstracts, schema.Query{
+										ID:          q.ID,
+										URL:         q.URL,
+										Description: q.Description,
+										Active:      q.Active,
+									})
+								}
+							}
+							return abstracts
+						},
+						EnableQuery:  p.cfg.EnableImageQuery,
+						DisableQuery: p.cfg.DisableImageQuery,
+						RemoveQuery:  p.cfg.RemoveImageQuery,
+						GetDisplayURL: func(q schema.Query) *url.URL {
+							return p.getDisplayURL(wallpaper.ImageQuery{URL: q.URL})
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+
 // Internal helper for use by the Fyne shim
-func (p *WikimediaProvider) validateQueryInternal(term, desc string) error {
+func (p *Provider) validateQueryInternal(term, desc string) error {
 	if len(desc) < 5 {
 		return errors.New(i18n.T("description too short"))
 	}
@@ -550,7 +593,7 @@ func (p *WikimediaProvider) validateQueryInternal(term, desc string) error {
 	return nil
 }
 
-func (p *WikimediaProvider) getDisplayURL(q wallpaper.ImageQuery) *url.URL {
+func (p *Provider) getDisplayURL(q wallpaper.ImageQuery) *url.URL {
 	queryURL := q.URL
 	lowerURL := strings.ToLower(queryURL)
 	var displayURL string
@@ -573,7 +616,7 @@ func (p *WikimediaProvider) getDisplayURL(q wallpaper.ImageQuery) *url.URL {
 
 func init() {
 	wallpaper.RegisterProvider("Wikimedia", func(cfg *wallpaper.Config, client *http.Client) provider.ImageProvider {
-		return NewWikimediaProvider(cfg, client)
+		return NewProvider(cfg, client)
 	})
 }
 
