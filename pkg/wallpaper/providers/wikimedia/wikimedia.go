@@ -574,25 +574,6 @@ func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, _ string) *schem
 }
 
 
-// Internal helper for use by the Fyne shim
-func (p *Provider) validateQueryInternal(term, desc string) error {
-	if len(desc) < 5 {
-		return errors.New(i18n.T("description too short"))
-	}
-	if len(desc) > wallpaper.MaxDescLength {
-		return errors.New(i18n.T("description too long"))
-	}
-	normalized, err := p.ParseURL(term)
-	if err != nil {
-		return err
-	}
-	id := wallpaper.GenerateQueryID(p.ID() + ":" + normalized)
-	if p.cfg.IsDuplicateID(id) {
-		return errors.New(i18n.T("duplicate query"))
-	}
-	return nil
-}
-
 func (p *Provider) getDisplayURL(q wallpaper.ImageQuery) *url.URL {
 	queryURL := q.URL
 	lowerURL := strings.ToLower(queryURL)
