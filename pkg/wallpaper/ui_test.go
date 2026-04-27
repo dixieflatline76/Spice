@@ -11,6 +11,7 @@ import (
 	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/widget"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
+	"github.com/dixieflatline76/Spice/v2/pkg/ui/schema"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -397,11 +398,11 @@ func (m *MockProvider) ID() string                                              
 func (m *MockProvider) Name() string                                                     { return m.IDVal }
 func (m *MockProvider) Title() string                                                    { return m.TitleVal }
 func (m *MockProvider) Type() provider.ProviderType                                      { return provider.TypeOnline }
-func (m *MockProvider) GetProviderIcon() fyne.Resource                                   { return nil }
+func (m *MockProvider) GetProviderIcon() interface{}                                     { return nil }
 func (m *MockProvider) GetAttributionType() provider.AttributionType                     { return provider.AttributionBy }
 func (m *MockProvider) ParseURL(url string) (string, error)                              { return "", nil }
-func (m *MockProvider) CreateSettingsPanel(sm setting.SettingsManager) fyne.CanvasObject { return nil }
-func (m *MockProvider) CreateQueryPanel(sm setting.SettingsManager, pendingURL string) fyne.CanvasObject {
+func (m *MockProvider) CreateSettingsPanel(sm setting.SettingsManager) *schema.PanelSchema { return nil }
+func (m *MockProvider) CreateQueryPanel(sm setting.SettingsManager, pendingURL string) *schema.PanelSchema {
 	return nil
 }
 func (m *MockProvider) FetchImages(ctx context.Context, apiURL string, page int) ([]provider.Image, error) {

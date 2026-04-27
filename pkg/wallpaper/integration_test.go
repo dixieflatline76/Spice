@@ -15,6 +15,7 @@ import (
 	"fyne.io/fyne/v2"
 	"github.com/dixieflatline76/Spice/v2/asset"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
+	"github.com/dixieflatline76/Spice/v2/pkg/ui/schema"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
 	"github.com/dixieflatline76/Spice/v2/util"
 	"github.com/stretchr/testify/assert"
@@ -332,7 +333,7 @@ func TestLifecycle_HappyPath(t *testing.T) {
 
 // Helper to bundle boilerplate setup
 type StubImageProvider struct {
-	icon fyne.Resource
+	icon interface{}
 }
 
 func (s *StubImageProvider) ID() string                             { return "stub" }
@@ -346,8 +347,8 @@ func (s *StubImageProvider) EnrichImage(ctx context.Context, img provider.Image)
 	return img, nil
 }
 func (s *StubImageProvider) Title() string                  { return "Stub" }
-func (s *StubImageProvider) GetProviderIcon() fyne.Resource { return s.icon }
-func (s *StubImageProvider) CreateSettingsPanel(sm setting.SettingsManager) fyne.CanvasObject {
+func (s *StubImageProvider) GetProviderIcon() interface{}    { return s.icon }
+func (s *StubImageProvider) CreateSettingsPanel(sm setting.SettingsManager) *schema.PanelSchema {
 	return nil
 }
 
@@ -358,7 +359,7 @@ func (s *StubImageProvider) Type() provider.ProviderType {
 func (s *StubImageProvider) SupportsUserQueries() bool {
 	return true
 }
-func (s *StubImageProvider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl string) fyne.CanvasObject {
+func (s *StubImageProvider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl string) *schema.PanelSchema {
 	return nil
 }
 

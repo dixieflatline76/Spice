@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"fyne.io/fyne/v2"
 	"golang.org/x/time/rate"
 
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
+	"github.com/dixieflatline76/Spice/v2/pkg/ui/schema"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
 )
 
@@ -30,13 +30,13 @@ func (m *MockPacedProvider) EnrichImage(ctx context.Context, img provider.Image)
 }
 func (m *MockPacedProvider) ParseURL(url string) (string, error) { return "", nil }
 func (m *MockPacedProvider) SupportsUserQueries() bool           { return false }
-func (m *MockPacedProvider) CreateQueryPanel(sm setting.SettingsManager, url string) fyne.CanvasObject {
+func (m *MockPacedProvider) CreateQueryPanel(sm setting.SettingsManager, url string) *schema.PanelSchema {
 	return nil
 }
-func (m *MockPacedProvider) CreateSettingsPanel(sm setting.SettingsManager) fyne.CanvasObject {
+func (m *MockPacedProvider) CreateSettingsPanel(sm setting.SettingsManager) *schema.PanelSchema {
 	return nil
 }
-func (m *MockPacedProvider) GetProviderIcon() fyne.Resource { return nil }
+func (m *MockPacedProvider) GetProviderIcon() interface{} { return nil }
 func (m *MockPacedProvider) HomeURL() string                { return "" }
 func (m *MockPacedProvider) Title() string                  { return m.id }
 func (m *MockPacedProvider) Type() provider.ProviderType    { return provider.TypeOnline }

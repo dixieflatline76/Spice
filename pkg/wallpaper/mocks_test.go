@@ -13,6 +13,7 @@ import (
 	"github.com/dixieflatline76/Spice/v2/asset"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui"
+	"github.com/dixieflatline76/Spice/v2/pkg/ui/schema"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
 	"github.com/stretchr/testify/mock"
 )
@@ -368,10 +369,10 @@ func (m *MockImageProvider) Title() string {
 }
 
 func (m *MockImageProvider) HomeURL() string { return "https://mock.provider" }
-func (m *MockImageProvider) CreateSettingsPanel(sm setting.SettingsManager) fyne.CanvasObject {
+func (m *MockImageProvider) CreateSettingsPanel(sm setting.SettingsManager) *schema.PanelSchema {
 	return nil
 }
-func (m *MockImageProvider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl string) fyne.CanvasObject {
+func (m *MockImageProvider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl string) *schema.PanelSchema {
 	return nil
 }
 func (m *MockImageProvider) GetAttributionType() provider.AttributionType {
@@ -382,4 +383,4 @@ func (m *MockImageProvider) GetAttributionType() provider.AttributionType {
 	return args.Get(0).(provider.AttributionType)
 }
 
-func (m *MockImageProvider) GetProviderIcon() fyne.Resource { return nil }
+func (m *MockImageProvider) GetProviderIcon() interface{} { return nil }
