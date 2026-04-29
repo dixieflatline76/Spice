@@ -12,7 +12,7 @@ import (
 )
 
 func TestWikimediaParseURL(t *testing.T) {
-	wp := &WikimediaProvider{}
+	wp := &Provider{}
 
 	tests := []struct {
 		input    string
@@ -47,7 +47,7 @@ func TestWikimediaParseURL(t *testing.T) {
 }
 
 func TestWikimediaWithResolution(t *testing.T) {
-	wp := &WikimediaProvider{}
+	wp := &Provider{}
 
 	tests := []struct {
 		name     string
@@ -119,7 +119,7 @@ func TestWikimediaFetchImages_Category(t *testing.T) {
 
 	cfg := &wallpaper.Config{}
 	client := ts.Client()
-	wp := NewWikimediaProvider(cfg, client)
+	wp := NewProvider(cfg, client)
 	wp.baseURL = ts.URL // Override Base URL
 
 	images, err := wp.FetchImages(context.Background(), "category:Nature", 1)
@@ -162,7 +162,7 @@ func TestWikimediaFetchImages_Gallery(t *testing.T) {
 
 	cfg := &wallpaper.Config{}
 	client := ts.Client()
-	wp := NewWikimediaProvider(cfg, client)
+	wp := NewProvider(cfg, client)
 	wp.baseURL = ts.URL
 
 	images, err := wp.FetchImages(context.Background(), "page:Commons:Featured_pictures/Astronomy", 1)
@@ -172,10 +172,10 @@ func TestWikimediaFetchImages_Gallery(t *testing.T) {
 	assert.Equal(t, "Hubble (Public Domain)", images[0].Attribution)
 }
 
-func TestWikimediaProvider_Structure(t *testing.T) {
+func TestProvider_Structure(t *testing.T) {
 	cfg := &wallpaper.Config{}
 	client := &http.Client{}
-	p := NewWikimediaProvider(cfg, client)
+	p := NewProvider(cfg, client)
 
 	assert.Equal(t, "Wikimedia", p.Title())
 }
@@ -280,7 +280,7 @@ func TestWikimediaPaginationState(t *testing.T) {
 
 	cfg := &wallpaper.Config{}
 	client := ts.Client()
-	wp := NewWikimediaProvider(cfg, client)
+	wp := NewProvider(cfg, client)
 	wp.baseURL = ts.URL
 
 	// 1. Fetch Page 1

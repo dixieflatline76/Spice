@@ -2,23 +2,20 @@ package artic
 
 import (
 	"context"
-	_ "embed" // For go:embed
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"io"
 	"math/rand"
 	"net/http"
-	"net/url"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
-	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/widget"
 	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
+	"github.com/dixieflatline76/Spice/v2/pkg/ui/schema"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
 	"github.com/dixieflatline76/Spice/v2/pkg/wallpaper"
 	"github.com/dixieflatline76/Spice/v2/util/log"
@@ -35,6 +32,9 @@ type Config interface {
 	GetArtInstituteChicagoQueries() []wallpaper.ImageQuery
 	EnableArtInstituteChicagoQuery(id string) error
 	DisableArtInstituteChicagoQuery(id string) error
+	EnableImageQuery(id string) error
+	DisableImageQuery(id string) error
+	RemoveImageQuery(id string) error
 }
 
 // Provider implements the Art Institute of Chicago image provider.
@@ -110,12 +110,12 @@ type TourData struct {
 
 func init() {
 	wallpaper.RegisterProvider(ProviderName, func(cfg *wallpaper.Config, client *http.Client) provider.ImageProvider {
-		return NewArtInstituteChicagoProvider(cfg, client)
+		return NewProvider(cfg, client)
 	})
 }
 
-// NewArtInstituteChicagoProvider creates a new AIC provider.
-func NewArtInstituteChicagoProvider(cfg Config, httpClient *http.Client) *Provider {
+// NewProvider creates a new AIC provider.
+func NewProvider(cfg Config, httpClient *http.Client) *Provider {
 	// We wrap the provided client with our strict serialization logic
 	next := httpClient.Transport
 	if next == nil {
@@ -142,11 +142,30 @@ func NewArtInstituteChicagoProvider(cfg Config, httpClient *http.Client) *Provid
 		if err != nil {
 			log.Printf("AIC: Failed to init remote collection: %v", err)
 		} else {
+			p.idCacheMu.Lock()
 			p.curatedList = *col
+			p.idCacheMu.Unlock()
 		}
 	}()
 	return p
 }
+
+// SyncRemoteConfig fetches the latest curated collections list from the remote repository.
+func (p *Provider) SyncRemoteConfig() error {
+	col, err := RefreshRemoteCollection()
+	if err != nil {
+		return err
+	}
+	if col != nil {
+		p.idCacheMu.Lock()
+		p.curatedList = *col
+		p.idCacheMu.Unlock()
+	}
+	return nil
+}
+
+// Ensure interface compliance
+var _ provider.RemoteConfigSyncer = (*Provider)(nil)
 
 func (p *Provider) ID() string {
 	return "ArtInstituteChicago"
@@ -158,6 +177,10 @@ func (p *Provider) Name() string {
 
 func (p *Provider) Title() string {
 	return ProviderTitle
+}
+
+func (p *Provider) GetProviderIcon() interface{} {
+	return iconData
 }
 
 func (p *Provider) GetClient() *http.Client {
@@ -285,11 +308,16 @@ func (p *Provider) resolveQueryToIDs(ctx context.Context, query string) ([]int, 
 	}
 
 	// Stability: Sort -> Shuffle -> Cache
-	sort.Ints(ids)
-	if p.cfg.GetImgShuffle() {
-		rand.Shuffle(len(ids), func(i, j int) {
-			ids[i], ids[j] = ids[j], ids[i]
-		})
+	if len(ids) > 0 {
+		idsCopy := make([]int, len(ids))
+		copy(idsCopy, ids)
+
+		if p.cfg.GetImgShuffle() {
+			rand.Shuffle(len(idsCopy), func(i, j int) {
+				idsCopy[i], idsCopy[j] = idsCopy[j], idsCopy[i]
+			})
+		}
+		ids = idsCopy
 	}
 
 	p.idCacheMu.Lock()
@@ -357,10 +385,6 @@ func (p *Provider) fetchArtworkDetails(ctx context.Context, id int) (*provider.I
 	}, nil
 }
 
-func (p *Provider) GetProviderIcon() fyne.Resource {
-	return fyne.NewStaticResource("artic.png", iconData)
-}
-
 func (p *Provider) EnrichImage(ctx context.Context, img provider.Image) (provider.Image, error) {
 	return img, nil // No enrichment needed for AIC currently
 }
@@ -377,91 +401,8 @@ func (p *Provider) GetDownloadHeaders() map[string]string {
 	}
 }
 
-func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl string) fyne.CanvasObject {
-	header := wallpaper.CreateMuseumHeader(
-		"Art Institute of Chicago",
-		"Chicago, IL • USA",
-		i18n.T("CC0 - Public Domain"),
-		"https://www.artic.edu/open-access/open-access-images",
-		i18n.T("One of the world's great art museums, housing icons like Nighthawks and American Gothic."),
-		"https://www.google.com/maps/search/?api=1&query=Art+Institute+of+Chicago",
-		"https://www.artic.edu",
-		"https://sales.artic.edu/donate",
-		sm,
-	)
-
-	// Collection List (Deferred Save Model)
-	listContainer := container.NewVBox()
-
-	// We iterate through our curated tours
-	keys := make([]string, 0, len(p.curatedList.Tours))
-	for k := range p.curatedList.Tours {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-
-	// Helper to find existing query state
-	getDetails := func(key string) (bool, string) {
-		for _, q := range p.cfg.GetArtInstituteChicagoQueries() {
-			if q.URL == key {
-				return q.Active, q.ID
-			}
-		}
-		return false, ""
-	}
-
-	for _, key := range keys {
-		tour := p.curatedList.Tours[key]
-		key := key // shadow for closure
-		active, _ := getDetails(key)
-
-		sm.SeedBaseline(ProviderName+"_"+key, active)
-		check := widget.NewCheck(tour.Name, func(b bool) {
-			if b != sm.GetBaseline(ProviderName+"_"+key).(bool) {
-				// Deferred save logic
-				sm.SetSettingChangedCallback(ProviderName+"_"+key, func() {
-					_, cid := getDetails(key)
-					if b {
-						if cid != "" {
-							if err := p.cfg.EnableArtInstituteChicagoQuery(cid); err != nil {
-								log.Printf("AIC: Failed to enable query %s: %v", key, err)
-							}
-						} else {
-							if _, err := p.cfg.AddArtInstituteChicagoQuery(tour.Name, key, true); err != nil {
-								log.Printf("AIC: Failed to add query %s: %v", tour.Name, err)
-							}
-						}
-					} else {
-						if cid != "" {
-							if err := p.cfg.DisableArtInstituteChicagoQuery(cid); err != nil {
-								log.Printf("AIC: Failed to disable query %s: %v", key, err)
-							}
-						}
-					}
-				})
-			} else {
-				sm.RemoveSettingChangedCallback(ProviderName + "_" + key)
-			}
-			sm.GetCheckAndEnableApplyFunc()()
-		})
-		check.Checked = active
-		listContainer.Add(check)
-	}
-
-	return container.NewVBox(
-		header,
-		widget.NewSeparator(),
-		widget.NewLabelWithStyle(i18n.T("Curated Tours"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-		listContainer,
-	)
-}
-
-func (p *Provider) CreateSettingsPanel(sm setting.SettingsManager) fyne.CanvasObject {
-	return nil // No specific settings like API keys needed for AIC
-}
-
 func (p *Provider) searchArtworkIDs(ctx context.Context, query string) ([]int, error) {
-	searchURL := fmt.Sprintf("%s/artworks/search?q=%s&fields=id,thumbnail&limit=100", APIBaseURL, url.QueryEscape(query))
+	searchURL := fmt.Sprintf("%s/artworks/search?q=%s&fields=id,thumbnail&limit=100", APIBaseURL, strings.ReplaceAll(query, " ", "%20"))
 
 	req, err := http.NewRequestWithContext(ctx, "GET", searchURL, nil)
 	if err != nil {
@@ -517,4 +458,88 @@ func getIIIFURL(imageID string, width, height int) string {
 	// Format: {scheme}://{server}{/prefix}/{identifier}/{region}/{size}/{rotation}/{quality}.{format}
 	// We use full region, and !w,h for "fit within"
 	return fmt.Sprintf("https://www.artic.edu/iiif/2/%s/full/!%d,%d/0/default.jpg", imageID, width, height)
+}
+
+// --- UI Implementation (Pure Go) ---
+
+// CreateSettingsPanel returns the declarative UI for ArtIC settings.
+func (p *Provider) CreateSettingsPanel(sm setting.SettingsManager) *schema.PanelSchema {
+	return schema.CreateMuseumSettingsPanel(schema.MuseumSettingsConfig{
+		ID:          "AIC",
+		Title:       i18n.T("Art Institute of Chicago"),
+		Location:    i18n.T("Chicago, IL, USA"),
+		LicenseURL:  "https://www.artic.edu/open-access/open-access-images",
+		Description: i18n.T("One of the world's great art museums, housing icons like Nighthawks and American Gothic."),
+		MapQuery:    "Art Institute of Chicago",
+		WebsiteURL:  "https://www.artic.edu",
+		DonateURL:   "https://www.artic.edu/support-us",
+	}, sm.OpenURL)
+}
+
+// CreateQueryPanel creates the image query management panel.
+func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, _ string) *schema.PanelSchema {
+	// 1. Curated Tours Section
+	keys := make([]string, 0, len(p.curatedList.Tours))
+	for k := range p.curatedList.Tours {
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		nameI := p.curatedList.Tours[keys[i]].Name
+		nameJ := p.curatedList.Tours[keys[j]].Name
+		if strings.HasPrefix(nameI, "⭐") && !strings.HasPrefix(nameJ, "⭐") {
+			return true
+		}
+		if strings.HasPrefix(nameJ, "⭐") && !strings.HasPrefix(nameI, "⭐") {
+			return false
+		}
+		return nameI < nameJ
+	})
+
+	tourItems := make([]schema.ItemSchema, 0, len(keys))
+	for _, key := range keys {
+		tour := p.curatedList.Tours[key]
+		key := key // shadow for closure
+
+		// Helper to find existing query state
+		getQuery := func(key string) (bool, string) {
+			for _, q := range p.cfg.GetArtInstituteChicagoQueries() {
+				if q.URL == key {
+					return q.Active, q.ID
+				}
+			}
+			return false, ""
+		}
+
+		active, _ := getQuery(key)
+
+		// We use BoolItem for each tour, mimicking the legacy NewCheck approach
+		tourItems = append(tourItems, schema.BoolItem{
+			Name:         ProviderName + "_" + key,
+			Label:        tour.Name,
+			InitialValue: active,
+			ApplyFunc: func(b bool) {
+				_, cid := getQuery(key)
+				if b {
+					if cid != "" {
+						_ = p.cfg.EnableArtInstituteChicagoQuery(cid)
+					} else {
+						_, _ = p.cfg.AddArtInstituteChicagoQuery(tour.Name, key, true)
+					}
+				} else {
+					if cid != "" {
+						_ = p.cfg.DisableArtInstituteChicagoQuery(cid)
+					}
+				}
+			},
+		})
+	}
+
+	toursSection := schema.SectionSchema{
+		Title: i18n.T("Curated Tours"),
+		Items: tourItems,
+	}
+
+	return &schema.PanelSchema{
+		Sections: []schema.SectionSchema{toursSection},
+	}
 }

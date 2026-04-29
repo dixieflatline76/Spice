@@ -29,16 +29,20 @@ const (
 	StaggerMonitorChangesPrefKey     = pluginPrefix + "stagger_changes_key"             // StaggerMonitorChangesPrefKey is used to set and retrieve the boolean flag for staggering wallpaper changes
 	ShortcutsDisabledPrefKey         = pluginPrefix + "shortcuts_disabled_key"          // ShortcutsDisabledPrefKey is used to set and retrieve the boolean flag for disabling hotkeys
 	TargetedShortcutsDisabledPrefKey = pluginPrefix + "targeted_shortcuts_disabled_key" // TargetedShortcutsDisabledPrefKey is used to set and retrieve the boolean flag for disabling targeted hotkeys
+	LogLevelPrefKey                  = pluginPrefix + "log_level_key"
+	MaxConcurrentProcessorsPrefKey   = pluginPrefix + "max_concurrent_processors_key"
 
 	// Provider keys (Shared)
+	WallhavenConfigPrefKey          = "wallhaven_image_queries"
+	WallhavenSyncEnabledPrefKey     = pluginPrefix + "wallhaven_sync_enabled_key"
+	WallhavenUsernamePrefKey        = pluginPrefix + "wallhaven_username_key"
+	WallhavenAPIKeyPrefKey          = "wallhaven_api_key" //nolint:gosec // Preference key, not a secret
 	GooglePhotosTokenPrefKey        = "google_photos_access_token"
 	GooglePhotosRefreshTokenPrefKey = "google_photos_refresh_token"
 	GooglePhotosTokenExpiryPrefKey  = "google_photos_token_expiry"
 	WikimediaAccessTokenPrefKey     = "wikimedia_access_token"  //nolint:gosec // Preference key, not a secret
 	WikimediaRefreshTokenPrefKey    = "wikimedia_refresh_token" //nolint:gosec // Preference key, not a secret
 	WikimediaTokenExpiryPrefKey     = "wikimedia_token_expiry"
-	WallhavenAPIKeyPrefKey          = "wallhaven_api_key" //nolint:gosec // Preference key, not a secret
-	wallhavenConfigPrefKey          = "wallhaven_image_queries"
 	PexelsAPIKeyPrefKey             = "pexels_api_key"    //nolint:gosec // Preference key, not a secret
 	PexelsAPIKeyRegexp              = `^[a-zA-Z0-9]{56}$` //nolint:gosec // Valid regex, not a secret
 	PexelsURLRegexp                 = `^https?://(?:www\.|api\.)?pexels\.com/(search/|collections/|v1/|).+$`
@@ -114,6 +118,7 @@ type Frequency int
 // Frequency constants
 const (
 	FrequencyNever Frequency = iota
+	Frequency1Minute
 	Frequency5Minutes
 	Frequency15Minutes
 	Frequency30Minutes
@@ -127,6 +132,7 @@ const (
 // FrequencyDurations maps a Frequency to its time.Duration
 var FrequencyDurations = map[Frequency]time.Duration{
 	FrequencyNever:     time.Duration(math.MaxInt64),
+	Frequency1Minute:   1 * time.Minute,
 	Frequency5Minutes:  5 * time.Minute,
 	Frequency15Minutes: 15 * time.Minute,
 	Frequency30Minutes: 30 * time.Minute,
@@ -141,6 +147,8 @@ func (f Frequency) String() string {
 	switch f {
 	case FrequencyNever:
 		return i18n.T("Never")
+	case Frequency1Minute:
+		return i18n.T("Every Minute")
 	case Frequency5Minutes:
 		return i18n.T("Every 5 Minutes")
 	case Frequency15Minutes:
@@ -169,6 +177,7 @@ func (f Frequency) Duration() time.Duration {
 func GetFrequencies() []fmt.Stringer {
 	frequencies := []Frequency{
 		FrequencyNever,
+		Frequency1Minute,
 		Frequency5Minutes,
 		Frequency15Minutes,
 		Frequency30Minutes,

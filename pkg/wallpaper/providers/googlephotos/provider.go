@@ -8,18 +8,15 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	_ "embed"
 
-	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/dialog"
-	"fyne.io/fyne/v2/storage"
-	"fyne.io/fyne/v2/widget"
 	"github.com/dixieflatline76/Spice/v2/config"
 	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
+	"github.com/dixieflatline76/Spice/v2/pkg/ui/schema"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
 	"github.com/dixieflatline76/Spice/v2/pkg/wallpaper"
 	"github.com/dixieflatline76/Spice/v2/util/log"
@@ -95,8 +92,8 @@ func (p *Provider) HomeURL() string {
 //go:embed GooglePhotos.png
 var iconData []byte
 
-func (p *Provider) GetProviderIcon() fyne.Resource {
-	return fyne.NewStaticResource("GooglePhotos", iconData)
+func (p *Provider) GetProviderIcon() interface{} {
+	return iconData
 }
 
 // ParseURL handles internal Google Photos URLs.
@@ -176,268 +173,165 @@ func (p *Provider) FetchImages(ctx context.Context, apiURL string, page int) ([]
 	return images, nil
 }
 
-func (p *Provider) CreateSettingsPanel(sm setting.SettingsManager) fyne.CanvasObject {
-	statusLabel := widget.NewLabel(i18n.T("Status: Checking..."))
-
-	var connectBtn *widget.Button
-	var updateUI func()
-
-	updateUI = func() {
-		// Google Photos Picker requires Auth merely to launch the session.
-		// We can keep the "Connected" state logic for visual reassurance,
-		// but the core action is "Select Photos".
-		token := p.cfg.GetGooglePhotosToken()
-		if token != "" {
-			expiry := p.cfg.GetGooglePhotosTokenExpiry()
-			statusMsg := i18n.T("Status: Authorized (Ready to Select)")
-			if time.Now().After(expiry) {
-				statusMsg += " " + i18n.T("(Token Expired)")
-			}
-			statusLabel.SetText(statusMsg)
-			connectBtn.SetText(i18n.T("Disconnect Authorisation"))
-			connectBtn.OnTapped = func() {
-				// revoke
-				p.cfg.SetGooglePhotosToken("")
-				updateUI()
-			}
-			connectBtn.Importance = widget.DangerImportance
-		} else {
-			statusLabel.SetText(i18n.T("Status: Not Authorized"))
-			connectBtn.SetText(i18n.T("Authorize Google Photos"))
-			connectBtn.Importance = widget.LowImportance // Or Medium
-			connectBtn.OnTapped = func() {
-				err := p.auth.StartOAuthFlow(func(u *url.URL) error {
-					return p.OpenBrowser(u.String())
-				})
-				if err != nil {
-					dialog.ShowError(err, sm.GetSettingsWindow())
-				} else {
-					dialog.ShowInformation(i18n.T("Success"), i18n.T("Authorized!"), sm.GetSettingsWindow())
-					updateUI()
-				}
-			}
-		}
-
-		// Trigger cross-panel update
-		if p.onAuthStatusChanged != nil {
-			p.onAuthStatusChanged()
-		}
-		connectBtn.Refresh()
+func (p *Provider) CreateSettingsPanel(sm setting.SettingsManager) *schema.PanelSchema {
+	return &schema.PanelSchema{
+		Sections: []schema.SectionSchema{
+			{
+				Title:   i18n.T("Google Photos"),
+				Compact: true,
+				Items: []schema.ItemSchema{
+					schema.LabelItem{
+						Text:       i18n.T("Google Photos is a photo sharing and storage service developed by Google."),
+						Importance: schema.ImportanceLow,
+					},
+				},
+			},
+		},
 	}
-
-	connectBtn = widget.NewButton(i18n.T("Authorize"), nil)
-	updateUI()
-
-	// Set importance based on state
-	go func() {
-		// Poll once to set initial state correctly since connectBtn is used in closure
-		fyne.Do(func() {
-			if p.cfg.GetGooglePhotosToken() != "" {
-				connectBtn.Importance = widget.DangerImportance
-			} else {
-				connectBtn.Importance = widget.MediumImportance
-			}
-			connectBtn.Refresh()
-		})
-	}()
-
-	return container.NewVBox(
-		widget.NewLabelWithStyle(i18n.T("Google Photos Integration"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-		statusLabel,
-		connectBtn,
-	)
 }
 
-func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl string) fyne.CanvasObject {
+func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl string) *schema.PanelSchema {
+	return &schema.PanelSchema{
+		Sections: []schema.SectionSchema{
+			{
+				Items: []schema.ItemSchema{
+					&schema.OAuthPickerItem{
+						Name:  "google_photos_picker",
+						Label: i18n.T("Google Photos Extension"),
+						Help:  i18n.T("Authorize your Google account to select and download your personal photo albums directly into Spice."),
+						CheckAuthStatus: func() (bool, bool) {
+							token := p.cfg.GetGooglePhotosToken()
+							if token == "" {
+								return false, false
+							}
+							expiry := p.cfg.GetGooglePhotosTokenExpiry()
+							return true, time.Now().After(expiry)
+						},
+						OnAuthorize: func() error {
+							return p.auth.StartOAuthFlow(func(u *url.URL) error {
+								sm.OpenURL(u.String())
+								return nil
+							})
+						},
+						OnDisconnect: func() error {
+							p.cfg.SetGooglePhotosToken("")
+							return nil
+						},
+						OnLaunchPicker: func(ctx context.Context, updateStatus func(string)) (int, string, error) {
+							// 1. Create Session
+							updateStatus(i18n.T("Creating Web Session..."))
+							session, err := p.CreatePickerSession(ctx)
+							if err != nil {
+								return 0, "", err
+							}
 
-	imgQueryList := p.createImgQueryList(sm)
-	sm.RegisterRefreshFunc(imgQueryList.Refresh)
+							// 2. Open Browser
+							updateStatus(i18n.T("Please select photos in your browser..."))
+							sm.OpenURL(session.PickerURI)
 
-	info := widget.NewLabel(i18n.T("Create New Wallpaper Collection:"))
+							// 3. Poll
+							updateStatus(i18n.T("Waiting for selection (check browser)..."))
+							finalSession, err := p.PollSession(ctx, session.ID, session.PollingConfig.PollInterval)
+							if err != nil {
+								return 0, "", err
+							}
 
-	progressBar := widget.NewProgressBarInfinite()
-	progressBar.Hide()
+							// 4. Get Items
+							updateStatus(i18n.T("Retrieving items..."))
+							items, err := p.GetSessionItems(ctx, finalSession.ID)
+							if err != nil {
+								return 0, "", err
+							}
+							if len(items) == 0 {
+								return 0, "", nil
+							}
 
-	statusLabel := widget.NewLabel("")
+							// 5. Download
+							updateStatus(fmt.Sprintf(i18n.T("Downloading %d items..."), len(items)))
 
-	addBtn := widget.NewButton(i18n.T("Select Photos via Google Picker"), nil)
-	cancelBtn := widget.NewButton(i18n.T("Cancel"), nil)
-	cancelBtn.Importance = widget.LowImportance // Subtle
-	cancelBtn.Hide()
+							guid := uuid.New().String()
+							storageBase := p.rootDir
+							targetDir := filepath.Join(storageBase, guid)
 
-	var cancelFunc context.CancelFunc
+							urlMap, err := p.DownloadItems(ctx, items, targetDir)
+							if err != nil {
+								return 0, "", err
+							}
 
-	// Logic to update button state based on auth
-	updateBtnState := func() {
-		token := p.cfg.GetGooglePhotosToken()
-		if token != "" {
-			addBtn.Enable()
-			statusLabel.SetText("") // clear any "Please Authorize" message
-		} else {
-			addBtn.Disable()
-			statusLabel.SetText("Please Authorize above first.")
-		}
+							// Pre-save metadata with links
+							if err := p.saveInitialMetadata(guid, urlMap); err != nil {
+								log.Printf("Failed to save initial metadata: %v", err)
+							}
+
+							return len(items), guid, nil
+						},
+						OnSaveCollection: func(guid string, description string, active bool) error {
+							urlStr := "googlephotos://" + guid
+							_, err := p.cfg.AddGooglePhotosQuery(description, urlStr, active)
+							if err != nil {
+								return err
+							}
+							_ = p.updateMetadata(guid, description)
+							return nil
+						},
+						OnCancelCollection: func(guid string) {
+							p.cleanupDownload(guid)
+						},
+					},
+					schema.QueryListItem{
+						GetQueries: func() []schema.Query {
+							queries := p.cfg.GetGooglePhotosQueries()
+							abstracts := make([]schema.Query, len(queries))
+							for i, q := range queries {
+								abstracts[i] = schema.Query{
+									ID:          q.ID,
+									URL:         q.URL,
+									Description: q.Description,
+									Active:      q.Active,
+									Managed:     q.Managed,
+								}
+							}
+							return abstracts
+						},
+						EnableQuery:  p.cfg.EnableGooglePhotosQuery,
+						DisableQuery: p.cfg.DisableGooglePhotosQuery,
+						RemoveQuery: func(id string) error {
+							// Cleanup files before removing query
+							queries := p.cfg.GetGooglePhotosQueries()
+							for _, q := range queries {
+								if q.ID == id {
+									u, _ := url.Parse(q.URL)
+									if u != nil && u.Host != "" {
+										p.cleanupDownload(u.Host)
+									}
+									break
+								}
+							}
+							return p.cfg.RemoveGooglePhotosQuery(id)
+						},
+						GetDisplayURL: func(q schema.Query) *url.URL {
+							u, err := url.Parse(q.URL)
+							if err != nil || u.Scheme != "googlephotos" {
+								return nil
+							}
+							guid := u.Host
+							absPath := filepath.Join(p.rootDir, guid)
+
+							// Copy logic from Favorites provider for compatible file URIs
+							slashPath := filepath.ToSlash(absPath)
+							if !strings.HasPrefix(slashPath, "/") {
+								slashPath = "/" + slashPath
+							}
+							return &url.URL{
+								Scheme: "file",
+								Path:   slashPath,
+							}
+						},
+					},
+				},
+			},
+		},
 	}
-
-	// Register callback
-	p.onAuthStatusChanged = func() {
-		// Run on UI thread to be safe, though callbacks usually are
-		updateBtnState()
-	}
-
-	// Set initial state
-	updateBtnState()
-
-	// Cancel Action
-	cancelBtn.OnTapped = func() {
-		if cancelFunc != nil {
-			cancelFunc() // Stop the background process
-			statusLabel.SetText("Operation cancelled.")
-		}
-		cancelBtn.Hide()
-		progressBar.Hide()
-		addBtn.Show()
-		addBtn.Enable()
-	}
-
-	addBtn.OnTapped = func() {
-		if p.cfg.GetGooglePhotosToken() == "" {
-			dialog.ShowError(fmt.Errorf("please authorize first"), sm.GetSettingsWindow())
-			return
-		}
-
-		addBtn.Disable()
-		addBtn.Hide()    // Hide "Select" to avoid confusion
-		cancelBtn.Show() // Show "Cancel"
-
-		statusLabel.SetText("Creating Picker Session...")
-		progressBar.Show()
-
-		// Create Cancellable Context
-		ctx, cancel := context.WithCancel(context.Background())
-		cancelFunc = cancel
-
-		go p.runPickerFlow(ctx, sm, addBtn, cancelBtn, progressBar, statusLabel, imgQueryList, &cancelFunc)
-	}
-
-	return container.NewBorder(
-		container.NewVBox(info, container.NewStack(addBtn, cancelBtn), progressBar, statusLabel, widget.NewSeparator(), widget.NewLabel(i18n.T("My Collections:"))),
-		nil, nil, nil,
-		imgQueryList,
-	)
-}
-
-func (p *Provider) runPickerFlow(ctx context.Context, sm setting.SettingsManager, addBtn, cancelBtn *widget.Button, progressBar *widget.ProgressBarInfinite, statusLabel *widget.Label, imgQueryList *widget.List, cancelFunc *context.CancelFunc) {
-	defer func() {
-		// Cleanup context on exit if not cancelled manually
-		// But wait, if we defer cancel(), it's fine.
-		// We just need to make sure UI reset happens.
-	}()
-
-	// 1. Create Session
-	session, err := p.CreatePickerSession(ctx)
-	if err != nil {
-		if ctx.Err() == context.Canceled {
-			return
-		} // Silent exit
-		p.uiError(sm, "Session Error", err, addBtn, progressBar, statusLabel, cancelBtn)
-		return
-	}
-
-	// 2. Open Browser
-	fyne.Do(func() {
-		statusLabel.SetText(i18n.T("Please select photos in your browser..."))
-	})
-	if err := p.OpenBrowser(session.PickerURI); err != nil {
-		if ctx.Err() == context.Canceled {
-			return
-		}
-		p.uiError(sm, i18n.T("Browser Error"), err, addBtn, progressBar, statusLabel, cancelBtn)
-		return
-	}
-
-	// 3. Poll
-	fyne.Do(func() {
-		statusLabel.SetText(i18n.T("Waiting for selection (check browser)..."))
-	})
-	finalSession, err := p.PollSession(ctx, session.ID, session.PollingConfig.PollInterval)
-	if err != nil {
-		if ctx.Err() == context.Canceled {
-			return
-		}
-		p.uiError(sm, i18n.T("Polling Error (Timed out?)"), err, addBtn, progressBar, statusLabel, cancelBtn)
-		return
-	}
-
-	// 4. Get Items
-	fyne.Do(func() {
-		statusLabel.SetText(i18n.T("Retrieving items..."))
-	})
-	items, err := p.GetSessionItems(ctx, finalSession.ID)
-	if err != nil {
-		if ctx.Err() == context.Canceled {
-			return
-		}
-		p.uiError(sm, i18n.T("Retrieval Error"), err, addBtn, progressBar, statusLabel, cancelBtn)
-		return
-	}
-
-	if len(items) == 0 {
-		p.uiError(sm, "No Items", fmt.Errorf("no photos selected"), addBtn, progressBar, statusLabel, cancelBtn)
-		return
-	}
-
-	// 5. Download
-	fyne.Do(func() {
-		statusLabel.SetText(fmt.Sprintf(i18n.T("Downloading %d items..."), len(items)))
-	})
-
-	guid := uuid.New().String()
-	storageBase := p.rootDir
-	targetDir := filepath.Join(storageBase, guid)
-
-	// Download and get file links
-	urlMap, err := p.DownloadItems(ctx, items, targetDir)
-	if err != nil {
-		if ctx.Err() == context.Canceled {
-			return
-		}
-		p.uiError(sm, i18n.T("Download Error"), err, addBtn, progressBar, statusLabel, cancelBtn)
-		return
-	}
-
-	// Pre-save metadata with links
-	if err := p.saveInitialMetadata(guid, urlMap); err != nil {
-		log.Printf("Failed to save initial metadata: %v", err)
-	}
-
-	// 6. Spawn Add Dialog (Main Thread)
-	fyne.Do(func() {
-		p.openAddGooglePhotosDialog(sm, guid, len(items), imgQueryList)
-
-		// Reset UI
-		cancelBtn.Hide()
-		addBtn.Show()
-		addBtn.Enable()
-		progressBar.Hide()
-		statusLabel.SetText("")
-		*cancelFunc = nil
-	})
-}
-
-func (p *Provider) uiError(sm setting.SettingsManager, title string, err error, addBtn *widget.Button, bar *widget.ProgressBarInfinite, label *widget.Label, cancelBtn *widget.Button) {
-	log.Printf("%s: %v", title, err)
-	fyne.Do(func() {
-		// dialog.ShowError(fmt.Errorf("%s: %v", title, err), sm.GetSettingsWindow()) // Optional: Don't popup on every error? User feedback in label is often enough.
-		// Actually, let's keep it for real errors.
-		dialog.ShowError(fmt.Errorf("%s: %v", title, err), sm.GetSettingsWindow())
-
-		cancelBtn.Hide()
-		addBtn.Show()
-		addBtn.Enable()
-		bar.Hide()
-		label.SetText(i18n.T("Error: ") + err.Error())
-	})
 }
 
 // updateMetadata updates the description in metadata.json while preserving other fields.
@@ -460,8 +354,6 @@ func (p *Provider) updateMetadata(guid, description string) error {
 	}
 
 	// 2. Update
-	data["id"] = guid
-	data["description"] = description
 	data["id"] = guid
 	data["description"] = description
 	// Author omitted or empty
@@ -503,106 +395,9 @@ func (p *Provider) saveInitialMetadata(guid string, fileLinks map[string]string)
 	return json.NewEncoder(f).Encode(data)
 }
 
-// openAddGooglePhotosDialog shows a dialog to confirm the new collection.
-func (p *Provider) openAddGooglePhotosDialog(sm setting.SettingsManager, guid string, count int, list *widget.List) {
-	urlStr := "googlephotos://" + guid
-	defaultDesc := fmt.Sprintf(i18n.T("Collection %s (%d items)"), time.Now().Format("Jan 02 15:04"), count)
-
-	// UI Elements
-	// URL (Disabled)
-	urlEntry := widget.NewEntry()
-	urlEntry.SetText(urlStr)
-	urlEntry.Disable()
-
-	// Description (Editable)
-	descEntry := widget.NewEntry()
-	descEntry.SetText(defaultDesc)
-	descEntry.PlaceHolder = i18n.T("Enter description...")
-
-	// Active (Check)
-	activeCheck := widget.NewCheck(i18n.T("Active"), nil)
-	activeCheck.SetChecked(true)
-
-	// Custom Dialog Content
-	// Layout: Label / Entry pairs
-	form := container.NewVBox(
-		widget.NewLabel(i18n.T("Internal ID:")),
-		urlEntry,
-		widget.NewLabel(i18n.T("Description:")),
-		descEntry,
-		activeCheck,
-	)
-
-	d := dialog.NewCustomConfirm(
-		i18n.T("Save Collection"),
-		i18n.T("Save"),
-		i18n.T("Cancel"),
-		form,
-		func(save bool) {
-			if save {
-				// Save Logic
-				_, err := p.cfg.AddGooglePhotosQuery(descEntry.Text, urlStr, activeCheck.Checked)
-				if err != nil {
-					dialog.ShowError(err, sm.GetSettingsWindow())
-					return
-				}
-				// Update Metadata
-				_ = p.updateMetadata(guid, descEntry.Text)
-
-				// Refresh
-				sm.SetRefreshFlag("queries")
-				sm.GetCheckAndEnableApplyFunc()()
-				list.Refresh()
-			} else {
-				// Cancel Logic: Delete folder
-				p.cleanupDownload(guid)
-			}
-		},
-		sm.GetSettingsWindow(),
-	)
-
-	// Resize dialog to be usable
-	d.Resize(fyne.NewSize(400, 350))
-	d.Show()
-}
-
 func (p *Provider) cleanupDownload(guid string) {
 	path := filepath.Join(p.rootDir, guid)
 	os.RemoveAll(path)
-}
-
-func (p *Provider) createImgQueryList(sm setting.SettingsManager) *widget.List {
-	return wallpaper.CreateQueryList(sm, wallpaper.QueryListConfig{
-		GetQueries:   p.cfg.GetGooglePhotosQueries,
-		EnableQuery:  p.cfg.EnableGooglePhotosQuery,
-		DisableQuery: p.cfg.DisableGooglePhotosQuery,
-		RemoveQuery: func(id string) error {
-			// Google Photos needs file cleanup before removing the query
-			queries := p.cfg.GetGooglePhotosQueries()
-			for _, q := range queries {
-				if q.ID == id {
-					u, _ := url.Parse(q.URL)
-					if u != nil && u.Host != "" {
-						p.cleanupDownload(u.Host)
-					}
-					break
-				}
-			}
-			return p.cfg.RemoveGooglePhotosQuery(id)
-		},
-		GetDisplayURL: func(q wallpaper.ImageQuery) *url.URL {
-			u, err := url.Parse(q.URL)
-			if err != nil || u.Scheme != "googlephotos" {
-				return nil
-			}
-			guid := u.Host
-			absPath := filepath.Join(p.rootDir, guid)
-
-			f := storage.NewFileURI(absPath)
-			res, _ := url.Parse(f.String())
-			return res
-		},
-	})
 }
 
 func (p *Provider) migrateOldGooglePhotos() {
@@ -643,7 +438,6 @@ func (p *Provider) migrateOldGooglePhotos() {
 
 		if err := os.Rename(oldPath, newPath); err != nil {
 			log.Printf("[GooglePhotos] Migration error: failed to move collection %s: %v", entry.Name(), err)
-			// Recursive copy-and-delete is complex, so we just log failure here as it's a cache
 		}
 	}
 
@@ -651,9 +445,4 @@ func (p *Provider) migrateOldGooglePhotos() {
 	if entries, err := os.ReadDir(oldDir); err == nil && len(entries) == 0 {
 		_ = os.Remove(oldDir)
 	}
-}
-
-func (p *Provider) OpenBrowser(urlStr string) error {
-	u, _ := url.Parse(urlStr)
-	return fyne.CurrentApp().OpenURL(u)
 }

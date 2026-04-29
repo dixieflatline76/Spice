@@ -25,6 +25,9 @@ pack-extension:
 gen-i18n:
 	go run cmd/util/gen_i18n/main.go
 
+check-i18n:
+	go run cmd/util/gen_i18n/main.go --check
+
 generate: gen-i18n
 	go generate ./...
 
@@ -296,19 +299,19 @@ list-updates:
 	@echo "Review the list above. Update major versions manually using 'go get module/vX@latest'."
 
 # --- Main build targets ---
-win-amd64: generate update-patch-deps lint test build-win-amd64 build-win-console-amd64
+win-amd64: generate update-patch-deps check-i18n lint test build-win-amd64 build-win-console-amd64
 
 win-amd64-dev: generate update-patch-deps lint test build-win-amd64-dev build-win-console-amd64-dev
 
-linux-amd64: generate update-patch-deps lint test build-linux-amd64
+linux-amd64: generate update-patch-deps check-i18n lint test build-linux-amd64
 
 linux-amd64-dev: generate update-patch-deps lint test build-linux-amd64-dev
 
-darwin-amd64: generate update-patch-deps lint test build-darwin-amd64
+darwin-amd64: generate update-patch-deps check-i18n lint test build-darwin-amd64
 
 darwin-amd64-dev: generate update-patch-deps lint test build-darwin-amd64-dev
 
-darwin-arm64: generate update-patch-deps lint test build-darwin-arm64
+darwin-arm64: generate update-patch-deps check-i18n lint test build-darwin-arm64
 
 darwin-arm64-dev: generate update-patch-deps lint test build-darwin-arm64-dev
 
@@ -378,4 +381,4 @@ notarize-mac-arm64:
 	@echo "Stapling notarization ticket to DMG..."
 	xcrun stapler staple "dist/Spice-$(VERSION)-arm64.dmg"
 
-.PHONY: build-win-amd64 build-win-console-amd64 build-win-arm64 build-linux-amd64 build-darwin-amd64 build-darwin-arm64 build-win-amd64-dev build-win-console-amd64-dev build-linux-amd64-dev lint test update-patch-deps update-minor-deps list-updates win-amd64 win-amd64-dev linux-amd64 linux-amd64-dev darwin-amd64 darwin-amd64-dev darwin-arm64 darwin-arm64-dev clean build-version-bump bump-patch bump-minor bump-major notarize-mac-arm64 coverage
+.PHONY: build-win-amd64 build-win-console-amd64 build-win-arm64 build-linux-amd64 build-darwin-amd64 build-darwin-arm64 build-win-amd64-dev build-win-console-amd64-dev build-linux-amd64-dev gen-i18n check-i18n lint test update-patch-deps update-minor-deps list-updates win-amd64 win-amd64-dev linux-amd64 linux-amd64-dev darwin-amd64 darwin-amd64-dev darwin-arm64 darwin-arm64-dev clean build-version-bump bump-patch bump-minor bump-major notarize-mac-arm64 coverage

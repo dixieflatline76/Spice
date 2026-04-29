@@ -1,6 +1,6 @@
 //go:build darwin
 
-package localfolder
+package ui
 
 import (
 	"bytes"

@@ -65,7 +65,7 @@ func TestAvoidSet_Persistence_FullCycle(t *testing.T) {
 	var prefJSON string
 	success := false
 	for i := 0; i < 20; i++ {
-		prefJSON = prefs.String(wallhavenConfigPrefKey)
+		prefJSON = prefs.String(WallhavenConfigPrefKey)
 		if strings.Contains(prefJSON, localID) && strings.Contains(prefJSON, wallhavenID) {
 			success = true
 			break

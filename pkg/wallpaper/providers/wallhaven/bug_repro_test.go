@@ -6,7 +6,7 @@ import (
 
 func TestParseURL_ComplexUserQuery(t *testing.T) {
 	// ParseUrl does not use the config for parsing, so nil is safe
-	provider := NewWallhavenProvider(nil, nil)
+	provider := NewProvider(nil, nil)
 	inputURL := "https://wallhaven.cc/search?q=id%3A37&categories=101&purity=100&atleast=3840x2160&sorting=random&order=desc&seed=ZjbLxi&page=2"
 
 	parsed, err := provider.ParseURL(inputURL)

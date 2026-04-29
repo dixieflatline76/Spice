@@ -2,7 +2,7 @@ package metmuseum
 
 import (
 	"context"
-	_ "embed" // For go:embed
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"math/rand"
@@ -13,11 +13,9 @@ import (
 	"sync"
 	"time"
 
-	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/widget"
 	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
+	"github.com/dixieflatline76/Spice/v2/pkg/ui/schema"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
 	"github.com/dixieflatline76/Spice/v2/pkg/wallpaper"
 	"github.com/dixieflatline76/Spice/v2/util/log"
@@ -42,11 +40,11 @@ type Provider struct {
 
 func init() {
 	wallpaper.RegisterProvider(ProviderName, func(cfg *wallpaper.Config, client *http.Client) provider.ImageProvider {
-		return NewMetMuseumProvider(cfg, client)
+		return NewProvider(cfg, client)
 	})
 }
 
-func NewMetMuseumProvider(cfg *wallpaper.Config, client *http.Client) *Provider {
+func NewProvider(cfg *wallpaper.Config, client *http.Client) *Provider {
 	p := &Provider{
 		cfg:       cfg,
 		client:    client,
@@ -68,6 +66,23 @@ func NewMetMuseumProvider(cfg *wallpaper.Config, client *http.Client) *Provider 
 	return p
 }
 
+// SyncRemoteConfig fetches the latest curated collections list from the remote repository.
+func (p *Provider) SyncRemoteConfig() error {
+	col, err := RefreshRemoteCollection()
+	if err != nil {
+		return err
+	}
+	if col != nil {
+		p.mu.Lock()
+		p.collection = col
+		p.mu.Unlock()
+	}
+	return nil
+}
+
+// Ensure interface compliance
+var _ provider.RemoteConfigSyncer = (*Provider)(nil)
+
 func (p *Provider) ID() string {
 	return "MetMuseum"
 }
@@ -84,6 +99,10 @@ func (p *Provider) Title() string {
 	return ProviderTitle
 }
 
+func (p *Provider) GetProviderIcon() interface{} {
+	return iconData
+}
+
 func (p *Provider) Type() provider.ProviderType {
 	return provider.TypeOnline
 }
@@ -98,10 +117,6 @@ func (p *Provider) SupportsUserQueries() bool {
 
 //go:embed MetMuseum.png
 var iconData []byte
-
-func (p *Provider) GetProviderIcon() fyne.Resource {
-	return fyne.NewStaticResource("MetMuseum.png", iconData)
-}
 
 // GetAPIPacing implements the PacedProvider interface to space out API calls.
 func (p *Provider) GetAPIPacing() time.Duration {
@@ -215,7 +230,7 @@ func (p *Provider) FetchImages(ctx context.Context, query string, page int) ([]p
 		}
 
 		// Throttle between batches to respect rate limits (80 req/s, but be gentle)
-		// We use Limit(5) above, so we might hit ~20-50 req/s.
+		// We use Limit(5) above, so we don't burst too hard.
 		// A set sleep ensures we don't burst too hard.
 		time.Sleep(200 * time.Millisecond)
 	}
@@ -249,42 +264,44 @@ func (p *Provider) resolveQueryToIDs(ctx context.Context, query string) ([]int, 
 	var ids []int
 	var err error
 
-	switch query {
-	case CollectionSpiceMelange, "metmuseum://curated":
-		// Case 1: Spice Melange (Already cached in p.collection, but needs to be handled uniformly for shuffle)
-		p.mu.RLock()
-		if p.collection == nil {
-			p.mu.RUnlock()
-			if col, err := InitRemoteCollection(p.cfg); err == nil {
-				p.mu.Lock()
-				p.collection = col
-				p.mu.Unlock()
-			} else {
-				return nil, fmt.Errorf("collection not loaded")
-			}
-			p.mu.RLock()
+	// Ensure collection is loaded
+	p.mu.RLock()
+	col := p.collection
+	p.mu.RUnlock()
+
+	if col == nil {
+		var initErr error
+		col, initErr = InitRemoteCollection(p.cfg)
+		if initErr != nil {
+			return nil, fmt.Errorf("collection not loaded: %w", initErr)
 		}
+		p.mu.Lock()
+		p.collection = col
+		p.mu.Unlock()
+	}
+
+	// Look up the collection entry by key
+	entry := col.FindEntry(query)
+	if entry == nil {
+		// Legacy fallback: treat unknown keys as the curated collection
+		log.Printf("MET: Unknown collection key %q, falling back to curated", query)
+		entry = col.FindEntry(CollectionSpiceMelange)
+		if entry == nil {
+			return nil, fmt.Errorf("no collection entries available")
+		}
+	}
+
+	switch entry.Type {
+	case "curated":
 		// Copy IDs to avoid mutating the source collection
-		ids = make([]int, len(p.collection.IDs))
-		copy(ids, p.collection.IDs)
-		p.mu.RUnlock()
-	case CollectionAmerican:
-		// Case 2: American Art
-		ids, err = p.fetchSearchHighlights(ctx, "American Paintings")
+		ids = make([]int, len(entry.IDs))
+		copy(ids, entry.IDs)
+	case "search":
+		ids, err = p.fetchSearchHighlights(ctx, entry.Query)
+	case "department":
+		ids, err = p.fetchDepartmentHighlights(ctx, entry.DeptID)
 	default:
-		// Case 3: Department Highlights
-		var deptID int
-		switch query {
-		case CollectionEuropean:
-			deptID = DeptEuropeanPaintings
-		case CollectionAsian:
-			deptID = DeptAsianArt
-		case CollectionEgyptian:
-			deptID = DeptEgyptianArt
-		default:
-			deptID = DeptEuropeanPaintings
-		}
-		ids, err = p.fetchDepartmentHighlights(ctx, deptID)
+		return nil, fmt.Errorf("unknown collection type: %s", entry.Type)
 	}
 
 	if err != nil {
@@ -512,103 +529,86 @@ func (p *Provider) EnrichImage(ctx context.Context, img provider.Image) (provide
 	return img, nil
 }
 
-// UI Implementation
+// --- UI Implementation (Pure Go) ---
 
-func (p *Provider) CreateSettingsPanel(sm setting.SettingsManager) fyne.CanvasObject {
-	return nil
+// CreateSettingsPanel returns the declarative UI for MetMuseum settings.
+func (p *Provider) CreateSettingsPanel(sm setting.SettingsManager) *schema.PanelSchema {
+	return schema.CreateMuseumSettingsPanel(schema.MuseumSettingsConfig{
+		ID:          "Met",
+		Title:       i18n.T("The Metropolitan Museum of Art"),
+		Location:    i18n.T("New York City, USA"),
+		LicenseURL:  "https://www.metmuseum.org/about-the-met/policies-and-documents/open-access",
+		Description: i18n.T("The crown jewel of New York City. From ancient Egyptian temples to modern masterpieces, The Met houses 5,000 years of humanity's greatest creative achievements."),
+		MapQuery:    "The Metropolitan Museum of Art",
+		WebsiteURL:  "https://www.metmuseum.org",
+		DonateURL:   "https://www.metmuseum.org/donate",
+	}, sm.OpenURL)
 }
 
-func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl string) fyne.CanvasObject {
-	// This provider uses the "Museum Template"
+// CreateQueryPanel creates the image query management panel.
+// Collection items are driven entirely from the JSON collection data.
+func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, _ string) *schema.PanelSchema {
+	// Ensure collection is loaded for dynamic rendering
+	p.mu.RLock()
+	col := p.collection
+	p.mu.RUnlock()
 
-	header := wallpaper.CreateMuseumHeader(
-		"The Metropolitan Museum of Art",
-		"New York City, USA",
-		i18n.T("Open Access (CC0)"),
-		"https://www.metmuseum.org/about-the-met/policies-and-documents/open-access",
-		i18n.T("The crown jewel of New York City. From ancient Egyptian temples to modern masterpieces, The Met houses 5,000 years of humanity's greatest creative achievements."),
-		"https://www.google.com/maps/search/?api=1&query=The+Metropolitan+Museum+of+Art",
-		"https://www.metmuseum.org",
-		"https://www.metmuseum.org/donate",
-		sm,
-	)
-
-	// Fixed List of Collections
-	collections := []struct {
-		Name string
-		Key  string
-	}{
-		{i18n.T("Director's Cut: Essential Masterpieces"), CollectionSpiceMelange},
-		{i18n.T("American Wing"), CollectionAmerican},
-		{i18n.T("European Paintings"), CollectionEuropean},
-		{i18n.T("Arts of Asia"), CollectionAsian},
-		{i18n.T("Egyptian Art"), CollectionEgyptian},
+	if col == nil {
+		if c, err := InitRemoteCollection(p.cfg); err == nil {
+			p.mu.Lock()
+			p.collection = c
+			p.mu.Unlock()
+			col = c
+		}
 	}
 
+	var curatedItems []schema.ItemSchema
+	if col != nil {
+		for _, entry := range col.Entries {
+			curatedItems = append(curatedItems, p.makeCollectionItem(entry.Name, entry.Key))
+		}
+	}
+
+	curatedSection := schema.SectionSchema{
+		Title: i18n.T("Museum Collections"),
+		Items: curatedItems,
+	}
+
+	return &schema.PanelSchema{
+		Sections: []schema.SectionSchema{curatedSection},
+	}
+}
+
+func (p *Provider) makeCollectionItem(label, key string) schema.BoolItem {
 	// Helper to find existing query state
-	getDetails := func(key string) (bool, string) {
-		for _, q := range p.cfg.GetMetMuseumQueries() {
-			if q.URL == key {
+	getQuery := func(key string) (bool, string) {
+		for _, q := range p.cfg.GetQueries() {
+			if q.Provider == p.ID() && q.URL == key {
 				return q.Active, q.ID
 			}
 		}
-		return false, "" // Not added yet
+		return false, ""
 	}
 
-	// Create Checkboxes
-	var checks []fyne.CanvasObject
-	for _, col := range collections {
-		col := col // capture
-		active, _ := getDetails(col.Key)
-		dirtyKey := fmt.Sprintf("met_%s", col.Key)
-		callbackKey := fmt.Sprintf("met_cb_%s", col.Key)
+	active, _ := getQuery(key)
 
-		sm.SeedBaseline(dirtyKey, active)
-		chk := widget.NewCheck(col.Name, func(on bool) {
-			if on != sm.GetBaseline(dirtyKey).(bool) {
-				sm.SetSettingChangedCallback(callbackKey, func() {
-					// Actual Save Logic (Deferred)
-					// Fetch fresh ID from config to ensure we target correctly
-					_, cid := getDetails(col.Key)
-
-					if on {
-						if cid != "" {
-							if err := p.cfg.EnableMetMuseumQuery(cid); err != nil {
-								log.Printf("MET: Failed to enable %s: %v", col.Name, err)
-							}
-						} else {
-							desc := fmt.Sprintf(i18n.T("The Met: %s"), col.Name)
-							if _, err := p.cfg.AddMetMuseumQuery(desc, col.Key, true); err != nil {
-								log.Printf("MET: Failed to add %s: %v", col.Name, err)
-							}
-						}
-					} else {
-						if cid != "" {
-							if err := p.cfg.DisableMetMuseumQuery(cid); err != nil {
-								log.Printf("MET: Failed to disable %s: %v", col.Name, err)
-							}
-						}
-					}
-				})
-				// Enable Apply Button
-				sm.SetRefreshFlag(dirtyKey)
+	return schema.BoolItem{
+		Name:         p.ID() + "_" + key,
+		Label:        label,
+		InitialValue: active,
+		ApplyFunc: func(b bool) {
+			_, cid := getQuery(key)
+			if b {
+				if cid != "" {
+					_ = p.cfg.EnableImageQuery(cid)
+				} else {
+					_, _ = p.cfg.AddMetMuseumQuery(label, key, true)
+				}
 			} else {
-				// Reverted to original state
-				sm.RemoveSettingChangedCallback(callbackKey)
-				sm.UnsetRefreshFlag(dirtyKey)
+				if cid != "" {
+					_ = p.cfg.DisableImageQuery(cid)
+				}
 			}
-			sm.GetCheckAndEnableApplyFunc()()
-		})
-		chk.Checked = active
-		checks = append(checks, chk)
+		},
 	}
-
-	listContainer := container.NewVBox(checks...)
-
-	return container.NewVBox(
-		header,
-		widget.NewSeparator(),
-		widget.NewLabelWithStyle(i18n.T("Collections"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-		listContainer,
-	)
 }

@@ -1,6 +1,6 @@
 //go:build !windows && !darwin
 
-package localfolder
+package ui
 
 import (
 	"fyne.io/fyne/v2"

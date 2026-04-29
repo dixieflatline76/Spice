@@ -1,6 +1,6 @@
 //go:build windows
 
-package localfolder
+package ui
 
 import (
 	"path/filepath"

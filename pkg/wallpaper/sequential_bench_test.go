@@ -18,6 +18,7 @@ import (
 	"github.com/dixieflatline76/Spice/v2/asset"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui"
+	"github.com/dixieflatline76/Spice/v2/pkg/ui/schema"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
 	"github.com/dixieflatline76/Spice/v2/util"
 	"github.com/stretchr/testify/mock"
@@ -56,8 +57,8 @@ func (m *BenchMockProvider) ParseURL(url string) (string, error) { return url, n
 func (m *BenchMockProvider) FetchImages(ctx context.Context, apiURL string, page int) ([]provider.Image, error) {
 	return nil, nil
 }
-func (m *BenchMockProvider) GetProviderIcon() fyne.Resource {
-	return fyne.NewStaticResource("dummy", []byte("dummy"))
+func (m *BenchMockProvider) GetProviderIcon() interface{} {
+	return []byte("dummy")
 }
 func (m *BenchMockProvider) Title() string   { return "Wallhaven" }
 func (m *BenchMockProvider) HomeURL() string { return "" }
@@ -71,10 +72,10 @@ func (m *BenchMockProvider) Type() provider.ProviderType {
 func (m *BenchMockProvider) SupportsUserQueries() bool {
 	return true
 }
-func (m *BenchMockProvider) CreateSettingsPanel(sm setting.SettingsManager) fyne.CanvasObject {
+func (m *BenchMockProvider) CreateSettingsPanel(sm setting.SettingsManager) *schema.PanelSchema {
 	return nil
 }
-func (m *BenchMockProvider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl string) fyne.CanvasObject {
+func (m *BenchMockProvider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl string) *schema.PanelSchema {
 	return nil
 }
 func (m *BenchMockProvider) GetAttributionType() provider.AttributionType {

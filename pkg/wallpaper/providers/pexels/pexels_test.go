@@ -20,8 +20,8 @@ func (m *mockPexelsTransport) RoundTrip(req *http.Request) (*http.Response, erro
 	return m.RoundTripFunc(req)
 }
 
-func TestPexelsProvider_ParseURL(t *testing.T) {
-	provider := &PexelsProvider{}
+func TestProvider_ParseURL(t *testing.T) {
+	provider := &Provider{}
 
 	tests := []struct {
 		name    string
@@ -77,7 +77,7 @@ func TestPexelsProvider_ParseURL(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := provider.ParseURL(tt.webURL)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("PexelsProvider.ParseURL() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("Provider.ParseURL() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if !tt.wantErr {
@@ -86,7 +86,7 @@ func TestPexelsProvider_ParseURL(t *testing.T) {
 				uWant, _ := url.Parse(tt.want)
 
 				if uGot.Scheme != uWant.Scheme || uGot.Host != uWant.Host || uGot.Path != uWant.Path {
-					t.Errorf("PexelsProvider.ParseURL() = %v, want %v", got, tt.want)
+					t.Errorf("Provider.ParseURL() = %v, want %v", got, tt.want)
 				}
 
 				qGot := uGot.Query()
@@ -105,7 +105,7 @@ func TestPexelsProvider_ParseURL(t *testing.T) {
 	}
 }
 
-func TestPexelsProvider_FetchImages(t *testing.T) {
+func TestProvider_FetchImages(t *testing.T) {
 	// Mock Search Response
 	mockSearchJSON := `{
 		"page": 1,
@@ -211,7 +211,7 @@ func TestPexelsProvider_FetchImages(t *testing.T) {
 			}
 
 			// Mock Config - pass nil as we are bypassing it via SetTokenForTesting.
-			provider := NewPexelsProvider(nil, client)
+			provider := NewProvider(nil, client)
 			provider.SetTokenForTesting("test-api-key")
 
 			images, err := provider.FetchImages(context.Background(), tt.apiURL, 1)
@@ -226,13 +226,13 @@ func TestPexelsProvider_FetchImages(t *testing.T) {
 	}
 }
 
-func TestPexelsProvider_FetchImages_NoAuth(t *testing.T) {
+func TestProvider_FetchImages_NoAuth(t *testing.T) {
 	client := &http.Client{}
 
 	// Use wallpaper.Config
 	cfg := &wallpaper.Config{}
 
-	provider := NewPexelsProvider(cfg, client)
+	provider := NewProvider(cfg, client)
 
 	_, err := provider.FetchImages(context.Background(), "https://api.pexels.com/v1/search", 1)
 	assert.Error(t, err)

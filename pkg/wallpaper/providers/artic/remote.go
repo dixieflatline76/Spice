@@ -26,43 +26,14 @@ var embeddedJSON []byte
 // Global cache fallback in case everything fails
 var embeddedCollection CuratedList
 
-// Hardcoded fallback (Ground Zero)
-var fallbackCollection = CuratedList{
-	Version:     1,
-	Description: "AIC Highlights (Ground Zero Fallback)",
-	Tours: map[string]TourData{
-		CollectionHighlights: {
-			Name: "AIC Highlights: The Big Picture",
-			// Seurat, Hopper, Wood, Hokusai, Monet, Caillebotte, Van Gogh
-			IDs: []int{27992, 111628, 117302, 24645, 16568, 20684, 16571, 16545, 28560, 20701, 76244},
-		},
-		CollectionImpression: {
-			Name: "Impressionist Vistas",
-			// Monet (St. Lazare, Bordighera, Water Lilies), Renoir, Caillebotte, Pissarro
-			IDs: []int{16568, 20684, 16571, 16545, 16546, 6565, 81538, 27992},
-		},
-		CollectionModern: {
-			Name: "Modern Landscapes",
-			IDs:  []int{111628, 20701, 60072, 76244, 115206},
-		},
-		CollectionAsia: {
-			Name: "Arts of Asia: Landscape Prints",
-			IDs:  []int{24645, 59056, 199092, 199093, 199120},
-		},
-	},
-}
-
 // InitRemoteCollection initializes the curated list from remote, cache, or embedded sources.
 func InitRemoteCollection() (*CuratedList, error) {
-	// 1. Start with Hardcoded Fallback
-	embeddedCollection = fallbackCollection
-
-	// 2. Load Embedded
+	// 1. Load from embedded JSON (compiled into the binary — always available)
 	if err := json.Unmarshal(embeddedJSON, &embeddedCollection); err != nil {
-		log.Printf("AIC: Failed to parse embedded collection, using hardcoded fallback: %v", err)
+		return nil, fmt.Errorf("failed to parse embedded artic.json: %w", err)
 	}
 
-	// 3. Determine Cache Path
+	// 2. Determine Cache Path
 	cacheDir := filepath.Join(config.GetWorkingDir(), "cache", "artic")
 	if err := os.MkdirAll(cacheDir, 0755); err != nil {
 		log.Printf("AIC: Failed to create cache dir: %v", err)
@@ -74,7 +45,7 @@ func InitRemoteCollection() (*CuratedList, error) {
 	var fetchedCollection *CuratedList
 	fetchErr := make(chan error, 1)
 
-	// 4. Async Fetch
+	// 3. Async Fetch
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -83,10 +54,16 @@ func InitRemoteCollection() (*CuratedList, error) {
 			fetchErr <- err
 			return
 		}
-		fetchedCollection = col
-		// Update Cache
-		if err := saveCache(cachePath, col); err != nil {
-			log.Printf("AIC: Failed to save cache: %v", err)
+
+		if col.Version >= embeddedCollection.Version {
+			fetchedCollection = col
+			// Update Cache
+			if err := saveCache(cachePath, col); err != nil {
+				log.Printf("AIC: Failed to save cache: %v", err)
+			}
+		} else {
+			log.Printf("AIC: Remote collection (v%d) is older than embedded (v%d), ignoring remote", col.Version, embeddedCollection.Version)
+			fetchErr <- fmt.Errorf("remote version older than embedded")
 		}
 	}()
 
@@ -108,13 +85,16 @@ func InitRemoteCollection() (*CuratedList, error) {
 		log.Printf("AIC: Remote fetch timed out, falling back to cache")
 	}
 
-	// 5. Fallback to Cache
+	// 4. Fallback to Cache
 	if cacheCol, err := loadCache(cachePath); err == nil {
-		log.Printf("AIC: Loaded cached collection (v%d)", cacheCol.Version)
-		return cacheCol, nil
+		if cacheCol.Version >= embeddedCollection.Version {
+			log.Printf("AIC: Loaded cached collection (v%d)", cacheCol.Version)
+			return cacheCol, nil
+		}
+		log.Printf("AIC: Cached collection (v%d) is older than embedded (v%d), ignoring cache", cacheCol.Version, embeddedCollection.Version)
 	}
 
-	// 6. Fallback to Embedded
+	// 5. Fallback to Embedded
 	log.Printf("AIC: Using embedded collection (v%d)", embeddedCollection.Version)
 	return &embeddedCollection, nil
 }
@@ -136,6 +116,27 @@ func fetchRemote() (*CuratedList, error) {
 		return nil, err
 	}
 	return &col, nil
+}
+
+// RefreshRemoteCollection forces a fetch from GitHub, and updates the local cache if successful.
+func RefreshRemoteCollection() (*CuratedList, error) {
+	col, err := fetchRemote()
+	if err != nil {
+		return nil, err
+	}
+
+	if col.Version >= embeddedCollection.Version {
+		cacheDir := filepath.Join(config.GetWorkingDir(), "cache", "artic")
+		cachePath := filepath.Join(cacheDir, cacheFileName)
+		_ = os.MkdirAll(cacheDir, 0755)
+		if err := saveCache(cachePath, col); err != nil {
+			log.Printf("AIC: Failed to save cache during refresh: %v", err)
+		}
+		return col, nil
+	}
+
+	log.Printf("AIC: Remote collection (v%d) is not newer than embedded (v%d), no update needed", col.Version, embeddedCollection.Version)
+	return nil, nil
 }
 
 func loadCache(path string) (*CuratedList, error) {

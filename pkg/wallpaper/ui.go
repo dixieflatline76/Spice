@@ -1,14 +1,11 @@
 package wallpaper
 
 import (
-	"net/url"
 	"sort"
 	"strings"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/dialog"
-	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
@@ -17,176 +14,18 @@ import (
 	utilLog "github.com/dixieflatline76/Spice/v2/util/log"
 )
 
-// QueryListConfig defines the provider-specific callbacks for a scrollable query list.
-// Providers pass this to CreateQueryList to get a scroll-safe widget.List that
-// correctly handles Fyne's cell recycling without losing pending user toggles.
-type QueryListConfig struct {
-	// GetQueries returns the current list of queries from config.
-	GetQueries func() []ImageQuery
-	// EnableQuery is called on Apply when the user enables a query.
-	EnableQuery func(id string) error
-	// DisableQuery is called on Apply when the user disables a query.
-	DisableQuery func(id string) error
-	// RemoveQuery is called when the user confirms deletion.
-	RemoveQuery func(id string) error
-	// GetDisplayText converts a query to its display label (e.g. full path). Optional.
-	GetDisplayText func(q ImageQuery) string
-	// GetDisplayURL converts an API URL to a clickable web URL. Optional.
-	GetDisplayURL func(q ImageQuery) *url.URL
-	// DeleteLabel is the text for the action button. Default is "Delete".
-	DeleteLabel string
-	// ForceActionEnabled will enable the action button even for managed queries.
-	ForceActionEnabled bool
-	// DeleteConfirmMessage is the custom message for the confirmation dialog.
-	DeleteConfirmMessage string
-}
-
-// CreateQueryList builds a scroll-safe widget.List for query management.
-// It handles baseline seeding, pending state preservation across Fyne cell recycling,
-// and wires up the enable/disable/delete interactions with the SettingsManager.
-func CreateQueryList(sm setting.SettingsManager, cfg QueryListConfig) *widget.List {
-	var queryList *widget.List
-	queryList = widget.NewList(
-		// Length
-		func() int {
-			return len(cfg.GetQueries())
-		},
-		// CreateItem — builds the cell template (no data binding here)
-		func() fyne.CanvasObject {
-			urlLink := widget.NewHyperlink(i18n.T("Placeholder"), nil)
-			activeCheck := widget.NewCheck(i18n.T("Active"), nil)
-			deleteButton := widget.NewButton(i18n.T("Delete"), func() {})
-			return container.NewHBox(urlLink, layout.NewSpacer(), activeCheck, deleteButton)
-		},
-		// UpdateItem — binds data to a recycled cell (scroll-safe)
-		func(i int, o fyne.CanvasObject) {
-			queries := cfg.GetQueries()
-			if i >= len(queries) {
-				return
-			}
-			query := queries[i]
-			queryKey := query.ID
-
-			c := o.(*fyne.Container)
-			urlLink := c.Objects[0].(*widget.Hyperlink)
-			activeCheck := c.Objects[2].(*widget.Check)
-			deleteButton := c.Objects[3].(*widget.Button)
-
-			// Set display text
-			if cfg.GetDisplayText != nil {
-				urlLink.SetText(cfg.GetDisplayText(query))
-			} else {
-				urlLink.SetText(query.Description)
-			}
-
-			// Set clickable URL
-			if cfg.GetDisplayURL != nil {
-				if u := cfg.GetDisplayURL(query); u != nil {
-					urlLink.SetURL(u)
-				}
-			} else {
-				if u, err := url.Parse(query.URL); err == nil {
-					urlLink.SetURL(u)
-				}
-			}
-
-			// --- Scroll-Safe State Management ---
-			// Only seed baseline on first encounter to avoid overwriting pending toggles.
-			if sm.GetBaseline(queryKey) == nil {
-				sm.SeedBaseline(queryKey, query.Active)
-			}
-
-			// MUST clear OnChanged before SetChecked, otherwise recycling a cell
-			// will trigger the previous query's OnChanged callback!
-			activeCheck.OnChanged = nil
-
-			// Restore pending state if user has toggled, otherwise use persisted state.
-			if sm.HasPendingChange(queryKey) {
-				activeCheck.SetChecked(!sm.GetBaseline(queryKey).(bool))
-			} else {
-				activeCheck.SetChecked(query.Active)
-			}
-
-			// Wire checkbox toggle
-			activeCheck.OnChanged = func(b bool) {
-				if b != sm.GetBaseline(queryKey).(bool) {
-					sm.SetSettingChangedCallback(queryKey, func() {
-						var err error
-						if b {
-							err = cfg.EnableQuery(query.ID)
-						} else {
-							err = cfg.DisableQuery(query.ID)
-						}
-
-						if err != nil {
-							utilLog.Printf("Failed to update query status: %v", err)
-						} else {
-							// Update the baseline IF the change was successfully applied.
-							// This prevents the "logic flip" bug if the user interacts
-							// with the list again before reloading the panel.
-							sm.SeedBaseline(queryKey, b)
-
-							// Also update the underlying query data object in the local slice for this cell recycle loop,
-							// just in case, though the config slice is usually re-fetched.
-							query.Active = b
-						}
-					})
-					sm.SetRefreshFlag(queryKey)
-				} else {
-					sm.RemoveSettingChangedCallback(queryKey)
-					sm.UnsetRefreshFlag(queryKey)
-				}
-				sm.GetCheckAndEnableApplyFunc()()
-				sm.Refresh() // Trigger reactive UI updates (like accordion titles)
-			}
-
-			// Wire action button (Delete or Clear for managed queries)
-			label := i18n.T("Delete")
-			if cfg.DeleteLabel != "" {
-				label = cfg.DeleteLabel
-			} else if query.Managed {
-				label = i18n.T("Clear")
-			}
-			deleteButton.SetText(label)
-
-			deleteButton.OnTapped = func() {
-				confirmTitle := i18n.T("Please Confirm")
-				confirmMsg := i18n.Tf("Are you sure you want to delete {{.Description}}?", map[string]any{"Description": query.Description})
-
-				if cfg.DeleteConfirmMessage != "" {
-					confirmMsg = cfg.DeleteConfirmMessage
-				} else if query.Managed || cfg.ForceActionEnabled {
-					// Default fallback for managed if no custom message
-					if cfg.DeleteLabel == i18n.T("Clear") {
-						confirmMsg = i18n.T("Are you sure you want to delete all saved favorites?")
-					}
-				}
-
-				d := dialog.NewConfirm(confirmTitle, confirmMsg, func(b bool) {
-					if b {
-						if query.Active {
-							sm.SetRefreshFlag(queryKey)
-							sm.GetCheckAndEnableApplyFunc()()
-						}
-						if err := cfg.RemoveQuery(query.ID); err != nil {
-							utilLog.Printf("Failed to remove query: %v", err)
-						}
-						queryList.Refresh()
-					}
-				}, sm.GetSettingsWindow())
-				d.Show()
-			}
-
-			// Managed queries cannot be deleted by default, unless force enabled
-			if query.Managed && !cfg.ForceActionEnabled {
-				deleteButton.Disable()
-			} else {
-				deleteButton.Enable()
-			}
-			deleteButton.Refresh()
-		},
-	)
-	return queryList
+// asResource converts a provider's abstract icon (bytes or resource) back to a Fyne resource.
+func asResource(icon interface{}, name string) fyne.Resource {
+	if icon == nil {
+		return nil
+	}
+	switch v := icon.(type) {
+	case fyne.Resource:
+		return v
+	case []byte:
+		return fyne.NewStaticResource(name, v)
+	}
+	return nil
 }
 
 // CreateTrayMenuItems creates the menu items for the tray menu
@@ -291,7 +130,7 @@ func (wp *Plugin) CreateTrayMenuItems() []*fyne.MenuItem {
 		// Provider Icon
 		if isInitialized {
 			if p, exists := wp.providers[currentImage.Provider]; exists {
-				mItems.ProviderMenuItem.Icon = p.GetProviderIcon()
+				mItems.ProviderMenuItem.Icon = asResource(p.GetProviderIcon(), currentImage.Provider)
 			}
 		}
 
@@ -366,7 +205,8 @@ func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 	sm.RegisterRefreshFunc(wp.RefreshImagesAndPulse)
 
 	// 1. Build General Settings
-	generalTab := builder.BuildGeneralTab()
+	generalSchema := builder.BuildGeneralTabSchema()
+	generalTab := container.NewVScroll(sm.RenderSchema(*generalSchema))
 
 	// 2. Build Provider Tabs
 	onlineTab, localTab, targetTabIndex := builder.BuildProviderTabs()

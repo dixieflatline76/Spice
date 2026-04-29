@@ -43,8 +43,6 @@ func (wp *Plugin) StartNightlyRefresh() {
 	}
 
 	initialTime := time.Now()
-	// Trigger sync on startup if enabled
-	wp.SyncWallhavenCollections()
 	lastRefreshDay = runCheckWithTimeout(initialTime, lastRefreshDay, true) // Force check on startup
 
 	for {
@@ -108,18 +106,32 @@ func (wp *Plugin) checkAndRunRefresh(now time.Time, lastRefreshDay int, isInitia
 		// Cleanup Orphans (Delete unknown files)
 		// We get known IDs from store (thread-safe)
 		wp.fm.CleanupOrphans(wp.store.GetKnownIDs())
-		log.Print("Nightly Maintenance: Finished.")
+		log.Print("Nightly Maintenance: Grooming Finished.")
 
-		// Wallhaven Sync
-		wp.SyncWallhavenCollections()
+		// Trigger app update check (callback handles preference check + network call)
+		if wp.updateCallback != nil {
+			log.Print("Nightly Maintenance: Triggering application update check...")
+			wp.updateCallback()
+		}
 
-		log.Print("Running nightly refresh action...") // Clarify log message
-		// Forward-Scanning Logic: We no longer force a reset to Page 1 every night.
-		// Instead, we let the system naturally "drift" forward.
-		// Safe Page Wrapping (in fetch_logic.go) will handle looping back only when a query is exhausted.
-		wp.FetchNewImages(false)
+		// Always: Sync all providers (remote configs + managed queries)
+		log.Print("Nightly Maintenance: Syncing providers...")
+		wp.SyncProviders()
 
-		log.Print("Nightly refresh action finished.")
+		log.Print("Nightly Maintenance: All background tasks finished.")
+
+		// Conditional: Image Refresh
+		if wp.cfg.GetNightlyRefresh() {
+			log.Print("Running nightly image refresh action...")
+			// Forward-Scanning Logic: We no longer force a reset to Page 1 every night.
+			// Instead, we let the system naturally "drift" forward.
+			// Safe Page Wrapping (in fetch_logic.go) will handle looping back only when a query is exhausted.
+			wp.FetchNewImages(false)
+			log.Print("Nightly image refresh action finished.")
+		} else {
+			log.Print("Nightly image refresh is disabled by user. Skipping downloads.")
+		}
+
 		return updatedLastRefreshDay // Return the new day
 	}
 

@@ -1,9 +1,9 @@
 {
-    "version": 1,
+    "version": 3,
     "description": "Art Institute of Chicago: Landscape Masterpieces",
     "tours": {
         "artic_highlights": {
-            "name": "AIC Highlights: The Big Picture",
+            "name": "⭐ Best of AIC",
             "ids": [
                 27992,
                 24645,
@@ -29,7 +29,7 @@
             ]
         },
         "artic_asia": {
-            "name": "Arts of Asia: Landscape Prints",
+            "name": "Asian Prints",
             "ids": [
                 24645,
                 87008

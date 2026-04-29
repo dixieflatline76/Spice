@@ -53,81 +53,146 @@ In `pkg/wallpaper/wallpaper.go`:
     *   **Rule**: The fetcher MUST NOT skip an image just because it exists in the store. It must also check if the image is missing a derivative for the *current* monitors.
     *   **Rationale**: Essential for "Backlog Healing." If a user adds a new monitor, the system must be able to "pull" existing cached originals into the processing pipeline.
 
-### 2.1 The Registry Pattern (v2.5)
- 
-The Settings UI (`pkg/ui/setting`) uses a **Deferred Save / Git-like Commit** model. Changes are staged, not saved, until "Apply" is clicked.
+### 2.1 Schema-Driven UI Architecture (Hexagonal / Ports & Adapters)
 
-#### ❌ The Legacy "Closure Trap" (Resolved)
-Previously, dynamic UI lists often captured stale state in closures, leading to "Apply" actions that did nothing.
+Spice implements a **Hexagonal Architecture** for its settings UI. Providers never import or create Fyne widgets directly. Instead, they declare their UI needs using pure Go structs, and a central rendering engine translates those structs into the actual framework widgets.
 
-#### ✅ The Registry Solution
-`SettingsManager` now maintains a **Registry** (`map[string]interface{}`) of the last-known "Baseline" values.
-1. **Baseline Seeding**: When a widget is created, its initial persisted value is mirrored into the registry.
-2. **Live Comparison**: `OnChanged` handlers now compare the widget's current state directly against the registry's baseline.
-3. **Advanced Props**:
-   - `IsPassword`: Setting this to `true` on a `TextEntrySettingConfig` masks the UI and enables secure keychain storage.
-   - `EnabledIf`: A dynamic function that determines if a widget is interactive (e.g., locking an API key field until it's cleared).
-4. **Programmatic Updates**: `SetValue(name, val)` allows for cross-widget state updates (e.g., the "Clear" button resetting the API key text field).
-5. **Atomic Commit**: On "Apply", the engine executes all queued changes and then synchronously promotes all "Live" values to "Baseline".
+#### The Boundary
 
-#### 2.2 The Transactional UI Pattern (v2.6)
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  INNER RING (Pure Go — zero framework imports)                  │
+│                                                                 │
+│  pkg/provider/provider.go     → Domain interfaces               │
+│  pkg/ui/schema/schema.go      → PORT: UI contract (ItemSchema)  │
+│  pkg/ui/schema/museum.go      → Schema helpers (museum template)│
+│  pkg/ui/setting/setting_mgr   → PORT: SettingsManager interface │
+│  pkg/wallpaper/providers/*    → Domain logic (100% Fyne-free)   │
+└─────────────────────────────────────────────────────────────────┘
+                              ▲
+                              │  Returns *schema.PanelSchema
+                              │
+┌─────────────────────────────────────────────────────────────────┐
+│  OUTER RING (Framework-coupled — Fyne)                          │
+│                                                                 │
+│  ui/settings_manager.go       → ADAPTER: RenderSchema()         │
+│  ui/ui.go                     → Application shell & tray        │
+└─────────────────────────────────────────────────────────────────┘
+```
 
-For sensitive credentials (API Keys, Usernames), Spice bypasses the strictly deferred model in favor of **Intentional Transactions**.
+**The key rule**: The dependency arrow always flows **inward**. Providers depend on `schema` and `setting` (ports), never on `ui/` (adapter). The engine (`ui/settings_manager.go`) depends on `schema` to know what to render, but providers never know about Fyne.
 
-*   **Rationale**: We never want to send an API key silently in the background while the user is typing (Auto-Validation), nor do we want to save a potentially invalid key that could break the background worker.
+#### Schema Types (`pkg/ui/schema/schema.go`)
+
+All provider UI is composed from these building blocks:
+
+| Schema Type | Purpose |
+|:---|:---|
+| `BoolItem` | Checkbox / toggle with label, help, `ApplyFunc`, `EnabledIf`, `VisibleIf` |
+| `TextItem` | Text entry with validation, debounce, `PostValidateCheck`, password masking |
+| `SelectItem` | Dropdown with index-based value tracking |
+| `SecretItem` | API key / credential with `OnVerify` and `OnClear` (Transactional pattern) |
+| `ButtonItem` | Simple action button |
+| `AsyncButtonItem` | Button with loading state and background task |
+| `ConfirmButtonItem` | Button with confirmation dialog |
+| `HyperlinkItem` | Clickable URL |
+| `LabelItem` | Static text or description |
+| `QueryListItem` | Full query management list (toggle, delete, display) |
+| `OAuthPickerItem` | OAuth + Picker workflow (Google Photos) |
+| `FolderPickerItem` | Native directory selector (Local Folders) |
+| `HorizontalRowItem` | Groups items side-by-side |
+
+#### The `RenderSchema()` Adapter
+
+`SettingsManager.RenderSchema(p schema.PanelSchema)` is the **single entry point** that walks the schema tree and materializes Fyne widgets. For each schema item it:
+
+1. Creates the native widget (e.g., `widget.NewCheck` for `BoolItem`)
+2. Seeds the **Baseline** in the registry
+3. Wires `OnChanged` → dirty detection → `ApplyFunc` queuing
+4. Registers `EnabledIf` / `VisibleIf` for reactive state management
+5. Returns a composed `fyne.CanvasObject`
+
+Providers never call these render methods — they only build and return `*schema.PanelSchema`.
+
+### 2.2 The Registry Pattern (Deferred Save)
+
+The Settings UI uses a **Deferred Save / Git-like Commit** model. Changes are staged, not saved, until "Apply" is clicked.
+
+`SettingsManager` maintains a **Registry** (`map[string]interface{}`) of the last-known "Baseline" values.
+
+1. **Baseline Seeding**: When `RenderSchema` processes a schema item, its initial value is automatically mirrored into the registry.
+2. **Live Comparison**: `OnChanged` handlers compare the widget's current state directly against the registry's baseline.
+3. **Reactive State**: Schema items support:
+   - `EnabledIf`: Dynamic function controlling widget interactivity (e.g., locking an API key field until cleared).
+   - `VisibleIf`: Dynamic function controlling widget visibility.
+4. **Programmatic Updates**: `SetValue(name, val)` allows for cross-widget state updates.
+5. **Atomic Commit**: On "Apply", the engine executes all queued `ApplyFunc` callbacks and then promotes all "Live" values to "Baseline".
+
+### 2.3 The Transactional UI Pattern (Credentials)
+
+For sensitive credentials (API Keys, Usernames), Spice bypasses the deferred model in favor of **Intentional Transactions** via `schema.SecretItem`.
+
+*   **Rationale**: We never want to send an API key silently in the background while the user is typing, nor save a potentially invalid key.
 *   **The Flow**:
     1.  **Direct Interaction**: The user enters a key. The "Clear" button transforms into **"Verify & Connect"**.
     2.  **Explicit Action**: Verification only occurs when the button is clicked.
     3.  **Immediate Persistence**: If verification succeeds, the key is saved to the config AND the baseline is seeded **immediately**. The field locks (via `EnabledIf`) and the button becomes **"Clear API Key"**.
-    4.  **Hanging Prevention**: All verification transactions MUST include a timeout (standard: 10s) via `context.WithTimeout` to prevent UI "stuckness".
-*   **Implementation**: This is handled manually in the provider's `CreateSettingsPanel` by wiring the action button to `p.cfg.SetKey()`, `sm.SeedBaseline()`, and `sm.Refresh()`.
+    4.  **Hanging Prevention**: All verification transactions MUST include a timeout (standard: 10s) via `context.WithTimeout`.
+*   **Implementation**: Declare a `schema.SecretItem` with `OnVerify` and `OnClear` hooks. The engine handles the UI state machine automatically.
 
-#### 2.3 The Generic Action Pattern (v2.7)
+### 2.4 The Generic Action Pattern (Query Lists)
 
-To keep `ui.go` provider-agnostic, the `QueryListConfig` now uses an **Explicit Action Contract** for the list's primary action button (historically "Delete").
+`schema.QueryListItem` uses an **Explicit Action Contract** for the list's primary action button (historically "Delete"):
 
-*   **`DeleteLabel`**: Allows a provider to rename the button (e.g., to "Clear") without the UI layer knowing the provider's identity.
-*   **`ForceActionEnabled`**: Overrides the standard `Managed` check. This allows "Clearable" system queries (like Favorites) to remain interactive while preserving the "Disabled" guard for strictly read-only synced sources (like Wallhaven collections).
-*   **`DeleteConfirmMessage`**: Allows for provider-specific warnings (e.g., "Are you sure you want to delete all saved favorites?") to be injected from the provider layer.
+*   **`DeleteLabel`**: Allows a provider to rename the button (e.g., "Clear") without the engine knowing the provider's identity.
+*   **`ForceActionEnabled`**: Overrides the standard `Managed` check. Allows "Clearable" system queries (like Favorites) to remain interactive while preserving the "Disabled" guard for read-only synced sources.
+*   **`DeleteConfirmMessage`**: Provider-specific warnings injected from the domain layer.
+*   **`GetDisplayText` / `GetDisplayURL`**: Pure functions for custom rendering without Fyne imports.
+
+### 2.5 UI Services (ShowError, ShowConfirm, ShowAddQueryDialog)
+
+Providers that need to display dialogs (errors, confirmations, add-query modals) use the `SettingsManager` interface methods. These are **never** called via direct Fyne `dialog.*` imports:
+
+*   `sm.ShowError(err)` — Modal error display
+*   `sm.ShowConfirm(title, message, callback)` — Confirmation with boolean callback
+*   `sm.ShowAddQueryDialog(cfg, url, desc, onAdded)` — Standardized "Add Query" modal using `schema.AddQueryConfig`
+*   `sm.OpenURL(urlString)` — Browser URL opening
 
 ## 3. Deep Dive: Provider Implementations
 
-Key logic patterns for the major providers in `pkg/wallpaper/providers/`.
+Key logic patterns for the major providers in `pkg/wallpaper/providers/`. **All 8 providers are 100% Fyne-free** — they return `*schema.PanelSchema` from `CreateSettingsPanel()` and `CreateQueryPanel()`.
 
 ### 3.1 Wallhaven (`wallhaven.go`)
-*   **Regex Router**: It parses user-pasted URLs using rigorous Regex:
+*   **Regex Router**: Parses user-pasted URLs using rigorous Regex:
     *   `UserFavoritesRegex`: `wallhaven.cc/user/([^/]+)/favorites/(\d+)` -> Converts to API Collection Endpoint.
     *   `SearchRegex`: Extracts `?q=...` or `?categories=...`.
-*   **API Key Hygiene**: The `ParseURL` function explicitly *strips* `apikey` params from saved URLs to prevent leaking keys in shared configs. Keys are stored in the secure OS keychain and are **masked** in the UI via the `IsPassword` property.
+*   **API Key Hygiene**: The `ParseURL` function explicitly *strips* `apikey` params from saved URLs. Keys are stored in the secure OS keychain and **masked** via `schema.SecretItem`.
 
 ### 3.2 The Met Museum (`metmuseum.go`)
-*   **The Template**: Uses `wallpaper.CreateMuseumHeader` for a standardized "Institution" look.
-*   **Director's Cut Configuration**: Unlike generic search providers, The Met uses a **Fixed List** of curated `const` queries (e.g., "Arts of Asia"). These are rendered as `widget.NewCheck` logic groups, not a dynamic `widget.List`.
+*   **Schema Template**: Uses `schema.CreateMuseumSettingsPanel()` for a standardized "Institution" look with Plan a Visit, Website, and Donate buttons.
+*   **Director's Cut Configuration**: Uses a **Fixed List** of curated queries rendered as `schema.BoolItem` logic groups (not a dynamic list).
 *   **Parallel Fetching**: Uses `errgroup` with a concurrency limit (5) to "scan" for valid images.
-*   **Filtering**: Implementation filters images:
-    *   **Shape**: Rejects extreme aspect ratios (>3.0 or <0.33) but allows both landscape and portrait, since `SmartImageProcessor` handles orientation scaling for multi-monitor setups.
-    *   **Quality**: Must have high-res `primaryImage`.
+*   **Filtering**: Rejects extreme aspect ratios (>3.0 or <0.33) but allows both landscape and portrait, since `SmartImageProcessor` handles orientation scaling.
 
 ### 3.3 Favorites (`favorites.go`)
 *   **Worker Pattern**: File IO (copying 5MB images) is too slow for the main thread.
-    *   It uses a `jobChan favJob` channel.
-    *   `runWorker` loop consumes jobs to `Add` or `Remove` files from the persistent favorites directory.
-*   **FIFO Garbage Collection**: It enforces a hard limit (MaxFavoritesLimit). When adding, if full, it finds the oldest file (by `ModTime`) and deletes it before writing the new one.
-*   **Metadata Sidecar**: It maintains `metadata.json` in the same folder to store Attribution and Product URL.
-*   **UI Implementation**: Uses the **Generic Action Pattern** (v2.7) to rename its list button to "Clear" and force it to be interactive despite being a system-managed query.
+    *   Uses a `jobChan favJob` channel with a `runWorker` loop.
+*   **FIFO Garbage Collection**: Enforces a hard limit (MaxFavoritesLimit). When full, deletes the oldest file (by `ModTime`) before writing.
+*   **Metadata Sidecar**: Maintains `metadata.json` for Attribution and Product URL.
+*   **UI Implementation**: Uses the **Generic Action Pattern** (§2.4) — sets `DeleteLabel: "Clear"` and `ForceActionEnabled: true` on its `schema.QueryListItem`.
 
 ### 3.4 Local Folders (`localfolder.go`)
-*   **Cross-Platform Picker**: Uses a dual-implementation: 
-    *   **Windows**: Uses a native `cfd` shell picker via `picker_windows.go` to avoid Fyne/Cgo deadlocks when opening native dialogs.
-    *   **Fallback**: Uses standard Fyne folder pickers for macOS/Linux.
-*   **Path Normalization**: Implements strict case-insensitive deduplication and trailing slash removal to ensure `C:\Images` and `C:/images/` are treated as the same source.
-*   **Recursive Scanning**: Uses `filepath.WalkDir` with an early-exit optimization that stops scanning a subdirectory as soon as it finds its first valid image, minimizing disk thrashing.
+*   **Cross-Platform Picker**: Uses `schema.FolderPickerItem` which the engine renders as a native directory selector (Windows uses `cfd` shell picker via `picker_windows.go` to avoid Fyne/Cgo deadlocks).
+*   **Path Normalization**: Strict case-insensitive deduplication and trailing slash removal.
+*   **Recursive Scanning**: Uses `filepath.WalkDir` with early-exit optimization.
 
 ## 4. Extension Guide
 
 ### 4.1 Adding a New Provider
 1.  **Create Package**: `pkg/wallpaper/providers/myprovider`.
 2.  **Implement Interface**: `provider.ImageProvider`.
+    - `CreateSettingsPanel(sm) *schema.PanelSchema` — Return a declarative schema, not Fyne widgets.
+    - `CreateQueryPanel(sm, pendingURL) *schema.PanelSchema` — Return the query list schema.
 3.  **Register**:
     ```go
     func init() {
@@ -136,19 +201,25 @@ Key logic patterns for the major providers in `pkg/wallpaper/providers/`.
         })
     }
     ```
-4.  **Import**: You don't need to manually import it. Run `go generate ./...` (or `make gen`). The `gen_providers` tool will automatically discover your package and add it to `cmd/spice/zz_generated_providers.go`. To disable a provider, simply add a `.disabled` file to its directory.
+4.  **Import**: Run `go generate ./...` (or `make gen`). The `gen_providers` tool will automatically discover your package and add it to `cmd/spice/zz_generated_providers.go`. To disable a provider, add a `.disabled` file to its directory.
 
 ### 4.2 UI Standardization
-Use the helpers in `pkg/wallpaper/ui_add_query.go` for consistency:
-*   `CreateAddQueryButton(...)` -> Handles the popup logic.
-*   `AddQueryConfig` struct -> Define your Regex validators here.
+Use `schema.AddQueryConfig` for add-query modals and `sm.ShowAddQueryDialog()` to display them.
+For museums, use `schema.CreateMuseumSettingsPanel()` to generate the standard header layout.
 
 ## 5. Critical Files Map
-*   **`pkg/wallpaper/store.go`**: The DB. Thread-safety critical.
-*   **`pkg/wallpaper/pipeline.go`**: The Async Engine.
-*   **`pkg/wallpaper/smart_image_processor.go`**: Face Detection & Cropping logic.
-*   **`pkg/ui/setting/setting_manager.go`**: The "Apply" logic controller.
-*   **`pkg/api/server.go`**: Local HTTP server for Browser Extension communication.
+
+| File | Role |
+|:---|:---|
+| `pkg/ui/schema/schema.go` | **PORT**: Framework-agnostic UI contract. All schema types live here. |
+| `pkg/ui/schema/museum.go` | Schema helper for standardized museum provider layouts. |
+| `pkg/ui/setting/setting_manager.go` | **PORT**: `SettingsManager` interface. Providers depend on this. |
+| `ui/settings_manager.go` | **ADAPTER**: Fyne implementation of `RenderSchema()` and all SM methods. |
+| `pkg/wallpaper/store.go` | The DB. Thread-safety critical. |
+| `pkg/wallpaper/pipeline.go` | The Async Engine. |
+| `pkg/wallpaper/smart_image_processor.go` | Face Detection & Cropping logic. |
+| `pkg/api/server.go` | Local HTTP server for Browser Extension communication. |
+
 
 ## 6. Smart Fit 2.0 & Imaging Logic
 
@@ -218,24 +289,80 @@ go run cmd/spice/main.go
 
 ## 9. Internationalization & Localization (i18n)
 
-Spice uses a custom i18n package (`pkg/i18n`) for runtime translations and synchronization with Fyne's internal state.
+Spice uses a custom i18n package (`pkg/i18n`) for runtime translations and synchronization with Fyne's internal state. Translation integrity is enforced at CI time.
 
 ### 9.1 Translation Architecture
 - **Language Selection**: Managed via `i18n.SetLanguage(code)`. It maps standard codes (e.g., "en", "de", "zh-Hant") to internal states and synchronizes with Fyne's `lang` package.
 - **String Retrieval**:
     - `i18n.T("key")`: Standard translation retrieval.
     - `i18n.Tf("key", map)`: Templated translation using Go `text/template` syntax.
+    - `i18n.N("key", count)`: Pluralized translation.
 - **Embedded Files**: Translations are stored in `pkg/i18n/translations/*.json` and embedded into the binary using `//go:embed`.
 
-### 9.2 Contributing New Translations
-1.  **Reference English**: Use `pkg/i18n/translations/en.json` as the authoritative source for keys.
-2.  **Create JSON**: Add `[lang-code].json` to the translations directory.
-3.  **Register Language**: 
-    - Add the language code and its display name to the `switch` statement in `pkg/i18n/i18n.go:SetLanguage`.
-    - Update the `Language` dropdown in `ui/ui.go` within the Preferences window construction.
-4.  **Verify**: Run `make test` to ensure no JSON parsing errors or missing key panics.
+### 9.2 The `gen-i18n` Tool (`cmd/util/gen_i18n/main.go`)
 
-### 9.3 Tray Menu Constraints (Critical)
+This is the single source of truth for translation management. It replaces all previous Python scripts.
+
+**Generate mode** (`make gen-i18n`):
+1. **Scans** all `.go` source files for `i18n.T()`, `i18n.Tf()`, and `i18n.N()` calls via regex.
+2. **Merges** `dynamicI18nKeys` — keys used via variables (e.g., `attribution_by`) that can't be statically detected.
+3. **Auto-adds** new keys to `en.json` (key = value, English fallback).
+4. **Warns** about stale keys in `en.json` (keys no longer referenced in code).
+5. **Propagates** missing keys into all language files (fills with English fallback).
+6. **Generates** `pseudo.json` for layout testing (vowel doubling to test UI expansion).
+7. **Generates** `zz_generated_languages.go` — the Go language registry used at runtime.
+
+**Check mode** (`make check-i18n`):
+- Read-only. Exits non-zero if:
+  - **Stale keys** exist in `en.json` or any language file (keys not in code).
+  - **Missing keys** in `en.json` (keys in code but not in translations).
+  - **Untranslated strings** in any language file (value identical to English, unless allowlisted).
+- This is gated into **release** build chains (`win-amd64`, `linux-amd64`, `darwin-*`) but not dev builds.
+
+### 9.3 Allowlists and Dynamic Keys
+
+Two mechanisms prevent false positives in `--check` mode:
+
+**`allowIdenticalToEnglish`** — Keys where the translation is legitimately the same as English:
+- Proper nouns: `"Art Institute of Chicago"`, `"The Metropolitan Museum of Art"`
+- Loanwords: `"App"`, `"Online"`, `"System"`, `"General"`, etc.
+- Brand names: `"Pexels"`, `"Wikimedia"`, `"Google Photos"`, `"wallhaven"`
+- Locations: `"Chicago, IL, USA"`, `"New York City, USA"`
+
+**`dynamicI18nKeys`** — Keys used via variables at runtime, invisible to the static regex scanner:
+- `"attribution_by"`, `"attribution_in"` — selected dynamically based on `provider.AttributionType`
+- `"Egyptian Art"`, `"European Paintings"` — museum collection names from curated JSON
+
+Both maps live in `cmd/util/gen_i18n/main.go`.
+
+### 9.4 Developer Workflow: Adding New Strings
+
+```bash
+# 1. Write Go code with i18n calls
+i18n.T("My New String")
+i18n.Tf("Download {{.Count}} images", map[string]any{"Count": n})
+
+# 2. Run the generator (auto-adds to en.json, propagates to all languages)
+make gen-i18n
+
+# 3. Translate the new key in each language JSON file
+#    (or leave as English fallback temporarily)
+
+# 4. Before PR merge — CI runs this and blocks if anything is out of sync
+make check-i18n
+```
+
+**If using dynamic keys** (variable-based `i18n.Tf(key, ...)` calls):
+- Add the key to `dynamicI18nKeys` in `cmd/util/gen_i18n/main.go`.
+
+### 9.5 Adding a New Language
+
+1. Create `pkg/i18n/translations/[code].json` with all keys from `en.json`.
+2. Add a `"_meta_name"` key with the language's native display name (e.g., `"日本語"`).
+3. Run `make gen-i18n` — this auto-generates the language registry and fills any missing keys.
+4. No manual code registration needed. The tool discovers languages from the filesystem.
+
+### 9.6 Tray Menu Constraints (Critical)
 When translating strings specifically for the system tray menu:
 - **Brevity**: Operating systems (especially Windows) calculate tray menu width based on the longest item. Keep translations as short as possible (e.g., German "Bild" vs "Hintergrundbild").
 - **Mnemonic Safety**: On Windows, `&` acts as a mnemonic prefix and is hidden. Use `+` as a universal cross-platform separator instead of `&` or `&&`.

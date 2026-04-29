@@ -2,71 +2,16 @@ package setting
 
 import (
 	"fmt"
-	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/widget"
+	"github.com/dixieflatline76/Spice/v2/pkg/ui/schema"
 )
 
-// SettingsHelper is the interface that must be implemented by all settings helpers.
-type SettingsHelper interface {
-	CreateSectionTitleLabel(desc string) *widget.Label           // Creates a section title label.
-	CreateSettingTitleLabel(desc string) *widget.Label           // Creates a setting title label.
-	CreateSettingDescriptionLabel(desc string) fyne.CanvasObject // Creates a setting description label.
-}
-
-// SelectConfig holds the configuration for a generic select widget.
-type SelectConfig struct {
-	Name         string
-	Options      []string
-	InitialValue interface{}
-	Label        fyne.CanvasObject
-	HelpContent  fyne.CanvasObject
-	OnChanged    func(string, interface{})
-	ApplyFunc    func(interface{})
-	NeedsRefresh bool        // Whether the UI needs a full refresh after applying
-	EnabledIf    func() bool // Optional: function to determine if the widget should be enabled
-}
-
-// BoolConfig holds configuration for a generic boolean check widget.
-type BoolConfig struct {
-	Name         string
-	InitialValue bool
-	Label        fyne.CanvasObject
-	HelpContent  fyne.CanvasObject
-	OnChanged    func(bool)
-	ApplyFunc    func(bool)
-	NeedsRefresh bool
-	EnabledIf    func() bool // Optional: function to determine if the widget should be enabled
-}
-
-// TextEntrySettingConfig holds configuration for a generic text entry widget.
-type TextEntrySettingConfig struct {
-	Name               string
-	InitialValue       string
-	PlaceHolder        string
-	Label              fyne.CanvasObject
-	HelpContent        fyne.CanvasObject
-	Validator          fyne.StringValidator
-	OnChanged          func(string)
-	PostValidateCheck  func(string) error
-	ApplyFunc          func(string)
-	NeedsRefresh       bool
-	DisplayStatus      bool          // Whether to display the value status next to the entry
-	IsPassword         bool          // Whether to mask the input (e.g. for API keys)
-	EnabledIf          func() bool   // Optional: function to determine if the widget should be enabled
-	ValidationDebounce time.Duration // Optional: delay before running PostValidateCheck (0 = synchronous)
-}
-
-// ButtonWithConfirmationConfig holds configuration for a button with confirmation dialog.
-type ButtonWithConfirmationConfig struct {
-	Name           string
-	Label          fyne.CanvasObject
-	HelpContent    fyne.CanvasObject
-	ButtonText     string
-	ConfirmTitle   string
-	ConfirmMessage string
-	OnPressed      func()
+// SettingReset holds the payload for an atomic state reset.
+type SettingReset struct {
+	Name  string
+	Value interface{}
 }
 
 // StringOptions converts a slice of fmt.Stringer to a slice of strings.
@@ -79,14 +24,8 @@ func StringOptions(options []fmt.Stringer) []string {
 }
 
 // SettingsManager is an interface for managing settings. It provides methods to create various types of settings widgets.
+// The interface is designed so that consumers in pkg/ never need to import Fyne directly.
 type SettingsManager interface {
-	SettingsHelper
-
-	CreateSelectSetting(cfg *SelectConfig, header *fyne.Container)                                 // Create a select setting widget.
-	CreateBoolSetting(cfg *BoolConfig, header *fyne.Container) *widget.Check                       // Create a boolean setting widget.
-	CreateTextEntrySetting(cfg *TextEntrySettingConfig, header *fyne.Container) *widget.Entry      // Create a text entry setting widget.
-	CreateButtonWithConfirmationSetting(cfg *ButtonWithConfirmationConfig, header *fyne.Container) // Create a button setting with confirmation dialog widget.
-
 	GetApplySettingsButton() *widget.Button                        //GetApplySettingsButton returns the Apply Changes button from the SettingsManager to be used in the UI.
 	SetSettingChangedCallback(settingName string, callback func()) // Set a callback function to be called when a setting changes.
 	RemoveSettingChangedCallback(settingName string)               // Remove a callback function associated with a specific setting.
@@ -95,9 +34,7 @@ type SettingsManager interface {
 
 	RegisterRefreshFunc(refreshFunc func())  // Register a function to be called when the settings need to be refreshed.
 	RegisterOnSettingsSaved(callback func()) // Register a function to be called after settings are saved.
-	GetSettingsWindow() fyne.Window          // GetSettingsWindow returns the window associated with the SettingsManager.
 	GetCheckAndEnableApplyFunc() func()      // GetCheckAndEnableApplyFunction returns the check and enable apply function for the SettingsManager.
-	RebuildTrayMenu()                        // Rebuilds the tray menu from scratch.
 	// SeedBaseline seeds the initial state for a setting to track changes.
 	SeedBaseline(name string, val interface{})
 	// GetBaseline returns the initial state for a setting.
@@ -108,6 +45,32 @@ type SettingsManager interface {
 	SetValue(name string, val interface{})
 	// HasPendingChange returns true if the user has toggled a setting but not yet applied.
 	HasPendingChange(name string) bool
-	// Refresh triggers all registered refresh functions immediately.
-	Refresh()
+	// RefreshUI performs a UI-ONLY refresh: state evaluation and widget repaints,
+	// WITHOUT running registered callbacks. Safe for interactive handlers (checkbox toggles,
+	// text edits) — will not trigger wallpaper changes or other engine-level side effects.
+	// This is the ONLY refresh method available to providers. Engine-internal code uses
+	// fullRefresh() for committed state changes that need registered callbacks.
+	RefreshUI()
+	// CommitSetting atomically reads the current UI value, applies it to the native setter, and updates the baseline.
+	CommitSetting(name string)
+	// ResetSettings atomically clears multiple settings, updates native getters, and resyncs baselines.
+	ResetSettings(resets ...SettingReset)
+
+	// SetSettingStatus programmatically updates a setting's status label (thread-safe).
+	SetSettingStatus(name string, message string, importance schema.Importance)
+
+	// RenderSchema takes a pure Go UI definition and renders it to a Fyne container.
+	RenderSchema(p schema.PanelSchema) fyne.CanvasObject
+
+	// OpenURL opens the specified URL in the system's default browser.
+	OpenURL(u string)
+
+	// ShowAddQueryDialog opens the modal for adding image queries.
+	ShowAddQueryDialog(cfg schema.AddQueryConfig, initialURL, initialDesc string, onAdded func())
+
+	// ShowError displays a modal error dialog to the user.
+	ShowError(err error)
+
+	// ShowConfirm displays a modal confirmation dialog to the user.
+	ShowConfirm(title, message string, callback func(bool))
 }

@@ -7,95 +7,40 @@ import (
 	"testing"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/widget"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
+	"github.com/dixieflatline76/Spice/v2/pkg/ui/schema"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
 
 type managedMockWidget struct {
-	widget    fyne.Disableable
+	widget    fyne.CanvasObject
 	enabledIf func() bool
+	visibleIf func() bool
 }
 
 // MockSettingsManager implements setting.SettingsManager for testing
 type MockSettingsManager struct {
 	mock.Mock
 	// We store the created widgets to inspect them
-	selectWidgets  map[string]*setting.SelectConfig
-	checkWidgets   map[string]*widget.Check
+	allWidgets     map[string]fyne.CanvasObject
 	managedWidgets []managedMockWidget
 	pendingChanges map[string]bool
+	statusLabels   map[string]string
 	refreshFuncs   []func()
 }
 
 func NewMockSettingsManager() *MockSettingsManager {
 	return &MockSettingsManager{
-		selectWidgets:  make(map[string]*setting.SelectConfig),
-		checkWidgets:   make(map[string]*widget.Check),
+		allWidgets:     make(map[string]fyne.CanvasObject),
 		managedWidgets: make([]managedMockWidget, 0),
 		pendingChanges: make(map[string]bool),
+		statusLabels:   make(map[string]string),
 	}
-}
-
-func (m *MockSettingsManager) CreateSectionTitleLabel(desc string) *widget.Label {
-	return widget.NewLabel(desc)
-}
-
-func (m *MockSettingsManager) CreateSettingTitleLabel(desc string) *widget.Label {
-	return widget.NewLabel(desc)
-}
-
-func (m *MockSettingsManager) CreateSettingDescriptionLabel(desc string) fyne.CanvasObject {
-	return widget.NewLabel(desc)
-}
-
-func (m *MockSettingsManager) CreateSelectSetting(cfg *setting.SelectConfig, header *fyne.Container) {
-	m.selectWidgets[cfg.Name] = cfg
-	// We don't have a real select widget in the mock yet, but let's track the EnabledIf
-	if cfg.EnabledIf != nil {
-		// Mock select widget just to have something to Disable/Enable
-		w := widget.NewSelect(cfg.Options, nil)
-		m.managedWidgets = append(m.managedWidgets, managedMockWidget{
-			widget:    w,
-			enabledIf: cfg.EnabledIf,
-		})
-	}
-}
-
-func (m *MockSettingsManager) CreateBoolSetting(cfg *setting.BoolConfig, header *fyne.Container) *widget.Check {
-	// Create a real widget so we can test its behavior
-	check := widget.NewCheck(cfg.Name, cfg.OnChanged)
-	check.Checked = cfg.InitialValue
-
-	// We need to store the check widget associated with the config name to retrieve it later
-	m.checkWidgets[cfg.Name] = check
-
-	if cfg.EnabledIf != nil {
-		m.managedWidgets = append(m.managedWidgets, managedMockWidget{
-			widget:    check,
-			enabledIf: cfg.EnabledIf,
-		})
-	}
-	return check
-}
-
-func (m *MockSettingsManager) CreateTextEntrySetting(cfg *setting.TextEntrySettingConfig, header *fyne.Container) *widget.Entry {
-	// Return a stub entry for tests
-	entry := widget.NewEntry()
-	if cfg.EnabledIf != nil {
-		m.managedWidgets = append(m.managedWidgets, managedMockWidget{
-			widget:    entry,
-			enabledIf: cfg.EnabledIf,
-		})
-	}
-	return entry
-}
-
-func (m *MockSettingsManager) CreateButtonWithConfirmationSetting(cfg *setting.ButtonWithConfirmationConfig, header *fyne.Container) {
-	// No-op for regression test
 }
 
 func (m *MockSettingsManager) GetApplySettingsButton() *widget.Button {
@@ -103,7 +48,7 @@ func (m *MockSettingsManager) GetApplySettingsButton() *widget.Button {
 }
 
 func (m *MockSettingsManager) SetSettingChangedCallback(settingName string, callback func()) {
-	// No-op for now
+	// No-op
 }
 
 func (m *MockSettingsManager) RemoveSettingChangedCallback(settingName string) {
@@ -126,16 +71,16 @@ func (m *MockSettingsManager) RegisterOnSettingsSaved(callback func()) {
 	// No-op
 }
 
-func (m *MockSettingsManager) GetSettingsWindow() fyne.Window {
-	return nil
+func (m *MockSettingsManager) ShowError(err error) {
+	// No-op
+}
+
+func (m *MockSettingsManager) ShowConfirm(title, message string, callback func(bool)) {
+	// No-op
 }
 
 func (m *MockSettingsManager) GetCheckAndEnableApplyFunc() func() {
 	return func() {}
-}
-
-func (m *MockSettingsManager) RebuildTrayMenu() {
-	// No-op
 }
 
 func (m *MockSettingsManager) SeedBaseline(name string, val interface{}) {
@@ -147,26 +92,40 @@ func (m *MockSettingsManager) GetBaseline(name string) interface{} {
 }
 
 func (m *MockSettingsManager) GetValue(name string) interface{} {
-	// Attempt to return current value from select/check widgets if they exist
-	if cfg, ok := m.selectWidgets[name]; ok {
-		return cfg.InitialValue // Mock current as initial for simplicity in tests unless we track more
-	}
-	if check, ok := m.checkWidgets[name]; ok {
-		return check.Checked
+	if w, ok := m.allWidgets[name]; ok {
+		if c, ok := w.(*widget.Check); ok {
+			return c.Checked
+		}
+		if s, ok := w.(*widget.Select); ok {
+			for i, opt := range s.Options {
+				if opt == s.Selected {
+					return i
+				}
+			}
+			return -1
+		}
 	}
 	return nil
 }
 
 func (m *MockSettingsManager) SetValue(name string, val interface{}) {
-	if cfg, ok := m.selectWidgets[name]; ok {
-		cfg.InitialValue = val
-		m.refreshWidgetStates()
-		return
-	}
-	if check, ok := m.checkWidgets[name]; ok {
-		if b, ok := val.(bool); ok {
-			check.SetChecked(b)
-			m.refreshWidgetStates()
+	if w, ok := m.allWidgets[name]; ok {
+		if c, ok := w.(*widget.Check); ok {
+			if b, ok := val.(bool); ok {
+				c.SetChecked(b)
+				m.refreshWidgetStates()
+			}
+		}
+		if s, ok := w.(*widget.Select); ok {
+			if str, ok := val.(string); ok {
+				s.SetSelected(str)
+				m.refreshWidgetStates()
+			} else if idx, ok := val.(int); ok {
+				if idx >= 0 && idx < len(s.Options) {
+					s.SetSelected(s.Options[idx])
+					m.refreshWidgetStates()
+				}
+			}
 		}
 	}
 }
@@ -180,17 +139,135 @@ func (m *MockSettingsManager) SetPendingChange(name string, pending bool) {
 }
 
 func (m *MockSettingsManager) Refresh() {
+	m.refreshWidgetStates()
 	for _, f := range m.refreshFuncs {
 		f()
 	}
 }
 
+func (m *MockSettingsManager) RefreshUI() {
+	m.refreshWidgetStates()
+}
+
+func (m *MockSettingsManager) CommitSetting(name string) {
+	m.pendingChanges[name] = false
+}
+
+func (m *MockSettingsManager) ResetSettings(resets ...setting.SettingReset) {
+	for _, r := range resets {
+		m.SetValue(r.Name, r.Value)
+		m.pendingChanges[r.Name] = false
+	}
+}
+
+func (m *MockSettingsManager) SetSettingStatus(name string, message string, importance schema.Importance) {
+	m.statusLabels[name] = message
+}
+
+func (m *MockSettingsManager) OpenURL(u string) {
+	m.Called(u)
+}
+
+func (m *MockSettingsManager) ShowAddQueryDialog(cfg schema.AddQueryConfig, initialURL, initialDesc string, onAdded func()) {
+	m.Called(cfg, initialURL, initialDesc, onAdded)
+}
+
+func (m *MockSettingsManager) RenderSchema(panel schema.PanelSchema) fyne.CanvasObject {
+	box := container.NewVBox()
+	for _, s := range panel.Sections {
+		for _, item := range s.Items {
+			switch v := item.(type) {
+			case schema.BoolItem:
+				check := widget.NewCheck(v.Label, v.OnChanged)
+				check.SetChecked(v.InitialValue)
+				m.allWidgets[v.Name] = check
+				if v.EnabledIf != nil || v.VisibleIf != nil {
+					m.managedWidgets = append(m.managedWidgets, managedMockWidget{
+						widget:    check,
+						enabledIf: v.EnabledIf,
+						visibleIf: v.VisibleIf,
+					})
+				}
+				box.Add(check)
+			case schema.SelectItem:
+				sel := widget.NewSelect(v.Options, nil)
+				if idx, ok := v.InitialValue.(int); ok && idx >= 0 && idx < len(v.Options) {
+					sel.SetSelected(v.Options[idx])
+				}
+				m.allWidgets[v.Name] = sel
+				if v.EnabledIf != nil || v.VisibleIf != nil {
+					m.managedWidgets = append(m.managedWidgets, managedMockWidget{
+						widget:    sel,
+						enabledIf: v.EnabledIf,
+						visibleIf: v.VisibleIf,
+					})
+				}
+				box.Add(sel)
+			case schema.ButtonItem:
+				btn := widget.NewButton(v.ButtonText, v.OnPressed)
+				m.allWidgets[v.Name] = btn
+				if v.EnabledIf != nil || v.VisibleIf != nil {
+					m.managedWidgets = append(m.managedWidgets, managedMockWidget{
+						widget:    btn,
+						enabledIf: v.EnabledIf,
+						visibleIf: v.VisibleIf,
+					})
+				}
+				box.Add(btn)
+			case schema.AsyncButtonItem:
+				btn := widget.NewButton(v.ButtonText, nil)
+				m.allWidgets[v.Name] = btn
+				if v.EnabledIf != nil || v.VisibleIf != nil {
+					m.managedWidgets = append(m.managedWidgets, managedMockWidget{
+						widget:    btn,
+						enabledIf: v.EnabledIf,
+						visibleIf: v.VisibleIf,
+					})
+				}
+				box.Add(btn)
+			case schema.TextItem:
+				entry := widget.NewEntry()
+				entry.SetText(v.InitialValue)
+				m.allWidgets[v.Name] = entry
+				if v.EnabledIf != nil || v.VisibleIf != nil {
+					m.managedWidgets = append(m.managedWidgets, managedMockWidget{
+						widget:    entry,
+						enabledIf: v.EnabledIf,
+						visibleIf: v.VisibleIf,
+					})
+				}
+				box.Add(entry)
+			case schema.HorizontalRowItem:
+				m.RenderSchema(schema.PanelSchema{
+					Sections: []schema.SectionSchema{{Items: v.Items}},
+				})
+			case *schema.HorizontalRowItem:
+				m.RenderSchema(schema.PanelSchema{
+					Sections: []schema.SectionSchema{{Items: v.Items}},
+				})
+			}
+		}
+	}
+	return box
+}
+
 func (m *MockSettingsManager) refreshWidgetStates() {
 	for _, mw := range m.managedWidgets {
-		if mw.enabledIf() {
-			mw.widget.Enable()
-		} else {
-			mw.widget.Disable()
+		if mw.visibleIf != nil {
+			if mw.visibleIf() {
+				mw.widget.Show()
+			} else {
+				mw.widget.Hide()
+			}
+		}
+		if mw.enabledIf != nil {
+			if d, ok := mw.widget.(fyne.Disableable); ok {
+				if mw.enabledIf() {
+					d.Enable()
+				} else {
+					d.Disable()
+				}
+			}
 		}
 	}
 }
@@ -217,8 +294,8 @@ func TestSmartFitEnablesFaceOptions(t *testing.T) {
 	wp.CreatePrefsPanel(sm)
 
 	// Verify Check Widgets exist
-	faceCrop := sm.checkWidgets["faceCrop"]
-	faceBoost := sm.checkWidgets["faceBoost"]
+	faceCrop := sm.allWidgets["faceCrop"].(*widget.Check)
+	faceBoost := sm.allWidgets["faceBoost"].(*widget.Check)
 	assert.NotNil(t, faceCrop, "Face Crop Check should be created")
 	assert.NotNil(t, faceBoost, "Face Boost Check should be created")
 
@@ -271,7 +348,7 @@ func TestReactiveAccordionTitle(t *testing.T) {
 	sm.SetPendingChange(id, true) // baseline was 'true', so pending change makes it 'false' in the title logic
 
 	// Verify Reactivity: Title should update immediately when func is called (provided Refresh was triggered)
-	// In the real app, sm.Refresh() is called on toggle, which calls the accordion refreshers, which call the titleFunc.
+	// In the real app, sm.RefreshUI() is called on toggle, which calls the accordion refreshers, which call the titleFunc.
 	assert.NotContains(t, titleFunc(), "(1 active)", "Title should no longer show active count after pending untoggle")
 	assert.Equal(t, "Wallhaven", titleFunc())
 
@@ -287,15 +364,17 @@ type MockProvider struct {
 	TitleVal string
 }
 
-func (m *MockProvider) ID() string                                                       { return m.IDVal }
-func (m *MockProvider) Name() string                                                     { return m.IDVal }
-func (m *MockProvider) Title() string                                                    { return m.TitleVal }
-func (m *MockProvider) Type() provider.ProviderType                                      { return provider.TypeOnline }
-func (m *MockProvider) GetProviderIcon() fyne.Resource                                   { return nil }
-func (m *MockProvider) GetAttributionType() provider.AttributionType                     { return provider.AttributionBy }
-func (m *MockProvider) ParseURL(url string) (string, error)                              { return "", nil }
-func (m *MockProvider) CreateSettingsPanel(sm setting.SettingsManager) fyne.CanvasObject { return nil }
-func (m *MockProvider) CreateQueryPanel(sm setting.SettingsManager, pendingURL string) fyne.CanvasObject {
+func (m *MockProvider) ID() string                                   { return m.IDVal }
+func (m *MockProvider) Name() string                                 { return m.IDVal }
+func (m *MockProvider) Title() string                                { return m.TitleVal }
+func (m *MockProvider) Type() provider.ProviderType                  { return provider.TypeOnline }
+func (m *MockProvider) GetProviderIcon() interface{}                 { return nil }
+func (m *MockProvider) GetAttributionType() provider.AttributionType { return provider.AttributionBy }
+func (m *MockProvider) ParseURL(url string) (string, error)          { return "", nil }
+func (m *MockProvider) CreateSettingsPanel(sm setting.SettingsManager) *schema.PanelSchema {
+	return nil
+}
+func (m *MockProvider) CreateQueryPanel(sm setting.SettingsManager, pendingURL string) *schema.PanelSchema {
 	return nil
 }
 func (m *MockProvider) FetchImages(ctx context.Context, apiURL string, page int) ([]provider.Image, error) {

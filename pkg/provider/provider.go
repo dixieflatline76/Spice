@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"fyne.io/fyne/v2"
+	"github.com/dixieflatline76/Spice/v2/pkg/ui/schema"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
 )
 
@@ -84,16 +84,19 @@ type ImageProvider interface {
 	// GetProviderIcon returns the provider's icon for UI display (e.g. tray menu, settings header).
 	// It should return a high-quality, recognizable icon, preferably 64x64 or larger.
 	// Returns nil if no icon is available.
-	GetProviderIcon() fyne.Resource
+	// Note: This remains framework-coupled for now as icons are typically platform-specific resources.
+	GetProviderIcon() interface{}
 
 	// CreateSettingsPanel creates the general configuration panel (e.g., API Keys).
 	// Returns nil if the provider has no general settings.
-	CreateSettingsPanel(sm setting.SettingsManager) fyne.CanvasObject
+	CreateSettingsPanel(sm setting.SettingsManager) *schema.PanelSchema
 
 	// CreateQueryPanel creates the image query management panel.
 	// Returns nil if the provider does not support custom queries.
-	CreateQueryPanel(sm setting.SettingsManager, pendingUrl string) fyne.CanvasObject
+	CreateQueryPanel(sm setting.SettingsManager, pendingUrl string) *schema.PanelSchema
 }
+
+// (SchemaProvider removed as ImageProvider now returns schemas directly)
 
 // ResolutionAwareProvider is an optional interface for providers that can filter images based on screen resolution.
 type ResolutionAwareProvider interface {
@@ -116,6 +119,13 @@ type CustomClientProvider interface {
 // Syncer is an optional interface for providers that support automated synchronization of managed queries.
 type Syncer interface {
 	Sync(ctx context.Context) error
+}
+
+// RemoteConfigSyncer is an optional interface for providers that fetch lightweight metadata
+// or curated collections from a remote endpoint. This is called unconditionally during
+// the nightly refresh to keep the application's internal catalog up to date.
+type RemoteConfigSyncer interface {
+	SyncRemoteConfig() error
 }
 
 // ThrottledProvider is an optional interface for providers that can signal
