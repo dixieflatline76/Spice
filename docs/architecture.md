@@ -343,7 +343,7 @@ graph LR
 
 To prevent ID collisions across different providers (e.g., Pexels and Wallhaven both using numeric IDs), Spice implements a centralized middleware strategy.
 
-### 3.11.1 Namespacing Lifecycle
+### 3.12.1 Namespacing Lifecycle
 
 IDs are namespaced at the ingestion boundary and de-namespaced when interacting with the original provider.
 
@@ -373,35 +373,7 @@ sequenceDiagram
 -   **Persistence**: The `ImageStore` and `FileManager` only see and store namespaced IDs (`Provider_ID`).
 -   **Transparency**: Standard providers remain unaware of namespacing; they only ever see their own raw IDs.
 
-## 3.9 The "Git-Driven" Content System
+## 3.13 The "Git-Driven" Content System
 For verified providers (Museums), Spice treats `raw.githubusercontent.com` as a Content Delivery Network (CDN).
 *   **Architecture**: `Remote > Cache > Embed > Hardcoded`.
 *   **Benefit**: Allows instant curation updates (adding new artworks to "Director's Cut") without requiring users to download a binary update.
-
-<!-- Mermaid JS Handling -->
-<script>
-  document.addEventListener("DOMContentLoaded", function() {
-    // Find all code blocks with 'language-mermaid'
-    const codeBlocks = document.querySelectorAll('code.language-mermaid');
-    codeBlocks.forEach(code => {
-      // Jekyll usually renders: <div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>...</code></pre></div></div>
-      // We need to allow the text to be processed by Mermaid.
-      // Easiest is to create a new div.mermaid and replace the pre/code block.
-      
-      const div = document.createElement('div');
-      div.className = 'mermaid';
-      div.textContent = code.textContent;
-      
-      // Find the closest container that we want to replace (usually the pre or the div wrapper)
-      const wrapper = code.closest('pre');
-      if (wrapper) {
-        wrapper.replaceWith(div);
-      }
-    });
-  });
-</script>
-
-<script type="module">
-  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-  mermaid.initialize({ startOnLoad: true, theme: 'default' });
-</script>
