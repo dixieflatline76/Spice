@@ -146,6 +146,25 @@ end
 	// Microsoft winget-pkgs pipeline dropped support for singleton manifests.
 	// We must now generate a 3-part multi-file manifest (Version, Installer, DefaultLocale).
 
+	log.Printf("Syncing %s/%s with upstream...", repoOwner, wingetRepo)
+	repoObj, _, err := client.Repositories.Get(ctx, repoOwner, wingetRepo)
+	if err == nil {
+		defaultBranch := repoObj.GetDefaultBranch()
+		if defaultBranch == "" {
+			defaultBranch = "master" // fallback
+		}
+		_, _, syncErr := client.Repositories.MergeUpstream(ctx, repoOwner, wingetRepo, &github.RepoMergeUpstreamRequest{
+			Branch: github.String(defaultBranch),
+		})
+		if syncErr != nil {
+			log.Printf("Note: Syncing fork returned: %v (this is usually fine if already up to date)", syncErr)
+		} else {
+			log.Printf("Successfully synced fork %s branch with upstream.", defaultBranch)
+		}
+	} else {
+		log.Printf("Warning: Failed to get repo details for syncing: %v", err)
+	}
+
 	wingetVersionTmpl := `PackageIdentifier: dixieflatline76.Spice
 PackageVersion: {{.Version}}
 DefaultLocale: en-US
