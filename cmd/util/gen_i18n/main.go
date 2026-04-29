@@ -18,6 +18,63 @@ type Language struct {
 	Name string
 }
 
+// allowIdenticalToEnglish is a set of keys that are legitimately
+// the same string in English and in other languages (proper nouns,
+// international loanwords, etc.). These are excluded from the
+// "untranslated" check.
+var allowIdenticalToEnglish = map[string]bool{
+	// Proper nouns — museum names used internationally in English
+	"Art Institute of Chicago":       true,
+	"The Metropolitan Museum of Art": true,
+
+	// International loanwords / identical across many languages
+	"AI":      true,
+	"App":     true,
+	"General": true,
+	"Images":  true,
+	"Local":   true,
+	"Online":  true,
+	"System":  true,
+	"Actions": true,
+
+	// Brand names / tech terms kept in English
+	"Pexels":                  true,
+	"Wikimedia":               true,
+	"Wikimedia Commons":       true,
+	"Google Photos":           true,
+	"Google Photos Extension": true,
+	"wallhaven":               true,
+	"Open Access (CC0)":       true,
+	"CC0 - Public Domain":     true,
+
+	// Locations kept in their international form
+	"Chicago, IL, USA":   true,
+	"New York City, USA": true,
+
+	// Short functional strings identical in many languages
+	"Error: ": true,
+
+	// Attribution keys where some languages use the same prefix as English
+	"attribution_in": true,
+
+	// Internal keys that use the key as the value
+	"_meta_name": true,
+}
+
+// dynamicI18nKeys are translation keys that exist in the JSON files but
+// are used at runtime via variables (e.g. i18n.Tf(key, ...)) rather than
+// direct i18n.T("literal") calls. The static regex extractor cannot detect
+// these, so we explicitly register them to prevent false "stale" warnings.
+var dynamicI18nKeys = map[string]bool{
+	// Attribution format strings — selected dynamically based on provider.AttributionType
+	"attribution_by": true,
+	"attribution_in": true,
+
+	// Museum collection names — used as data-driven labels from curated JSON collections
+	"Egyptian Art":       true,
+	"European Paintings": true,
+}
+
 func main() {
 	translationsDir := "pkg/i18n/translations"
 	outputFile := "pkg/i18n/zz_generated_languages.go"
@@ -30,6 +87,14 @@ func main() {
 		codeRoot = "../.." // Navigate up to project root
 	}
 
+	// Parse --check flag
+	checkMode := false
+	for _, arg := range os.Args[1:] {
+		if arg == "--check" {
+			checkMode = true
+		}
+	}
+
 	files, err := os.ReadDir(translationsDir)
 	if err != nil {
 		log.Fatalf("failed to read translations dir (%s): %v", translationsDir, err)
@@ -39,7 +104,13 @@ func main() {
 	// Phase 1: Extract all i18n keys from Go source code
 	// ──────────────────────────────────────────────────────────────────
 	codeKeys := extractKeysFromCode(codeRoot)
-	fmt.Printf("Extracted %d unique i18n keys from source code\n", len(codeKeys))
+
+	// Merge in dynamic keys that can't be detected by static regex analysis
+	for k := range dynamicI18nKeys {
+		codeKeys[k] = true
+	}
+	fmt.Printf("Extracted %d unique i18n keys from source code (%d static + %d dynamic)\n",
+		len(codeKeys), len(codeKeys)-len(dynamicI18nKeys), len(dynamicI18nKeys))
 
 	// ──────────────────────────────────────────────────────────────────
 	// Phase 2: Load en.json as the reference
@@ -63,74 +134,96 @@ func main() {
 	fmt.Printf("Existing en.json has %d keys\n", existingKeyCount)
 
 	// ──────────────────────────────────────────────────────────────────
-	// Phase 3: Merge — auto-add new keys, warn about stale keys
+	// Phase 3: Merge — detect new keys and stale keys
 	// ──────────────────────────────────────────────────────────────────
+	var violations []string
+
+	// Detect new keys (in code but not in en.json)
 	addedCount := 0
 	for key := range codeKeys {
 		if _, exists := enMap[key]; !exists {
-			// Auto-add: key = value (matches existing en.json pattern)
-			enMap[key] = key
-			addedCount++
-			fmt.Printf("  ADDED: %q\n", key)
+			if checkMode {
+				violations = append(violations, fmt.Sprintf("MISSING from en.json: %q (found in code but not in translations)", key))
+			} else {
+				enMap[key] = key
+				addedCount++
+				fmt.Printf("  ADDED: %q\n", key)
+			}
 		}
 	}
 
 	// Detect stale keys (in en.json but not found in code)
-	staleCount := 0
+	var staleKeys []string
 	for key := range enMap {
 		if _, inCode := codeKeys[key]; !inCode {
-			staleCount++
-			fmt.Printf("  STALE (not found in code): %q\n", key)
+			staleKeys = append(staleKeys, key)
+		}
+	}
+	sort.Strings(staleKeys)
+
+	if len(staleKeys) > 0 {
+		for _, key := range staleKeys {
+			if checkMode {
+				violations = append(violations, fmt.Sprintf("STALE in en.json: %q (not found in any i18n.T/Tf/N call)", key))
+			} else {
+				fmt.Printf("  STALE (not found in code): %q\n", key)
+			}
 		}
 	}
 
-	if addedCount > 0 {
-		fmt.Printf("→ Added %d new keys to en.json\n", addedCount)
-	}
-	if staleCount > 0 {
-		fmt.Printf("→ WARNING: %d stale keys in en.json (review manually, not auto-deleted)\n", staleCount)
-	}
-	if addedCount == 0 && staleCount == 0 {
-		fmt.Println("→ en.json is in sync with source code")
-	}
-
-	// ──────────────────────────────────────────────────────────────────
-	// Phase 4: Sort and rewrite en.json
-	// ──────────────────────────────────────────────────────────────────
-	if metaName != nil {
-		enMap["_meta_name"] = metaName
-	}
-	if enOut, err := json.MarshalIndent(enMap, "", "  "); err == nil {
-		if writeErr := os.WriteFile(enPath, enOut, 0600); writeErr != nil {
-			log.Printf("warning: failed to write %s: %v", enPath, writeErr)
+	if !checkMode {
+		if addedCount > 0 {
+			fmt.Printf("→ Added %d new keys to en.json\n", addedCount)
 		}
-	}
-	delete(enMap, "_meta_name")
-	fmt.Printf("Wrote en.json with %d keys\n", len(enMap))
-
-	// ──────────────────────────────────────────────────────────────────
-	// Phase 5: Generate pseudo.json for layout testing
-	// ──────────────────────────────────────────────────────────────────
-	pseudoMap := make(map[string]string)
-	pseudoMap["_meta_name"] = "[!! Pseudo-Loc !!]"
-	for k, v := range enMap {
-		if str, ok := v.(string); ok {
-			pseudoMap[k] = pseudolocalize(str)
+		if len(staleKeys) > 0 {
+			fmt.Printf("→ WARNING: %d stale keys in en.json (review manually, not auto-deleted)\n", len(staleKeys))
+		}
+		if addedCount == 0 && len(staleKeys) == 0 {
+			fmt.Println("→ en.json is in sync with source code")
 		}
 	}
 
-	pseudoPath := filepath.Join(translationsDir, "pseudo.json")
-	pseudoData, err := json.MarshalIndent(pseudoMap, "", "  ")
-	if err != nil {
-		log.Fatalf("failed to marshal pseudo.json: %v", err)
+	// ──────────────────────────────────────────────────────────────────
+	// Phase 4: Sort and rewrite en.json (skip in check mode)
+	// ──────────────────────────────────────────────────────────────────
+	if !checkMode {
+		if metaName != nil {
+			enMap["_meta_name"] = metaName
+		}
+		if enOut, err := json.MarshalIndent(enMap, "", "  "); err == nil {
+			if writeErr := os.WriteFile(enPath, enOut, 0600); writeErr != nil {
+				log.Printf("warning: failed to write %s: %v", enPath, writeErr)
+			}
+		}
+		delete(enMap, "_meta_name")
+		fmt.Printf("Wrote en.json with %d keys\n", len(enMap))
 	}
-	if err := os.WriteFile(pseudoPath, pseudoData, 0600); err != nil {
-		log.Fatalf("failed to write pseudo.json: %v", err)
-	}
-	fmt.Println("Generated pseudo.json for layout testing")
 
 	// ──────────────────────────────────────────────────────────────────
-	// Phase 6: Propagate — auto-fill missing keys into other languages
+	// Phase 5: Generate pseudo.json for layout testing (skip in check mode)
+	// ──────────────────────────────────────────────────────────────────
+	if !checkMode {
+		pseudoMap := make(map[string]string)
+		pseudoMap["_meta_name"] = "[!! Pseudo-Loc !!]"
+		for k, v := range enMap {
+			if str, ok := v.(string); ok {
+				pseudoMap[k] = pseudolocalize(str)
+			}
+		}
+
+		pseudoPath := filepath.Join(translationsDir, "pseudo.json")
+		pseudoData, err := json.MarshalIndent(pseudoMap, "", "  ")
+		if err != nil {
+			log.Fatalf("failed to marshal pseudo.json: %v", err)
+		}
+		if err := os.WriteFile(pseudoPath, pseudoData, 0600); err != nil {
+			log.Fatalf("failed to write pseudo.json: %v", err)
+		}
+		fmt.Println("Generated pseudo.json for layout testing")
+	}
+
+	// ──────────────────────────────────────────────────────────────────
+	// Phase 6: Check all language files for issues
 	// ──────────────────────────────────────────────────────────────────
 	var languages []Language
 	for _, f := range files {
@@ -162,26 +255,55 @@ func main() {
 			continue
 		}
 
-		// Auto-fill any missing keys from en.json
-		changed := false
-		for k, v := range enMap {
-			if _, ok := m[k]; !ok {
-				m[k] = v
-				changed = true
+		if code != "en" {
+			// Check for stale keys in this language file (keys not in en.json)
+			for k := range m {
+				if k == "_meta_name" {
+					continue
+				}
+				if _, inEn := enMap[k]; !inEn {
+					if checkMode {
+						violations = append(violations, fmt.Sprintf("STALE in %s: %q (not in en.json)", f.Name(), k))
+					}
+				}
+			}
+
+			// Check for untranslated keys (value == English value and not allowlisted)
+			for k, v := range enMap {
+				if langVal, exists := m[k]; exists {
+					enStr, enOk := v.(string)
+					langStr, langOk := langVal.(string)
+					if enOk && langOk && enStr == langStr && !allowIdenticalToEnglish[k] {
+						if checkMode {
+							violations = append(violations, fmt.Sprintf("UNTRANSLATED in %s: %q (still English)", f.Name(), k))
+						}
+					}
+				}
 			}
 		}
 
-		if changed {
-			log.Printf("info: auto-filled missing keys in %s.json", code)
-		}
-
-		// Always rewrite the file to guarantee alphabetical sorting
-		if outData, err := json.MarshalIndent(m, "", "  "); err == nil {
-			if writeErr := os.WriteFile(path, outData, 0600); writeErr != nil {
-				log.Printf("warning: failed to write %s: %v", path, writeErr)
+		if !checkMode {
+			// Auto-fill any missing keys from en.json
+			changed := false
+			for k, v := range enMap {
+				if _, ok := m[k]; !ok {
+					m[k] = v
+					changed = true
+				}
 			}
-		} else {
-			log.Printf("warning: failed to rewrite %s: %v", path, err)
+
+			if changed {
+				log.Printf("info: auto-filled missing keys in %s.json", code)
+			}
+
+			// Always rewrite the file to guarantee alphabetical sorting
+			if outData, err := json.MarshalIndent(m, "", "  "); err == nil {
+				if writeErr := os.WriteFile(path, outData, 0600); writeErr != nil {
+					log.Printf("warning: failed to write %s: %v", path, writeErr)
+				}
+			} else {
+				log.Printf("warning: failed to rewrite %s: %v", path, err)
+			}
 		}
 
 		languages = append(languages, Language{
@@ -191,68 +313,91 @@ func main() {
 	}
 
 	// ──────────────────────────────────────────────────────────────────
-	// Phase 7: Generate Go language registry
+	// Phase 7: Generate Go language registry (skip in check mode)
 	// ──────────────────────────────────────────────────────────────────
+	if !checkMode {
+		// Sort languages by code for deterministic output, but keep English first if it exists
+		sort.Slice(languages, func(i, j int) bool {
+			if languages[i].Code == "en" {
+				return true
+			}
+			if languages[j].Code == "en" {
+				return false
+			}
+			return languages[i].Code < languages[j].Code
+		})
 
-	// Sort languages by code for deterministic output, but keep English first if it exists
-	sort.Slice(languages, func(i, j int) bool {
-		if languages[i].Code == "en" {
-			return true
+		goFile, err := os.Create(outputFile)
+		if err != nil {
+			log.Fatalf("failed to create output file: %v", err)
 		}
-		if languages[j].Code == "en" {
-			return false
+		defer goFile.Close()
+
+		fmt.Fprintln(goFile, "// Code generated by gen_i18n. DO NOT EDIT.")
+		fmt.Fprintln(goFile, "package i18n")
+		fmt.Fprintln(goFile)
+		fmt.Fprintln(goFile, "type Language struct {")
+		fmt.Fprintln(goFile, "\tCode string")
+		fmt.Fprintln(goFile, "\tName string")
+		fmt.Fprintln(goFile, "}")
+		fmt.Fprintln(goFile)
+		fmt.Fprintln(goFile, "var SupportedLanguages = []Language{")
+		for _, lang := range languages {
+			fmt.Fprintf(goFile, "\t{Code: %q, Name: %q},\n", lang.Code, lang.Name)
 		}
-		return languages[i].Code < languages[j].Code
-	})
+		fmt.Fprintln(goFile, "}")
+		fmt.Fprintln(goFile)
+		fmt.Fprintln(goFile, "func GetLanguageNames() []string {")
+		fmt.Fprintln(goFile, "\tnames := []string{\"System Default\"}")
+		fmt.Fprintln(goFile, "\tfor _, lang := range SupportedLanguages {")
+		fmt.Fprintln(goFile, "\t\tnames = append(names, lang.Name)")
+		fmt.Fprintln(goFile, "\t}")
+		fmt.Fprintln(goFile, "\treturn names")
+		fmt.Fprintln(goFile, "}")
 
-	goFile, err := os.Create(outputFile)
-	if err != nil {
-		log.Fatalf("failed to create output file: %v", err)
-	}
-	defer goFile.Close()
+		// Generate zz_generated_pseudoloc.go
+		pseudoFile := "pkg/i18n/zz_generated_pseudoloc.go"
+		if _, err := os.Stat("translations"); err == nil {
+			pseudoFile = "zz_generated_pseudoloc.go"
+		}
 
-	fmt.Fprintln(goFile, "// Code generated by gen_i18n. DO NOT EDIT.")
-	fmt.Fprintln(goFile, "package i18n")
-	fmt.Fprintln(goFile)
-	fmt.Fprintln(goFile, "type Language struct {")
-	fmt.Fprintln(goFile, "\tCode string")
-	fmt.Fprintln(goFile, "\tName string")
-	fmt.Fprintln(goFile, "}")
-	fmt.Fprintln(goFile)
-	fmt.Fprintln(goFile, "var SupportedLanguages = []Language{")
-	for _, lang := range languages {
-		fmt.Fprintf(goFile, "\t{Code: %q, Name: %q},\n", lang.Code, lang.Name)
-	}
-	fmt.Fprintln(goFile, "}")
-	fmt.Fprintln(goFile)
-	fmt.Fprintln(goFile, "func GetLanguageNames() []string {")
-	fmt.Fprintln(goFile, "\tnames := []string{\"System Default\"}")
-	fmt.Fprintln(goFile, "\tfor _, lang := range SupportedLanguages {")
-	fmt.Fprintln(goFile, "\t\tnames = append(names, lang.Name)")
-	fmt.Fprintln(goFile, "\t}")
-	fmt.Fprintln(goFile, "\treturn names")
-	fmt.Fprintln(goFile, "}")
+		pf, err := os.Create(pseudoFile)
+		if err != nil {
+			log.Fatalf("failed to create %s: %v", pseudoFile, err)
+		}
+		defer pf.Close()
 
-	// Generate zz_generated_pseudoloc.go
-	pseudoFile := "pkg/i18n/zz_generated_pseudoloc.go"
-	if _, err := os.Stat("translations"); err == nil {
-		pseudoFile = "zz_generated_pseudoloc.go"
+		fmt.Fprintln(pf, "// Code generated by gen_i18n. DO NOT EDIT.")
+		fmt.Fprintln(pf, "//go:build !release")
+		fmt.Fprintln(pf)
+		fmt.Fprintln(pf, "package i18n")
+		fmt.Fprintln(pf)
+		fmt.Fprintln(pf, "func init() {")
+		fmt.Fprintln(pf, "\tSupportedLanguages = append(SupportedLanguages, Language{Code: \"pseudo\", Name: \"[!! Pseudo-Loc !!]\"})")
+		fmt.Fprintln(pf, "}")
 	}
 
-	pf, err := os.Create(pseudoFile)
-	if err != nil {
-		log.Fatalf("failed to create %s: %v", pseudoFile, err)
+	// ──────────────────────────────────────────────────────────────────
+	// Final: Report results
+	// ──────────────────────────────────────────────────────────────────
+	if checkMode {
+		if len(violations) > 0 {
+			sort.Strings(violations)
+			fmt.Printf("\n✗ i18n check FAILED with %d violation(s):\n\n", len(violations))
+			for _, v := range violations {
+				fmt.Printf("  • %s\n", v)
+			}
+			fmt.Println()
+			fmt.Println("To fix:")
+			fmt.Println("  1. Run 'make gen-i18n' to sync en.json with code")
+			fmt.Println("  2. Remove stale keys from all language files")
+			fmt.Println("  3. Translate new strings in all language files")
+			fmt.Println("  4. Add legitimately-identical strings to the allowlist in gen_i18n/main.go")
+			os.Exit(1)
+		}
+		fmt.Println("\n✓ i18n check passed — all translations in sync")
+		return
 	}
-	defer pf.Close()
-
-	fmt.Fprintln(pf, "// Code generated by gen_i18n. DO NOT EDIT.")
-	fmt.Fprintln(pf, "//go:build !release")
-	fmt.Fprintln(pf)
-	fmt.Fprintln(pf, "package i18n")
-	fmt.Fprintln(pf)
-	fmt.Fprintln(pf, "func init() {")
-	fmt.Fprintln(pf, "\tSupportedLanguages = append(SupportedLanguages, Language{Code: \"pseudo\", Name: \"[!! Pseudo-Loc !!]\"})")
-	fmt.Fprintln(pf, "}")
 
 	fmt.Println("Done.")
 }

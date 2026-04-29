@@ -142,11 +142,30 @@ func NewProvider(cfg Config, httpClient *http.Client) *Provider {
 		if err != nil {
 			log.Printf("AIC: Failed to init remote collection: %v", err)
 		} else {
+			p.idCacheMu.Lock()
 			p.curatedList = *col
+			p.idCacheMu.Unlock()
 		}
 	}()
 	return p
 }
+
+// SyncRemoteConfig fetches the latest curated collections list from the remote repository.
+func (p *Provider) SyncRemoteConfig() error {
+	col, err := RefreshRemoteCollection()
+	if err != nil {
+		return err
+	}
+	if col != nil {
+		p.idCacheMu.Lock()
+		p.curatedList = *col
+		p.idCacheMu.Unlock()
+	}
+	return nil
+}
+
+// Ensure interface compliance
+var _ provider.RemoteConfigSyncer = (*Provider)(nil)
 
 func (p *Provider) ID() string {
 	return "ArtInstituteChicago"

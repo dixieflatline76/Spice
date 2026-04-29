@@ -66,6 +66,23 @@ func NewProvider(cfg *wallpaper.Config, client *http.Client) *Provider {
 	return p
 }
 
+// SyncRemoteConfig fetches the latest curated collections list from the remote repository.
+func (p *Provider) SyncRemoteConfig() error {
+	col, err := RefreshRemoteCollection()
+	if err != nil {
+		return err
+	}
+	if col != nil {
+		p.mu.Lock()
+		p.collection = col
+		p.mu.Unlock()
+	}
+	return nil
+}
+
+// Ensure interface compliance
+var _ provider.RemoteConfigSyncer = (*Provider)(nil)
+
 func (p *Provider) ID() string {
 	return "MetMuseum"
 }

@@ -775,7 +775,7 @@ func (sa *SpiceApp) Start() {
 
 	// Create the tray menu
 	saInstance.CreateTrayMenu()
-	go sa.StartPeriodicUpdateCheck()
+	go sa.StartStartupUpdateCheck()
 
 	// Activate all plugins
 	go func() {
@@ -790,33 +790,40 @@ func (sa *SpiceApp) Start() {
 	sa.Run()
 }
 
-// StartPeriodicUpdateCheck starts a goroutine to check for updates on startup and then periodically.
-func (sa *SpiceApp) StartPeriodicUpdateCheck() {
-	utilLog.Print("Starting periodic application update checker...")
-
-	performCheck := func() {
-		if !sa.appConfig.GetUpdateCheckEnabled() {
-			utilLog.Print("Update check disabled by user.")
-			return
-		}
-		utilLog.Print("Checking for application updates...")
-		updateInfo, err := util.CheckForUpdates(nil)
-		if err != nil {
-			utilLog.Printf("Update check failed: %v", err)
-			return
-		}
-		sa.updateTrayMenu(updateInfo)
+// StartStartupUpdateCheck performs a one-time check for updates on startup,
+// and registers the callback for the nightly background check.
+func (sa *SpiceApp) StartStartupUpdateCheck() {
+	// Register a self-contained callback that the nightly scheduler invokes.
+	// It owns the full lifecycle: preference check → network call → tray update.
+	if plugin := wallpaper.GetInstance(); plugin != nil {
+		plugin.SetUpdateCallback(func() {
+			if !sa.appConfig.GetUpdateCheckEnabled() {
+				utilLog.Print("Nightly update check skipped: disabled by user.")
+				return
+			}
+			utilLog.Print("Nightly Maintenance: Checking for application updates...")
+			updateInfo, err := util.CheckForUpdates(nil)
+			if err != nil {
+				utilLog.Printf("Nightly Maintenance: Update check failed: %v", err)
+				return
+			}
+			sa.updateTrayMenu(updateInfo)
+		})
 	}
 
+	// Perform the initial check after a short delay
 	time.Sleep(1 * time.Minute)
-	performCheck()
-
-	ticker := time.NewTicker(24 * time.Hour)
-	defer ticker.Stop()
-
-	for range ticker.C {
-		performCheck()
+	if !sa.appConfig.GetUpdateCheckEnabled() {
+		utilLog.Print("Startup update check disabled by user.")
+		return
 	}
+	utilLog.Print("Checking for application updates on startup...")
+	updateInfo, err := util.CheckForUpdates(nil)
+	if err != nil {
+		utilLog.Printf("Update check failed: %v", err)
+		return
+	}
+	sa.updateTrayMenu(updateInfo)
 }
 
 // updateTrayMenu adds or removes the "Update Available" menu item based on check results.

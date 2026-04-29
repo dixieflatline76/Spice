@@ -118,6 +118,27 @@ func fetchRemote() (*CuratedList, error) {
 	return &col, nil
 }
 
+// RefreshRemoteCollection forces a fetch from GitHub, and updates the local cache if successful.
+func RefreshRemoteCollection() (*CuratedList, error) {
+	col, err := fetchRemote()
+	if err != nil {
+		return nil, err
+	}
+
+	if col.Version >= embeddedCollection.Version {
+		cacheDir := filepath.Join(config.GetWorkingDir(), "cache", "artic")
+		cachePath := filepath.Join(cacheDir, cacheFileName)
+		_ = os.MkdirAll(cacheDir, 0755)
+		if err := saveCache(cachePath, col); err != nil {
+			log.Printf("AIC: Failed to save cache during refresh: %v", err)
+		}
+		return col, nil
+	}
+
+	log.Printf("AIC: Remote collection (v%d) is not newer than embedded (v%d), no update needed", col.Version, embeddedCollection.Version)
+	return nil, nil
+}
+
 func loadCache(path string) (*CuratedList, error) {
 	f, err := os.Open(path)
 	if err != nil {

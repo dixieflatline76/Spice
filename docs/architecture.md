@@ -300,24 +300,44 @@ To manage evolving configuration schemas (e.g., legacy JSON formats, ID backfill
 *   **MigrationChain**: A sequence of `MigrationStep` functions (e.g., `UnifyQueriesStep`, `EnsureFavoritesStep`).
 *   **Execution**: On startup, `loadFromPrefs` executes the chain. If any step modifies the config, a save is triggered automatically. This ensures data integrity across version upgrades.
 
-## 3.11 UI State Management (The Registry Pattern)
-*Added in v2.5*
+## 3.11 Schema-Driven UI & Hexagonal Architecture
+*Refactored in v2.8*
 
-To solve the "Closure Trap" bug and ensure UI consistency across multiple monitor settings, Spice implemented a centralized **Settings Registry**.
+Spice uses a **Hexagonal Architecture (Ports & Adapters)** for its settings UI. All 8 providers are **100% Fyne-free** — they declare their UI via pure Go `schema.PanelSchema` structs (the **port**), and the rendering engine (`ui/settings_manager.go`) translates them into Fyne widgets (the **adapter**).
 
-- **Registry**: `SettingsManager` maintains a `map[string]interface{}` (the Baseline) representing the last-saved state of every UI widget.
-- **Advanced Capabilities**:
-    - **Secure Masking**: Supports `IsPassword: true` for automatic masking of sensitive inputs (e.g., API keys).
-    - **Dynamic Locking**: Supports `EnabledIf` predicates to programmatically disable widgets based on other values (e.g., locking an API key field until its value is cleared).
-- **The Lifecycle**:
-    1. **Seeding**: On window creation, widgets `SeedBaseline` with their initial persistent value.
-    2. **Dirty Detection**: `OnChanged` callbacks compare the "Live" value against the "Baseline" (not the ephemeral Config).
-    3. **Atomic Commit**: The "Apply" button executes all queued callbacks and then promotes "Live" values to "Baseline", ensuring the UI remains consistent if the user continues editing without closing the window.
+```mermaid
+graph LR
+    classDef port fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px,color:#000,font-size:14px;
+    classDef adapter fill:#fff3e0,stroke:#e65100,stroke-width:2px,color:#000,font-size:14px;
+    classDef domain fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#000,font-size:14px;
 
-- **The Transactional UI Exception**:
-    - For sensitive credentials (API Keys), Spice bypasses the deferred save model.
+    subgraph Inner ["Inner Ring (Pure Go)"]
+        Schema["pkg/ui/schema<br/>PanelSchema, BoolItem,<br/>SecretItem, QueryListItem..."]:::port
+        SMI["pkg/ui/setting<br/>SettingsManager interface"]:::port
+        Providers["pkg/wallpaper/providers/*<br/>Zero Fyne imports"]:::domain
+    end
+
+    subgraph Outer ["Outer Ring (Fyne)"]
+        Engine["ui/settings_manager.go<br/>RenderSchema() adapter"]:::adapter
+    end
+
+    Providers -- "Returns *schema.PanelSchema" --> Schema
+    Providers -- "Depends on" --> SMI
+    Engine -- "Implements" --> SMI
+    Engine -- "Renders" --> Schema
+```
+
+- **Schema (Port)**: `pkg/ui/schema/schema.go` defines 13+ pure Go types (`BoolItem`, `TextItem`, `SelectItem`, `SecretItem`, `AsyncButtonItem`, `QueryListItem`, `OAuthPickerItem`, `FolderPickerItem`, etc.).
+- **SettingsManager (Port)**: `pkg/ui/setting/setting_manager.go` defines the interface with `RenderSchema()`, `ShowError()`, `ShowConfirm()`, `ShowAddQueryDialog()`, `CommitSetting()`, etc.
+- **Engine (Adapter)**: `ui/settings_manager.go` (1900+ lines) implements the full rendering pipeline with the **Registry Pattern**:
+    1. **Seeding**: `RenderSchema` walks the schema tree, creates native widgets, and seeds the Baseline.
+    2. **Dirty Detection**: `OnChanged` callbacks compare the "Live" value against the "Baseline".
+    3. **Atomic Commit**: The "Apply" button executes all queued `ApplyFunc` callbacks and promotes "Live" values to "Baseline".
+
+- **The Transactional UI Exception** (`schema.SecretItem`):
+    - For sensitive credentials (API Keys), the engine bypasses the deferred save model.
     - **Verification Flow**: Clicking "Verify" performs a network check and *immediately* persists the value upon success.
-    - **Visual Locking**: Success calls `sm.SeedBaseline()` and `sm.Refresh()`, which instantly locks the field and enables dependent features (like sync) without requiring an "Apply" click.
+    - **Visual Locking**: The engine calls `SeedBaseline()` and `RefreshUI()`, instantly locking the field without requiring an "Apply" click.
 
 ## 3.12 ID Namespacing (Middleware)
 

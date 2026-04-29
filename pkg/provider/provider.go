@@ -121,6 +121,13 @@ type Syncer interface {
 	Sync(ctx context.Context) error
 }
 
+// RemoteConfigSyncer is an optional interface for providers that fetch lightweight metadata
+// or curated collections from a remote endpoint. This is called unconditionally during
+// the nightly refresh to keep the application's internal catalog up to date.
+type RemoteConfigSyncer interface {
+	SyncRemoteConfig() error
+}
+
 // ThrottledProvider is an optional interface for providers that can signal
 // they are currently in a cooldown state (e.g., due to a 429 error).
 type ThrottledProvider interface {

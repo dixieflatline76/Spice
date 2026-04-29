@@ -26,39 +26,64 @@ pkg/wallpaper/providers/<name>/
 
 > Ensure you generate `.png` assets for the museum logo to display in the UI.
 
-## 3. Implementing the Museum UI (`CreateQueryPanel`)
+## 3. Implementing the Museum UI (Schema-Based)
 
-Museums use `wallpaper.CreateMuseumHeader` instead of standard query inputs. This renders a rich presentation layer.
+Museums use `schema.CreateMuseumSettingsPanel` for the rich header, and `schema.BoolItem` for the curated collection toggles. **No Fyne imports are needed** — everything is declared as pure Go schema structs.
+
+### 3.1 Settings Panel (Header)
 
 ```go
-func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl string) fyne.CanvasObject {
-	header := wallpaper.CreateMuseumHeader(
-		"Cleveland Museum of Art",        // Name
-		"Cleveland, OH • USA",            // Location
-		"Open Access (CC0)",              // License
-		"https://www.clevelandart.org",   // License Link
-		"Discover thousands of masterpieces...", // Romance Copy
-		"https://www.google.com/maps...", // Map URL (Triggers "Plan a Visit")
-		"https://www.clevelandart.org",   // Web URL
-		"https://give.clevelandart.org",  // Donate URL
-		sm,
-	)
-
-	// Fixed List of Collections (Deferred Save Model)
-	listContainer := container.NewVBox()
-	
-    // Follow the Strict Deferred-Save Model using `sm.SetSettingChangedCallback` 
-    // exactly as detailed in docs/creating_new_providers.md
-	// ...
-
-	return container.NewVBox(
-		header,
-		widget.NewSeparator(),
-		widget.NewLabelWithStyle("Curated Tours", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-		listContainer,
-	)
+func (p *Provider) CreateSettingsPanel(sm setting.SettingsManager) *schema.PanelSchema {
+    return schema.CreateMuseumSettingsPanel(schema.MuseumSettingsConfig{
+        ID:          "CMA",
+        Title:       i18n.T("Cleveland Museum of Art"),
+        Location:    i18n.T("Cleveland, OH, USA"),
+        LicenseURL:  "https://www.clevelandart.org/open-access",
+        Description: i18n.T("Discover thousands of masterpieces..."),
+        MapQuery:    "Cleveland Museum of Art",
+        WebsiteURL:  "https://www.clevelandart.org",
+        DonateURL:   "https://give.clevelandart.org",
+    }, sm.OpenURL)
 }
 ```
+
+### 3.2 Query Panel (Curated Tours)
+
+```go
+func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, _ string) *schema.PanelSchema {
+    tourItems := make([]schema.ItemSchema, 0)
+    for key, tour := range p.curatedList.Tours {
+        key := key // shadow for closure
+        isActive, queryID := p.getQueryState(key)
+
+        tourItems = append(tourItems, schema.BoolItem{
+            Name:         "cma_tour_" + key,
+            Label:        tour.Name,
+            InitialValue: isActive,
+            ApplyFunc: func(on bool) {
+                if on {
+                    p.cfg.EnableQuery(queryID)
+                } else {
+                    p.cfg.DisableQuery(queryID)
+                }
+            },
+            NeedsRefresh: true,
+        })
+    }
+
+    return &schema.PanelSchema{
+        Sections: []schema.SectionSchema{
+            {
+                Title:   i18n.T("Curated Tours"),
+                Compact: true,
+                Items:   tourItems,
+            },
+        },
+    }
+}
+```
+
+The rendering engine handles all dirty tracking, Apply button state, and widget creation automatically.
 
 ## 4. Remote Curation (`remote.go`)
 

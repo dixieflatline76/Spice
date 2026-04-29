@@ -149,15 +149,10 @@ func (b *PrefsPanelBuilder) BuildGeneralTabSchema() *schema.PanelSchema {
 					schema.BoolItem{
 						Name:         "nightlyRefresh",
 						Label:        i18n.T("Refresh wallpapers nightly:"),
-						Help:         i18n.T("Useful when using image queries with random elements. Toggling this will start or stop the nightly refresh process."),
+						Help:         i18n.T("Controls whether Spice automatically downloads new wallpapers each night. Background maintenance tasks (cache cleanup, metadata sync) always run regardless of this setting."),
 						InitialValue: b.plugin.cfg.GetNightlyRefresh(),
 						ApplyFunc: func(val bool) {
 							b.plugin.cfg.SetNightlyRefresh(val)
-							if val {
-								go b.plugin.StartNightlyRefresh()
-							} else {
-								b.plugin.StopNightlyRefresh()
-							}
 						},
 					},
 				},

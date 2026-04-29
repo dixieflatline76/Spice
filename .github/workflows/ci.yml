@@ -51,6 +51,9 @@ jobs:
       - name: Run tests
         run: go test ./...
 
+      - name: Check i18n integrity
+        run: make check-i18n
+
       - name: Dry Run Build (No Secrets)
         if: runner.os == 'Windows'
         run: make build-win-amd64

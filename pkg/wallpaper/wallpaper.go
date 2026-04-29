@@ -72,6 +72,7 @@ type Plugin struct {
 	providers           map[string]provider.ImageProvider
 	favoriter           provider.Favoriter
 	actionChan          chan func()
+	updateCallback      func()
 
 	// New Components
 	store        StoreInterface
@@ -255,6 +256,14 @@ func (wp *Plugin) RequestFetch(providerID ...string) {
 // GetInstance returns the singleton instance of the wallpaper plugin.
 func GetInstance() *Plugin {
 	return getPlugin()
+}
+
+// SetUpdateCallback registers a callback that the nightly scheduler invokes
+// to signal that it's time to perform an application update check.
+// The callback itself is responsible for checking user preferences and
+// making the actual network call.
+func (wp *Plugin) SetUpdateCallback(cb func()) {
+	wp.updateCallback = cb
 }
 
 // LoadPlugin initializes the wallpaper plugin and registers it with the manager.
@@ -442,9 +451,9 @@ func (wp *Plugin) Activate() {
 	// Start Pipeline
 	wp.pipeline.Start(workers)
 
-	if wp.cfg.GetNightlyRefresh() {
-		go wp.StartNightlyRefresh()
-	}
+	// Nightly scheduler now runs unconditionally to handle metadata syncs, updates, etc.
+	// Actual image downloading is gated within the scheduler by GetNightlyRefresh().
+	go wp.StartNightlyRefresh()
 
 	wp.SetSmartFit(wp.cfg.GetSmartFit())
 
@@ -461,7 +470,7 @@ func (wp *Plugin) Activate() {
 		}
 		wp.downloadMutex.Unlock()
 		// Sync Collections and then fetch
-		wp.SyncWallhavenCollections()
+		wp.SyncProviders()
 		wp.FetchNewImages(false)
 	}
 	wp.ChangeWallpaperFrequency(wp.cfg.GetWallpaperChangeFrequency(), false)
