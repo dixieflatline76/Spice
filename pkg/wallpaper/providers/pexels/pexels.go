@@ -529,7 +529,7 @@ func (p *Provider) getDisplayURL(q schema.Query) *url.URL {
 		return res
 	}
 	if strings.Contains(apiURL, "api.pexels.com/v1/collections") {
-		re := regexp.MustCompile(`api\.pexels\.com/v1/collections/([a-zA-Z0-9]+)`)
+		re := regexp.MustCompile(`^https?://api\.pexels\.com/v1/collections/([a-zA-Z0-9]+)`)
 		matches := re.FindStringSubmatch(apiURL)
 		if len(matches) >= 2 {
 			displayURL := fmt.Sprintf("https://www.pexels.com/collections/%s/", matches[1])
