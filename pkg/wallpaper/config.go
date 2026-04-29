@@ -43,6 +43,7 @@ type Config struct {
 	// Callbacks
 	QueryRemovedCallback      func(queryID string) `json:"-"`
 	QueryDisabledCallback     func(queryID string) `json:"-"`
+	QueryEnabledCallback      func(queryID string) `json:"-"`
 	FavoritesClearedCallback  func()               `json:"-"`
 	ShortcutsDisabled         bool                 `json:"-"`
 	TargetedShortcutsDisabled bool                 `json:"-"`
@@ -228,6 +229,10 @@ func (c *Config) AddProviderQuery(description, url, provider string, active, man
 
 	c.Queries = append([]ImageQuery{newQuery}, c.Queries...)
 	c.save()
+
+	if active && c.QueryEnabledCallback != nil {
+		go c.QueryEnabledCallback(id)
+	}
 	return id, nil
 }
 
@@ -366,6 +371,13 @@ func (c *Config) SetQueryDisabledCallback(callback func(queryID string)) {
 	c.QueryDisabledCallback = callback
 }
 
+// SetQueryEnabledCallback sets the callback for when a query is enabled.
+func (c *Config) SetQueryEnabledCallback(callback func(queryID string)) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.QueryEnabledCallback = callback
+}
+
 // SetFavoritesClearedCallback sets the callback for when all favorites are cleared.
 func (c *Config) SetFavoritesClearedCallback(callback func()) {
 	c.mu.Lock()
@@ -395,6 +407,10 @@ func (c *Config) EnableImageQuery(id string) error {
 
 	c.Queries[index].Active = true
 	c.save()
+
+	if c.QueryEnabledCallback != nil {
+		go c.QueryEnabledCallback(id)
+	}
 	return nil
 }
 

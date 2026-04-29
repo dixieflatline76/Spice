@@ -444,38 +444,37 @@ func getIIIFURL(imageID string, width, height int) string {
 // --- UI Implementation (Pure Go) ---
 
 // CreateSettingsPanel returns the declarative UI for ArtIC settings.
-func (p *Provider) CreateSettingsPanel(_ setting.SettingsManager) *schema.PanelSchema {
-	return &schema.PanelSchema{}
+func (p *Provider) CreateSettingsPanel(sm setting.SettingsManager) *schema.PanelSchema {
+	return schema.CreateMuseumSettingsPanel(schema.MuseumSettingsConfig{
+		ID:          "AIC",
+		Title:       i18n.T("Art Institute of Chicago"),
+		Location:    i18n.T("Chicago, IL, USA"),
+		LicenseURL:  "https://www.artic.edu/open-access/open-access-images",
+		Description: i18n.T("One of the world's great art museums, housing icons like Nighthawks and American Gothic."),
+		MapQuery:    "Art Institute of Chicago",
+		WebsiteURL:  "https://www.artic.edu",
+		DonateURL:   "https://www.artic.edu/support-us",
+	}, sm.OpenURL)
 }
 
 // CreateQueryPanel creates the image query management panel.
 func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, _ string) *schema.PanelSchema {
-	// 1. Header Section
-	headerSection := schema.SectionSchema{
-		Items: []schema.ItemSchema{
-			schema.LabelItem{Text: "Art Institute of Chicago", IsTitle: true},
-			schema.LabelItem{Text: "Chicago, IL • USA", Importance: schema.ImportanceLow},
-			schema.HyperlinkItem{
-				Text: i18n.T("CC0 - Public Domain"),
-				URL:  "https://www.artic.edu/open-access/open-access-images",
-			},
-			schema.LabelItem{
-				Text: i18n.T("One of the world's great art museums, housing icons like Nighthawks and American Gothic."),
-			},
-			schema.ButtonItem{
-				Name:       "aic_web",
-				ButtonText: i18n.T("Visit Website"),
-				OnPressed:  func() { p.OpenBrowser("https://www.artic.edu") },
-			},
-		},
-	}
-
-	// 2. Curated Tours Section
+	// 1. Curated Tours Section
 	keys := make([]string, 0, len(p.curatedList.Tours))
 	for k := range p.curatedList.Tours {
 		keys = append(keys, k)
 	}
-	sort.Strings(keys)
+	sort.Slice(keys, func(i, j int) bool {
+		nameI := p.curatedList.Tours[keys[i]].Name
+		nameJ := p.curatedList.Tours[keys[j]].Name
+		if strings.HasPrefix(nameI, "⭐") && !strings.HasPrefix(nameJ, "⭐") {
+			return true
+		}
+		if strings.HasPrefix(nameJ, "⭐") && !strings.HasPrefix(nameI, "⭐") {
+			return false
+		}
+		return nameI < nameJ
+	})
 
 	tourItems := make([]schema.ItemSchema, 0, len(keys))
 	for _, key := range keys {
@@ -522,11 +521,6 @@ func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, _ string) *schem
 	}
 
 	return &schema.PanelSchema{
-		Sections: []schema.SectionSchema{headerSection, toursSection},
+		Sections: []schema.SectionSchema{toursSection},
 	}
 }
-
-func (p *Provider) OpenBrowser(u string) {
-	// Abstracted
-}
-

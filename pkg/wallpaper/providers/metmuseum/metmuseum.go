@@ -247,42 +247,44 @@ func (p *Provider) resolveQueryToIDs(ctx context.Context, query string) ([]int, 
 	var ids []int
 	var err error
 
-	switch query {
-	case CollectionSpiceMelange, "metmuseum://curated":
-		// Case 1: Spice Melange (Already cached in p.collection, but needs to be handled uniformly for shuffle)
-		p.mu.RLock()
-		if p.collection == nil {
-			p.mu.RUnlock()
-			if col, err := InitRemoteCollection(p.cfg); err == nil {
-				p.mu.Lock()
-				p.collection = col
-				p.mu.Unlock()
-			} else {
-				return nil, fmt.Errorf("collection not loaded")
-			}
-			p.mu.RLock()
+	// Ensure collection is loaded
+	p.mu.RLock()
+	col := p.collection
+	p.mu.RUnlock()
+
+	if col == nil {
+		var initErr error
+		col, initErr = InitRemoteCollection(p.cfg)
+		if initErr != nil {
+			return nil, fmt.Errorf("collection not loaded: %w", initErr)
 		}
+		p.mu.Lock()
+		p.collection = col
+		p.mu.Unlock()
+	}
+
+	// Look up the collection entry by key
+	entry := col.FindEntry(query)
+	if entry == nil {
+		// Legacy fallback: treat unknown keys as the curated collection
+		log.Printf("MET: Unknown collection key %q, falling back to curated", query)
+		entry = col.FindEntry(CollectionSpiceMelange)
+		if entry == nil {
+			return nil, fmt.Errorf("no collection entries available")
+		}
+	}
+
+	switch entry.Type {
+	case "curated":
 		// Copy IDs to avoid mutating the source collection
-		ids = make([]int, len(p.collection.IDs))
-		copy(ids, p.collection.IDs)
-		p.mu.RUnlock()
-	case CollectionAmerican:
-		// Case 2: American Art
-		ids, err = p.fetchSearchHighlights(ctx, "American Paintings")
+		ids = make([]int, len(entry.IDs))
+		copy(ids, entry.IDs)
+	case "search":
+		ids, err = p.fetchSearchHighlights(ctx, entry.Query)
+	case "department":
+		ids, err = p.fetchDepartmentHighlights(ctx, entry.DeptID)
 	default:
-		// Case 3: Department Highlights
-		var deptID int
-		switch query {
-		case CollectionEuropean:
-			deptID = DeptEuropeanPaintings
-		case CollectionAsian:
-			deptID = DeptAsianArt
-		case CollectionEgyptian:
-			deptID = DeptEgyptianArt
-		default:
-			deptID = DeptEuropeanPaintings
-		}
-		ids, err = p.fetchDepartmentHighlights(ctx, deptID)
+		return nil, fmt.Errorf("unknown collection type: %s", entry.Type)
 	}
 
 	if err != nil {
@@ -513,37 +515,41 @@ func (p *Provider) EnrichImage(ctx context.Context, img provider.Image) (provide
 // --- UI Implementation (Pure Go) ---
 
 // CreateSettingsPanel returns the declarative UI for MetMuseum settings.
-func (p *Provider) CreateSettingsPanel(_ setting.SettingsManager) *schema.PanelSchema {
-	return &schema.PanelSchema{}
+func (p *Provider) CreateSettingsPanel(sm setting.SettingsManager) *schema.PanelSchema {
+	return schema.CreateMuseumSettingsPanel(schema.MuseumSettingsConfig{
+		ID:          "Met",
+		Title:       i18n.T("The Metropolitan Museum of Art"),
+		Location:    i18n.T("New York City, USA"),
+		LicenseURL:  "https://www.metmuseum.org/about-the-met/policies-and-documents/open-access",
+		Description: i18n.T("The crown jewel of New York City. From ancient Egyptian temples to modern masterpieces, The Met houses 5,000 years of humanity's greatest creative achievements."),
+		MapQuery:    "The Metropolitan Museum of Art",
+		WebsiteURL:  "https://www.metmuseum.org",
+		DonateURL:   "https://www.metmuseum.org/donate",
+	}, sm.OpenURL)
 }
 
 // CreateQueryPanel creates the image query management panel.
+// Collection items are driven entirely from the JSON collection data.
 func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, _ string) *schema.PanelSchema {
-	headerSection := schema.SectionSchema{
-		Items: []schema.ItemSchema{
-			schema.LabelItem{Text: "The Metropolitan Museum of Art", IsTitle: true},
-			schema.LabelItem{Text: "New York, NY • USA", Importance: schema.ImportanceLow},
-			schema.HyperlinkItem{
-				Text: i18n.T("CC0 - Public Domain"),
-				URL:  "https://www.metmuseum.org/about-the-met/policies-and-documents/open-access",
-			},
-			schema.LabelItem{
-				Text: i18n.T("One of the world's largest and finest art museums, with collections spanning 5,000 years of world culture."),
-			},
-			schema.ButtonItem{
-				Name:       "met_web",
-				ButtonText: i18n.T("Visit Website"),
-				OnPressed:  func() { p.OpenBrowser("https://www.metmuseum.org") },
-			},
-		},
+	// Ensure collection is loaded for dynamic rendering
+	p.mu.RLock()
+	col := p.collection
+	p.mu.RUnlock()
+
+	if col == nil {
+		if c, err := InitRemoteCollection(p.cfg); err == nil {
+			p.mu.Lock()
+			p.collection = c
+			p.mu.Unlock()
+			col = c
+		}
 	}
 
-	curatedItems := []schema.ItemSchema{
-		p.makeCollectionItem(i18n.T("Spice Melange (Curated)"), CollectionSpiceMelange),
-		p.makeCollectionItem(i18n.T("American Paintings"), CollectionAmerican),
-		p.makeCollectionItem(i18n.T("European Paintings"), CollectionEuropean),
-		p.makeCollectionItem(i18n.T("Asian Art"), CollectionAsian),
-		p.makeCollectionItem(i18n.T("Egyptian Art"), CollectionEgyptian),
+	var curatedItems []schema.ItemSchema
+	if col != nil {
+		for _, entry := range col.Entries {
+			curatedItems = append(curatedItems, p.makeCollectionItem(entry.Name, entry.Key))
+		}
 	}
 
 	curatedSection := schema.SectionSchema{
@@ -552,34 +558,34 @@ func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, _ string) *schem
 	}
 
 	return &schema.PanelSchema{
-		Sections: []schema.SectionSchema{headerSection, curatedSection},
+		Sections: []schema.SectionSchema{curatedSection},
 	}
 }
 
-func (p *Provider) makeCollectionItem(label, url string) schema.BoolItem {
+func (p *Provider) makeCollectionItem(label, key string) schema.BoolItem {
 	// Helper to find existing query state
-	getQuery := func(url string) (bool, string) {
+	getQuery := func(key string) (bool, string) {
 		for _, q := range p.cfg.GetQueries() {
-			if q.Provider == p.ID() && q.URL == url {
+			if q.Provider == p.ID() && q.URL == key {
 				return q.Active, q.ID
 			}
 		}
 		return false, ""
 	}
 
-	active, _ := getQuery(url)
+	active, _ := getQuery(key)
 
 	return schema.BoolItem{
-		Name:         p.ID() + "_" + url,
+		Name:         p.ID() + "_" + key,
 		Label:        label,
 		InitialValue: active,
 		ApplyFunc: func(b bool) {
-			_, cid := getQuery(url)
+			_, cid := getQuery(key)
 			if b {
 				if cid != "" {
 					_ = p.cfg.EnableImageQuery(cid)
 				} else {
-					_, _ = p.cfg.AddMetMuseumQuery(label, url, true)
+					_, _ = p.cfg.AddMetMuseumQuery(label, key, true)
 				}
 			} else {
 				if cid != "" {
@@ -589,8 +595,3 @@ func (p *Provider) makeCollectionItem(label, url string) schema.BoolItem {
 		},
 	}
 }
-
-func (p *Provider) OpenBrowser(u string) {
-	// Abstracted
-}
-

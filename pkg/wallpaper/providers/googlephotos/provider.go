@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	_ "embed"
@@ -173,7 +174,20 @@ func (p *Provider) FetchImages(ctx context.Context, apiURL string, page int) ([]
 }
 
 func (p *Provider) CreateSettingsPanel(sm setting.SettingsManager) *schema.PanelSchema {
-	return nil
+	return &schema.PanelSchema{
+		Sections: []schema.SectionSchema{
+			{
+				Title:   i18n.T("Google Photos"),
+				Compact: true,
+				Items: []schema.ItemSchema{
+					schema.LabelItem{
+						Text:       i18n.T("Google Photos is a photo sharing and storage service developed by Google."),
+						Importance: schema.ImportanceLow,
+					},
+				},
+			},
+		},
+	}
 }
 
 func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl string) *schema.PanelSchema {
@@ -195,7 +209,8 @@ func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl strin
 						},
 						OnAuthorize: func() error {
 							return p.auth.StartOAuthFlow(func(u *url.URL) error {
-								return p.OpenBrowser(u.String())
+								sm.OpenURL(u.String())
+								return nil
 							})
 						},
 						OnDisconnect: func() error {
@@ -212,9 +227,7 @@ func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl strin
 
 							// 2. Open Browser
 							updateStatus(i18n.T("Please select photos in your browser..."))
-							if err := p.OpenBrowser(session.PickerURI); err != nil {
-								return 0, "", err
-							}
+							sm.OpenURL(session.PickerURI)
 
 							// 3. Poll
 							updateStatus(i18n.T("Waiting for selection (check browser)..."))
@@ -275,6 +288,7 @@ func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl strin
 									URL:         q.URL,
 									Description: q.Description,
 									Active:      q.Active,
+									Managed:     q.Managed,
 								}
 							}
 							return abstracts
@@ -302,9 +316,16 @@ func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl strin
 							}
 							guid := u.Host
 							absPath := filepath.Join(p.rootDir, guid)
-							// File URL
-							res, _ := url.Parse("file:///" + filepath.ToSlash(absPath))
-							return res
+
+							// Copy logic from Favorites provider for compatible file URIs
+							slashPath := filepath.ToSlash(absPath)
+							if !strings.HasPrefix(slashPath, "/") {
+								slashPath = "/" + slashPath
+							}
+							return &url.URL{
+								Scheme: "file",
+								Path:   slashPath,
+							}
 						},
 					},
 				},
@@ -377,10 +398,6 @@ func (p *Provider) saveInitialMetadata(guid string, fileLinks map[string]string)
 func (p *Provider) cleanupDownload(guid string) {
 	path := filepath.Join(p.rootDir, guid)
 	os.RemoveAll(path)
-}
-
-func (p *Provider) OpenBrowser(urlStr string) error {
-	return nil // Abstracted
 }
 
 func (p *Provider) migrateOldGooglePhotos() {

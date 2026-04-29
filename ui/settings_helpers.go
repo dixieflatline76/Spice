@@ -16,6 +16,10 @@ func (sm *SettingsManager) CreateSectionTitleLabel(desc string) *widget.Label {
 	label.Wrapping = fyne.TextWrapWord
 	label.Importance = widget.HighImportance
 	label.TextStyle = fyne.TextStyle{Bold: true}
+	if sm.isRenderingCompact {
+		// Use a smaller header style if compact is requested
+		label.Importance = widget.MediumImportance
+	}
 	return label
 }
 
@@ -41,7 +45,8 @@ func (sm *SettingsManager) CreateSettingDescriptionLabel(desc string) fyne.Canva
 	}
 
 	// Standardized Indentation: matching the schema-driven standard
-	padding := theme.Padding() * 3
+	// Tightened for optimization: reduced from 3x to 1x padding
+	padding := theme.Padding()
 	indent := canvas.NewRectangle(color.Transparent)
 	indent.SetMinSize(fyne.NewSize(padding, 0))
 

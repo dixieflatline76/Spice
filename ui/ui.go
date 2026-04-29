@@ -32,7 +32,7 @@ import (
 	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 	"github.com/dixieflatline76/Spice/v2/pkg/sysinfo"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui"
-	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
+	"github.com/dixieflatline76/Spice/v2/pkg/ui/schema"
 	"github.com/dixieflatline76/Spice/v2/pkg/wallpaper"
 	"github.com/dixieflatline76/Spice/v2/util"
 	utilLog "github.com/dixieflatline76/Spice/v2/util/log"
@@ -442,6 +442,7 @@ func (sa *SpiceApp) CreatePreferencesWindow(initialTab string) {
 
 	// If window already exists, just show it and switch tab if requested
 	if sa.prefsWindow != nil {
+		sa.RebuildPreferencesContent(initialTab) // Rebuild to pick up any new pendingAddUrls
 		if initialTab != "" && sa.tabItems != nil {
 			if item, ok := sa.tabItems[initialTab]; ok {
 				sa.prefsTabs.Select(item)
@@ -547,85 +548,11 @@ func (sa *SpiceApp) RebuildPreferencesContent(initialTab string) {
 	}
 
 	sm := NewSettingsManager(sa.prefsWindow)
+	sm.RegisterOnSettingsSaved(func() {
+		sa.RebuildTrayMenu()
+	})
 
 	// --- General Tab ---
-	generalContainer := container.NewVBox()
-	generalContainer.Add(sm.CreateSectionTitleLabel(i18n.T("General Application Settings")))
-
-	// Enable System Notifications
-	var notificationsConfig setting.BoolConfig
-	notificationsConfig = setting.BoolConfig{
-		Name:         "enableNotifications",
-		InitialValue: sa.appConfig.GetAppNotificationsEnabled(),
-		Label:        sm.CreateSettingTitleLabel(i18n.T("Enable System Notifications:")),
-		HelpContent:  sm.CreateSettingDescriptionLabel(i18n.T("Enable or disable system notifications from Spice.")),
-		ApplyFunc: func(b bool) {
-			sa.appConfig.SetAppNotificationsEnabled(b)
-			notificationsConfig.InitialValue = b
-		},
-	}
-	sm.CreateBoolSetting(&notificationsConfig, generalContainer)
-
-	// Enable New Version Check
-	var updateCheckConfig setting.BoolConfig
-	updateCheckConfig = setting.BoolConfig{
-		Name:         "enableUpdateCheck",
-		InitialValue: sa.appConfig.GetUpdateCheckEnabled(),
-		Label:        sm.CreateSettingTitleLabel(i18n.T("Enable New Version Check:")),
-		HelpContent:  sm.CreateSettingDescriptionLabel(i18n.T("Automatically check for new versions of Spice on startup.")),
-		ApplyFunc: func(b bool) {
-			sa.appConfig.SetUpdateCheckEnabled(b)
-			updateCheckConfig.InitialValue = b
-		},
-	}
-	sm.CreateBoolSetting(&updateCheckConfig, generalContainer)
-
-	// Enable Global Shortcuts
-	shortcutConfig := setting.BoolConfig{
-		Name:         "enableShortcuts",
-		InitialValue: !wallpaper.GetInstance().GetShortcutsDisabled(),
-		Label:        sm.CreateSettingTitleLabel(i18n.T("Enable global shortcuts:")),
-		HelpContent:  sm.CreateSettingDescriptionLabel(i18n.T("Use keyboard shortcuts to control wallpapers. Disable if they conflict with other apps.")),
-		ApplyFunc: func(val bool) {
-			wallpaper.GetInstance().SetShortcutsDisabled(!val)
-			hotkey.StartListeners(GetPluginManager())
-		},
-	}
-	sm.CreateBoolSetting(&shortcutConfig, generalContainer)
-
-	targetedInner := container.NewVBox()
-
-	targetedShortcutConfig := setting.BoolConfig{
-		Name:         "enableTargetedShortcuts",
-		InitialValue: !wallpaper.GetInstance().GetTargetedShortcutsDisabled(),
-		Label:        sm.CreateSettingTitleLabel(i18n.T("Enable Display Specific Shortcuts (Alt + Arrow + 1-9):")),
-		HelpContent:  sm.CreateSettingDescriptionLabel(i18n.T("Disable this if Alt+Arrow conflicts with your browser or other apps.")),
-		ApplyFunc: func(val bool) {
-			wallpaper.GetInstance().SetTargetedShortcutsDisabled(!val)
-			hotkey.StartListeners(GetPluginManager())
-		},
-		EnabledIf: func() bool {
-			val := sm.GetValue("enableShortcuts")
-			if val == nil {
-				return true
-			}
-			return val.(bool)
-		},
-	}
-	sm.CreateBoolSetting(&targetedShortcutConfig, targetedInner)
-
-	indentation := widget.NewLabel("      ")
-
-	shortcutsGuideURL, _ := url.Parse("https://github.com/dixieflatline76/Spice/blob/main/docs/user_guide.md#keyboard-shortcuts")
-	shortcutsLink := widget.NewHyperlink(i18n.T("View all shortcuts →"), shortcutsGuideURL)
-	targetedAndLinkContainer := container.NewVBox(
-		targetedInner,
-		container.NewHBox(shortcutsLink),
-	)
-
-	indentedWrapper := container.NewBorder(nil, nil, indentation, nil, targetedAndLinkContainer)
-	generalContainer.Add(indentedWrapper)
-
 	// Theme Selection
 	themeOptions := []string{i18n.T("System"), i18n.T("Dark"), i18n.T("Light")}
 	currentTheme := sa.appConfig.GetTheme()
@@ -636,34 +563,6 @@ func (sa *SpiceApp) RebuildPreferencesContent(initialTab string) {
 			break
 		}
 	}
-
-	themeConfig := setting.SelectConfig{
-		Name:         "theme",
-		Options:      setting.StringOptions(util.StringsToStringers(themeOptions)),
-		InitialValue: initialThemeIndex,
-		Label:        sm.CreateSettingTitleLabel(i18n.T("Theme:")),
-		HelpContent:  sm.CreateSettingDescriptionLabel(i18n.T("Select the application theme.")),
-	}
-	themeConfig.ApplyFunc = func(val interface{}) {
-		selectedIndex := val.(int)
-		if selectedIndex < 0 || selectedIndex >= len(themeOptions) {
-			return // Safety check
-		}
-		selectedTheme := themeOptions[selectedIndex]
-		sa.appConfig.SetTheme(selectedTheme)
-		themeConfig.InitialValue = selectedIndex
-
-		// Apply Theme
-		switch selectedTheme {
-		case "Dark":
-			sa.Settings().SetTheme(&forcedVariantTheme{Theme: theme.DefaultTheme(), variant: theme.VariantDark})
-		case "Light":
-			sa.Settings().SetTheme(&forcedVariantTheme{Theme: theme.DefaultTheme(), variant: theme.VariantLight})
-		default:
-			sa.Settings().SetTheme(theme.DefaultTheme())
-		}
-	}
-	sm.CreateSelectSetting(&themeConfig, generalContainer)
 
 	// Language Selection
 	langOptions := i18n.GetLanguageNames()
@@ -678,65 +577,152 @@ func (sa *SpiceApp) RebuildPreferencesContent(initialTab string) {
 		}
 	}
 
-	langConfig := setting.SelectConfig{
-		Name:         "language",
-		Options:      setting.StringOptions(util.StringsToStringers(langDisplayOptions)),
-		InitialValue: initialLangIndex,
-		Label:        sm.CreateSettingTitleLabel(i18n.T("Language:")),
-		HelpContent:  sm.CreateSettingDescriptionLabel(i18n.T("Select the application language. Restart may be required for full effect.")),
-		NeedsRefresh: true,
-	}
-	langConfig.ApplyFunc = func(val interface{}) {
-		selectedIndex := val.(int)
-		if selectedIndex < 0 || selectedIndex >= len(langOptions) {
-			return
-		}
-		selectedLang := langOptions[selectedIndex]
-		sa.appConfig.SetLanguage(selectedLang)
-		i18n.SetLanguage(selectedLang)
-		langConfig.InitialValue = selectedIndex
+	generalSchema := schema.PanelSchema{
+		Sections: []schema.SectionSchema{
+			{
+				Title: i18n.T("General Application Settings"),
+				Items: []schema.ItemSchema{
+					schema.BoolItem{
+						Name:         "enableNotifications",
+						InitialValue: sa.appConfig.GetAppNotificationsEnabled(),
+						Label:        i18n.T("Enable System Notifications:"),
+						Help:         i18n.T("Enable or disable system notifications from Spice."),
+						ApplyFunc: func(b bool) {
+							sa.appConfig.SetAppNotificationsEnabled(b)
+						},
+					},
+					schema.BoolItem{
+						Name:         "enableUpdateCheck",
+						InitialValue: sa.appConfig.GetUpdateCheckEnabled(),
+						Label:        i18n.T("Enable New Version Check:"),
+						Help:         i18n.T("Automatically check for new versions of Spice on startup."),
+						ApplyFunc: func(b bool) {
+							sa.appConfig.SetUpdateCheckEnabled(b)
+						},
+					},
+					schema.BoolItem{
+						Name:         "enableShortcuts",
+						InitialValue: !wallpaper.GetInstance().GetShortcutsDisabled(),
+						Label:        i18n.T("Enable global shortcuts:"),
+						Help:         i18n.T("Use keyboard shortcuts to control wallpapers. Disable if they conflict with other apps."),
+						ApplyFunc: func(val bool) {
+							wallpaper.GetInstance().SetShortcutsDisabled(!val)
+							hotkey.StartListeners(GetPluginManager())
+						},
+					},
+					schema.HorizontalRowItem{
+						ID: "shortcutsIndent",
+						Items: []schema.ItemSchema{
+							schema.LabelItem{ID: "shortcutsSpacer", Text: "      "},
+							schema.BoolItem{
+								Name:         "enableTargetedShortcuts",
+								InitialValue: !wallpaper.GetInstance().GetTargetedShortcutsDisabled(),
+								Label:        i18n.T("Enable Display Specific Shortcuts (Alt + Arrow + 1-9):"),
+								Help:         i18n.T("Disable this if Alt+Arrow conflicts with your browser or other apps."),
+								ApplyFunc: func(val bool) {
+									wallpaper.GetInstance().SetTargetedShortcutsDisabled(!val)
+									hotkey.StartListeners(GetPluginManager())
+								},
+								EnabledIf: func() bool {
+									val := sm.GetValue("enableShortcuts")
+									if val == nil {
+										return true
+									}
+									return val.(bool)
+								},
+							},
+						},
+					},
+					schema.HorizontalRowItem{
+						ID: "shortcutsLinkRow",
+						Items: []schema.ItemSchema{
+							schema.LabelItem{ID: "shortcutsLinkSpacer", Text: "      "},
+							schema.HyperlinkItem{
+								ID:   "shortcutsLink",
+								Text: i18n.T("View all shortcuts →"),
+								URL:  "https://github.com/dixieflatline76/Spice/blob/main/docs/user_guide.md#keyboard-shortcuts",
+							},
+						},
+					},
+					schema.SelectItem{
+						Name:         "theme",
+						Options:      themeOptions,
+						InitialValue: initialThemeIndex,
+						Label:        i18n.T("Theme:"),
+						Help:         i18n.T("Select the application theme."),
+						ApplyFunc: func(val interface{}) {
+							selectedIndex := val.(int)
+							if selectedIndex < 0 || selectedIndex >= len(themeOptions) {
+								return
+							}
+							selectedTheme := themeOptions[selectedIndex]
+							sa.appConfig.SetTheme(selectedTheme)
 
-		// Broadcast to extensions
-		if srv := api.GetServer(); srv != nil {
-			if err := srv.BroadcastLanguage(i18n.GetLanguage()); err != nil {
-				utilLog.Printf("Failed to broadcast language change to extensions: %v", err)
-			}
-		}
+							switch selectedTheme {
+							case "Dark":
+								sa.Settings().SetTheme(&forcedVariantTheme{Theme: theme.DefaultTheme(), variant: theme.VariantDark})
+							case "Light":
+								sa.Settings().SetTheme(&forcedVariantTheme{Theme: theme.DefaultTheme(), variant: theme.VariantLight})
+							default:
+								sa.Settings().SetTheme(theme.DefaultTheme())
+							}
+						},
+					},
+					schema.SelectItem{
+						Name:         "language",
+						Options:      langDisplayOptions,
+						InitialValue: initialLangIndex,
+						Label:        i18n.T("Language:"),
+						Help:         i18n.T("Select the application language. Restart may be required for full effect."),
+						NeedsRefresh: true,
+						ApplyFunc: func(val interface{}) {
+							selectedIndex := val.(int)
+							if selectedIndex < 0 || selectedIndex >= len(langOptions) {
+								return
+							}
+							selectedLang := langOptions[selectedIndex]
+							sa.appConfig.SetLanguage(selectedLang)
+							i18n.SetLanguage(selectedLang)
 
-		// Since language has changed, we must rebuild the entire Preferences window and Tray Menu.
-		// We determine the active tab beforehand to restore it.
-		activeID := "App"
-		selected := sa.prefsTabs.Selected() // sa.prefsTabs might be nil if this is during setup, but Apply happens much later.
-		for id, item := range sa.tabItems {
-			if item == selected {
-				activeID = id
-				break
-			}
-		}
-		sa.RebuildPreferencesContent(activeID)
-		sa.RebuildTrayMenu()
-	}
-	sm.CreateSelectSetting(&langConfig, generalContainer)
+							if srv := api.GetServer(); srv != nil {
+								if err := srv.BroadcastLanguage(i18n.GetLanguage()); err != nil {
+									utilLog.Printf("Failed to broadcast language change to extensions: %v", err)
+								}
+							}
 
-	// Enable Debug Logging
-	var debugLogConfig setting.BoolConfig
-	debugLogConfig = setting.BoolConfig{
-		Name:         "enableDebugLogging",
-		InitialValue: sa.appConfig.GetDebugLoggingEnabled(),
-		Label:        sm.CreateSettingTitleLabel(i18n.T("Enable Debug Logging:")),
-		HelpContent:  sm.CreateSettingDescriptionLabel(i18n.T("Write verbose debug entries to the log file. Useful for troubleshooting.")),
-		ApplyFunc: func(b bool) {
-			sa.appConfig.SetDebugLoggingEnabled(b)
-			utilLog.SetDebugEnabled(b)
-			debugLogConfig.InitialValue = b
+							activeID := "App"
+							selected := sa.prefsTabs.Selected()
+							for id, item := range sa.tabItems {
+								if item == selected {
+									activeID = id
+									break
+								}
+							}
+							sa.RebuildPreferencesContent(activeID)
+							sa.RebuildTrayMenu()
+						},
+					},
+					schema.BoolItem{
+						Name:         "enableDebugLogging",
+						InitialValue: sa.appConfig.GetDebugLoggingEnabled(),
+						Label:        i18n.T("Enable Debug Logging:"),
+						Help:         i18n.T("Write verbose debug entries to the log file. Useful for troubleshooting."),
+						ApplyFunc: func(b bool) {
+							sa.appConfig.SetDebugLoggingEnabled(b)
+							utilLog.SetDebugEnabled(b)
+						},
+					},
+				},
+			},
 		},
 	}
-	sm.CreateBoolSetting(&debugLogConfig, generalContainer)
+
+	generalContainer := sm.RenderSchema(generalSchema)
 
 	// Initialize/Reset tab mapping
 	sa.tabItems = make(map[string]*container.TabItem)
 
-	generalTabItem := container.NewTabItem(i18n.T("App"), container.NewVScroll(generalContainer))
+	generalTabItem := container.NewTabItem(i18n.T("App"), generalContainer)
 	sa.tabItems["App"] = generalTabItem
 
 	// --- Plugin Tabs ---

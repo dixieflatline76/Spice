@@ -619,8 +619,9 @@ func (p *Provider) CreateSettingsPanel(_ setting.SettingsManager) *schema.PanelS
 	return &schema.PanelSchema{
 		Sections: []schema.SectionSchema{
 			{
+				Title:   i18n.T("Favorites Management"),
+				Compact: true,
 				Items: []schema.ItemSchema{
-					schema.LabelItem{Text: i18n.T("Favorites Management"), IsTitle: true},
 					schema.LabelItem{Text: i18n.T("Local favorites are stored persistently in your Spice application folder."), Importance: schema.ImportanceLow},
 				},
 			},
@@ -637,18 +638,28 @@ func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, _ string) *schem
 				Items: []schema.ItemSchema{
 					schema.QueryListItem{
 						GetQueries: func() []schema.Query {
-							return []schema.Query{
-								{
-									ID:          wallpaper.FavoritesQueryID,
-									URL:         wallpaper.FavoritesQueryID,
-									Description: i18n.T("Personal Collection"),
-									Active:      true,
-								},
+							queries := p.cfg.GetFavoritesQueries()
+							if len(queries) == 0 {
+								// Ensure at least the default favorites collection exists in config
+								_, _ = p.cfg.AddFavoritesQuery(i18n.T("Personal Collection"), wallpaper.FavoritesQueryID, true)
+								queries = p.cfg.GetFavoritesQueries()
 							}
+
+							res := make([]schema.Query, len(queries))
+							for i, q := range queries {
+								res[i] = schema.Query{
+									ID:          q.ID,
+									URL:         q.URL,
+									Description: q.Description,
+									Active:      q.Active,
+									Managed:     q.Managed,
+								}
+							}
+							return res
 						},
-						EnableQuery:  func(_ string) error { return nil },
-						DisableQuery: func(_ string) error { return nil },
-						RemoveQuery:  func(_ string) error { return nil },
+						EnableQuery:  p.cfg.EnableImageQuery,
+						DisableQuery: p.cfg.DisableImageQuery,
+						RemoveQuery:  func(_ string) error { return nil }, // Favorites collection is a system query, cannot be removed
 						GetDisplayURL: func(q schema.Query) *url.URL {
 							u, _ := url.Parse(p.HomeURL())
 							return u
@@ -659,4 +670,3 @@ func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, _ string) *schem
 		},
 	}
 }
-

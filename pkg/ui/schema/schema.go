@@ -39,8 +39,10 @@ type PanelSchema struct {
 
 // SectionSchema represents a logical grouping of settings.
 type SectionSchema struct {
+	ID          string // Unique identifier for this section (e.g., "met", "aic")
 	Title       string
 	Description string
+	Compact     bool // If true, rendering will use high-density layouts
 	Items       []ItemSchema
 }
 
@@ -74,6 +76,7 @@ type TextItem struct {
 	OnChanged          func(string)
 	ApplyFunc          func(string)
 	NeedsRefresh       bool
+	SkipApply          bool // When true, changes won't register with the Apply button (e.g. verify-first fields)
 	EnabledIf          func() bool
 	VisibleIf          func() bool
 }
@@ -106,6 +109,7 @@ type AsyncButtonItem struct {
 	OnPressed       func() error
 	OnCompleted     func(error)
 	NeedsRefresh    bool
+	IconName        string
 	EnabledIf       func() bool
 	VisibleIf       func() bool
 }
@@ -122,6 +126,7 @@ type ConfirmButtonItem struct {
 	ConfirmMessage string
 	Importance     Importance
 	OnPressed      func()
+	IconName       string
 	EnabledIf      func() bool
 	VisibleIf      func() bool
 }
@@ -136,6 +141,7 @@ type ButtonItem struct {
 	ButtonText string
 	Importance Importance
 	OnPressed  func()
+	IconName   string
 	EnabledIf  func() bool
 	VisibleIf  func() bool
 }
@@ -144,6 +150,7 @@ func (ButtonItem) isItemSchema() {}
 
 // HyperlinkItem represents a clickable URL.
 type HyperlinkItem struct {
+	ID   string
 	Text string
 	URL  string
 }
@@ -152,6 +159,7 @@ func (HyperlinkItem) isItemSchema() {}
 
 // LabelItem represents static text or a sub-title.
 type LabelItem struct {
+	ID         string
 	Text       string
 	IsTitle    bool
 	Importance Importance // Low importance maps to muted description style
@@ -201,15 +209,62 @@ type Query struct {
 	URL         string
 	Description string
 	Active      bool
+	Managed     bool // Whether this query is managed by sync (cannot be deleted)
 }
 
 // QueryListItem represents the abstraction for the list of queries/collections.
 type QueryListItem struct {
-	GetQueries    func() []Query
-	EnableQuery   func(id string) error
-	DisableQuery  func(id string) error
-	RemoveQuery   func(id string) error
-	GetDisplayURL func(Query) *url.URL
+	ID                   string
+	GetQueries           func() []Query
+	EnableQuery          func(id string) error
+	DisableQuery         func(id string) error
+	RemoveQuery          func(id string) error
+	GetDisplayText       func(Query) string // Optional: converts a query to its display label
+	GetDisplayURL        func(Query) *url.URL
+	DeleteLabel          string // Text for the action button. Default is "Delete".
+	ForceActionEnabled   bool   // Enable the action button even for managed queries.
+	DeleteConfirmMessage string // Custom message for the confirmation dialog.
 }
 
 func (QueryListItem) isItemSchema() {}
+
+// HorizontalRowItem groups multiple items horizontally.
+type HorizontalRowItem struct {
+	ID    string
+	Items []ItemSchema
+}
+
+func (HorizontalRowItem) isItemSchema() {}
+
+// AddQueryConfig defines the configuration for a standardized Add Query modal.
+type AddQueryConfig struct {
+	Title           string
+	Description     string // Optional description for the modal
+	URLPlaceholder  string
+	URLValidator    string
+	URLErrorMsg     string
+	DescPlaceholder string
+	DescValidator   string
+	DescErrorMsg    string
+
+	// ValidateFunc is an optional custom validation logic.
+	ValidateFunc func(url, desc string) error
+
+	// AddHandler performs the actual addition of the query.
+	// It returns the new query ID and an error if it fails.
+	AddHandler func(desc, url string, active bool) (string, error)
+}
+
+// SecretItem represents a sensitive credential (like an API key).
+type SecretItem struct {
+	Name         string
+	Label        string
+	Help         string
+	InitialValue string
+	Placeholder  string
+	OnVerify     func(key string) error
+	OnClear      func()
+	ApplyFunc    func(string)
+}
+
+func (SecretItem) isItemSchema() {}

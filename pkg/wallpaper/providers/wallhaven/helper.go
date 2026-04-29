@@ -50,7 +50,7 @@ func CheckWallhavenUsername(ctx context.Context, username, apiKey string) error 
 		return fmt.Errorf("API key owner has no collections; favorites sync unavailable")
 	}
 
-	// 2. Verify existence of target username's collections
+	// 2. Verify target username's collections exist and are accessible with this API key
 	usernameURL := fmt.Sprintf(WallhavenAPICollectionsRootURL, username)
 	uReq, err := http.NewRequestWithContext(ctx, "GET", usernameURL, nil)
 	if err != nil {
@@ -69,9 +69,28 @@ func CheckWallhavenUsername(ctx context.Context, username, apiKey string) error 
 
 	if uResp.StatusCode != http.StatusOK {
 		if uResp.StatusCode == http.StatusNotFound {
-			return fmt.Errorf("username '%s' not found or has no public collections on Wallhaven", username)
+			return fmt.Errorf("username '%s' not found on Wallhaven", username)
 		}
 		return fmt.Errorf("username verification failed (status %d)", uResp.StatusCode)
+	}
+
+	// Decode and verify that the API key can actually see collections with content
+	var userColResp CollectionResponse
+	if err := json.NewDecoder(uResp.Body).Decode(&userColResp); err != nil {
+		return fmt.Errorf("failed to decode user collections: %w", err)
+	}
+
+	if len(userColResp.Data) == 0 {
+		return fmt.Errorf("username '%s' has no accessible collections (check privacy settings)", username)
+	}
+
+	// Verify at least one collection has images
+	totalImages := 0
+	for _, col := range userColResp.Data {
+		totalImages += col.Count
+	}
+	if totalImages == 0 {
+		return fmt.Errorf("username '%s' has collections but they contain no images", username)
 	}
 
 	return nil

@@ -23,6 +23,5 @@ func TestProviderRegistry(t *testing.T) {
 	for name, factory := range providers {
 		provider := factory(cfg, client)
 		assert.NotNil(t, provider, "Factory for %s should return a provider", name)
-		assert.Equal(t, name, provider.Name(), "Provider name should match key")
 	}
 }

@@ -416,73 +416,36 @@ func (p *Provider) CreateSettingsPanel(sm setting.SettingsManager) *schema.Panel
 	return &schema.PanelSchema{
 		Sections: []schema.SectionSchema{
 			{
-				Title:       i18n.T("Pexels API Key"),
-				Description: i18n.T("Enter your Pexels API Key to enable high-quality wallpaper search."),
+				Title:   i18n.T("Pexels"),
+				Compact: true,
 				Items: []schema.ItemSchema{
-					schema.TextItem{
+					schema.LabelItem{
+						Text:       i18n.T("Pexels provides high quality and completely free stock photos licensed under the Pexels license."),
+						Importance: schema.ImportanceLow,
+					},
+					schema.SecretItem{
 						Name:         pexAPIIdent,
-						Label:        i18n.T("API Key:"),
+						Label:        i18n.T("pexels API Key:"),
 						InitialValue: p.cfg.GetPexelsAPIKey(),
-						PlaceHolder:  i18n.T("Enter your Pexels API Key"),
-						IsPassword:   true,
-						NeedsRefresh: true,
-						EnabledIf: func() bool {
-							currentValue := sm.GetValue(pexAPIIdent)
-							if currentValue == nil {
-								return true
-							}
-							baselineValue := sm.GetBaseline(pexAPIIdent)
-							if baselineValue == nil {
-								baselineValue = ""
-							}
-							return currentValue.(string) == "" || currentValue.(string) != baselineValue.(string)
+						Placeholder:  i18n.T("Enter your Pexels API Key"),
+						OnVerify: func(key string) error {
+							ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+							defer cancel()
+							return CheckPexelsAPIKeyWithContext(ctx, key)
 						},
-						ApplyFunc: func(s string) {
-							p.cfg.SetPexelsAPIKey(s)
+						ApplyFunc: func(key string) {
+							p.cfg.SetPexelsAPIKey(key)
+						},
+						OnClear: func() {
+							p.cfg.SetPexelsAPIKey("")
+							sm.ResetSettings(
+								setting.SettingReset{Name: pexAPIIdent, Value: ""},
+							)
 						},
 					},
 					schema.HyperlinkItem{
 						Text: i18n.T("Get a free API key from Pexels."),
 						URL:  "https://www.pexels.com/api/key/",
-					},
-					schema.AsyncButtonItem{
-						Name:        "verifyPexelsKey",
-						ButtonText:  i18n.T("Verify & Connect"),
-						LoadingText: i18n.T("Verifying..."),
-						Style:       schema.ButtonStylePrimary,
-						VisibleIf: func() bool {
-							currSecret := sm.GetValue(pexAPIIdent).(string)
-							baseSecret := sm.GetBaseline(pexAPIIdent).(string)
-							return currSecret != "" && currSecret != baseSecret
-						},
-						OnPressed: func() error {
-							currKey := sm.GetValue(pexAPIIdent).(string)
-							ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-							defer cancel()
-							return CheckPexelsAPIKeyWithContext(ctx, currKey)
-						},
-						OnCompleted: func(err error) {
-							if err == nil {
-								sm.CommitSetting(pexAPIIdent)
-							}
-						},
-					},
-					schema.AsyncButtonItem{
-						Name:        "clearPexelsKey",
-						ButtonText:  i18n.T("Clear API Key"),
-						LoadingText: i18n.T("Clearing..."),
-						Style:       schema.ButtonStyleDanger,
-						VisibleIf: func() bool {
-							currSecret := sm.GetValue(pexAPIIdent).(string)
-							baseSecret := sm.GetBaseline(pexAPIIdent).(string)
-							return currSecret != "" && currSecret == baseSecret
-						},
-						OnPressed: func() error {
-							return nil
-						},
-						OnCompleted: func(_ error) {
-							sm.ResetSettings(setting.SettingReset{Name: pexAPIIdent, Value: ""})
-						},
 					},
 				},
 			},
@@ -492,12 +455,39 @@ func (p *Provider) CreateSettingsPanel(sm setting.SettingsManager) *schema.Panel
 
 // CreateQueryPanel creates the image query management panel.
 func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl string) *schema.PanelSchema {
+	addCfg := schema.AddQueryConfig{
+		Title:           i18n.T("Add Pexels Collection"),
+		URLPlaceholder:  "https://www.pexels.com/search/...",
+		URLValidator:    PexelsURLRegexp,
+		URLErrorMsg:     i18n.T("Invalid Pexels URL"),
+		DescPlaceholder: i18n.T("Collection Description (e.g. Nature)"),
+		AddHandler: func(desc, url string, active bool) (string, error) {
+			apiURL, err := p.ParseURL(url)
+			if err != nil {
+				return "", err
+			}
+			return p.cfg.AddPexelsQuery(desc, apiURL, active)
+		},
+	}
+
+	if pendingUrl != "" {
+		sm.ShowAddQueryDialog(addCfg, pendingUrl, "", sm.RefreshUI)
+	}
+
 	return &schema.PanelSchema{
 		Sections: []schema.SectionSchema{
 			{
 				Title:       i18n.T("Pexels Queries"),
 				Description: i18n.T("Manage your Pexels image queries here."),
 				Items: []schema.ItemSchema{
+					schema.ButtonItem{
+						Name:       "pexels_add",
+						ButtonText: i18n.T("Add New Collection"),
+						IconName:   "add",
+						OnPressed: func() {
+							sm.ShowAddQueryDialog(addCfg, "", "", sm.RefreshUI)
+						},
+					},
 					schema.QueryListItem{
 						GetQueries: func() []schema.Query {
 							queries := p.cfg.GetPexelsQueries()
@@ -508,6 +498,7 @@ func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl strin
 									URL:         q.URL,
 									Description: q.Description,
 									Active:      q.Active,
+									Managed:     q.Managed,
 								}
 							}
 							return abstracts
@@ -515,10 +506,37 @@ func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl strin
 						EnableQuery:  p.cfg.EnablePexelsQuery,
 						DisableQuery: p.cfg.DisablePexelsQuery,
 						RemoveQuery:  p.cfg.RemovePexelsQuery,
-						// Pexels URLs work directly
+						GetDisplayURL: func(q schema.Query) *url.URL {
+							return p.getDisplayURL(q)
+						},
 					},
 				},
 			},
 		},
 	}
+}
+
+func (p *Provider) getDisplayURL(q schema.Query) *url.URL {
+	apiURL := q.URL
+	if strings.Contains(apiURL, "api.pexels.com/v1/search") {
+		u, err := url.Parse(apiURL)
+		if err != nil {
+			return nil
+		}
+		query := u.Query().Get("query")
+		displayURL := fmt.Sprintf("https://www.pexels.com/search/%s/", url.PathEscape(query))
+		res, _ := url.Parse(displayURL)
+		return res
+	}
+	if strings.Contains(apiURL, "api.pexels.com/v1/collections") {
+		re := regexp.MustCompile(`api\.pexels\.com/v1/collections/([a-zA-Z0-9]+)`)
+		matches := re.FindStringSubmatch(apiURL)
+		if len(matches) >= 2 {
+			displayURL := fmt.Sprintf("https://www.pexels.com/collections/%s/", matches[1])
+			res, _ := url.Parse(displayURL)
+			return res
+		}
+	}
+	res, _ := url.Parse(apiURL)
+	return res
 }

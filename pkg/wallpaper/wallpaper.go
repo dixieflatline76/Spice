@@ -278,6 +278,7 @@ func (wp *Plugin) Init(manager ui.PluginManager) {
 
 	wp.cfg.SetQueryRemovedCallback(wp.onQueryRemoved)
 	wp.cfg.SetQueryDisabledCallback(wp.onQueryDisabled)
+	wp.cfg.SetQueryEnabledCallback(wp.onQueryEnabled)
 	wp.cfg.SetFavoritesClearedCallback(wp.ResetFavorites)
 
 	wp.providers = make(map[string]provider.ImageProvider)
@@ -1191,6 +1192,11 @@ func (wp *Plugin) onQueryDisabled(queryID string) {
 	wp.CancelFetchContext()
 
 	// Trigger fetch to ensure store is replenished from other active sources (including Favorites)
+	go wp.RequestFetch()
+}
+
+func (wp *Plugin) onQueryEnabled(queryID string) {
+	log.Debugf("[Plugin] Query %s enabled. Triggering immediate fetch...", queryID)
 	go wp.RequestFetch()
 }
 

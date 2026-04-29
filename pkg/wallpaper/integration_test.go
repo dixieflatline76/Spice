@@ -346,8 +346,8 @@ func (s *StubImageProvider) FetchImages(ctx context.Context, apiURL string, page
 func (s *StubImageProvider) EnrichImage(ctx context.Context, img provider.Image) (provider.Image, error) {
 	return img, nil
 }
-func (s *StubImageProvider) Title() string                  { return "Stub" }
-func (s *StubImageProvider) GetProviderIcon() interface{}    { return s.icon }
+func (s *StubImageProvider) Title() string                { return "Stub" }
+func (s *StubImageProvider) GetProviderIcon() interface{} { return s.icon }
 func (s *StubImageProvider) CreateSettingsPanel(sm setting.SettingsManager) *schema.PanelSchema {
 	return nil
 }

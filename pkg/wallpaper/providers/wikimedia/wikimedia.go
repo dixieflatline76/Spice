@@ -520,7 +520,8 @@ func (p *Provider) CreateSettingsPanel(_ setting.SettingsManager) *schema.PanelS
 	return &schema.PanelSchema{
 		Sections: []schema.SectionSchema{
 			{
-				Title: i18n.T("Wikimedia Commons"),
+				Title:   i18n.T("Wikimedia Commons"),
+				Compact: true,
 				Items: []schema.ItemSchema{
 					schema.LabelItem{
 						Text:       i18n.T("Wikimedia Commons is a media file repository making public domain and freely-licensed educational media content available to everyone."),
@@ -537,13 +538,40 @@ func (p *Provider) CreateSettingsPanel(_ setting.SettingsManager) *schema.PanelS
 }
 
 // CreateQueryPanel creates the image query management panel.
-func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, _ string) *schema.PanelSchema {
+func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, pendingUrl string) *schema.PanelSchema {
+	addCfg := schema.AddQueryConfig{
+		Title:           i18n.T("Add Wikimedia Collection"),
+		URLPlaceholder:  "Category:Nature or Search:Pacific Ocean",
+		URLValidator:    `^.*$`, // Wikimedia is flexible
+		URLErrorMsg:     i18n.T("Invalid Wikimedia Input"),
+		DescPlaceholder: i18n.T("Collection Description (e.g. Nature)"),
+		AddHandler: func(desc, url string, active bool) (string, error) {
+			apiURL, err := p.ParseURL(url)
+			if err != nil {
+				return "", err
+			}
+			return p.cfg.AddWikimediaQuery(desc, apiURL, active)
+		},
+	}
+
+	if pendingUrl != "" {
+		sm.ShowAddQueryDialog(addCfg, pendingUrl, "", sm.RefreshUI)
+	}
+
 	return &schema.PanelSchema{
 		Sections: []schema.SectionSchema{
 			{
-				Title:       i18n.T("Wikimedia Queries"),
-				Description: i18n.T("Manage your Wikimedia image queries here."),
+				Title:   i18n.T("Wikimedia Queries"),
+				Compact: true,
 				Items: []schema.ItemSchema{
+					schema.ButtonItem{
+						Name:       "wikimedia_add",
+						ButtonText: i18n.T("Add New Collection"),
+						IconName:   "add",
+						OnPressed: func() {
+							sm.ShowAddQueryDialog(addCfg, "", "", sm.RefreshUI)
+						},
+					},
 					schema.QueryListItem{
 						GetQueries: func() []schema.Query {
 							queries := p.cfg.GetQueries()
@@ -555,6 +583,7 @@ func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, _ string) *schem
 										URL:         q.URL,
 										Description: q.Description,
 										Active:      q.Active,
+										Managed:     q.Managed,
 									})
 								}
 							}
@@ -572,7 +601,6 @@ func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, _ string) *schem
 		},
 	}
 }
-
 
 func (p *Provider) getDisplayURL(q wallpaper.ImageQuery) *url.URL {
 	queryURL := q.URL

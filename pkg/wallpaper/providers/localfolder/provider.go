@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -176,10 +177,6 @@ func (p *Provider) FetchImages(ctx context.Context, folderPath string, page int)
 func (p *Provider) CreateSettingsPanel(_ setting.SettingsManager) *schema.PanelSchema {
 	items := []schema.ItemSchema{
 		schema.LabelItem{
-			Text:    i18n.T("Local Folders"),
-			IsTitle: true,
-		},
-		schema.LabelItem{
 			Text:       i18n.T("Browse to a folder on your computer containing wallpaper images."),
 			Importance: schema.ImportanceLow,
 		},
@@ -195,7 +192,9 @@ func (p *Provider) CreateSettingsPanel(_ setting.SettingsManager) *schema.PanelS
 	return &schema.PanelSchema{
 		Sections: []schema.SectionSchema{
 			{
-				Items: items,
+				Title:   i18n.T("Local Folders"),
+				Compact: true,
+				Items:   items,
 			},
 		},
 	}
@@ -230,6 +229,7 @@ func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, _ string) *schem
 									URL:         q.URL,
 									Description: q.URL, // Show full path
 									Active:      q.Active,
+									Managed:     q.Managed,
 								}
 							}
 							return abstracts
@@ -237,13 +237,27 @@ func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, _ string) *schem
 						EnableQuery:  p.cfg.EnableImageQuery,
 						DisableQuery: p.cfg.DisableImageQuery,
 						RemoveQuery:  p.cfg.RemoveLocalFolderQuery,
+						GetDisplayURL: func(q schema.Query) *url.URL {
+							// Copy logic from Favorites provider for compatible file URIs
+							absPath, err := filepath.Abs(q.URL)
+							if err != nil {
+								return nil
+							}
+							slashPath := filepath.ToSlash(absPath)
+							if runtime.GOOS == "windows" && !strings.HasPrefix(slashPath, "/") {
+								slashPath = "/" + slashPath
+							}
+							return &url.URL{
+								Scheme: "file",
+								Path:   slashPath,
+							}
+						},
 					},
 				},
 			},
 		},
 	}
 }
-
 
 // ResolveNamespace is the DynamicNamespaceResolver callback for the API server.
 // It maps collectionIDs (path hashes) to the actual folder paths from config.

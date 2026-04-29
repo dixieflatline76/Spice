@@ -201,7 +201,6 @@ func (b *PrefsPanelBuilder) BuildGeneralTabSchema() *schema.PanelSchema {
 	}
 }
 
-
 // BuildProviderTabs creates the provider accordions (Online, Local).
 func (b *PrefsPanelBuilder) BuildProviderTabs() (fyne.CanvasObject, fyne.CanvasObject, int) {
 	var onlineItems []accordionItem

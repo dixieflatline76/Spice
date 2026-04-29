@@ -7,8 +7,13 @@ import (
 )
 
 // CheckPexelsAPIKeyWithContext verifies if the given API key is valid using the provided context.
+// Uses the /v1/collections endpoint which requires authentication (unlike /v1/curated which is public).
 func CheckPexelsAPIKeyWithContext(ctx context.Context, apiKey string) error {
-	req, err := http.NewRequestWithContext(ctx, "GET", "https://api.pexels.com/v1/curated?per_page=1", nil)
+	if len(apiKey) < 10 {
+		return fmt.Errorf("invalid Pexels API key (too short)")
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "GET", "https://api.pexels.com/v1/collections?per_page=1", nil)
 	if err != nil {
 		return fmt.Errorf("creating request: %w", err)
 	}
@@ -25,7 +30,7 @@ func CheckPexelsAPIKeyWithContext(ctx context.Context, apiKey string) error {
 		return nil
 	}
 
-	if resp.StatusCode == http.StatusUnauthorized {
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
 		return fmt.Errorf("invalid Pexels API key")
 	}
 

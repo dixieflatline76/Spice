@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/widget"
+	"github.com/dixieflatline76/Spice/v2/pkg/ui/schema"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
 	"github.com/stretchr/testify/assert"
 )
@@ -21,19 +21,27 @@ func TestCommitSetting(t *testing.T) {
 	testWin := app.NewWindow("Test")
 
 	sm := NewSettingsManager(testWin)
-	header := container.NewVBox()
 
-	// 1. Create a setting
+	// 1. Create a setting via schema
 	initialVal := "Original Baseline"
 	appliedVal := ""
 
-	sm.CreateTextEntrySetting(&setting.TextEntrySettingConfig{
-		Name:         "testKey",
-		InitialValue: initialVal,
-		ApplyFunc: func(s string) {
-			appliedVal = s
+	p := schema.PanelSchema{
+		Sections: []schema.SectionSchema{
+			{
+				Items: []schema.ItemSchema{
+					schema.TextItem{
+						Name:         "testKey",
+						InitialValue: initialVal,
+						ApplyFunc: func(s string) {
+							appliedVal = s
+						},
+					},
+				},
+			},
 		},
-	}, header)
+	}
+	sm.RenderSchema(p)
 
 	// 2. Modify value in UI
 	newVal := "New Value to Commit"
@@ -41,7 +49,7 @@ func TestCommitSetting(t *testing.T) {
 
 	// Since SetValue doesn't trigger the change callback (it's for programmatic sync),
 	// we need to simulate the UI callback.
-	entry := sm.(*SettingsManager).widgets["testKey"].(*widget.Entry)
+	entry := sm.(*SettingsManager).allWidgets["testKey"].(*widget.Entry)
 	entry.OnChanged(newVal)
 
 	assert.True(t, sm.HasPendingChange("testKey"), "Should have pending change after typing")
@@ -60,16 +68,24 @@ func TestResetSettings(t *testing.T) {
 	app := test.NewApp()
 	testWin := app.NewWindow("Test")
 	sm := NewSettingsManager(testWin)
-	header := container.NewVBox()
 
 	appliedVal := "Initial"
-	sm.CreateTextEntrySetting(&setting.TextEntrySettingConfig{
-		Name:         "testKey",
-		InitialValue: "Initial",
-		ApplyFunc: func(s string) {
-			appliedVal = s
+	p := schema.PanelSchema{
+		Sections: []schema.SectionSchema{
+			{
+				Items: []schema.ItemSchema{
+					schema.TextItem{
+						Name:         "testKey",
+						InitialValue: "Initial",
+						ApplyFunc: func(s string) {
+							appliedVal = s
+						},
+					},
+				},
+			},
 		},
-	}, header)
+	}
+	sm.RenderSchema(p)
 
 	// 1. Atomic Reset
 	resetVal := "Reset Value"
@@ -86,22 +102,31 @@ func TestAsyncButtonReentrancy(t *testing.T) {
 	app := test.NewApp()
 	testWin := app.NewWindow("Test Reentrancy")
 	sm := NewSettingsManager(testWin)
-	header := container.NewVBox()
 
 	var callCount int32
 	blocker := make(chan bool)
 
-	btn := sm.CreateAsyncButton(&setting.AsyncButtonConfig{
-		Name:        "asyncTest",
-		ButtonText:  "Execute",
-		LoadingText: "Loading...",
-		OnPressed: func() error {
-			atomic.AddInt32(&callCount, 1)
-			<-blocker // Wait for manual release
-			return nil
+	p := schema.PanelSchema{
+		Sections: []schema.SectionSchema{
+			{
+				Items: []schema.ItemSchema{
+					schema.AsyncButtonItem{
+						Name:        "asyncTest",
+						ButtonText:  "Execute",
+						LoadingText: "Loading...",
+						OnPressed: func() error {
+							atomic.AddInt32(&callCount, 1)
+							<-blocker // Wait for manual release
+							return nil
+						},
+						OnCompleted: func(err error) {},
+					},
+				},
+			},
 		},
-		OnCompleted: func(err error) {},
-	}, header)
+	}
+	sm.RenderSchema(p)
+	btn := sm.(*SettingsManager).allWidgets["asyncTest"].(*widget.Button)
 
 	// Verify initial state
 	assert.False(t, btn.Disabled())
@@ -132,49 +157,58 @@ func TestVisibleIfStateTransitions(t *testing.T) {
 	app := test.NewApp()
 	testWin := app.NewWindow("Test Visibility")
 	sm := NewSettingsManager(testWin)
-	header := container.NewVBox()
 
 	baseline := "ValidKey"
-	sm.CreateTextEntrySetting(&setting.TextEntrySettingConfig{
-		Name:         "wallhavenAPIKey",
-		InitialValue: baseline,
-		ApplyFunc:    func(s string) {},
-	}, header)
-
-	verifyBtn := sm.CreateAsyncButton(&setting.AsyncButtonConfig{
-		Name:       "verify",
-		ButtonText: "Verify",
-		VisibleIf: func() bool {
-			curr := sm.GetValue("wallhavenAPIKey").(string)
-			base := sm.GetBaseline("wallhavenAPIKey").(string)
-			return curr != base || curr == ""
+	p := schema.PanelSchema{
+		Sections: []schema.SectionSchema{
+			{
+				Items: []schema.ItemSchema{
+					schema.TextItem{
+						Name:         "wallhavenAPIKey",
+						InitialValue: baseline,
+						ApplyFunc:    func(s string) {},
+					},
+					schema.AsyncButtonItem{
+						Name:       "verify",
+						ButtonText: "Verify",
+						VisibleIf: func() bool {
+							curr := sm.GetValue("wallhavenAPIKey").(string)
+							base := sm.GetBaseline("wallhavenAPIKey").(string)
+							return curr != base || curr == ""
+						},
+					},
+					schema.AsyncButtonItem{
+						Name:       "clear",
+						ButtonText: "Clear",
+						VisibleIf: func() bool {
+							curr := sm.GetValue("wallhavenAPIKey").(string)
+							base := sm.GetBaseline("wallhavenAPIKey").(string)
+							return curr == base && curr != ""
+						},
+					},
+				},
+			},
 		},
-	}, header)
+	}
+	sm.RenderSchema(p)
 
-	clearBtn := sm.CreateAsyncButton(&setting.AsyncButtonConfig{
-		Name:       "clear",
-		ButtonText: "Clear",
-		VisibleIf: func() bool {
-			curr := sm.GetValue("wallhavenAPIKey").(string)
-			base := sm.GetBaseline("wallhavenAPIKey").(string)
-			return curr == base && curr != ""
-		},
-	}, header)
+	verifyBtn := sm.(*SettingsManager).allWidgets["verify"].(*widget.Button)
+	clearBtn := sm.(*SettingsManager).allWidgets["clear"].(*widget.Button)
 
 	// Initial State: baseline matches live -> Clear visible, Verify hidden
-	sm.Refresh()
+	sm.(*SettingsManager).fullRefresh()
 	assert.True(t, clearBtn.Visible(), "Clear button should be visible initially")
 	assert.False(t, verifyBtn.Visible(), "Verify button should be hidden initially")
 
 	// Transition 1: User types (live != baseline)
 	sm.SetValue("wallhavenAPIKey", "ValidKeyX")
-	sm.Refresh()
+	sm.(*SettingsManager).fullRefresh()
 	assert.False(t, clearBtn.Visible(), "Clear button should hide when editing")
 	assert.True(t, verifyBtn.Visible(), "Verify button should show when editing")
 
 	// Transition 2: User reverts (live == baseline)
 	sm.SetValue("wallhavenAPIKey", "ValidKey")
-	sm.Refresh()
+	sm.(*SettingsManager).fullRefresh()
 	assert.True(t, clearBtn.Visible(), "Clear button should reappear on revert")
 	assert.False(t, verifyBtn.Visible(), "Verify button should hide on revert")
 }
@@ -183,20 +217,28 @@ func TestApplyTriggersRefresh(t *testing.T) {
 	app := test.NewApp()
 	testWin := app.NewWindow("Test Apply Refresh")
 	sm := NewSettingsManager(testWin)
-	header := container.NewVBox()
 
 	refreshCount := 0
 	sm.RegisterRefreshFunc(func() {
 		refreshCount++
 	})
 
-	// Create a setting with NeedsRefresh: true
-	sm.CreateBoolSetting(&setting.BoolConfig{
-		Name:         "triggerRefresh",
-		InitialValue: false,
-		NeedsRefresh: true,
-		ApplyFunc:    func(b bool) {},
-	}, header)
+	// Create a setting with NeedsRefresh: true via schema
+	p := schema.PanelSchema{
+		Sections: []schema.SectionSchema{
+			{
+				Items: []schema.ItemSchema{
+					schema.BoolItem{
+						Name:         "triggerRefresh",
+						InitialValue: false,
+						NeedsRefresh: true,
+						ApplyFunc:    func(b bool) {},
+					},
+				},
+			},
+		},
+	}
+	sm.RenderSchema(p)
 
 	// Verify initial state: apply button should be disabled, no refreshes yet
 	applyBtn := sm.GetApplySettingsButton()
@@ -218,26 +260,31 @@ func TestAsyncButtonStatusAutoUpdate(t *testing.T) {
 	app := test.NewApp()
 	testWin := app.NewWindow("Test Async Status")
 	sm := NewSettingsManager(testWin)
-	header := container.NewVBox()
 
-	// 1. Create a text setting with status enabled
-	sm.CreateTextEntrySetting(&setting.TextEntrySettingConfig{
-		Name:          "targetField",
-		InitialValue:  "Initial",
-		DisplayStatus: true,
-	}, header)
-
-	// 2. Create an async button targeting that field
-	sm.CreateAsyncButton(&setting.AsyncButtonConfig{
-		Name:            "testBtn",
-		ButtonText:      "Verify",
-		TargetStatusKey: "targetField",
-		OnPressed: func() error {
-			time.Sleep(50 * time.Millisecond)
-			return nil // Signal success
+	p := schema.PanelSchema{
+		Sections: []schema.SectionSchema{
+			{
+				Items: []schema.ItemSchema{
+					schema.TextItem{
+						Name:          "targetField",
+						InitialValue:  "Initial",
+						DisplayStatus: true,
+					},
+					schema.AsyncButtonItem{
+						Name:            "testBtn",
+						ButtonText:      "Verify",
+						TargetStatusKey: "targetField",
+						OnPressed: func() error {
+							time.Sleep(50 * time.Millisecond)
+							return nil // Signal success
+						},
+						OnCompleted: func(err error) {},
+					},
+				},
+			},
 		},
-		OnCompleted: func(err error) {},
-	}, header)
+	}
+	sm.RenderSchema(p)
 
 	// Verify initial status: Empty
 	statusLabel := sm.(*SettingsManager).statusLabels["targetField"]
@@ -245,7 +292,7 @@ func TestAsyncButtonStatusAutoUpdate(t *testing.T) {
 
 	// Simulate Button Click
 	// Tapping our async button specifically
-	testBtn, ok := sm.(*SettingsManager).widgets["testBtn"].(*widget.Button)
+	testBtn, ok := sm.(*SettingsManager).allWidgets["testBtn"].(*widget.Button)
 	assert.True(t, ok)
 	assert.NotNil(t, testBtn)
 
@@ -265,20 +312,28 @@ func TestSetSettingStatusThreadSafety(t *testing.T) {
 	app := test.NewApp()
 	testWin := app.NewWindow("Test Thread Safety")
 	sm := NewSettingsManager(testWin)
-	header := container.NewVBox()
 
-	sm.CreateTextEntrySetting(&setting.TextEntrySettingConfig{
-		Name:          "safetyTarget",
-		InitialValue:  "",
-		DisplayStatus: true,
-	}, header)
+	p := schema.PanelSchema{
+		Sections: []schema.SectionSchema{
+			{
+				Items: []schema.ItemSchema{
+					schema.TextItem{
+						Name:          "safetyTarget",
+						InitialValue:  "",
+						DisplayStatus: true,
+					},
+				},
+			},
+		},
+	}
+	sm.RenderSchema(p)
 
 	statusLabel := sm.(*SettingsManager).statusLabels["safetyTarget"]
 
 	// Launch background status update
 	done := make(chan bool)
 	go func() {
-		sm.SetSettingStatus("safetyTarget", "External Update", setting.ImportanceHigh)
+		sm.SetSettingStatus("safetyTarget", "External Update", schema.ImportanceHigh)
 		done <- true
 	}()
 
@@ -296,18 +351,18 @@ func TestSchemaRendering(t *testing.T) {
 	sm := NewSettingsManager(testWin)
 
 	// 1. Define a pure Go schema (No Fyne dependencies here!)
-	schema := setting.PanelSchema{
-		Sections: []setting.SectionSchema{
+	p := schema.PanelSchema{
+		Sections: []schema.SectionSchema{
 			{
 				Title:       "General Settings",
 				Description: "Configure basic app behavior",
-				Items: []setting.ItemSchema{
-					setting.BoolItem{
+				Items: []schema.ItemSchema{
+					schema.BoolItem{
 						Name:         "enableNotifications",
 						Label:        "Enable Notifications",
 						InitialValue: true,
 					},
-					setting.TextItem{
+					schema.TextItem{
 						Name:         "username",
 						Label:        "Username",
 						InitialValue: "Karl",
@@ -318,14 +373,14 @@ func TestSchemaRendering(t *testing.T) {
 							return nil
 						},
 					},
-					setting.HyperlinkItem{
+					schema.HyperlinkItem{
 						Text: "Help",
 						URL:  "https://example.com",
 					},
-					setting.LabelItem{
+					schema.LabelItem{
 						Text: "Static description",
 					},
-					setting.LabelItem{
+					schema.LabelItem{
 						Text:    "Sub Header",
 						IsTitle: true,
 					},
@@ -333,11 +388,11 @@ func TestSchemaRendering(t *testing.T) {
 			},
 			{
 				Title: "Advanced",
-				Items: []setting.ItemSchema{
-					setting.AsyncButtonItem{
+				Items: []schema.ItemSchema{
+					schema.AsyncButtonItem{
 						Name:       "resetDatabase",
 						ButtonText: "Reset DB",
-						Style:      setting.ButtonStyleDanger,
+						Style:      schema.ButtonStyleDanger,
 					},
 				},
 			},
@@ -345,32 +400,85 @@ func TestSchemaRendering(t *testing.T) {
 	}
 
 	// 2. Render the schema
-	rendered := sm.RenderSchema(schema)
+	rendered := sm.RenderSchema(p)
 
 	// 3. Verify the generated tree
 	assert.NotNil(t, rendered)
 
-	// We expect a main VBox containing 2 sections (VBoxes)
+	// For panels without an expanding list (like museums), we expect a direct VBox
 	mainBox, ok := rendered.(*fyne.Container)
-	assert.True(t, ok)
-	assert.Equal(t, 2, len(mainBox.Objects), "Should have 2 sections")
+	assert.True(t, ok, "Rendered output should be a VBox container")
+	assert.Equal(t, 2, len(mainBox.Objects), "VBox should have 2 sections")
 
 	// Check registry: The RenderSchema should have registered the widgets
-	assert.NotNil(t, sm.(*SettingsManager).widgets["enableNotifications"])
-	assert.NotNil(t, sm.(*SettingsManager).widgets["username"])
-	assert.NotNil(t, sm.(*SettingsManager).widgets["resetDatabase"])
+	assert.NotNil(t, sm.(*SettingsManager).allWidgets["enableNotifications"])
+	assert.NotNil(t, sm.(*SettingsManager).allWidgets["username"])
+	assert.NotNil(t, sm.(*SettingsManager).allWidgets["resetDatabase"])
 
 	// Check widget types
-	check := sm.(*SettingsManager).widgets["enableNotifications"].(*widget.Check)
+	check := sm.(*SettingsManager).allWidgets["enableNotifications"].(*widget.Check)
 	assert.True(t, check.Checked)
 
-	entry := sm.(*SettingsManager).widgets["username"].(*widget.Entry)
+	entry := sm.(*SettingsManager).allWidgets["username"].(*widget.Entry)
 	assert.Equal(t, "Karl", entry.Text)
 
 	// Verify Validator translation
 	assert.NoError(t, entry.Validator("ValidName"))
 	assert.Error(t, entry.Validator("Hi")) // Too short
 
-	btn := sm.(*SettingsManager).widgets["resetDatabase"].(*widget.Button)
+	btn := sm.(*SettingsManager).allWidgets["resetDatabase"].(*widget.Button)
 	assert.Equal(t, widget.DangerImportance, btn.Importance)
+}
+
+func TestSecretItemStateTransitions(t *testing.T) {
+	app := test.NewApp()
+	testWin := app.NewWindow("SecretTest")
+	sm := NewSettingsManager(testWin)
+
+	apiKey := ""
+	panel := schema.PanelSchema{
+		Sections: []schema.SectionSchema{
+			{
+				Title: "Security",
+				Items: []schema.ItemSchema{
+					schema.SecretItem{
+						Name:  "myKey",
+						Label: "API Key",
+						OnVerify: func(key string) error {
+							if key == "valid" {
+								apiKey = key
+								return nil
+							}
+							return fmt.Errorf("invalid key")
+						},
+						OnClear: func() {
+							apiKey = ""
+							sm.ResetSettings(setting.SettingReset{Name: "myKey", Value: ""})
+						},
+					},
+				},
+			},
+		},
+	}
+
+	// 1. Initial Render (Empty State)
+	_ = sm.RenderSchema(panel)
+	assert.Equal(t, "", sm.GetBaseline("myKey"), "Baseline should be seeded as empty initially")
+
+	// 2. Mock a valid Save
+	// In the real UI, the user types "valid" and hits "Save", which calls OnVerify then CommitSetting.
+	err := panel.Sections[0].Items[0].(schema.SecretItem).OnVerify("valid")
+	assert.NoError(t, err)
+
+	sm.(*SettingsManager).valueGetters["myKey"] = func() interface{} { return "valid" }
+	sm.CommitSetting("myKey")
+
+	assert.Equal(t, "valid", sm.GetBaseline("myKey"), "Baseline should be 'valid' after commit")
+	assert.Equal(t, "valid", apiKey, "Provider variable should be updated via OnVerify side-effect")
+
+	// 3. Clear the key
+	// This would be triggered by the "Clear" button in the SAVED state branch.
+	// Since RenderSchema is declarative, calling sm.RefreshUI() and re-rendering would show the Save UI again.
+	sm.ResetSettings(setting.SettingReset{Name: "myKey", Value: ""})
+	assert.Equal(t, "", sm.GetBaseline("myKey"), "Baseline should be empty after reset")
 }
