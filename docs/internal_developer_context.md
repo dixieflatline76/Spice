@@ -1,63 +1,250 @@
 # Spice Internal Developer Context & Architecture Guide
 
-> **Purpose**: This document serves as the authoritative "Mental Model" of the Spice codebase. It contains deep-dive technical details required to understand the system's constraints, concurrency model, and extension patterns. **Read this before making changes.**
+> **Purpose**: This document is the authoritative "Rules & Constraints" guide for the Spice codebase. It contains the concurrency model, lock hierarchy, known gotchas, extension patterns, and implementation details that you **must understand before modifying code**.
+>
+> For high-level system design and data flow diagrams, see [architecture.md](architecture.md).
 
-## 1. Core Architecture: Hybrid Concurrency Model
+## 1. Concurrency Model
 
-Spice is designed to remain responsive (60fps UI) even while downloading 50MB 8K images or performing CPU-intensive face detection.
+Spice uses a **hybrid concurrency model**. The hot path (image ingestion from download workers) is serialized through a single pipeline goroutine (`stateManagerLoop`). Administrative operations (favorites toggling, cache clearing, startup reconciliation, query removal) mutate the store directly under `sync.RWMutex`.
 
-### 1.1 The Concurrency Model
-**The hot path (image ingestion) is serialized through one goroutine. Admin operations use direct mutex access.**
+### 1.1 Concurrent Actors
 
-*   **The Store (`pkg/wallpaper/store.go`)**: The source of truth.
-    *   **Data Structure**: Uses `[]provider.Image` for sequential access (history) and `map[string]bool` (`idSet`) for O(1) lookups.
-    *   **Locking**:
-        *   `RLock()`: Used by the UI (Reader) for instant "Next/Prev" actions.
-        *   `Lock()`: Used by the Pipeline's StateManager (hot path) and the Plugin (admin operations).
-    *   **Persistence**: Uses a "Debounced Save" mechanism. Calling `scheduleSaveLocked()` starts a timer (2s). If called again, the timer resets. This batches 100+ rapid updates (bulk imports) into a single JSON write.
-    *   **Synchronization Model**: The `Sync` method uses a **Policy Pattern** via `ImageSyncAction` (Keep, Delete, Invalidate). This ensures deterministic state transitions for every image based on active queries, avoid sets, and file availability, replacing complex ad-hoc logic.
+| Actor | Goroutines | Lock(s) Held | Lifetime |
+| :--- | :--- | :--- | :--- |
+| MonitorController | 1 per monitor | `mc.mu` (RWMutex) | `Activate()` → `Deactivate()` |
+| Pipeline workers | `runtime.NumCPU()` (configurable via `MaxConcurrentProcessors`) | None (channel-only) | `Activate()` → `Deactivate()` |
+| Pipeline Dispatcher pumps | 1 per active provider (created lazily on first `Submit`) | None (channel-only) | First job → context cancel |
+| Pipeline stateManager | 1 | `store.mu` via Store API | `Activate()` → `Deactivate()` |
+| Nightly scheduler | 1 | `downloadMutex` | `Activate()` → `Deactivate()` |
+| Ticker goroutine | 1 per frequency change | None | Until replaced |
+| Fetch goroutines | Up to 5 (semaphore) | `downloadMutex`, `sourcesMutex` | Per fetch cycle |
+| Favorites worker | 1 | `favProvider.mu` via favMap | Provider lifetime |
+| Enrichment worker | 1 | None (channel-driven) | `Activate()` → `Deactivate()` |
 
-*   **The Pipeline (`pkg/wallpaper/pipeline.go`)**: The workhorse.
-    *   **Dispatcher (Fair Bouncer)**: A dedicated goroutine that holds jobs and trickles them into the worker pool based on strict provider API limits.
-    *   **Worker Pool**: 16 generic goroutines that fetch and process images immediately upon receiving a job. They communicate results via `resultChan`.
-    *   **State Manager Loop**: The serialized writer for the **hot path**. It `select`s on:
-        1.  `resultChan`: New images from workers -> Calls `store.Add()`.
-        2.  `cmdChan`: Commands from UI (`CmdMarkSeen`, `CmdRemove`) -> Calls `store.MarkSeen()`.
-    *   **Yielding**: The loop calls `runtime.Gosched()` after every operation to ensure the UI reader thread is never starved during heavy batch processing.
+> **Note**: The Pipeline stateManager is the serialized writer for the hot path (`Add`, `MarkSeen`, `Remove`, `Clear`). The Plugin itself also writes to the store directly for admin operations (`Update`, `RemoveByQueryID`, `ResetFavorites`, `Wipe`, `Sync`) under the store's `RWMutex`.
 
-*   **Admin Operations (Plugin / `wallpaper.go`)**: Infrequent, user-initiated mutations.
-    *   `ToggleFavorite`: Calls `store.Remove()` or `store.Update()` directly.
-    *   `reconcileFavorites`: Calls `store.Remove()` / `store.Update()` at startup.
-    *   `onQueryRemoved` / `onQueryDisabled`: Calls `store.RemoveByQueryID()`.
-    *   `ClearCache`: Calls `store.Wipe()`.
-    *   These are all protected by the store's `sync.RWMutex` and do not contend with the hot path in practice.
+### 1.2 Lock Hierarchy
 
-### 1.2 Pagination & Anti-Thrashing Logic
-In `pkg/wallpaper/wallpaper.go`:
-*   **The Trigger**: `applyWallpaper` checks `seenCount / totalCount`. If > 70%, it triggers a fetch.
-*   **Protection**:
-    *   **Atomic Flag**: `fetchingInProgress` (Atomic Bool) acts as a mutex for the *network trigger*, preventing 1000 clicks from spawning 1000 fetch threads.
-    *   **Starvation Check**: If the provider returns 0 images (dry source), the system compares `currentTotal` vs `lastTriggerTotal`. If they haven't changed, it enforces a 60s cooldown to prevent API bans.
+Locks must always be acquired in this order to prevent deadlocks:
 
-### 1.3 Persistent Architectural Constraints (Golden Rules)
+```
+wp.monMu → mc.mu → store.mu → saveMu
+wp.downloadMutex (independent — never held with monMu/mc.mu)
+wp.globalFetchMu (independent — protects global fetch cancellation context)
+wp.queryCancelMu (independent — protects per-query context map)
+favProvider.mu (independent — accessed via Favoriter interface)
+```
+
+**Key invariants:**
+- `mc.mu.RLock()` is safe from any goroutine **except** the MC's own actor goroutine (which holds `mc.mu.Lock()` in `handleCommand`).
+- `store.mu` is always the innermost lock — no code holds `store.mu` while acquiring another lock.
+- `downloadMutex` protects `queryPages`, `stopNightlyRefresh`, and fetch state. Never nested with `monMu`.
+
+### 1.3 The Store (`pkg/wallpaper/store.go`)
+
+The source of truth. Thread-safe container with **no iteration logic** (no `currentIndex`).
+
+- **Data Structures**:
+    - `[]provider.Image` — sequential access (history, serialization)
+    - `idSet map[string]bool` — O(1) existence checks (45ns vs 470ns+ linear scan)
+    - `pathSet map[string]int` — O(1) `MarkSeen` by filepath (index into images slice)
+    - `resolutionBuckets map[string][]string` — `"WxH"` → list of image IDs. Enables per-monitor image selection without scanning the entire store
+    - `avoidSet map[string]bool` — block list (deleted/blocked image IDs)
+- **Locking**:
+    - `RLock()`: Used by MonitorControllers for instant "Next/Prev" actions
+    - `Lock()`: Used by the Pipeline's StateManager (hot path) and the Plugin (admin ops)
+- **Persistence**: Debounced via `scheduleSaveLocked()` with configurable duration (default 2s). Uses snapshot-under-RLock for non-blocking writes
+- **`QueryActiveFunc`**: Callback injected by the Plugin. Allows the Store to reject images from queries that were disabled mid-download
+- **`WaitForImages`**: Event-driven notification channel. MonitorControllers and the initial pulse use this to block until new content arrives, replacing polling
+
+### 1.4 The Pipeline (`pkg/wallpaper/pipeline.go`)
+
+The workhorse for image processing.
+
+- **Dispatcher (`dispatcher.go`)**: Creates a **per-provider pump goroutine** on first job submission. Each pump applies API rate limits (`rate.Limiter`) and process rate limits *before* releasing jobs to the shared worker channel. This prevents Head-of-Line blocking — a slow provider (Wikimedia with 429 limits) never delays a fast provider (Pexels)
+- **Worker Pool**: `runtime.NumCPU()` goroutines (overridable via `MaxConcurrentProcessors` preference). Workers consume from unbuffered `jobChan` and produce to buffered `resultChan`
+- **State Manager Loop**: Single goroutine. `select`s on:
+    1. `resultChan`: New images from workers → calls `store.Add()`
+    2. `cmdChan`: Commands from UI (`CmdMarkSeen`, `CmdRemove`, `CmdClear`)
+    3. `ctx.Done()`: Shutdown
+- **Yielding**: Calls `runtime.Gosched()` after every operation to prevent starving readers
+
+### 1.5 The MonitorController (`monitor_controller.go`)
+
+Each physical monitor is an **Actor** with its own goroutine, state, and command channel.
+
+- **Command Loop**: `select`s on `Commands` channel and `Store.GetUpdateChannel()` (broadcast pattern for new content)
+- **`next()` Flow**:
+    1. Query resolution bucket: `store.GetIDsForResolution("1920x1080")`
+    2. Check starvation: bucket < `BucketStarvationThreshold` (5) → trigger fetch
+    3. Check cycle progress: `RandomPos > 80% of ShuffleIDs` → trigger fetch
+    4. Rebuild shuffle if bucket size changed
+    5. Pick next from shuffled deck, skipping blocked/missing images
+    6. Apply wallpaper via OS API, call `MarkSeen()` directly on store
+- **Starvation Recovery**: When bucket is empty, sets `WaitingForImages=true`. The `Store.GetUpdateChannel()` listener automatically retries `next()` when new content arrives
+
+## 2. Pagination & Fetch Trigger System
+
+The old centralized `applyWallpaper` checking `seenCount/totalCount` is **gone**. The current system has four layers:
+
+### Layer 1: MonitorController → Per-Monitor Starvation Detection
+
+Each monitor independently decides when to request more images:
+
+```
+On every next():
+  1. Get bucket = store.GetIDsForResolution("1920x1080")
+  2. If bucket.size < 5 (BucketStarvationThreshold) → request fetch
+  3. Else if shufflePosition > 80% of shuffleList → request fetch
+  4. Callback: mc.OnFetchRequest() → wp.RequestFetch()
+```
+
+This is **per-monitor, per-resolution**. A 4K monitor can be starving while a 1080p monitor has plenty.
+
+### Layer 2: Plugin → Anti-Loop Protection (`RequestFetch`)
+
+`RequestFetch()` is the centralized gatekeeper. It does NOT decide *when* to fetch — it prevents storms:
+
+- **Debounce**: Skip if `isDownloading` or `fetchingInProgress` (except Favorites — local scan is cheap)
+- **Dry Source Detection**: If `totalCount` hasn't grown since last trigger AND `seenCount` has → 60s cooldown
+- **Rapid Retry**: If `seenCount` hasn't changed → 15s cooldown
+- **Targeted fetch**: Optional `providerID` parameter restricts to one source
+
+### Layer 3: Fetch Logic → Per-Query Pagination (`FetchNewImages`)
+
+Each query tracks its own page counter, persisted to `query_pages.json`:
+
+- Page counter stored as `SafeCounter` per query ID
+- `FetchImages(ctx, url, page)` called for each active query
+- If 0 results AND page > 1 → **Safe Page Wrap** back to page 1
+- If results found → increment page, persist to `query_pages.json`
+- Namespacing middleware applied at ingestion: `img.ID = provider.ID() + "_" + img.ID`
+- Dedup: existing images are only re-submitted if missing derivatives for current monitors ("Backlog Healing")
+
+### Layer 4: Automatic Rotation (Ticker)
+
+`ChangeWallpaperFrequency` creates a `time.Ticker` → `SetNextWallpaper(-1, false)` → dispatches `CmdNextAuto` to all monitors. Secondary monitors can be staggered (10-30% random delay of interval).
+
+## 3. Persistent Architectural Constraints (Golden Rules)
+
 ⚠️ **Never remove or "refactor away" these mechanisms. They solve recurring production bugs.**
 
-1.  **Safe Page Wrapping (fetch_logic.go)**: 
+1.  **Safe Page Wrapping (`fetch_logic.go`)**:
     *   **Rule**: When `FetchImages` returns 0 results for a `page > 1`, ALWAYS reset the query to `Page 1`.
-    *   **Rationale**: Most providers (Wallhaven, Wikimedia) have finite pages. Without wrapping, the wallpaper flow dies permanently once the last page is reached.
+    *   **Rationale**: Most providers have finite pages. Without wrapping, the wallpaper flow dies permanently once the last page is reached.
     *   **Restriction**: Do NOT wrap if `err != nil`. This distinguishes "EndOfResults" from "NetworkError".
-2.  **Resolution Probing & Persistence (downloader.go)**:
+
+2.  **Resolution Probing & Persistence (`downloader.go`)**:
     *   **Rule**: Once an image is opened (or its header decoded), the discovered `Width` and `Height` MUST be saved back to the `Store`.
-    *   **Rationale**: Fixes the "Ghost Dimension" ($0 \times 0$) bug where lack of persistence forces expensive full-file decodes on every refresh.
-3.  **Deadlock-Free Deduplication (fetch_logic.go)**:
+    *   **Rationale**: Fixes the "Ghost Dimension" (0×0) bug where lack of persistence forces expensive full-file decodes on every refresh.
+
+3.  **Deadlock-Free Deduplication (`fetch_logic.go`)**:
     *   **Rule**: The fetcher MUST NOT skip an image just because it exists in the store. It must also check if the image is missing a derivative for the *current* monitors.
-    *   **Rationale**: Essential for "Backlog Healing." If a user adds a new monitor, the system must be able to "pull" existing cached originals into the processing pipeline.
+    *   **Rationale**: Essential for "Backlog Healing." If a user adds a new monitor, the system must be able to pull existing cached originals back into the processing pipeline.
 
-### 2.1 Schema-Driven UI Architecture (Hexagonal / Ports & Adapters)
+## 4. Known Concurrency Decisions
 
-Spice implements a **Hexagonal Architecture** for its settings UI. Providers never import or create Fyne widgets directly. Instead, they declare their UI needs using pure Go structs, and a central rendering engine translates those structs into the actual framework widgets.
+### 4.1 Ticker Pointer Comparison (Intentionally Lockless)
+The `ChangeWallpaperFrequency` ticker goroutine compares `wp.ticker != currentTicker` without holding `downloadMutex`. This is a best-effort stale-ticker check; the worst case is one extra rotation call before the goroutine self-terminates. Acceptable trade-off vs. the complexity of an atomic pointer or done-channel approach.
 
-#### The Boundary
+### 4.2 `Sync.determineSyncAction` avoidSet Read (Practically Safe)
+`determineSyncAction` reads `s.avoidSet` between snapshot and exclusive lock in `Sync()`. This is technically a data race, but `avoidSet` is only mutated by `Remove()` and `LoadAvoidSet()` — neither runs concurrently with `Sync()` in the current codebase. Documented as accepted technical debt.
+
+### 4.3 Fair Dispatcher Architecture
+The Dispatcher creates **one pump goroutine per active provider** (not a single global goroutine). Each pump applies provider-specific `rate.Limiter` delays *before* releasing jobs to the shared `jobChan`. This transforms unbounded concurrent network spikes into orderly bursts, ensuring fast providers are processed instantly while slow/strict providers are perfectly paced.
+
+### 4.4 Provider Bulkheads & Circuit Breakers (Concurrency Isolation)
+For extremely rigid providers (like Wikimedia's stringent 429 policies), Spice employs **Bulkheads** (1-slot semaphores) at the API polling level, and **Global Circuit Breakers** at the transport layer. This isolates strict domains so their failures, pacing, and HTTP 429 cooldown limits never stall the generic orchestrator or other providers.
+
+## 5. Favorites Data Lifecycle
+
+### 5.1 State Locations
+
+| Location | Purpose | Key |
+| :--- | :--- | :--- |
+| `favorite_images/` folder | Source image files | Filename (e.g., `Wallhaven_21z536.jpg`) |
+| `favorite_images/metadata.json` | Attribution & product URL per file | Filename as key |
+| `favProvider.favMap` (in-memory) | O(1) "is this ID favorited?" lookup | Image ID (filename sans extension) |
+| `image_cache_map.json` (store) | Full image metadata incl. Provider, IsFavorited | Image ID |
+
+### 5.2 Favorite Flow (Add)
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Plugin as "Plugin.ToggleFavorite"
+    participant FavProv as "Favorites Provider"
+    participant Store as ImageStore
+
+    User->>Plugin: Click "Favorite"
+    Plugin->>FavProv: AddFavorite(img)
+    Note right of FavProv: "1. favMap[img.ID] = true"
+    Note right of FavProv: "2. Async: copy file to favorites folder"
+    Note right of FavProv: "3. Async: update metadata.json"
+    Plugin->>Store: Update(img) "[IsFavorited=true]"
+    Plugin->>Plugin: RequestFetch("Favorites")
+    Note right of Plugin: "Next fetch: Favorites provider returns image"
+    Note right of Plugin: "Store.Add() override: Provider → Favorites"
+```
+
+**Result**: Single store entry with `Provider=Favorites, IsFavorited=true`.
+
+### 5.3 Unfavorite Flow (Remove)
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Plugin as "Plugin.ToggleFavorite"
+    participant FavProv as "Favorites Provider"
+    participant Store as ImageStore
+
+    User->>Plugin: Click "Remove Favorite"
+    Plugin->>FavProv: RemoveFavorite(img)
+    Note right of FavProv: "1. delete(favMap, img.ID)"
+    Note right of FavProv: "2. Async: delete file + metadata entry"
+
+    alt Provider == Favorites
+        Plugin->>Store: Remove(img.ID) [deep delete]
+        Note right of Plugin: "Auto-advance monitors showing this image"
+    else Original provider
+        Plugin->>Store: Update(img) "[IsFavorited=false]"
+    end
+```
+
+### 5.4 Startup Reconciliation
+
+On `Activate()`, a 3-phase cleanup handles stale state:
+
+```
+Phase 1: loadInitialMetadata() [in NewProvider()]
+  ├── Read metadata.json → build favMap
+  ├── Validate each favMap entry against files on disk (glob)
+  └── Orphans found? → delete from favMap + rewrite metadata.json
+
+Phase 2: LoadCache() [in Activate()]
+  └── Load image_cache_map.json into store (may contain stale entries)
+
+Phase 3: reconcileFavorites() [in Activate()]
+  ├── For each image in store:
+  │   ├── If Provider=Favorites && favMap says false:
+  │   │   └── store.Remove() — dead entry, source file gone
+  │   └── If IsFavorited != favMap[ID]:
+  │       └── store.Update() — correct stale flag
+  └── Log summary of corrections
+```
+
+**`IsFavorited()` source of truth**: The `favMap` is authoritative. All images are validated against it.
+
+### 5.5 Store.Add() Override Rule
+
+When a Favorites-provider image is added with an ID that already exists (from the original provider), the store **replaces** the existing entry. `Provider` changes, `FilePath` changes, `Seen` state is preserved. The store always has **one entry per image ID**, never duplicates.
+
+## 6. Schema-Driven UI Architecture (Hexagonal / Ports & Adapters)
+
+Providers never import or create Fyne widgets directly. They declare their UI needs using pure Go structs, and a central rendering engine translates those structs into framework widgets.
+
+### 6.1 The Boundary
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -80,18 +267,14 @@ Spice implements a **Hexagonal Architecture** for its settings UI. Providers nev
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-**The key rule**: The dependency arrow always flows **inward**. Providers depend on `schema` and `setting` (ports), never on `ui/` (adapter). The engine (`ui/settings_manager.go`) depends on `schema` to know what to render, but providers never know about Fyne.
-
-#### Schema Types (`pkg/ui/schema/schema.go`)
-
-All provider UI is composed from these building blocks:
+### 6.2 Schema Types (`pkg/ui/schema/schema.go`)
 
 | Schema Type | Purpose |
 |:---|:---|
-| `BoolItem` | Checkbox / toggle with label, help, `ApplyFunc`, `EnabledIf`, `VisibleIf` |
+| `BoolItem` | Checkbox/toggle with `ApplyFunc`, `EnabledIf`, `VisibleIf` |
 | `TextItem` | Text entry with validation, debounce, `PostValidateCheck`, password masking |
 | `SelectItem` | Dropdown with index-based value tracking |
-| `SecretItem` | API key / credential with `OnVerify` and `OnClear` (Transactional pattern) |
+| `SecretItem` | API key/credential with `OnVerify` and `OnClear` (Transactional pattern) |
 | `ButtonItem` | Simple action button |
 | `AsyncButtonItem` | Button with loading state and background task |
 | `ConfirmButtonItem` | Button with confirmation dialog |
@@ -102,270 +285,139 @@ All provider UI is composed from these building blocks:
 | `FolderPickerItem` | Native directory selector (Local Folders) |
 | `HorizontalRowItem` | Groups items side-by-side |
 
-#### The `RenderSchema()` Adapter
+### 6.3 The Registry Pattern (Deferred Save)
 
-`SettingsManager.RenderSchema(p schema.PanelSchema)` is the **single entry point** that walks the schema tree and materializes Fyne widgets. For each schema item it:
+Settings UI uses a **Deferred Save / Git-like Commit** model:
 
-1. Creates the native widget (e.g., `widget.NewCheck` for `BoolItem`)
-2. Seeds the **Baseline** in the registry
-3. Wires `OnChanged` → dirty detection → `ApplyFunc` queuing
-4. Registers `EnabledIf` / `VisibleIf` for reactive state management
-5. Returns a composed `fyne.CanvasObject`
+1. **Baseline Seeding**: `RenderSchema` creates widgets and mirrors initial values into the registry
+2. **Live Comparison**: `OnChanged` handlers compare widget state against the registry baseline
+3. **Reactive State**: `EnabledIf` / `VisibleIf` for dynamic control, `SetValue()` for cross-widget updates
+4. **Atomic Commit**: "Apply" executes all queued `ApplyFunc` callbacks and promotes Live → Baseline
 
-Providers never call these render methods — they only build and return `*schema.PanelSchema`.
+### 6.4 The Transactional UI Pattern (Credentials)
 
-### 2.2 The Registry Pattern (Deferred Save)
+For `schema.SecretItem`, Spice bypasses the deferred model:
+- Verification only occurs when "Verify & Connect" is explicitly clicked
+- On success: key is saved immediately, baseline is seeded, field locks via `EnabledIf`
+- All verification transactions MUST include a timeout (standard: 10s) via `context.WithTimeout`
 
-The Settings UI uses a **Deferred Save / Git-like Commit** model. Changes are staged, not saved, until "Apply" is clicked.
+### 6.5 The Generic Action Pattern (Query Lists)
 
-`SettingsManager` maintains a **Registry** (`map[string]interface{}`) of the last-known "Baseline" values.
+`schema.QueryListItem` uses an **Explicit Action Contract**:
+- `DeleteLabel`: Provider can rename the button (e.g., "Clear")
+- `ForceActionEnabled`: Overrides `Managed` check (for Favorites)
+- `DeleteConfirmMessage`: Provider-specific warnings
+- `GetDisplayText` / `GetDisplayURL`: Pure functions for custom rendering
 
-1. **Baseline Seeding**: When `RenderSchema` processes a schema item, its initial value is automatically mirrored into the registry.
-2. **Live Comparison**: `OnChanged` handlers compare the widget's current state directly against the registry's baseline.
-3. **Reactive State**: Schema items support:
-   - `EnabledIf`: Dynamic function controlling widget interactivity (e.g., locking an API key field until cleared).
-   - `VisibleIf`: Dynamic function controlling widget visibility.
-4. **Programmatic Updates**: `SetValue(name, val)` allows for cross-widget state updates.
-5. **Atomic Commit**: On "Apply", the engine executes all queued `ApplyFunc` callbacks and then promotes all "Live" values to "Baseline".
+### 6.6 UI Services
 
-### 2.3 The Transactional UI Pattern (Credentials)
+Providers use `SettingsManager` interface methods for dialogs — **never** direct Fyne `dialog.*` imports:
+- `sm.ShowError(err)`, `sm.ShowConfirm(title, message, callback)`
+- `sm.ShowAddQueryDialog(cfg, url, desc, onAdded)`, `sm.OpenURL(urlString)`
 
-For sensitive credentials (API Keys, Usernames), Spice bypasses the deferred model in favor of **Intentional Transactions** via `schema.SecretItem`.
+## 7. Provider Implementations
 
-*   **Rationale**: We never want to send an API key silently in the background while the user is typing, nor save a potentially invalid key.
-*   **The Flow**:
-    1.  **Direct Interaction**: The user enters a key. The "Clear" button transforms into **"Verify & Connect"**.
-    2.  **Explicit Action**: Verification only occurs when the button is clicked.
-    3.  **Immediate Persistence**: If verification succeeds, the key is saved to the config AND the baseline is seeded **immediately**. The field locks (via `EnabledIf`) and the button becomes **"Clear API Key"**.
-    4.  **Hanging Prevention**: All verification transactions MUST include a timeout (standard: 10s) via `context.WithTimeout`.
-*   **Implementation**: Declare a `schema.SecretItem` with `OnVerify` and `OnClear` hooks. The engine handles the UI state machine automatically.
+Key logic patterns for the major providers in `pkg/wallpaper/providers/`. **All providers are 100% Fyne-free**.
 
-### 2.4 The Generic Action Pattern (Query Lists)
+### 7.1 Wallhaven (`wallhaven.go`)
+- **Regex Router**: Rigorous URL parsing (`UserFavoritesRegex`, `SearchRegex`)
+- **API Key Hygiene**: `ParseURL` strips `apikey` params. Keys stored in OS keychain, masked via `schema.SecretItem`
 
-`schema.QueryListItem` uses an **Explicit Action Contract** for the list's primary action button (historically "Delete"):
+### 7.2 The Met Museum (`metmuseum.go`)
+- **Schema Template**: `schema.CreateMuseumSettingsPanel()` for standardized museum layout
+- **Parallel Fetching**: `errgroup` with concurrency limit (5)
+- **Aspect Ratio Filter**: Rejects > 3.0 or < 0.33
 
-*   **`DeleteLabel`**: Allows a provider to rename the button (e.g., "Clear") without the engine knowing the provider's identity.
-*   **`ForceActionEnabled`**: Overrides the standard `Managed` check. Allows "Clearable" system queries (like Favorites) to remain interactive while preserving the "Disabled" guard for read-only synced sources.
-*   **`DeleteConfirmMessage`**: Provider-specific warnings injected from the domain layer.
-*   **`GetDisplayText` / `GetDisplayURL`**: Pure functions for custom rendering without Fyne imports.
+### 7.3 Favorites (`favorites.go`)
+- **Worker Pattern**: File IO via `jobChan` + `runWorker` loop
+- **FIFO Garbage Collection**: Enforces `MaxFavoritesLimit`, deletes oldest by `ModTime`
+- **Metadata Sidecar**: `metadata.json` for Attribution and Product URL
 
-### 2.5 UI Services (ShowError, ShowConfirm, ShowAddQueryDialog)
+### 7.4 Local Folders (`localfolder.go`)
+- **Cross-Platform Picker**: `schema.FolderPickerItem` (Windows uses `cfd` shell picker)
+- **Recursive Scanning**: `filepath.WalkDir` with early-exit optimization
 
-Providers that need to display dialogs (errors, confirmations, add-query modals) use the `SettingsManager` interface methods. These are **never** called via direct Fyne `dialog.*` imports:
+## 8. Smart Fit 2.0 & Imaging Logic
 
-*   `sm.ShowError(err)` — Modal error display
-*   `sm.ShowConfirm(title, message, callback)` — Confirmation with boolean callback
-*   `sm.ShowAddQueryDialog(cfg, url, desc, onAdded)` — Standardized "Add Query" modal using `schema.AddQueryConfig`
-*   `sm.OpenURL(urlString)` — Browser URL opening
+The imaging engine (`pkg/wallpaper/smart_image_processor.go`) implements the **Strategy Pattern**:
 
-## 3. Deep Dive: Provider Implementations
+### 8.1 Strategy Selection
+1. **Analysis Phase**: Calculate Entropy (Energy), scan for Faces
+2. **`FaceCropStrategy`**: Selected if face found and Face Crop enabled
+3. **`SmartPanStrategy`**: Selected for "Face Boost" or low-energy fallback
+4. **`EntropyCropStrategy`**: Default. Contains the **Feet Guard**
 
-Key logic patterns for the major providers in `pkg/wallpaper/providers/`. **All 8 providers are 100% Fyne-free** — they return `*schema.PanelSchema` from `CreateSettingsPanel()` and `CreateQueryPanel()`.
+### 8.2 The Feet Guard
+If `smartcrop` suggests a crop starting very low, force Center Crop. This threshold relaxes for "High Energy" images and stays strict for "Low Energy" (sky/ground).
 
-### 3.1 Wallhaven (`wallhaven.go`)
-*   **Regex Router**: Parses user-pasted URLs using rigorous Regex:
-    *   `UserFavoritesRegex`: `wallhaven.cc/user/([^/]+)/favorites/(\d+)` -> Converts to API Collection Endpoint.
-    *   `SearchRegex`: Extracts `?q=...` or `?categories=...`.
-*   **API Key Hygiene**: The `ParseURL` function explicitly *strips* `apikey` params from saved URLs. Keys are stored in the secure OS keychain and **masked** via `schema.SecretItem`.
+### 8.3 Externalized Tuning (`pkg/wallpaper/tuning.go`)
+All magic numbers in `TuningConfig`: `AggressiveMultiplier`, `FaceRescueQThreshold`, `FeetGuardRatio`, etc. Structured for future remote hot-swap.
 
-### 3.2 The Met Museum (`metmuseum.go`)
-*   **Schema Template**: Uses `schema.CreateMuseumSettingsPanel()` for a standardized "Institution" look with Plan a Visit, Website, and Donate buttons.
-*   **Director's Cut Configuration**: Uses a **Fixed List** of curated queries rendered as `schema.BoolItem` logic groups (not a dynamic list).
-*   **Parallel Fetching**: Uses `errgroup` with a concurrency limit (5) to "scan" for valid images.
-*   **Filtering**: Rejects extreme aspect ratios (>3.0 or <0.33) but allows both landscape and portrait, since `SmartImageProcessor` handles orientation scaling.
+## 9. Extension Guide
 
-### 3.3 Favorites (`favorites.go`)
-*   **Worker Pattern**: File IO (copying 5MB images) is too slow for the main thread.
-    *   Uses a `jobChan favJob` channel with a `runWorker` loop.
-*   **FIFO Garbage Collection**: Enforces a hard limit (MaxFavoritesLimit). When full, deletes the oldest file (by `ModTime`) before writing.
-*   **Metadata Sidecar**: Maintains `metadata.json` for Attribution and Product URL.
-*   **UI Implementation**: Uses the **Generic Action Pattern** (§2.4) — sets `DeleteLabel: "Clear"` and `ForceActionEnabled: true` on its `schema.QueryListItem`.
+### 9.1 Adding a New Provider
+1. Create package: `pkg/wallpaper/providers/myprovider`
+2. Implement `provider.ImageProvider` — return `*schema.PanelSchema`, not Fyne widgets
+3. Register via `wallpaper.RegisterProvider()`
+4. Run `go generate ./...` (or `make gen`) — auto-discovery via `gen_providers`
+5. To disable: add a `.disabled` file to the provider directory
 
-### 3.4 Local Folders (`localfolder.go`)
-*   **Cross-Platform Picker**: Uses `schema.FolderPickerItem` which the engine renders as a native directory selector (Windows uses `cfd` shell picker via `picker_windows.go` to avoid Fyne/Cgo deadlocks).
-*   **Path Normalization**: Strict case-insensitive deduplication and trailing slash removal.
-*   **Recursive Scanning**: Uses `filepath.WalkDir` with early-exit optimization.
+### 9.2 UI Standardization
+- Use `schema.AddQueryConfig` for add-query modals
+- For museums: `schema.CreateMuseumSettingsPanel()`
 
-## 4. Extension Guide
+## 10. The "Live Update" Architecture (Museums)
 
-### 4.1 Adding a New Provider
-1.  **Create Package**: `pkg/wallpaper/providers/myprovider`.
-2.  **Implement Interface**: `provider.ImageProvider`.
-    - `CreateSettingsPanel(sm) *schema.PanelSchema` — Return a declarative schema, not Fyne widgets.
-    - `CreateQueryPanel(sm, pendingURL) *schema.PanelSchema` — Return the query list schema.
-3.  **Register**:
-    ```go
-    func init() {
-        wallpaper.RegisterProvider("MyProvider", func(cfg *Config, client *client) ImageProvider {
-            return NewProvider(cfg, client)
-        })
-    }
-    ```
-4.  **Import**: Run `go generate ./...` (or `make gen`). The `gen_providers` tool will automatically discover your package and add it to `cmd/spice/zz_generated_providers.go`. To disable a provider, add a `.disabled` file to its directory.
-
-### 4.2 UI Standardization
-Use `schema.AddQueryConfig` for add-query modals and `sm.ShowAddQueryDialog()` to display them.
-For museums, use `schema.CreateMuseumSettingsPanel()` to generate the standard header layout.
-
-## 5. Critical Files Map
-
-| File | Role |
-|:---|:---|
-| `pkg/ui/schema/schema.go` | **PORT**: Framework-agnostic UI contract. All schema types live here. |
-| `pkg/ui/schema/museum.go` | Schema helper for standardized museum provider layouts. |
-| `pkg/ui/setting/setting_manager.go` | **PORT**: `SettingsManager` interface. Providers depend on this. |
-| `ui/settings_manager.go` | **ADAPTER**: Fyne implementation of `RenderSchema()` and all SM methods. |
-| `pkg/wallpaper/store.go` | The DB. Thread-safety critical. |
-| `pkg/wallpaper/pipeline.go` | The Async Engine. |
-| `pkg/wallpaper/smart_image_processor.go` | Face Detection & Cropping logic. |
-| `pkg/api/server.go` | Local HTTP server for Browser Extension communication. |
-
-
-## 6. Smart Fit 2.0 & Imaging Logic
-
-Spice's imaging engine (`pkg/wallpaper/smart_image_processor.go`) is more than just a cropper. It implements a decision tree to balance "Artistic Integrity" vs "Screen Filling".
-
-### 6.1 The Strategy Pattern (Refactored)
-The decision tree is now implemented via the **Strategy Pattern** (`CropStrategy` interface).
-
-1.  **Analysis Phase**: The processor first calculates **Entropy** (Energy) and scans for **Faces**.
-2.  **Strategy Selection**:
-    *   **`FaceCropStrategy`**: Selected if a face is found and Face Crop enabled.
-    *   **`SmartPanStrategy`**: Selected for "Face Boost" or as a fallback for low-energy images in Flexibility Mode.
-    *   **`EntropyCropStrategy`**: The default smart cropper. Contains the **Feet Guard**.
-3.  **The "Feet Guard"**:
-    *   If `smartcrop` suggests a crop starting very low (cutting heads?), we force a Center Crop.
-    *   **Energy-Aware**: This threshold relaxes for "High Energy" (busy/detailed) and stays strict for "Low Energy" (sky/ground).
-
-### 6.2 Externalized Tuning (`pkg/wallpaper/tuning.go`)
-All magic numbers are extracted into `TuningConfig`.
-*   `AggressiveMultiplier`: Controls how much "extra" resolution allows for "extra" cropping.
-*   `FaceRescueQThreshold`: Confidence score required to override aspect ratio bans.
-*   **Goal**: These values are structured to be hot-swapped via a remote JSON config in the future.
-
-## 7. The "Live Update" Architecture (Museums)
-
-Providers like MetMuseum (`pkg/wallpaper/providers/metmuseum`) use a **4-Layer Fallback** system to allow content updates without app updates.
-
-### 7.1 The Fallback Chain
+### 10.1 The Fallback Chain
 `InitRemoteCollection()` logic:
-1.  **Remote Fetch**: HTTP GET `raw.githubusercontent.com/.../met.json`. (Timeout: 3s).
-2.  **Local Cache**: If remote fails, load `~/.config/spice/cache/met/met_cache.json`.
-3.  **Embed**: If cache missing/corrupt, load `//go:embed met.json` (baked at build time).
-4.  **Hardcoded**: If all hell breaks loose, load `SpiceMelangeIDs` (Go `const` slice).
+1. **Remote Fetch**: HTTP GET `raw.githubusercontent.com/.../met.json` (Timeout: 3s)
+2. **Local Cache**: If remote fails, load `~/.config/spice/cache/met/met_cache.json`
+3. **Embed**: If cache missing, load `//go:embed met.json`
+4. **Hardcoded**: If all fails, load `SpiceMelangeIDs` (Go `const` slice)
 
-### 7.2 Usage
-This allows curators to update the "Director's Cut" collections (IDs, Descriptions) by simply committing to the GitHub repo. Spice clients enforce the new catalog on their next restart.
+## 11. Development Environment & Secrets
 
-## 8. Development Environment & Secrets
+### 11.1 The `.spice_secrets` File
+Create in project root (git-ignored). Format: `KEY=VALUE`.
 
-When developing locally, especially when running the app directly via `go run` instead of `make`, you must manually inject API secrets into your environment.
-
-### 8.1 The `.spice_secrets` File
-Create a file named `.spice_secrets` in the project root. This file is git-ignored.
-Format: `KEY=VALUE`
-
-```bash
-UNSPLASH_CLIENT_ID=abc...
-GOOGLE_PHOTOS_CLIENT_ID=xyz...
-```
-
-### 8.2 The `load_secrets` Helper
-The project includes helper scripts (`load_secrets.ps1` for PowerShell, `load_secrets.sh` for Bash) to read this file and export variables to your current shell session.
-
-**Usage (PowerShell):**
+### 11.2 The `load_secrets` Helper
 ```powershell
-. .\load_secrets.ps1  # Note the dot-source syntax!
+. .\load_secrets.ps1  # PowerShell
+source ./load_secrets.sh  # Bash
 go run cmd/spice/main.go
 ```
 
-**Usage (Bash):**
+The `Makefile` handles this automatically via `cmd/util/load_secrets/main.go`.
+
+## 12. Internationalization & Localization (i18n)
+
+### 12.1 Translation Architecture
+- `i18n.T("key")`: Standard retrieval
+- `i18n.Tf("key", map)`: Templated (Go `text/template`)
+- `i18n.N("key", count)`: Pluralized
+- Translations embedded via `//go:embed` from `pkg/i18n/translations/*.json`
+
+### 12.2 The `gen-i18n` Tool
+- **Generate**: `make gen-i18n` — scans source for i18n calls, updates all language files
+- **Check**: `make check-i18n` — CI gate for stale/missing/untranslated keys
+
+### 12.3 Allowlists
+- `allowIdenticalToEnglish`: Proper nouns, loanwords, brand names
+- `dynamicI18nKeys`: Keys used via variables, invisible to static scanner
+
+### 12.4 Adding New Strings
 ```bash
-source ./load_secrets.sh
-go run cmd/spice/main.go
+i18n.T("My New String")     # 1. Write code
+make gen-i18n                # 2. Generate (auto-adds to en.json)
+make check-i18n              # 3. CI verifies sync
 ```
 
-**Note**: The `Makefile` automatically handles this injection via `cmd/util/load_secrets/main.go`, so you only need to manually source this script when bypassing the Makefile.
+### 12.5 Adding a New Language
+1. Create `pkg/i18n/translations/[code].json` with `"_meta_name"` key
+2. Run `make gen-i18n` — auto-generates language registry
 
-## 9. Internationalization & Localization (i18n)
-
-Spice uses a custom i18n package (`pkg/i18n`) for runtime translations and synchronization with Fyne's internal state. Translation integrity is enforced at CI time.
-
-### 9.1 Translation Architecture
-- **Language Selection**: Managed via `i18n.SetLanguage(code)`. It maps standard codes (e.g., "en", "de", "zh-Hant") to internal states and synchronizes with Fyne's `lang` package.
-- **String Retrieval**:
-    - `i18n.T("key")`: Standard translation retrieval.
-    - `i18n.Tf("key", map)`: Templated translation using Go `text/template` syntax.
-    - `i18n.N("key", count)`: Pluralized translation.
-- **Embedded Files**: Translations are stored in `pkg/i18n/translations/*.json` and embedded into the binary using `//go:embed`.
-
-### 9.2 The `gen-i18n` Tool (`cmd/util/gen_i18n/main.go`)
-
-This is the single source of truth for translation management. It replaces all previous Python scripts.
-
-**Generate mode** (`make gen-i18n`):
-1. **Scans** all `.go` source files for `i18n.T()`, `i18n.Tf()`, and `i18n.N()` calls via regex.
-2. **Merges** `dynamicI18nKeys` — keys used via variables (e.g., `attribution_by`) that can't be statically detected.
-3. **Auto-adds** new keys to `en.json` (key = value, English fallback).
-4. **Warns** about stale keys in `en.json` (keys no longer referenced in code).
-5. **Propagates** missing keys into all language files (fills with English fallback).
-6. **Generates** `pseudo.json` for layout testing (vowel doubling to test UI expansion).
-7. **Generates** `zz_generated_languages.go` — the Go language registry used at runtime.
-
-**Check mode** (`make check-i18n`):
-- Read-only. Exits non-zero if:
-  - **Stale keys** exist in `en.json` or any language file (keys not in code).
-  - **Missing keys** in `en.json` (keys in code but not in translations).
-  - **Untranslated strings** in any language file (value identical to English, unless allowlisted).
-- This is gated into **release** build chains (`win-amd64`, `linux-amd64`, `darwin-*`) but not dev builds.
-
-### 9.3 Allowlists and Dynamic Keys
-
-Two mechanisms prevent false positives in `--check` mode:
-
-**`allowIdenticalToEnglish`** — Keys where the translation is legitimately the same as English:
-- Proper nouns: `"Art Institute of Chicago"`, `"The Metropolitan Museum of Art"`
-- Loanwords: `"App"`, `"Online"`, `"System"`, `"General"`, etc.
-- Brand names: `"Pexels"`, `"Wikimedia"`, `"Google Photos"`, `"wallhaven"`
-- Locations: `"Chicago, IL, USA"`, `"New York City, USA"`
-
-**`dynamicI18nKeys`** — Keys used via variables at runtime, invisible to the static regex scanner:
-- `"attribution_by"`, `"attribution_in"` — selected dynamically based on `provider.AttributionType`
-- `"Egyptian Art"`, `"European Paintings"` — museum collection names from curated JSON
-
-Both maps live in `cmd/util/gen_i18n/main.go`.
-
-### 9.4 Developer Workflow: Adding New Strings
-
-```bash
-# 1. Write Go code with i18n calls
-i18n.T("My New String")
-i18n.Tf("Download {{.Count}} images", map[string]any{"Count": n})
-
-# 2. Run the generator (auto-adds to en.json, propagates to all languages)
-make gen-i18n
-
-# 3. Translate the new key in each language JSON file
-#    (or leave as English fallback temporarily)
-
-# 4. Before PR merge — CI runs this and blocks if anything is out of sync
-make check-i18n
-```
-
-**If using dynamic keys** (variable-based `i18n.Tf(key, ...)` calls):
-- Add the key to `dynamicI18nKeys` in `cmd/util/gen_i18n/main.go`.
-
-### 9.5 Adding a New Language
-
-1. Create `pkg/i18n/translations/[code].json` with all keys from `en.json`.
-2. Add a `"_meta_name"` key with the language's native display name (e.g., `"日本語"`).
-3. Run `make gen-i18n` — this auto-generates the language registry and fills any missing keys.
-4. No manual code registration needed. The tool discovers languages from the filesystem.
-
-### 9.6 Tray Menu Constraints (Critical)
-When translating strings specifically for the system tray menu:
-- **Brevity**: Operating systems (especially Windows) calculate tray menu width based on the longest item. Keep translations as short as possible (e.g., German "Bild" vs "Hintergrundbild").
-- **Mnemonic Safety**: On Windows, `&` acts as a mnemonic prefix and is hidden. Use `+` as a universal cross-platform separator instead of `&` or `&&`.
-- **Sanitization**: All dynamic strings (like attributions) displayed in the tray MUST pass through `SanitizeMenuString` (in `pkg/wallpaper/helper.go`) to strip HTML and collapse excessive whitespace.
-- **Rune-Aware Truncation**: Never truncate tray labels by bytes. Always cast to `[]rune` before slicing to avoid corrupting multi-byte localized characters.
-
+### 12.6 Tray Menu Constraints (Critical)
+- **Brevity**: Windows calculates tray width from longest item
+- **Mnemonic Safety**: Use `+` not `&` as separator
+- **Sanitization**: Dynamic strings must pass through `SanitizeMenuString`
+- **Rune-Aware Truncation**: Always `[]rune` before slicing

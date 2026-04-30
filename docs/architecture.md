@@ -3,14 +3,20 @@ layout: default
 title: Architecture
 ---
 
-# Spice Architecture Documentation (Wallpaper Plugin)
+# Spice Architecture Documentation
 
 > **Status**: Current as of v2.3.1
-> **Focus**: Concurrency Model, Image Pipeline, and Actor-based Display Management
+> **Scope**: System design, data flow, and component roles
 
 ## 1. Executive Summary
 
-Spice employs a **hybrid concurrency architecture** to separate resource-intensive operations (image processing, I/O) from the user interface. The performance-critical **hot path** (image download, processing, and ingestion) is serialized through a **single-writer pipeline**, while infrequent **administrative operations** (favorites, cache clearing, reconciliation) use direct **mutex-protected** store access. This design eliminates UI main-thread blocking ("jank") and ensures a responsive user experience even during heavy background downloads.
+Spice is a cross-platform wallpaper rotation engine built as a modular plugin application. Its core design separates **user interaction** (instant, non-blocking) from **background work** (downloading, processing, persisting) through a hybrid concurrency architecture.
+
+Key design principles:
+- **Actor Model**: Each monitor is an independent actor with its own state, shuffle deck, and command loop
+- **Pipeline Serialization**: Image ingestion from workers flows through a single goroutine, eliminating lock contention on the hot path
+- **Hexagonal Architecture**: All providers are framework-agnostic — they declare UI via pure Go structs, not Fyne widgets
+- **Resolution Buckets**: Images are indexed by resolution, enabling O(1) per-monitor image selection
 
 ## 2. System Architecture (Plugin System)
 
@@ -36,28 +42,33 @@ graph TD
     WP -->|Injects| TrayUI[Tray Menu Items]:::core
 ```
 
-## 3. Wallpaper Plugin Architecture
+## 3. Data Flow: Image Lifecycle
 
-### 3.1 Core Concepts
+An image moves through the system in four phases:
 
-#### 3.1.1 The Pipeline-Serialized Hot Path
+```mermaid
+graph LR
+    classDef fetch fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#000;
+    classDef pipe fill:#fff3e0,stroke:#e65100,stroke-width:2px,color:#000;
+    classDef store fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px,color:#000;
+    classDef display fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,color:#000;
 
-On the performance-critical hot path (image ingestion from workers), mutations are serialized through a **single pipeline goroutine** (`stateManagerLoop`). This eliminates lock contention during high-throughput operations like bulk downloading.
+    A["1. Fetch<br/>(Provider API)"]:::fetch
+    B["2. Process<br/>(Pipeline Workers)"]:::pipe
+    C["3. Store<br/>(ImageStore)"]:::store
+    D["4. Display<br/>(Monitor Actor)"]:::display
 
-#### 3.1.2 Mutex-Protected Admin Operations
+    A -->|"Raw URLs"| B
+    B -->|"Processed Image"| C
+    C -->|"Resolution Bucket Query"| D
+```
 
-Infrequent administrative operations (toggling favorites, cache clearing, startup reconciliation, query removal) mutate the store directly under `sync.RWMutex`. These operations are inherently synchronous — a user clicks "Clear Cache" and the store must be updated before the UI refreshes.
+1. **Fetch**: `FetchNewImages` queries active providers, namespaces image IDs, and submits jobs to the Pipeline
+2. **Process**: Worker pool downloads, decodes, and smart-fits images to each monitor's resolution, producing derivatives
+3. **Store**: `ImageStore` indexes images by ID and resolution bucket, persists to disk via debounced JSON writes
+4. **Display**: Each `MonitorController` actor queries the store for images matching its resolution, shuffles, and applies wallpapers via OS APIs
 
-#### 3.1.3 Decoupled UI Session
-
-The User Interface maintains its own **local session state** (which image am I looking at right now?). It strictly reads from the shared store and sends asynchronous commands to request changes.
-
-## 3.2 High-Level Architecture
-
-The system is divided into two distinct execution contexts:
-
-1. **The UI Context (Main Thread)**: Handles user input, rendering, and navigation. It is optimized for **Read Speed**.
-2. **The Pipeline Context (Background)**: Handles downloading, processing, and state mutation. It is optimized for **Throughput**.
+## 4. Component Architecture
 
 ```mermaid
 graph TD
@@ -81,7 +92,7 @@ graph TD
 
     subgraph Pipeline_Layer ["Pipeline Context"]
         Dispatcher{{"Dispatcher<br/>(Fair Bouncer)"}}:::pipe
-        Workers[["16x Worker Pool<br/>(Download/Crop)"]]:::pipe
+        Workers[["Worker Pool<br/>(Download/Crop)"]]:::pipe
         Manager(("State Manager<br/>Loop")):::pipe
     end
 
@@ -98,82 +109,53 @@ graph TD
     Monitor1 -- "Current Wallpaper Change" --> Plugin
 ```
 
-## 3.3 Component Details
+### 4.1 Monitor Controller — Actor Pattern (`monitor_controller.go`)
 
-### 3.3.1 The Monitor Controller (Actor Pattern)
-*Added in v2.0*
+Each physical monitor is managed by an autonomous **Actor** with its own goroutine and state.
 
-To support independent multi-monitor wallpapers, Spice moved from a single-controller model to an **Actor Model**.
+- **State**: Current image, history stack, shuffle permutation (`ShuffleIDs`, `RandomPos`), pause state
+- **Command Loop**: A dedicated goroutine that `select`s on `Commands` channel and `Store.GetUpdateChannel()`
+- **Resolution Isolation**: Each monitor queries the Store for images matching its specific resolution via Resolution Buckets
+- **Starvation Recovery**: When a bucket is empty, the actor sets `WaitingForImages=true` and auto-retries when the Store signals new content
 
--   **Role**: An autonomous agent responsible for **one** specific display.
--   **Isolation**: Each monitor has its own:
-    -   **State**: Current Image, History Stack, Shuffle Permutation (`ShuffleIDs`, `RandomPos`).
-    -   **Command Loop**: A dedicated goroutine that `select`s on a `Commands` channel.
--   **Behavior**:
-    -   Receives high-level commands (`CmdNext`, `CmdPrev`, `CmdUpdateShuffle`) from the central Plugin.
-    -   Executes logic locally (e.g., calculating the next random index).
-    -   Applies the wallpaper *only* to its assigned screen.
--   **Benefit**: User interaction on Monitor 1 (e.g., browsing history) is completely decoupled from Monitor 2.
+### 4.2 ImageStore (`store.go`)
 
-### 4.1 ImageStore (`pkg/wallpaper/store.go`)
+The thread-safe data repository.
 
-A thread-safe, stateless container.
+- **Primary Data**: `[]provider.Image` (sequential access) + `idSet` (O(1) existence) + `pathSet` (O(1) MarkSeen by filepath)
+- **Resolution Buckets**: `map[string][]string` mapping `"WxH"` → list of compatible image IDs. Enables instant per-monitor image selection
+- **Persistence**: Debounced (2s) JSON writes using snapshot-under-RLock
+- **Writers**: Pipeline (hot path: `Add`, `MarkSeen`) and Plugin (admin: `Remove`, `Wipe`, `Sync`, `RemoveByQueryID`)
 
-- **Role**: The "Database" of the application.
-- **Locking**: Uses `sync.RWMutex`.
-  - **Reads (Next Button)**: Uses `RLock()` (Non-blocking).
-  - **Writes (Download/MarkSeen)**: Uses `Lock()` (Exclusive).
-  - **Persistence**: Debounced (2s) and uses `RLock()` to save to disk without blocking readers.
-- **Constraints**: Contains no iteration logic (no `currentIndex`).
-- **Writers**: The store is written to by two categories of caller:
-  - **Pipeline (hot path)**: `Add`, `MarkSeen`, `Remove`, `Clear` — serialized through `stateManagerLoop`.
-  - **Plugin (admin ops)**: `Update`, `Remove`, `RemoveByQueryID`, `ResetFavorites`, `Wipe`, `Sync` — called directly under mutex from the Plugin for user-initiated or startup operations.
+### 4.3 Pipeline (`pipeline.go`)
 
-### 4.2 Pipeline State Manager (`pkg/wallpaper/pipeline.go`)
+The background processing engine.
 
-The serialized writer for the **hot path**.
+- **Dispatcher**: Creates a per-provider `pump` goroutine that enforces API rate limits *before* releasing jobs to the shared worker channel. Prevents Head-of-Line blocking between fast and slow providers
+- **Worker Pool**: `runtime.NumCPU()` goroutines (configurable) that download, decode, and smart-fit images
+- **State Manager Loop**: Single goroutine consuming `resultChan` and `cmdChan`, serializing writes to the Store. Calls `runtime.Gosched()` after each operation to prevent starving UI readers
 
-- **Role**: Consumes results from workers and commands from the UI.
-- **Behavior**:
-  - Loops continuously selecting on `resultChan` and `cmdChan`.
-  - Acquires Write Lock -> Mutates Store -> Releases Lock.
-  - **Yields**: Calls `runtime.Gosched()` after every operation to prevent starving readers.
-- **Scope**: Handles `Add` (from workers), `MarkSeen`, `Remove`, and `Clear` (from command channel). Does **not** handle admin operations like favorites management or query cleanup, which are performed directly by the Plugin.
+### 4.4 Fetch & Pagination System
 
-### 4.3 UI Plugin (`pkg/wallpaper/wallpaper.go`)
+Image fetching is triggered by monitors and throttled by the plugin:
 
-The "Controller".
+1. **MonitorController** detects starvation (bucket < 5 images) or cycle exhaustion (> 80% of shuffle list consumed)
+2. **`RequestFetch()`** (centralized gatekeeper) — anti-loop protection with cooldowns
+3. **`FetchNewImages()`** — iterates active queries, each tracking its own page counter persisted to `query_pages.json`
+4. **Safe Page Wrapping** — when a provider returns 0 results for page > 1, auto-resets to page 1
 
-- **Role**: Manages the user session and optimistic UI updates.
-- **Key Logic**:
-  - **Navigation**: Calculates next index locally, reads from store.
-  - **Optimistic Updates**: Updates Tray Menu *before* calling blocking OS wallpaper functions.
-  - **Rollback**: If OS call fails, reverts UI to previous state.
+### 4.5 Scheduler & Nightly Maintenance (`scheduler.go`)
 
-### 4.4 Lazy Enrichment Worker (`startEnrichmentWorker`)
+A persistent goroutine (`StartNightlyRefresh`) runs unconditionally and handles:
+- **Day-change detection**: Triggers maintenance on the first tick after midnight
+- **Cache grooming**: `store.Sync()` with active query IDs and processing flags
+- **Orphan cleanup**: `FileManager.CleanupOrphans()` removes unknown files
+- **Provider sync**: Wallhaven collection sync, museum remote config refresh
+- **Conditional image fetch**: Only if `NightlyRefresh` preference is enabled
 
-A persistent, single-goroutine worker that "pivots" to the user's current location.
+## 5. Interaction Flows
 
-- **Role**: Fetches metadata (Enrichment) for upcoming images.
-- **Behavior**:
-  - Listens on `enrichmentSignal` (buffered channel).
-  - When user navigates, instantly aborts current look-ahead and jumps to new index.
-  - Ensures metadata is ready *just in time*, reducing API waste.
-
-### 4.5 Orchestrator & Provider Rate Limiting (Pipeline Concurrency)
-
-To maximize download speeds while safely obeying strict third-party API limits, Spice uses a decoupled dispatcher and bulkhead architecture:
-
-- **Dispatcher (Fair Bouncer)**: Upstream of the pipeline, a dedicated `Dispatcher` manages all incoming download jobs. It queries the `provider.PacedProvider` interface to apply delays *before* the job hits the shared generic pipeline channel, ensuring that heavily rate-limited providers do not cause Head-of-Line (HOL) blocking for fast providers.
-- **16 Generic Pipeline Workers**: The core orchestrator spawns 16 parallel workers that rapidly consume incoming image jobs. These workers no longer have inline generic rate limiters; they execute jobs immediately upon receipt from the queue, maximizing concurrency footprint.
-- **Global Circuit Breakers & Bulkheads**: For extreme throttling conditions (e.g., Wikimedia 429 policies), providers implement dedicated Bulkheads (1-slot semaphores) to force strict serialized access, and a `CircuitBreaker` transport layer that globalizes hard cooldowns across all parallel processing.
-- **`provider.CustomClientProvider` Interface**: For exotic limit architectures (like ArtInstituteChicago), providers can inject entirely custom `http.RoundTripper` pipelines that govern network calls at the transport layer.
-
-## 3.4 Interaction Flows
-
-### 3.4.1 "Next Wallpaper" Flow (Zero Contention)
-
-This flow demonstrates how the UI updates instantly without waiting for a write lock.
+### 5.1 "Next Wallpaper" Flow
 
 ```mermaid
 sequenceDiagram
@@ -189,20 +171,20 @@ sequenceDiagram
     deactivate Plugin
     
     activate MC
-    Note right of MC: 1. Calculate next image (Shuffled/History)
-    MC->>Store: GetByID(nextID) [RLock]
+    Note right of MC: 1. Query Resolution Bucket
+    MC->>Store: GetIDsForResolution(resKey)
+    Note right of MC: 2. Pick next from shuffled deck
+    MC->>Store: GetByID(nextID)
     Store-->>MC: Image Info
     
-    Note right of MC: 2. Process Change
+    Note right of MC: 3. Apply wallpaper
     MC->>OS: setWallpaper(path)
-    MC->>Store: MarkSeen(path) [Exclusive Lock]
-    MC->>Plugin: Signal Change (for Tray Menu update)
+    MC->>Store: MarkSeen(path)
+    MC->>Plugin: Signal Change (Tray Menu update)
     deactivate MC
 ```
 
-### 3.4.2 "Delete Wallpaper" Flow
-
-Deleting requires modifying the store, handled asynchronously.
+### 5.2 "Delete Wallpaper" Flow
 
 ```mermaid
 sequenceDiagram
@@ -210,7 +192,6 @@ sequenceDiagram
     participant Plugin as Wallpaper Plugin
     participant MC as "Monitor Controller (Actor)"
     participant Store as ImageStore
-    participant OS as "OS / Wallpaper API"
 
     User->>Plugin: Click "Delete"
     activate Plugin
@@ -218,91 +199,15 @@ sequenceDiagram
     deactivate Plugin
     
     activate MC
-    MC->>OS: Remove File from Disk
-    MC->>Store: Remove(ID) [Lock]
-    Note right of MC: Trigger auto-navigation to next
-    MC->>MC: next()
+    MC->>Store: Remove(ID) [adds to AvoidSet]
+    Note right of MC: FileManager: async deep delete
+    MC->>MC: next() [auto-advance]
     deactivate MC
 ```
 
-## 3.5 Directory Structure & Key Files
+## 6. Schema-Driven UI — Hexagonal Architecture
 
-| Component | File Path | Responsibility |
-| :--- | :--- | :--- |
-| **Interfaces**| `pkg/wallpaper/interfaces.go`| Definitions for `JobSubmitter` and `StoreInterface`. |
-| **Store** | `pkg/wallpaper/store.go` | Data repository. RWMutex protected. |
-| **Pipeline** | `pkg/wallpaper/pipeline.go` | Worker pool & State Manager Loop. |
-| **Actor** | `pkg/wallpaper/monitor_controller.go`| Monitor-specific state & logic. |
-| **Controller**| `pkg/wallpaper/wallpaper.go` | Main plugin orchestrator & UI dispatch. |
-| **Processor** | `pkg/wallpaper/smart_image_processor.go` | Face detection, cropping (Heavy CPU). |
-
-## 3.5 Resource Management
-
-### 3.5.1 Deep Cache Cleaning (Recursive Deletion)
-
-Spice implements a strict "Zero Orphans" policy for resource management. When a wallpaper collection (Query) is deleted:
-
-1.  **Configuration Callback**: The `Config` triggers a registered callback (`onQueryRemoved`).
-2.  **Store Pruning**: The callback invokes `store.RemoveByQueryID(queryID)`.
-3.  **Deep Delete (Wallhaven Reset Example)**: The File Manager's `DeepDelete` function is called for every image ID:
-    - **Trigger**: Clicking "Clear API Key" for Wallhaven triggers a full account reset.
-    - **Action**: All synced collection IDs are passed to the store for removal.
-    - **Cleanup**: Recursively deletes the **Master Image** and all **Derivatives** (Smart Fit, Face Crop, etc.) in their respective subdirectories.
-
-### 3.5.2 Provider Strategies
-
-Spice supports two distinct provider interaction models:
-
-*   **API Fetch (Standard)**:
-    *   **Examples**: Wallhaven, Pexels.
-    *   **Flow**: Query API -> Get URLs -> Download One-by-One on demand.
-    *   **State**: Ephemeral. Images are only downloaded when viewed (or pre-fetched).
-
-*   **Import / Pick (Google Photos)**:
-    *   **Example**: Google Photos.
-    *   **Flow**: Launch Picker -> Select N Items -> Bulk Download Immediately to `cache/google_photos/<GUID>`.
-    *   **State**: Local. The provider acts as a local file scanner over the imported directory.
-    *   **Cleanup**: Deleting the collection deletes the entire backing folder.
-
-### 3.5.3 Provider Categorization
-
-To manage the growing number of providers, Spice categorizes them into three distinct types (`provider.ProviderType`), which dictates their UI placement:
-
-*   **TypeOnline**: Remote APIs (Pexels, Wallhaven). Placed in the "Online" tab working via network fetch.
-*   **TypeLocal**: Local filesystem interactions (Favorites, Local Files). Placed in the "Local" tab.
-*   **TypeAI**: Generative or logical providers. Placed in the "AI" tab (Future).
-
-
-- **Events**: The `cmdChan` pattern can be expanded to a full Event Bus if the application grows complexity (e.g., specific event subscribers).
-
-## 3.7 Performance Strategies
-
-To maintain responsiveness under load, the following optimizations are employed:
-
-1. **O(1) Image Store**: The store uses a secondary `idSet map[string]bool` to perform existence checks in constant time (45ns) rather than linear scans (470ns+), ensuring that the pipeline writer never lags even with thousands of images.
-2. **Synchronous Race Prevention**: The Controller synchronously anticipates background work (setting `isDownloading = true` under lock) *before* spawning goroutines. This prevents "job storms" and CPU saturation during rapid UI interactions.
-3. **Hot/Cold Path Separation**: Performance-critical writes (image ingestion from workers) are serialized through the pipeline to minimize lock contention. Administrative writes (favorites, cache clearing) go directly through the mutex — these are infrequent and benefit from synchronous completion rather than async queueing.
-
-## 3.8 Smart Fit Algorithm (Strategy Pattern)
-Spice's imaging engine (`pkg/wallpaper/smart_image_processor.go`) implements the **Strategy Pattern** to dynamically select the best cropping method based on image content and user settings.
-
-*   **Strategies**:
-    *   **`FaceCropStrategy`**: Used when a high-confidence face is found. Strictly crops around the face.
-    *   **`EntropyCropStrategy`**: Uses SmartCrop (luminance/energy analysis) to find the most interesting area.
-    *   **`SmartPanStrategy`**: Fallback for specific cases (e.g., "Face Boost" centering).
-*   **Decision Logic**:
-    *   **Face Rescue**: High-quality images with incorrect aspect ratios are "Rescued" only if a dominant face is detected.
-    *   **Feet Guard**: A heuristic within `EntropyCropStrategy` preventing crops of the bottom 20% unless "High Energy" is detected.
-    *   **Tuning**: Heuristic parameters are externalized in `pkg/wallpaper/tuning.go`.
-
-## 3.10 Configuration Management (Migration Chain)
-To manage evolving configuration schemas (e.g., legacy JSON formats, ID backfilling), Spice uses a **Chain of Responsibility** pattern.
-*   **MigrationChain**: A sequence of `MigrationStep` functions (e.g., `UnifyQueriesStep`, `EnsureFavoritesStep`).
-*   **Execution**: On startup, `loadFromPrefs` executes the chain. If any step modifies the config, a save is triggered automatically. This ensures data integrity across version upgrades.
-
-## 3.11 Schema-Driven UI & Hexagonal Architecture
-
-Spice uses a **Hexagonal Architecture (Ports & Adapters)** for its settings UI. All 8 providers are **100% Fyne-free** — they declare their UI via pure Go `schema.PanelSchema` structs (the **port**), and the rendering engine (`ui/settings_manager.go`) translates them into Fyne widgets (the **adapter**).
+Spice uses a **Hexagonal Architecture (Ports & Adapters)** for its settings UI. All providers are **100% Fyne-free** — they declare their UI via pure Go `schema.PanelSchema` structs (the **port**), and the rendering engine translates them into Fyne widgets (the **adapter**).
 
 ```mermaid
 graph LR
@@ -326,25 +231,33 @@ graph LR
     Engine -- "Renders" --> Schema
 ```
 
-- **Schema (Port)**: `pkg/ui/schema/schema.go` defines 13+ pure Go types (`BoolItem`, `TextItem`, `SelectItem`, `SecretItem`, `AsyncButtonItem`, `QueryListItem`, `OAuthPickerItem`, `FolderPickerItem`, etc.).
-- **SettingsManager (Port)**: `pkg/ui/setting/setting_manager.go` defines the interface with `RenderSchema()`, `ShowError()`, `ShowConfirm()`, `ShowAddQueryDialog()`, `CommitSetting()`, etc.
-- **Engine (Adapter)**: `ui/settings_manager.go` (1900+ lines) implements the full rendering pipeline with the **Registry Pattern**:
-    1. **Seeding**: `RenderSchema` walks the schema tree, creates native widgets, and seeds the Baseline.
-    2. **Dirty Detection**: `OnChanged` callbacks compare the "Live" value against the "Baseline".
-    3. **Atomic Commit**: The "Apply" button executes all queued `ApplyFunc` callbacks and promotes "Live" values to "Baseline".
+- **Schema (Port)**: `pkg/ui/schema/schema.go` defines 13+ pure Go types (`BoolItem`, `TextItem`, `SelectItem`, `SecretItem`, `AsyncButtonItem`, `QueryListItem`, `OAuthPickerItem`, `FolderPickerItem`, etc.)
+- **SettingsManager (Port)**: `pkg/ui/setting/setting_manager.go` defines the interface
+- **Engine (Adapter)**: `ui/settings_manager.go` implements the full rendering pipeline with a **Registry Pattern** (Baseline seeding → Dirty detection → Atomic commit)
 
-- **The Transactional UI Exception** (`schema.SecretItem`):
-    - For sensitive credentials (API Keys), the engine bypasses the deferred save model.
-    - **Verification Flow**: Clicking "Verify" performs a network check and *immediately* persists the value upon success.
-    - **Visual Locking**: The engine calls `SeedBaseline()` and `RefreshUI()`, instantly locking the field without requiring an "Apply" click.
+## 7. Resource Management
 
-## 3.12 ID Namespacing (Middleware)
+### 7.1 Deep Cache Cleaning
 
-To prevent ID collisions across different providers (e.g., Pexels and Wallhaven both using numeric IDs), Spice implements a centralized middleware strategy.
+When a query is deleted, a callback chain fires: `Config.onQueryRemoved` → `store.RemoveByQueryID` → `FileManager.DeepDeleteBatch` (Master + all Derivatives).
 
-### 3.12.1 Namespacing Lifecycle
+### 7.2 Provider Strategies
 
-IDs are namespaced at the ingestion boundary and de-namespaced when interacting with the original provider.
+| Strategy | Examples | Flow |
+|:---|:---|:---|
+| **API Fetch** | Wallhaven, Pexels, Wikimedia | Query API → Get URLs → Download on demand |
+| **Import/Pick** | Google Photos | Launch Picker → Bulk download to local cache → Scan as local files |
+| **Local Scan** | Favorites, Local Folders | Scan local directory → Index files directly |
+
+### 7.3 Provider Categorization
+
+Providers are categorized by `provider.ProviderType` for UI placement:
+- **TypeOnline**: Remote APIs (Pexels, Wallhaven, Wikimedia, Museums). "Online" tab
+- **TypeLocal**: Local filesystem (Favorites, Local Folders). "Local" tab
+
+## 8. ID Namespacing (Middleware)
+
+To prevent ID collisions across providers, IDs are namespaced at the ingestion boundary:
 
 ```mermaid
 sequenceDiagram
@@ -369,10 +282,33 @@ sequenceDiagram
     Pipe->>Pipe: Save enriched image to Store
 ```
 
--   **Persistence**: The `ImageStore` and `FileManager` only see and store namespaced IDs (`Provider_ID`).
--   **Transparency**: Standard providers remain unaware of namespacing; they only ever see their own raw IDs.
+The Store and FileManager only see namespaced IDs. Providers remain unaware of namespacing.
 
-## 3.13 The "Git-Driven" Content System
-For verified providers (Museums), Spice treats `raw.githubusercontent.com` as a Content Delivery Network (CDN).
-*   **Architecture**: `Remote > Cache > Embed > Hardcoded`.
-*   **Benefit**: Allows instant curation updates (adding new artworks to "Director's Cut") without requiring users to download a binary update.
+## 9. Configuration Management (Migration Chain)
+
+Spice uses a **Chain of Responsibility** pattern to manage evolving configuration schemas:
+- **MigrationChain**: A sequence of `MigrationStep` functions (e.g., `UnifyQueriesStep`, `EnsureFavoritesStep`)
+- On startup, `loadFromPrefs` executes the chain. If any step modifies the config, a save is triggered automatically
+
+## 10. The "Git-Driven" Content System
+
+For verified providers (Museums), Spice treats `raw.githubusercontent.com` as a CDN:
+- **Fallback Chain**: Remote → Cache → Embed → Hardcoded
+- Allows instant curation updates (new artworks) without requiring app updates
+
+## 11. Key Files
+
+| Component | File Path | Responsibility |
+| :--- | :--- | :--- |
+| **Interfaces**| `pkg/wallpaper/interfaces.go`| `JobSubmitter` and `StoreInterface` |
+| **Store** | `pkg/wallpaper/store.go` | Data repository, resolution buckets |
+| **Pipeline** | `pkg/wallpaper/pipeline.go` | Worker pool, Dispatcher, State Manager |
+| **Actor** | `pkg/wallpaper/monitor_controller.go`| Per-monitor state & wallpaper logic |
+| **Controller**| `pkg/wallpaper/wallpaper.go` | Main plugin orchestrator |
+| **Processor** | `pkg/wallpaper/smart_image_processor.go` | Face detection, cropping strategies |
+| **Fetch Logic** | `pkg/wallpaper/fetch_logic.go` | Provider queries, pagination, dedup |
+| **Dispatcher** | `pkg/wallpaper/dispatcher.go` | Fair queue, per-provider rate limiting |
+| **Scheduler** | `pkg/wallpaper/scheduler.go` | Nightly maintenance, refresh cycles |
+| **Schema** | `pkg/ui/schema/schema.go` | PORT: Framework-agnostic UI contract |
+| **Settings** | `pkg/ui/setting/setting_manager.go` | PORT: SettingsManager interface |
+| **Engine** | `ui/settings_manager.go` | ADAPTER: Fyne rendering engine |
