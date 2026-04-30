@@ -143,26 +143,26 @@ end
 	}{version, dmgHash}, fmt.Sprintf("Bump spice to %s", version))
 
 	// 4. Winget Manifest Automation (Multi-File Format)
-	// Microsoft winget-pkgs pipeline dropped support for singleton manifests.
-	// We must now generate a 3-part multi-file manifest (Version, Installer, DefaultLocale).
+	// Uses Git Trees API for a single atomic commit on a feature branch.
+	// This keeps the fork's master clean and produces 1-commit PRs.
 
 	log.Printf("Syncing %s/%s with upstream...", repoOwner, wingetRepo)
 	repoObj, _, err := client.Repositories.Get(ctx, repoOwner, wingetRepo)
-	if err == nil {
-		defaultBranch := repoObj.GetDefaultBranch()
-		if defaultBranch == "" {
-			defaultBranch = "master" // fallback
-		}
-		_, _, syncErr := client.Repositories.MergeUpstream(ctx, repoOwner, wingetRepo, &github.RepoMergeUpstreamRequest{
-			Branch: github.String(defaultBranch),
-		})
-		if syncErr != nil {
-			log.Printf("Note: Syncing fork returned: %v (this is usually fine if already up to date)", syncErr)
-		} else {
-			log.Printf("Successfully synced fork %s branch with upstream.", defaultBranch)
-		}
+	if err != nil {
+		log.Fatalf("Failed to get repo details for %s/%s: %v", repoOwner, wingetRepo, err)
+	}
+	defaultBranch := repoObj.GetDefaultBranch()
+	if defaultBranch == "" {
+		defaultBranch = "master"
+	}
+
+	_, _, syncErr := client.Repositories.MergeUpstream(ctx, repoOwner, wingetRepo, &github.RepoMergeUpstreamRequest{
+		Branch: github.String(defaultBranch),
+	})
+	if syncErr != nil {
+		log.Printf("Note: Syncing fork returned: %v (usually fine if already up to date)", syncErr)
 	} else {
-		log.Printf("Warning: Failed to get repo details for syncing: %v", err)
+		log.Printf("Successfully synced fork %s branch with upstream.", defaultBranch)
 	}
 
 	wingetVersionTmpl := `PackageIdentifier: dixieflatline76.Spice
@@ -205,21 +205,119 @@ ManifestType: defaultLocale
 ManifestVersion: 1.5.0
 `
 
-	// Define paths
 	baseManifestPath := fmt.Sprintf("manifests/d/dixieflatline76/Spice/%s", version)
 
-	// Create the data payload for the templates
 	wingetData := struct {
 		Version   string
 		SetupHash string
 	}{version, strings.ToUpper(setupHash)}
 
-	// Push all three files dynamically
-	updateRepoFile(ctx, client, wingetRepo, fmt.Sprintf("%s/dixieflatline76.Spice.yaml", baseManifestPath), wingetVersionTmpl, wingetData, fmt.Sprintf("Bump spice (version manifest) to %s", version))
-	updateRepoFile(ctx, client, wingetRepo, fmt.Sprintf("%s/dixieflatline76.Spice.installer.yaml", baseManifestPath), wingetInstallerTmpl, wingetData, fmt.Sprintf("Bump spice (installer manifest) to %s", version))
-	updateRepoFile(ctx, client, wingetRepo, fmt.Sprintf("%s/dixieflatline76.Spice.locale.en-US.yaml", baseManifestPath), wingetLocaleTmpl, wingetData, fmt.Sprintf("Bump spice (locale manifest) to %s", version))
+	// Render all 3 manifest templates
+	wingetFiles := []struct {
+		Path     string
+		Template string
+	}{
+		{fmt.Sprintf("%s/dixieflatline76.Spice.yaml", baseManifestPath), wingetVersionTmpl},
+		{fmt.Sprintf("%s/dixieflatline76.Spice.installer.yaml", baseManifestPath), wingetInstallerTmpl},
+		{fmt.Sprintf("%s/dixieflatline76.Spice.locale.en-US.yaml", baseManifestPath), wingetLocaleTmpl},
+	}
+
+	pushWingetBranch(ctx, client, defaultBranch, version, wingetData, wingetFiles)
 
 	log.Println("Release process completed successfully! 🚀")
+}
+
+// pushWingetBranch creates a feature branch on the winget-pkgs fork and pushes
+// all manifest files as a single atomic commit using the Git Trees API.
+// This produces clean 1-commit PRs and keeps the fork's default branch pristine.
+func pushWingetBranch(ctx context.Context, client *github.Client, baseBranch, version string, data interface{}, files []struct {
+	Path     string
+	Template string
+}) {
+	branchName := fmt.Sprintf("spice-v%s", version)
+	commitMsg := fmt.Sprintf("New version: dixieflatline76.Spice version %s", version)
+
+	// 1. Get the SHA of the base branch HEAD
+	baseRef, _, err := client.Git.GetRef(ctx, repoOwner, wingetRepo, "refs/heads/"+baseBranch)
+	if err != nil {
+		log.Fatalf("Failed to get ref for %s: %v", baseBranch, err)
+	}
+	baseSHA := baseRef.Object.GetSHA()
+	log.Printf("Base branch %s is at %s", baseBranch, baseSHA[:12])
+
+	// 2. Delete the feature branch if it already exists (idempotent reruns)
+	_, resp, _ := client.Git.GetRef(ctx, repoOwner, wingetRepo, "refs/heads/"+branchName)
+	if resp != nil && resp.StatusCode == 200 {
+		log.Printf("Branch %s already exists, deleting for clean rerun...", branchName)
+		_, delErr := client.Git.DeleteRef(ctx, repoOwner, wingetRepo, "refs/heads/"+branchName)
+		if delErr != nil {
+			log.Fatalf("Failed to delete existing branch %s: %v", branchName, delErr)
+		}
+	}
+
+	// 3. Create the feature branch from base
+	newRef := &github.Reference{
+		Ref:    github.String("refs/heads/" + branchName),
+		Object: &github.GitObject{SHA: github.String(baseSHA)},
+	}
+	_, _, err = client.Git.CreateRef(ctx, repoOwner, wingetRepo, newRef)
+	if err != nil {
+		log.Fatalf("Failed to create branch %s: %v", branchName, err)
+	}
+	log.Printf("Created feature branch: %s", branchName)
+
+	// 4. Build tree entries for all manifest files
+	var treeEntries []*github.TreeEntry
+	for _, f := range files {
+		t, err := template.New("tmpl").Parse(f.Template)
+		if err != nil {
+			log.Fatalf("Failed to parse template for %s: %v", f.Path, err)
+		}
+		var buf bytes.Buffer
+		if err := t.Execute(&buf, data); err != nil {
+			log.Fatalf("Failed to execute template for %s: %v", f.Path, err)
+		}
+		content := buf.String()
+
+		treeEntries = append(treeEntries, &github.TreeEntry{
+			Path:    github.String(f.Path),
+			Mode:    github.String("100644"),
+			Type:    github.String("blob"),
+			Content: github.String(content),
+		})
+		log.Printf("Prepared manifest: %s", f.Path)
+	}
+
+	// 5. Create a new tree with the manifest files layered on the base
+	tree, _, err := client.Git.CreateTree(ctx, repoOwner, wingetRepo, baseSHA, treeEntries)
+	if err != nil {
+		log.Fatalf("Failed to create tree: %v", err)
+	}
+
+	// 6. Create a single commit pointing to the new tree
+	commit := &github.Commit{
+		Message: github.String(commitMsg),
+		Tree:    tree,
+		Parents: []*github.Commit{{SHA: github.String(baseSHA)}},
+	}
+	newCommit, _, err := client.Git.CreateCommit(ctx, repoOwner, wingetRepo, commit, nil)
+	if err != nil {
+		log.Fatalf("Failed to create commit: %v", err)
+	}
+	log.Printf("Created atomic commit: %s", newCommit.GetSHA()[:12])
+
+	// 7. Update the feature branch ref to point to the new commit
+	branchRef := &github.Reference{
+		Ref:    github.String("refs/heads/" + branchName),
+		Object: &github.GitObject{SHA: newCommit.SHA},
+	}
+	_, _, err = client.Git.UpdateRef(ctx, repoOwner, wingetRepo, branchRef, true)
+	if err != nil {
+		log.Fatalf("Failed to update branch %s: %v", branchName, err)
+	}
+
+	log.Printf("✅ Winget manifests pushed to branch '%s' as a single commit.", branchName)
+	log.Printf("   → Open a PR from: https://github.com/%s/%s/compare/master...%s:%s", "microsoft", wingetRepo, repoOwner, branchName)
 }
 
 func hashFile(path string) (string, error) {
@@ -268,6 +366,8 @@ func uploadAsset(ctx context.Context, client *github.Client, releaseID int64, pa
 	log.Printf("Successfully uploaded %s", baseName)
 }
 
+// updateRepoFile commits a single rendered template to a repo using the Contents API.
+// Used for Homebrew cask updates where a single-file commit is appropriate.
 func updateRepoFile(ctx context.Context, client *github.Client, repo, path, tmpl string, data interface{}, commitMsg string) {
 	t, err := template.New("tmpl").Parse(tmpl)
 	if err != nil {
@@ -296,8 +396,6 @@ func updateRepoFile(ctx context.Context, client *github.Client, repo, path, tmpl
 		sha = fileContent.SHA
 	}
 
-	// For Winget we should try to figure out default branch. It is usually "master" or "main"
-	// Setting nil for Branch uses the default branch structure.
 	opts := &github.RepositoryContentFileOptions{
 		Message: github.String(commitMsg),
 		Content: []byte(content),
