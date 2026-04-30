@@ -24,7 +24,7 @@ Spice is a premium wallpaper manager that automatically cycles high-quality wall
 
 Spice is more than a utility; it's a high-performance framework for desktop environment management.
 
-*   **Lock-free UI Pipeline:** Separates heavy 4K I/O operations from the Fyne UI thread using a hybrid-concurrency pipeline and O(1) state stores.
+*   **Low-Contention UI Pipeline:** Separates heavy 4K I/O operations from the Fyne UI thread using a hybrid-concurrency pipeline with serialized hot-path writes and O(1) state stores.
 *   **Actor-Model Multi-Monitor:** Independent goroutines manage each connected display autonomously without synchronous blocking.
 *   **Plugin Ecosystem:** Exposes a robust `ui.Plugin` interface allowing developers to inject custom Fyne preference panels and system tray menus safely into the host engine.
 
@@ -50,7 +50,7 @@ Spice is more than a utility; it's a high-performance framework for desktop envi
 
 ### 🎮 Control & Experience
 *   **⌨️ Global Hotkeys:** Control Spice instantly from anywhere.
-*   **🌐 Multilingual Support:** Fully localized in 10 languages (English, German, Spanish, French, Italian, Portuguese, Japanese, Russian, and Chinese).
+*   **🌐 Multilingual Support:** Fully localized in 12 languages (English, German, Spanish, French, Italian, Portuguese, Japanese, Russian, Ukrainian, Chinese Simplified, and Chinese Traditional).
 
 #### Targeted Actions (Single Monitor)
 Target a specific monitor (**1-9**) by holding that number key while pressing the shortcut. Defaults to **Display 1** if no number is held.
@@ -85,7 +85,8 @@ These actions affect all displays simultaneously.
 ## 📚 Documentation
 
 * **User Guide:** For a comprehensive look at all settings and features, see our [**Detailed User Guide**](docs/user_guide.md).
-* **Architecture:** Curious how Spice works under the hood? Read our [**Architecture Documentation**](docs/architecture.md) for a deep dive into our hybrid concurrency model and actor-based multi-monitor management.
+* **Architecture:** Curious how Spice works under the hood? Read our [**Architecture Documentation**](docs/architecture.md) for a deep dive into the data flow and actor-based multi-monitor management.
+* **Developer Context:** For concurrency rules, lock hierarchy, and implementation constraints, see the [**Internal Developer Guide**](docs/internal_developer_context.md).
 * **New Providers:** Want to add your own wallpaper source? Check out our [**Provider Creation Guide**](docs/creating_new_providers.md) to learn how to implement the `ImageProvider` interface in minutes.
 * **New Plugins:** Want to extend Spice with completely new features? Read our [**Plugin Development Guide**](docs/creating_new_plugins.md).
 
@@ -117,7 +118,7 @@ For a comprehensive walkthrough of all features, keyboard shortcuts, and configu
 
 ### 🔑 Developer Setup & Secrets
 
-Note: The compiled App Store releases include production OAuth credentials. If you are building from source, you must provide your own API keys (e.g., Google GCP, Unsplash) via a `.spice_secrets` file. See the included `load_secrets` scripts for details.
+Note: The compiled App Store releases include production OAuth credentials. If you are building from source, you must provide your own API keys (e.g., Google GCP, Pexels, Wikimedia) via a `.spice_secrets` file. See the included `load_secrets` scripts for details.
 
 ### Tips
 
