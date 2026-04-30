@@ -610,39 +610,27 @@ func (sa *SpiceApp) RebuildPreferencesContent(initialTab string) {
 							hotkey.StartListeners(GetPluginManager())
 						},
 					},
-					schema.HorizontalRowItem{
-						ID: "shortcutsIndent",
-						Items: []schema.ItemSchema{
-							schema.LabelItem{ID: "shortcutsSpacer", Text: "      "},
-							schema.BoolItem{
-								Name:         "enableTargetedShortcuts",
-								InitialValue: !wallpaper.GetInstance().GetTargetedShortcutsDisabled(),
-								Label:        i18n.T("Enable Display Specific Shortcuts (Alt + Arrow + 1-9):"),
-								Help:         i18n.T("Disable this if Alt+Arrow conflicts with your browser or other apps."),
-								ApplyFunc: func(val bool) {
-									wallpaper.GetInstance().SetTargetedShortcutsDisabled(!val)
-									hotkey.StartListeners(GetPluginManager())
-								},
-								EnabledIf: func() bool {
-									val := sm.GetValue("enableShortcuts")
-									if val == nil {
-										return true
-									}
-									return val.(bool)
-								},
-							},
+					schema.BoolItem{
+						Name:         "enableTargetedShortcuts",
+						InitialValue: !wallpaper.GetInstance().GetTargetedShortcutsDisabled(),
+						Label:        i18n.T("Enable Display Specific Shortcuts (Alt + Arrow + 1-9):"),
+						Help:         i18n.T("Disable this if Alt+Arrow conflicts with your browser or other apps."),
+						ApplyFunc: func(val bool) {
+							wallpaper.GetInstance().SetTargetedShortcutsDisabled(!val)
+							hotkey.StartListeners(GetPluginManager())
+						},
+						EnabledIf: func() bool {
+							val := sm.GetValue("enableShortcuts")
+							if val == nil {
+								return true
+							}
+							return val.(bool)
 						},
 					},
-					schema.HorizontalRowItem{
-						ID: "shortcutsLinkRow",
-						Items: []schema.ItemSchema{
-							schema.LabelItem{ID: "shortcutsLinkSpacer", Text: "      "},
-							schema.HyperlinkItem{
-								ID:   "shortcutsLink",
-								Text: i18n.T("View all shortcuts →"),
-								URL:  "https://github.com/dixieflatline76/Spice/blob/main/docs/user_guide.md#keyboard-shortcuts",
-							},
-						},
+					schema.HyperlinkItem{
+						ID:   "shortcutsLink",
+						Text: i18n.T("View all shortcuts →"),
+						URL:  "https://github.com/dixieflatline76/Spice/blob/main/docs/user_guide.md#keyboard-shortcuts",
 					},
 					schema.SelectItem{
 						Name:         "theme",
