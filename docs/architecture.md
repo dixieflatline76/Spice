@@ -5,7 +5,7 @@ title: Architecture
 
 # Spice Architecture Documentation (Wallpaper Plugin)
 
-> **Status**: Current as of v2.5.1 (Concurrency Model Audit)
+> **Status**: Current as of v2.3.1
 > **Focus**: Concurrency Model, Image Pipeline, and Actor-based Display Management
 
 ## 1. Executive Summary
@@ -301,7 +301,6 @@ To manage evolving configuration schemas (e.g., legacy JSON formats, ID backfill
 *   **Execution**: On startup, `loadFromPrefs` executes the chain. If any step modifies the config, a save is triggered automatically. This ensures data integrity across version upgrades.
 
 ## 3.11 Schema-Driven UI & Hexagonal Architecture
-*Refactored in v2.8*
 
 Spice uses a **Hexagonal Architecture (Ports & Adapters)** for its settings UI. All 8 providers are **100% Fyne-free** — they declare their UI via pure Go `schema.PanelSchema` structs (the **port**), and the rendering engine (`ui/settings_manager.go`) translates them into Fyne widgets (the **adapter**).
 

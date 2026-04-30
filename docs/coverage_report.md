@@ -1,3 +1,31 @@
+# Test Coverage Report
+
+> **Overall Statement Coverage: 34.9%**
+>
+> Generated from `go test -coverprofile`. Regenerate with `make test-coverage`.
+
+## Coverage Notes
+
+The overall percentage is artificially low because large portions of the codebase are inherently untestable:
+
+- **OS-specific code** (`windows.go`, `darwin.go`, `chromeos.go`) — requires real desktop environment
+- **UI rendering** (`ui/ui.go`, `ui/settings_manager.go`) — requires Fyne runtime
+- **CLI utilities** (`cmd/util/*`) — standalone tools, not library code
+- **Provider `CreateSettingsPanel` / `CreateQueryPanel`** — return schema structs consumed by the UI adapter
+
+**Well-tested areas** (>80% coverage):
+- `pkg/wallpaper/store.go` — Core data store
+- `pkg/wallpaper/smart_image_processor.go` — Image fitting & face detection
+- `pkg/wallpaper/config.go` — Configuration management
+- `pkg/wallpaper/pipeline.go` — Worker pool lifecycle
+- `pkg/wallpaper/file_manager.go` — File operations & cleanup
+- `pkg/wallpaper/providers/*/` — Provider logic (ParseURL, FetchImages)
+- `util/synced.go` — Thread-safe primitives
+
+---
+
+## Per-Function Detail
+
 github.com/dixieflatline76/Spice/asset/asset.go:22:					NewManager				100.0%
 github.com/dixieflatline76/Spice/asset/asset.go:27:					GetImage				77.8%
 github.com/dixieflatline76/Spice/asset/asset.go:44:					GetRawImage				0.0%

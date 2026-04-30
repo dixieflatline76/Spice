@@ -5,7 +5,7 @@ title: Concurrency & Favorites Lifecycle
 
 # Concurrency Model & Favorites Lifecycle
 
-> **Status**: Current as of v2.5.1 (Concurrency Model Audit)
+> **Status**: Current as of v2.3.1
 > **Scope**: Non-UI concurrency patterns, lock hierarchy, and favorites data lifecycle
 >
 > **Model**: Spice uses a **hybrid concurrency model**. The hot path (image ingestion from download workers) is serialized through a single pipeline goroutine (`stateManagerLoop`). Administrative operations (favorites toggling, cache clearing, startup reconciliation, query removal) mutate the store directly under `sync.RWMutex`.

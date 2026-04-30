@@ -1,6 +1,6 @@
 # Creating New Plugins for Spice
 
-Spice is designed to be extensible through a modular Plugin architecture. This guide will walk you through creating a new plugin from scratch.
+Spice is designed to be extensible through a modular Plugin architecture. This guide walks you through creating a new plugin from scratch.
 
 ## 1. The Plugin Interface
 
@@ -18,9 +18,54 @@ type Plugin interface {
 }
 ```
 
-## 2. "Hello World" Example
+## 2. Schema-Based Settings
 
-Below is a complete implementation of a simple "Hello World" plugin that adds a toggle to the tray and a welcome message to the settings.
+Plugins should follow the **Hexagonal Architecture** used throughout Spice. While `CreatePrefsPanel` returns a `*fyne.Container` (for maximum flexibility), the recommended approach is to build your settings using the schema-driven pattern:
+
+1. **Define your settings** as `*schema.PanelSchema` structs (pure Go, no Fyne imports).
+2. **Render them** via `sm.RenderSchema()` inside `CreatePrefsPanel`.
+
+This ensures consistent styling, automatic dirty tracking, and Apply button integration.
+
+```go
+func (p *MyPlugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
+    panel := &schema.PanelSchema{
+        Sections: []schema.SectionSchema{
+            {
+                Title: i18n.T("My Plugin Settings"),
+                Items: []schema.ItemSchema{
+                    schema.BoolItem{
+                        Name:         "enableGreetings",
+                        Label:        i18n.T("Enable Greetings"),
+                        InitialValue: p.cfg.GetGreetingsEnabled(),
+                        ApplyFunc: func(on bool) {
+                            p.cfg.SetGreetingsEnabled(on)
+                        },
+                    },
+                    schema.SelectItem{
+                        Name:    "greetingStyle",
+                        Label:   i18n.T("Greeting Style"),
+                        Options: setting.StringOptions("Formal", "Casual", "Enthusiastic"),
+                        InitialValue: p.cfg.GetGreetingStyle(),
+                        ApplyFunc: func(idx int) {
+                            p.cfg.SetGreetingStyle(idx)
+                        },
+                    },
+                },
+            },
+        },
+    }
+
+    rendered := sm.RenderSchema(*panel)
+    return container.NewVBox(rendered)
+}
+```
+
+> **Key Rule**: Providers and plugins should never import `fyne.io/fyne/v2/widget` directly for settings UI. Use `schema.*` types and let the rendering engine handle widget creation. The only Fyne import needed is `fyne.io/fyne/v2/container` for the return type.
+
+## 3. "Hello World" Example
+
+Below is a complete implementation of a simple "Hello World" plugin:
 
 ```go
 package hello
@@ -28,8 +73,9 @@ package hello
 import (
     "fyne.io/fyne/v2"
     "fyne.io/fyne/v2/container"
-    "fyne.io/fyne/v2/widget"
+    "github.com/dixieflatline76/Spice/v2/pkg/i18n"
     "github.com/dixieflatline76/Spice/v2/pkg/ui"
+    "github.com/dixieflatline76/Spice/v2/pkg/ui/schema"
     "github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
 )
 
@@ -39,7 +85,7 @@ type HelloPlugin struct {
 }
 
 func (p *HelloPlugin) ID() string   { return "hello-world" }
-func (p *HelloPlugin) Name() string { return "Hello World" }
+func (p *HelloPlugin) Name() string { return i18n.T("Hello World") }
 
 func (p *HelloPlugin) Init(mgr ui.PluginManager) {
     p.manager = mgr
@@ -56,29 +102,39 @@ func (p *HelloPlugin) Deactivate() {
 
 func (p *HelloPlugin) CreateTrayMenuItems() []*fyne.MenuItem {
     return []*fyne.MenuItem{
-        fyne.NewMenuItem("Say Hello", func() {
+        fyne.NewMenuItem(i18n.T("Say Hello"), func() {
             p.manager.NotifyUser("Spice", "Hello from the tray!")
         }),
     }
 }
 
 func (p *HelloPlugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
-    return container.NewVBox(
-        widget.NewLabel("Hello World Plugin Settings"),
-        widget.NewCheck("Enable Greetings", func(val bool) {
-            if val {
-                p.Activate()
-            } else {
-                p.Deactivate()
-            }
-        }),
-    )
+    panel := &schema.PanelSchema{
+        Sections: []schema.SectionSchema{
+            {
+                Title: i18n.T("Hello World Settings"),
+                Items: []schema.ItemSchema{
+                    schema.BoolItem{
+                        Name:         "enableGreetings",
+                        Label:        i18n.T("Enable Greetings"),
+                        InitialValue: p.enabled,
+                        ApplyFunc: func(on bool) {
+                            p.enabled = on
+                        },
+                    },
+                },
+            },
+        },
+    }
+
+    rendered := sm.RenderSchema(*panel)
+    return container.NewVBox(rendered)
 }
 ```
 
-## 3. Registering Your Plugin
+## 4. Registering Your Plugin
 
-To enable your plugin, you must register it in the main application entry point.
+To enable your plugin, register it in the main application entry point:
 
 ```go
 func main() {
@@ -89,8 +145,10 @@ func main() {
 }
 ```
 
-## 4. Best Practices
+## 5. Best Practices
 
-*   **Non-Blocking**: Ensure `Activate()` and `Deactivate()` return quickly. Spawn goroutines if you need to do background work.
-*   **UI Safety**: All UI updates from background goroutines must be wrapped in `fyne.DoMain` if using raw Fyne calls, but the `PluginManager` handles its own thread safety for notifications.
-*   **Settings Persistence**: Use the provided `setting.SettingsManager` in `CreatePrefsPanel` to register keys for persistent configuration.
+*   **Schema First**: Always use `schema.*` types for settings UI. This ensures consistent styling, automatic dirty detection, and Apply button integration across all plugins.
+*   **Non-Blocking**: Ensure `Activate()` and `Deactivate()` return quickly. Spawn goroutines for background work.
+*   **UI Safety**: All UI updates from background goroutines must be wrapped in `fyne.DoMain` if using raw Fyne calls. The `PluginManager` handles its own thread safety for notifications.
+*   **Internationalization**: All user-facing strings must use `i18n.T()` or `i18n.Tf()`. Run `make gen-i18n` after adding new strings.
+*   **Settings Persistence**: Use `fyne.Preferences` for storage and declare your UI via schema types in `CreatePrefsPanel`.

@@ -1,6 +1,6 @@
 # How to Create a New Image Provider
 
-A deep-dive technical guide for implementing new image sources in Spice (v1.1.0+).
+A deep-dive technical guide for implementing new image sources in Spice.
 
 ### Prerequisites — Recommended Reading Order
 
