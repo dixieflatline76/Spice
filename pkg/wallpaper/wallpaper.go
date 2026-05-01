@@ -373,7 +373,7 @@ func (wp *Plugin) Activate() {
 	wp.jobSubmitter = wp.pipeline
 
 	if err := wp.fm.EnsureDirs(); err != nil {
-		log.Fatalf("Error ensuring directories: %v", err)
+		log.Printf("Warning: Error ensuring directories: %v. Some features may be limited.", err)
 	}
 
 	if err := wp.store.LoadCache(); err != nil {
