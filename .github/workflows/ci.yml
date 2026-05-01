@@ -6,7 +6,7 @@ on:
   pull_request:
     branches: [ main ]
   release:
-    types: [published]
+    types: [published, released]
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
@@ -69,7 +69,7 @@ jobs:
   build-win:
     name: Build Windows
     runs-on: windows-latest
-    if: github.event_name == 'release'
+    if: github.event.action == 'published'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -145,7 +145,7 @@ jobs:
   build-mac:
     name: Build macOS
     runs-on: macos-latest
-    if: github.event_name == 'release'
+    if: github.event.action == 'published'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -259,7 +259,7 @@ jobs:
     name: Publish Release
     runs-on: windows-latest
     needs: [build-win, build-mac]
-    if: github.event_name == 'release'
+    if: github.event.action == 'published'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -338,3 +338,40 @@ jobs:
         run: go run cmd/util/spice_releaser/main.go
         env:
           SPICE_RELEASER_TOKEN: ${{ secrets.GORELEASER_GITHUB_TOKEN }}
+          SKIP_DISTRIBUTION: ${{ github.event.release.prerelease }}
+
+  distribute-release:
+    name: Distribute (Prerelease Promotion)
+    runs-on: windows-latest
+    if: github.event.action == 'released' && github.event.release.prerelease == false
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+          cache: true
+
+      - name: Download Release Assets
+        run: |
+          $tagName = '${{ github.event.release.tag_name }}'
+          $version = $tagName -replace '^v'
+          New-Item -ItemType Directory -Force -Path bin
+          New-Item -ItemType Directory -Force -Path dist
+
+          gh release download $tagName --pattern "Spice-*-windows-amd64.exe" --dir bin
+          gh release download $tagName --pattern "Spice-Setup-*-windows-amd64.exe" --dir bin
+          gh release download $tagName --pattern "Spice-*-macos-arm64.dmg" --dir dist
+          gh release download $tagName --pattern "Spice-Extension-*-chrome.zip" --dir dist
+          gh release download $tagName --pattern "Spice-Extension-*-firefox.zip" --dir dist
+        env:
+          GH_TOKEN: ${{ secrets.GORELEASER_GITHUB_TOKEN }}
+        shell: pwsh
+
+      - name: Run Spice Releaser
+        run: go run cmd/util/spice_releaser/main.go
+        env:
+          SPICE_RELEASER_TOKEN: ${{ secrets.GORELEASER_GITHUB_TOKEN }}
+
