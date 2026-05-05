@@ -22,9 +22,17 @@ var LogSubDir = "." + strings.ToLower(AppName)
 // LogExt is the extension for the log files.
 var LogExt = ".log"
 
-// GetWorkingDir returns the working directory for the service.
+// GetWorkingDir returns the working directory for transient/cache data.
+// Uses os.UserCacheDir() which is sandbox-safe on macOS and idiomatic on all platforms:
+//   - macOS: ~/Library/Caches (sandbox auto-maps to container)
+//   - Windows: %LocalAppData%
+//   - Linux: ~/.cache (XDG_CACHE_HOME)
 func GetWorkingDir() string {
-	return filepath.Join(os.TempDir(), strings.ToLower(AppName))
+	cacheDir, err := os.UserCacheDir()
+	if err != nil {
+		cacheDir = os.TempDir() // Fallback
+	}
+	return filepath.Join(cacheDir, strings.ToLower(AppName))
 }
 
 var appDir string
