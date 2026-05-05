@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"os/user"
 	"path/filepath"
 	"sync"
@@ -116,7 +117,18 @@ func GetConfig(p fyne.Preferences) *Config {
 	cfgOnce.Do(func() {
 		u, e := user.Current()
 		if e != nil {
-			log.Fatalf("failed to initialize %s: %s", config.AppName, e)
+			// App Sandbox may restrict user database access (getpwuid_r).
+			// Fall back to environment variables instead of crashing.
+			log.Printf("Warning: user.Current() failed: %s. Using environment fallback.", e)
+			uid := os.Getenv("UID")
+			if uid == "" {
+				uid = "sandbox-user"
+			}
+			username := os.Getenv("USER")
+			if username == "" {
+				username = "sandbox"
+			}
+			u = &user.User{Uid: uid, Username: username}
 		}
 		cfgInstance = &Config{
 			Preferences:        p,

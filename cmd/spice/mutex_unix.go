@@ -5,6 +5,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,6 +19,8 @@ var (
 )
 
 // acquireLock tries to acquire a single-instance lock (file lock on Unix).
+// If the lock mechanism itself fails (e.g. sandbox restrictions), the app
+// proceeds anyway — Apple enforces single instance for App Store apps.
 func acquireLock() (bool, error) {
 	cacheDir, err := os.UserCacheDir()
 	if err != nil {
@@ -32,7 +35,9 @@ func acquireLock() (bool, error) {
 	lockFilePath := filepath.Join(cacheDir, config.AppName+".lock")
 	file, err := os.OpenFile(lockFilePath, os.O_RDWR|os.O_CREATE, 0666)
 	if err != nil {
-		return false, errors.New("another instance is already running")
+		// Can't create lock file (sandbox/permissions). Proceed without lock.
+		fmt.Fprintf(os.Stderr, "[Spice] Warning: cannot create lock file %s: %v. Proceeding without single-instance lock.\n", lockFilePath, err)
+		return true, nil
 	}
 
 	//Try to get an exclusive lock. FcntlFlock implements a simple file locker.
@@ -45,12 +50,14 @@ func acquireLock() (bool, error) {
 
 	if err != nil {
 		if errors.Is(err, syscall.EAGAIN) || errors.Is(err, syscall.EACCES) {
-			// Another instance is running, lock is BUSY
-			file.Close() // Close the file if we failed to acquire the lock
+			// Another instance is genuinely running, lock is BUSY
+			file.Close()
 			return false, nil
 		}
+		// Unexpected lock error (sandbox?). Proceed without lock.
+		fmt.Fprintf(os.Stderr, "[Spice] Warning: FcntlFlock failed: %v. Proceeding without single-instance lock.\n", err)
 		file.Close()
-		return false, errors.New("another instance is already running")
+		return true, nil
 	}
 
 	lockFile = file

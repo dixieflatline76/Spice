@@ -113,6 +113,12 @@ func main() {
 		uploadAsset(ctx, client, release.GetID(), file)
 	}
 
+	// Check if we should skip package manager distribution (prerelease builds)
+	if strings.EqualFold(os.Getenv("SKIP_DISTRIBUTION"), "true") {
+		log.Println("SKIP_DISTRIBUTION=true — skipping Homebrew and Winget updates. Assets uploaded successfully! 🚀")
+		return
+	}
+
 	// 3. Homebrew Cask Automation
 	caskTmpl := `cask "spice" do
   arch arm: "arm64", intel: "x86_64"

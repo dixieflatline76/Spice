@@ -4,6 +4,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -19,25 +20,40 @@ import (
 
 var version = "0.0.0"
 
+// breadcrumb writes a diagnostic message to stderr for sysdiagnose capture.
+// These bypass the file logger and appear in Console.app, allowing DTS engineers
+// to see exactly where the app dies during App Store review.
+func breadcrumb(msg string) {
+	fmt.Fprintf(os.Stderr, "[Spice:%s] %s\n", version, msg)
+}
+
 func init() {
 	config.AppVersion = version
 }
 
 func main() {
+	breadcrumb("main() entered")
+
 	// Create a mutex to ensure only one instance is running
 	ok, err := acquireLock()
 	if err != nil {
+		breadcrumb(fmt.Sprintf("acquireLock failed: %v", err))
 		log.Fatalf("Failed to launch: %v", err)
 	}
 	if !ok {
-		fmt.Println("Another instance of Wallhavener is already running.")
+		breadcrumb("acquireLock returned false — another instance detected")
+		fmt.Println("Another instance of Spice is already running.")
 		return
 	}
 	defer releaseLock() // Make sure to release the lock when done
+	breadcrumb("lock acquired")
 
 	spiceApp := ui.GetApplication() // Create a new Fyne application
-	pm := ui.GetPluginManager()     // Get the plugin manager
-	wallpaper.LoadPlugin(pm)        // Initialize the wallpaper plugin
+	breadcrumb("UI application initialized")
+
+	pm := ui.GetPluginManager() // Get the plugin manager
+	wallpaper.LoadPlugin(pm)    // Initialize the wallpaper plugin
+	breadcrumb("wallpaper plugin loaded")
 
 	// --- BROWSER INTEGRATION START ---
 	// Start the Local API Server
@@ -93,5 +109,6 @@ func main() {
 		hotkey.StartListeners(ui.GetPluginManager())
 	}()
 
+	breadcrumb("entering Fyne event loop")
 	spiceApp.Start() // Run the application
 }

@@ -8,6 +8,7 @@ import (
 	"image/draw"
 	"image/gif"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -131,11 +132,17 @@ func GetApplication() ui.App {
 func getInstance() *SpiceApp {
 	// Create a new instance of the application if it doesn't exist
 	saOnce.Do(func() {
+		fmt.Fprintln(os.Stderr, "[Spice] getInstance: starting")
+
 		// Initialize the wallpaper service for right OS
 		currentOS := getOS()
+		fmt.Fprintln(os.Stderr, "[Spice] getInstance: OS interface created")
 
 		a := app.NewWithID(config.AppName)
+		fmt.Fprintln(os.Stderr, "[Spice] getInstance: Fyne app created")
+
 		if _, ok := a.(desktop.App); ok {
+			fmt.Fprintln(os.Stderr, "[Spice] getInstance: desktop.App confirmed")
 
 			saInstance = &SpiceApp{
 				App:      a,
@@ -149,6 +156,7 @@ func getInstance() *SpiceApp {
 				tabItems: make(map[string]*container.TabItem),
 			}
 			saInstance.appConfig = config.NewAppConfig(saInstance.Preferences())
+			fmt.Fprintln(os.Stderr, "[Spice] getInstance: app config loaded")
 
 			// Apply saved debug logging preference
 			if saInstance.appConfig.GetDebugLoggingEnabled() {
@@ -168,8 +176,10 @@ func getInstance() *SpiceApp {
 			default:
 				saInstance.Settings().SetTheme(theme.DefaultTheme())
 			}
+			fmt.Fprintln(os.Stderr, "[Spice] getInstance: theme applied")
 
 			saInstance.verifyEULA()
+			fmt.Fprintln(os.Stderr, "[Spice] getInstance: EULA verified")
 
 			// Setup OS-specific lifecycle hooks (e.g. Chrome OS Pseudo-Tray)
 			saInstance.os.SetupLifecycle(saInstance.App, saInstance)
@@ -183,7 +193,9 @@ func getInstance() *SpiceApp {
 					wp.SyncMonitors(false)
 				}
 			})
+			fmt.Fprintln(os.Stderr, "[Spice] getInstance: lifecycle hooks set")
 		} else {
+			fmt.Fprintln(os.Stderr, "[Spice] getInstance: FATAL — not a desktop.App")
 			utilLog.Fatal("Spice not supported on this platform")
 		}
 	})
