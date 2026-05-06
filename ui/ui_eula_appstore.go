@@ -21,4 +21,9 @@ func (sa *SpiceApp) verifyEULA() {
 	// We specifically do NOT call CreateSplashScreen here.
 	// This ensures the app starts silently in the tray, avoiding OpenGL window creation
 	// until the user (or reviewer) explicitly requests a windowed feature.
+
+	// Explicitly hide the Dock icon. In the standard build, CreateSplashScreen
+	// calls TransformToBackground after the splash timer. Since we skip that,
+	// we must do it here or the Dock icon stays visible permanently.
+	sa.os.TransformToBackground()
 }
