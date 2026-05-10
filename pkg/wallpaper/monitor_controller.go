@@ -474,8 +474,16 @@ func (mc *MonitorController) reprocessWithAnchor(anchor provider.CropAnchor) {
 
 	log.Printf("[Monitor %d] Reprocessing with anchor %v for image %s", mc.ID, anchor, img.ID)
 
-	// 1. Update anchor in image metadata and persist
-	img.CropAnchor = anchor
+	// 1. Update anchor in image metadata for this monitor's resolution and persist
+	resKey := fmt.Sprintf("%dx%d", mc.Monitor.Rect.Dx(), mc.Monitor.Rect.Dy())
+	if img.CropAnchors == nil {
+		img.CropAnchors = make(map[string]provider.CropAnchor)
+	}
+	if anchor == provider.AnchorAuto {
+		delete(img.CropAnchors, resKey) // Auto = remove override
+	} else {
+		img.CropAnchors[resKey] = anchor
+	}
 	mc.Store.Update(img)
 
 	// 2. Find master path
@@ -510,7 +518,7 @@ func (mc *MonitorController) reprocessWithAnchor(anchor provider.CropAnchor) {
 	}
 
 	// 5. Determine derivative path and overwrite
-	resKey := fmt.Sprintf("%dx%d", width, height)
+	resKey = fmt.Sprintf("%dx%d", width, height)
 	derivPath := ""
 	if p, ok := img.DerivativePaths[resKey]; ok {
 		derivPath = p

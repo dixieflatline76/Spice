@@ -470,7 +470,7 @@ func (wp *Plugin) generateMissingDerivatives(ctx context.Context, img provider.I
 		}
 
 		// Generate
-		processedImg, err := wp.imgProcessor.FitImage(ctx, srcImg, res.Width, res.Height, img.CropAnchor)
+		processedImg, err := wp.imgProcessor.FitImage(ctx, srcImg, res.Width, res.Height, img.GetAnchor(resDir))
 		if err != nil {
 			log.Printf("Error fitting image for %s: %v", resDir, err)
 			continue

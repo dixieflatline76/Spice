@@ -95,9 +95,21 @@ type Image struct {
 	SourceQueryID    string            // ID of the query that produced this image (for smart cache clearing)
 	Width            int               // Image Width (if available from source)
 	Height           int               // Image Height (if available from source)
-	CropAnchor       CropAnchor        // User-selected crop focal point hint (0 or AnchorAuto = pipeline default)
+	CropAnchors      map[string]CropAnchor `json:",omitempty"` // Per-resolution crop anchor hints (key = "WxH", e.g. "3440x1440")
 	IsFavorited      bool              // Flag to protect image from cache pruning
 	Seen             bool              // Flag for pagination/history logic
+}
+
+// GetAnchor returns the crop anchor for a specific resolution key.
+// Returns AnchorAuto if no anchor is set for the given resolution.
+func (img Image) GetAnchor(resKey string) CropAnchor {
+	if img.CropAnchors == nil {
+		return AnchorAuto
+	}
+	if a, ok := img.CropAnchors[resKey]; ok {
+		return a
+	}
+	return AnchorAuto
 }
 
 // Favoriter defines the interface for providers that support favoriting images.

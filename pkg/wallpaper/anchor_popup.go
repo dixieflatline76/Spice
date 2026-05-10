@@ -1,6 +1,7 @@
 package wallpaper
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
@@ -32,7 +33,8 @@ func (wp *Plugin) showAnchorPopup(monitorID int) {
 	}
 
 	mc.mu.RLock()
-	currentAnchor := mc.State.CurrentImage.CropAnchor
+	resKey := fmt.Sprintf("%dx%d", mc.Monitor.Rect.Dx(), mc.Monitor.Rect.Dy())
+	currentAnchor := mc.State.CurrentImage.GetAnchor(resKey)
 	mc.mu.RUnlock()
 
 	if wp.manager == nil {
