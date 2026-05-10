@@ -9,6 +9,77 @@ import (
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
 )
 
+// CropAnchor represents a user-selected focal point hint for Smart Fit cropping.
+// Values 200-209 align with Command channel values for zero-conversion dispatch.
+type CropAnchor int
+
+const (
+	AnchorAuto         CropAnchor = iota + 200 // 200 — No anchor (pipeline default)
+	AnchorTopLeft                              // 201
+	AnchorTopCenter                            // 202
+	AnchorTopRight                             // 203
+	AnchorMiddleLeft                           // 204
+	AnchorMiddleCenter                         // 205
+	AnchorMiddleRight                          // 206
+	AnchorBottomLeft                           // 207
+	AnchorBottomCenter                         // 208
+	AnchorBottomRight                          // 209
+)
+
+// Center returns the normalized (0-1) coordinates for this anchor position.
+func (a CropAnchor) Center() (float64, float64) {
+	switch a {
+	case AnchorTopLeft:
+		return 0.2, 0.2
+	case AnchorTopCenter:
+		return 0.5, 0.2
+	case AnchorTopRight:
+		return 0.8, 0.2
+	case AnchorMiddleLeft:
+		return 0.2, 0.5
+	case AnchorMiddleCenter:
+		return 0.5, 0.5
+	case AnchorMiddleRight:
+		return 0.8, 0.5
+	case AnchorBottomLeft:
+		return 0.2, 0.8
+	case AnchorBottomCenter:
+		return 0.5, 0.8
+	case AnchorBottomRight:
+		return 0.8, 0.8
+	default:
+		return 0.5, 0.5 // Auto/unknown → center
+	}
+}
+
+// String returns a human-readable name for the anchor position.
+func (a CropAnchor) String() string {
+	switch a {
+	case AnchorAuto:
+		return "Auto"
+	case AnchorTopLeft:
+		return "TopLeft"
+	case AnchorTopCenter:
+		return "TopCenter"
+	case AnchorTopRight:
+		return "TopRight"
+	case AnchorMiddleLeft:
+		return "MiddleLeft"
+	case AnchorMiddleCenter:
+		return "MiddleCenter"
+	case AnchorMiddleRight:
+		return "MiddleRight"
+	case AnchorBottomLeft:
+		return "BottomLeft"
+	case AnchorBottomCenter:
+		return "BottomCenter"
+	case AnchorBottomRight:
+		return "BottomRight"
+	default:
+		return "Unknown"
+	}
+}
+
 // Image represents a generic wallpaper image.
 type Image struct {
 	ID               string
@@ -24,6 +95,7 @@ type Image struct {
 	SourceQueryID    string            // ID of the query that produced this image (for smart cache clearing)
 	Width            int               // Image Width (if available from source)
 	Height           int               // Image Height (if available from source)
+	CropAnchor       CropAnchor        // User-selected crop focal point hint (0 or AnchorAuto = pipeline default)
 	IsFavorited      bool              // Flag to protect image from cache pruning
 	Seen             bool              // Flag for pagination/history logic
 }

@@ -5,6 +5,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"github.com/dixieflatline76/Spice/v2/asset"
+	"github.com/dixieflatline76/Spice/v2/pkg/provider"
 )
 
 // PluginManager is the interface that must be implemented by all UI plugin managers.
@@ -21,6 +22,11 @@ type PluginManager interface {
 	GetAssetManager() *asset.Manager                                      // Returns the asset manager.
 	RefreshTrayMenu()                                                     // Refreshes the tray menu.
 	RebuildTrayMenu()                                                     // Rebuilds the tray menu from scratch.
+
+	// ShowAnchorPopup displays the 3×3 crop anchor selection popup.
+	// The outer ring (UI layer) owns window lifecycle and OpenGL error recovery.
+	// onSelect receives the chosen anchor and a done callback to invoke after processing.
+	ShowAnchorPopup(monitorID int, currentAnchor provider.CropAnchor, labels [9]string, values [9]provider.CropAnchor, onSelect func(anchor provider.CropAnchor, onDone func()))
 }
 
 // App is the interface that must be implemented by all applications.

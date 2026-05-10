@@ -146,7 +146,7 @@ func main() {
 	fmt.Printf("Input: %dx%d\n", img.Bounds().Dx(), img.Bounds().Dy())
 
 	// Run
-	res, err := proc.FitImage(context.Background(), img, 1920, 1080)
+	res, err := proc.FitImage(context.Background(), img, 1920, 1080, 0)
 	if err != nil {
 		fmt.Printf("FIT ERROR: %v\n", err)
 	} else {

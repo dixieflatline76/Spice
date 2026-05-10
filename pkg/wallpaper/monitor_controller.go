@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
 	"fyne.io/fyne/v2"
+	"github.com/disintegration/imaging"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
 	"github.com/dixieflatline76/Spice/v2/util/log"
 )
@@ -26,6 +28,18 @@ const (
 	CmdSyncState
 	CmdPause
 	CmdNextAuto
+
+	// Anchor commands — matches provider.CropAnchor values exactly
+	CmdAnchorAuto Command = 200
+	CmdAnchorTL   Command = 201
+	CmdAnchorTC   Command = 202
+	CmdAnchorTR   Command = 203
+	CmdAnchorML   Command = 204
+	CmdAnchorMC   Command = 205
+	CmdAnchorMR   Command = 206
+	CmdAnchorBL   Command = 207
+	CmdAnchorBC   Command = 208
+	CmdAnchorBR   Command = 209
 )
 
 // StoreInterface defines the subset of ImageStore methods needed by the controller.
@@ -179,6 +193,13 @@ func (mc *MonitorController) Run(ctx context.Context) {
 
 func (mc *MonitorController) handleCommand(cmd Command) {
 	log.Debugf("[Monitor %d] Actor received command %v (Pending: %d)", mc.ID, cmd, len(mc.Commands))
+
+	// Anchor commands (200-209) — route to reprocess
+	if cmd >= CmdAnchorAuto && cmd <= CmdAnchorBR {
+		mc.reprocessWithAnchor(provider.CropAnchor(cmd))
+		return
+	}
+
 	switch cmd {
 	case CmdNext:
 		mc.next(true)
@@ -438,6 +459,82 @@ func (mc *MonitorController) applyImage(img provider.Image) {
 
 	if mc.OnWallpaperChanged != nil {
 		log.Debugf("[Monitor %d] Triggering async UI refresh for %s", mc.ID, path)
+		mc.OnWallpaperChanged(img, mc.ID)
+	}
+}
+
+// reprocessWithAnchor updates the crop anchor on the current image, re-runs FitImage,
+// and sets the resulting derivative as the wallpaper.
+func (mc *MonitorController) reprocessWithAnchor(anchor provider.CropAnchor) {
+	img := mc.State.CurrentImage
+	if img.ID == "" {
+		log.Printf("[Monitor %d] Cannot reprocess anchor: no current image", mc.ID)
+		return
+	}
+
+	log.Printf("[Monitor %d] Reprocessing with anchor %v for image %s", mc.ID, anchor, img.ID)
+
+	// 1. Update anchor in image metadata and persist
+	img.CropAnchor = anchor
+	mc.Store.Update(img)
+
+	// 2. Find master path
+	ext := filepath.Ext(img.FilePath)
+	if ext == "" {
+		ext = ".jpg"
+	}
+	masterPath, err := mc.fm.GetMasterPath(img.ID, ext)
+	if err != nil {
+		log.Printf("[ERROR] [Monitor %d] Failed to get master path: %v", mc.ID, err)
+		return
+	}
+	if _, err := os.Stat(masterPath); os.IsNotExist(err) {
+		log.Printf("[ERROR] [Monitor %d] Master file missing: %s", mc.ID, masterPath)
+		return
+	}
+
+	// 3. Open and decode master
+	srcImg, err := imaging.Open(masterPath)
+	if err != nil {
+		log.Printf("[ERROR] [Monitor %d] Failed to open master: %v", mc.ID, err)
+		return
+	}
+
+	// 4. Re-run FitImage with anchor
+	width, height := mc.Monitor.Rect.Dx(), mc.Monitor.Rect.Dy()
+	ctx := context.Background()
+	processedImg, err := mc.processor.FitImage(ctx, srcImg, width, height, anchor)
+	if err != nil {
+		log.Printf("[ERROR] [Monitor %d] FitImage failed with anchor %v: %v", mc.ID, anchor, err)
+		return
+	}
+
+	// 5. Determine derivative path and overwrite
+	resKey := fmt.Sprintf("%dx%d", width, height)
+	derivPath := ""
+	if p, ok := img.DerivativePaths[resKey]; ok {
+		derivPath = p
+	} else if p, ok := img.DerivativePaths["primary"]; ok {
+		derivPath = p
+	}
+	if derivPath == "" {
+		log.Printf("[ERROR] [Monitor %d] No derivative path found for %s", mc.ID, resKey)
+		return
+	}
+
+	if err := imaging.Save(processedImg, derivPath); err != nil {
+		log.Printf("[ERROR] [Monitor %d] Failed to save derivative: %v", mc.ID, err)
+		return
+	}
+
+	// 6. Set wallpaper
+	mc.State.CurrentImage = img
+	if err := mc.os.SetWallpaper(derivPath, mc.ID); err != nil {
+		log.Printf("[ERROR] [Monitor %d] Failed to set wallpaper: %v", mc.ID, err)
+	}
+
+	// 7. Refresh tray menu
+	if mc.OnWallpaperChanged != nil {
 		mc.OnWallpaperChanged(img, mc.ID)
 	}
 }

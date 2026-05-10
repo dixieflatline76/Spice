@@ -161,6 +161,12 @@ func (wp *Plugin) CreateTrayMenuItems() []*fyne.MenuItem {
 		if mItems.FavoriteMenuItem != nil {
 			res = append(res, mItems.FavoriteMenuItem)
 		}
+		if wp.cfg.GetSmartFitMode() != SmartFitOff {
+			anchorItem := wp.manager.CreateMenuItem(i18n.T("Crop Anchor"), func() {
+				wp.showAnchorPopup(mID)
+			}, "anchor.png")
+			res = append(res, anchorItem)
+		}
 		res = append(res, deleteItem)
 
 		return res

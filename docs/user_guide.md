@@ -10,6 +10,7 @@
 3. [Preferences: App Tab](#preferences-app-tab)
 4. [Preferences: Wallpaper Tab](#preferences-wallpaper-tab)
    - [General](#general-settings)
+   - [Smart Crop Anchors](#smart-crop-anchors)
    - [Online Sources](#online-sources)
    - [Local Sources](#local-sources)
      - [Local Favorites](#local-favorites)
@@ -35,6 +36,7 @@ When one display is connected, the tray menu shows actions directly:
 | **Source:** | Shows the image provider (e.g., *Wallhaven*, *Met Museum*) |
 | **By:** | Shows attribution — click to open the original image on the web |
 | **Add to Favorites** | Save the current wallpaper locally *(only visible when Favorites is enabled)* |
+| **Crop Anchor** | Open the Smart Crop Anchor grid to fine-tune how the current wallpaper is cropped *(only visible when Smart Fit is active)* |
 | **Delete And Block** | Delete the image from cache and prevent it from ever appearing again |
 | *(separator)* | |
 | **Preferences** | Open the settings window |
@@ -82,6 +84,12 @@ Hold a **number key (1–9)** alongside the modifier to target a specific displa
 | **Block / Delete** | `Alt` + `N` + `↓` | `Command` + `N` + `↓` |
 | **Add to Favorites** | `Alt` + `N` + `↑` | `Command` + `N` + `↑` |
 | **Pause / Play** | `Alt` + `N` + `P` | `Command` + `N` + `P` |
+| **Anchor Up** | `Alt` + `N` + `W` | `Command` + `N` + `W` |
+| **Anchor Down** | `Alt` + `N` + `S` | `Command` + `N` + `S` |
+| **Anchor Left** | `Alt` + `N` + `A` | `Command` + `N` + `A` |
+| **Anchor Right** | `Alt` + `N` + `D` | `Command` + `N` + `D` |
+| **Anchor Center** | `Alt` + `N` + `E` | `Command` + `N` + `E` |
+| **Anchor Auto** | `Alt` + `N` + `Q` | `Command` + `N` + `Q` |
 
 **Example:** To skip the wallpaper on your second monitor, press and hold `Alt` (Windows) or `Command` (macOS), tap `2`, and press `→`. 
 
@@ -142,6 +150,35 @@ The **Wallpaper** plugin tab appears immediately after the App tab. It contains 
 | **Disabled** | Images are used as-is — no processing. Fastest. |
 | **Quality** | Rejects images whose aspect ratio doesn't match your monitor. No black bars, no stretched photos. May skip some images. |
 | **Flexibility** | Accepts high-resolution images even if their aspect ratio differs from your screen, then crops intelligently. More variety. |
+
+---
+
+### Smart Crop Anchors
+
+Smart Crop Anchors give you manual control over *where* Spice focuses when cropping a wallpaper. By default, Spice uses a combination of face detection and entropy analysis to find the best region. Anchors let you override that decision.
+
+**How it works:**
+- Click **Crop Anchor** in the tray menu (or a display's submenu) to open the 3×3 anchor grid.
+- Select a direction: the wallpaper is immediately re-processed to emphasize that region.
+- Select **Auto** to return to the intelligent default.
+- The anchor popup stays open so you can experiment with different positions in real-time.
+
+**Keyboard Shortcuts (WASD Layout):**
+
+You can set anchors directly from the keyboard using the same targeted modifier pattern as other shortcuts. Hold a number key (1-9) to target a specific display.
+
+| Key | Anchor |
+| :--- | :--- |
+| `W` | Up ↑ |
+| `A` | Left ← |
+| `S` | Down ↓ |
+| `D` | Right → |
+| `E` | Center ● |
+| `Q` | Auto (pipeline default) |
+
+**Example:** To anchor the wallpaper on Display 2 to the top of the image, press and hold `Alt` (Windows) or `Command` (macOS), tap `2`, and press `W`.
+
+> **Note:** Smart Crop Anchors require **Smart Fit Mode** to be set to either *Quality* or *Flexibility*. When Smart Fit is *Disabled*, anchors have no effect since images are not cropped.
 
 ---
 

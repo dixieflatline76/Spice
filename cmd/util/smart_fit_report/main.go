@@ -251,7 +251,7 @@ func main() {
 			cfg.Tuning.FaceDetectShift = m.Shift
 
 			// Process
-			resImg, err := processor.FitImage(ctx, srcImg, 3440, 1440)
+			resImg, err := processor.FitImage(ctx, srcImg, 3440, 1440, 0)
 			stats := processor.GetLastStats()
 
 			filename := fmt.Sprintf("%s_%s.jpg", ti.Name, sanitize(m.Name))

@@ -27,6 +27,10 @@ type TuningConfig struct {
 
 	// Encoding
 	EncodingQuality int `json:"encoding_quality"` // Default: 95
+
+	// Crop Anchor
+	AnchorBlendFace   float64 `json:"anchor_blend_face"`    // Default: 0.6 (60% anchor, 40% face)
+	AnchorBlendNoFace float64 `json:"anchor_blend_no_face"` // Default: 0.85 (85% anchor, 15% center)
 }
 
 // DefaultTuningConfig returns the standard values for Spice 1.6.2.
@@ -49,5 +53,7 @@ func DefaultTuningConfig() TuningConfig {
 		FaceDetectMinSizePct:         1,
 		FaceDetectShift:              0.1,
 		EncodingQuality:              95,
+		AnchorBlendFace:              0.6,
+		AnchorBlendNoFace:            0.85,
 	}
 }

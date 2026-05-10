@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/disintegration/imaging"
+	"github.com/dixieflatline76/Spice/v2/pkg/provider"
 	"github.com/dixieflatline76/Spice/v2/util/log"
 	pigo "github.com/esimov/pigo/core"
 )
@@ -196,7 +197,7 @@ func (c *SmartImageProcessor) checkFlexibilityModeCompatibility(imgWidth, imgHei
 }
 
 // FitImage fits an image with context awareness.
-func (c *SmartImageProcessor) FitImage(ctx context.Context, img image.Image, targetWidth, targetHeight int) (image.Image, error) {
+func (c *SmartImageProcessor) FitImage(ctx context.Context, img image.Image, targetWidth, targetHeight int, anchor provider.CropAnchor) (image.Image, error) {
 	if c.config.GetSmartFitMode() == SmartFitOff {
 		c.lastStats = FaceDetectionStats{}
 		return img, nil
@@ -257,7 +258,7 @@ func (c *SmartImageProcessor) FitImage(ctx context.Context, img image.Image, tar
 	}
 
 	// 3. Strategy Selection
-	strategy := c.selectStrategy(img, faceFound, faceBox, energy, energyErr)
+	strategy := c.selectStrategy(img, faceFound, faceBox, energy, energyErr, anchor)
 
 	// 4. Execution
 	return strategy.Apply(ctx, img, systemWidth, systemHeight, c)
@@ -300,7 +301,44 @@ func (c *SmartImageProcessor) checkQualityGate(imgAspect, sysAspect float64, fac
 	return fmt.Errorf("quality mode rejected: aspect diff %.2f > %.2f and no strong face (Q>%.1f) to rescue", aspectDiff, c.config.Tuning.AspectThreshold, c.config.Tuning.FaceRescueQThreshold)
 }
 
-func (c *SmartImageProcessor) selectStrategy(img image.Image, faceFound bool, faceBox image.Rectangle, energy float64, energyErr error) CropStrategy {
+func (c *SmartImageProcessor) selectStrategy(img image.Image, faceFound bool, faceBox image.Rectangle, energy float64, energyErr error, anchor provider.CropAnchor) CropStrategy {
+	// Anchor Blend (highest priority when set)
+	if anchor > provider.AnchorAuto {
+		// Compute natural center
+		var naturalCenter image.Point
+		if faceFound {
+			naturalCenter = image.Point{
+				X: faceBox.Min.X + faceBox.Dx()/2,
+				Y: faceBox.Min.Y + faceBox.Dy()/2,
+			}
+		} else {
+			naturalCenter = image.Point{
+				X: img.Bounds().Dx() / 2,
+				Y: img.Bounds().Dy() / 2,
+			}
+		}
+
+		cx, cy := anchor.Center()
+		anchorPt := image.Point{
+			X: int(cx * float64(img.Bounds().Dx())),
+			Y: int(cy * float64(img.Bounds().Dy())),
+		}
+
+		weight := c.config.Tuning.AnchorBlendNoFace
+		if faceFound {
+			weight = c.config.Tuning.AnchorBlendFace
+		}
+
+		blended := image.Point{
+			X: int(float64(naturalCenter.X)*(1-weight) + float64(anchorPt.X)*weight),
+			Y: int(float64(naturalCenter.Y)*(1-weight) + float64(anchorPt.Y)*weight),
+		}
+
+		log.Debugf("SmartFit: Anchor Blend → anchor=%v weight=%.0f%% natural=%v result=%v",
+			anchor, weight*100, naturalCenter, blended)
+		return &SmartPanStrategy{Center: blended}
+	}
+
 	// Flexibility Mode Low Energy Fallback
 	if c.config.GetSmartFitMode() == SmartFitAggressive {
 		if !faceFound && energyErr == nil && energy < c.config.Tuning.MinEnergyThreshold {

@@ -31,6 +31,7 @@ import (
 	"github.com/dixieflatline76/Spice/v2/pkg/api"
 	"github.com/dixieflatline76/Spice/v2/pkg/hotkey"
 	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
+	"github.com/dixieflatline76/Spice/v2/pkg/provider"
 	"github.com/dixieflatline76/Spice/v2/pkg/sysinfo"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/schema"
@@ -174,7 +175,7 @@ func getInstance() *SpiceApp {
 			case "Light":
 				saInstance.Settings().SetTheme(&forcedVariantTheme{Theme: theme.DefaultTheme(), variant: theme.VariantLight})
 			default:
-				saInstance.Settings().SetTheme(theme.DefaultTheme())
+				saInstance.Settings().SetTheme(&spiceTheme{Theme: theme.DefaultTheme()})
 			}
 			fmt.Fprintln(os.Stderr, "[Spice] getInstance: theme applied")
 
@@ -664,7 +665,7 @@ func (sa *SpiceApp) RebuildPreferencesContent(initialTab string) {
 							case "Light":
 								sa.Settings().SetTheme(&forcedVariantTheme{Theme: theme.DefaultTheme(), variant: theme.VariantLight})
 							default:
-								sa.Settings().SetTheme(theme.DefaultTheme())
+								sa.Settings().SetTheme(&spiceTheme{Theme: theme.DefaultTheme()})
 							}
 						},
 					},
@@ -760,13 +761,28 @@ func (sa *SpiceApp) RebuildPreferencesContent(initialTab string) {
 	sm.GetCheckAndEnableApplyFunc()() // Trigger initial UI dependency refresh
 }
 
-// forcedVariantTheme is a theme that forces a specific variant (Dark or Light)
+// spiceTheme wraps any Fyne theme to apply the Spice brand accent color.
+type spiceTheme struct {
+	fyne.Theme
+}
+
+func (t *spiceTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) color.Color {
+	if name == theme.ColorNamePrimary {
+		return color.NRGBA{R: 0xFF, G: 0x98, B: 0x00, A: 255} // Spice warm amber
+	}
+	return t.Theme.Color(name, variant)
+}
+
+// forcedVariantTheme forces a specific variant (Dark or Light) and applies the Spice accent.
 type forcedVariantTheme struct {
 	fyne.Theme
 	variant fyne.ThemeVariant
 }
 
 func (t *forcedVariantTheme) Color(name fyne.ThemeColorName, _ fyne.ThemeVariant) color.Color {
+	if name == theme.ColorNamePrimary {
+		return color.NRGBA{R: 0xFF, G: 0x98, B: 0x00, A: 255} // Spice warm amber
+	}
 	return t.Theme.Color(name, t.variant)
 }
 
@@ -1064,4 +1080,454 @@ func (sa *SpiceApp) CreateAboutSplash() {
 			time.Sleep(delays[i])
 		}
 	}()
+}
+
+// Anchor popup shared palette — theme-aware highlight colors.
+// Active amber is consistent across themes; inactive/text adapt for readability.
+func anchorIsDarkTheme() bool {
+	settings := fyne.CurrentApp().Settings()
+	// Check if Spice has forced a specific theme variant
+	if ft, ok := settings.Theme().(*forcedVariantTheme); ok {
+		return ft.variant == theme.VariantDark
+	}
+	// Fall back to system theme
+	return settings.ThemeVariant() == theme.VariantDark
+}
+
+func anchorCellInactiveColor() color.NRGBA {
+	if anchorIsDarkTheme() {
+		return color.NRGBA{R: 50, G: 50, B: 58, A: 255} // dark slate
+	}
+	return color.NRGBA{R: 220, G: 220, B: 225, A: 255} // light gray
+}
+
+func anchorCellActiveColor() color.NRGBA {
+	return color.NRGBA{R: 0xFF, G: 0x98, B: 0x00, A: 255} // warm amber (both themes)
+}
+
+func anchorTextActiveColor() color.NRGBA {
+	return color.NRGBA{R: 30, G: 30, B: 35, A: 255} // dark text on amber (both themes)
+}
+
+func anchorTextInactiveColor() color.NRGBA {
+	if anchorIsDarkTheme() {
+		return color.NRGBA{R: 200, G: 200, B: 210, A: 255} // light text on dark
+	}
+	return color.NRGBA{R: 50, G: 50, B: 58, A: 255} // dark text on light
+}
+
+func anchorHeaderColor() color.NRGBA {
+	if anchorIsDarkTheme() {
+		return color.NRGBA{R: 220, G: 220, B: 225, A: 255}
+	}
+	return color.NRGBA{R: 40, G: 40, B: 45, A: 255}
+}
+
+func anchorDescColor() color.NRGBA {
+	if anchorIsDarkTheme() {
+		return color.NRGBA{R: 120, G: 120, B: 130, A: 255}
+	}
+	return color.NRGBA{R: 100, G: 100, B: 110, A: 255}
+}
+
+func anchorMonitorColor() color.NRGBA {
+	if anchorIsDarkTheme() {
+		return color.NRGBA{R: 150, G: 150, B: 160, A: 255}
+	}
+	return color.NRGBA{R: 70, G: 70, B: 80, A: 255}
+}
+
+// anchorCell is a tappable canvas-based grid cell for the anchor popup.
+// It renders a colored rectangle background with a centered pixel art icon.
+type anchorCell struct {
+	widget.BaseWidget
+	active   bool
+	icon     image.Image
+	onTapped func()
+	bg       *canvas.Rectangle
+	img      *canvas.Image
+}
+
+func newAnchorCell(icon image.Image, active bool, onTapped func()) *anchorCell {
+	c := &anchorCell{
+		icon:     icon,
+		active:   active,
+		onTapped: onTapped,
+	}
+	c.ExtendBaseWidget(c)
+	return c
+}
+
+func (c *anchorCell) Tapped(_ *fyne.PointEvent) {
+	if c.onTapped != nil {
+		c.onTapped()
+	}
+}
+
+func (c *anchorCell) CreateRenderer() fyne.WidgetRenderer {
+	bgColor := anchorCellInactiveColor()
+	if c.active {
+		bgColor = anchorCellActiveColor()
+	}
+
+	c.bg = canvas.NewRectangle(bgColor)
+	c.bg.CornerRadius = 6
+
+	c.img = canvas.NewImageFromImage(c.icon)
+	c.img.FillMode = canvas.ImageFillContain
+	c.img.ScaleMode = canvas.ImageScalePixels // Preserve pixel art crispness
+
+	return &anchorCellRenderer{
+		cell:    c,
+		objects: []fyne.CanvasObject{c.bg, c.img},
+	}
+}
+
+type anchorCellRenderer struct {
+	cell    *anchorCell
+	objects []fyne.CanvasObject
+}
+
+func (r *anchorCellRenderer) Layout(size fyne.Size) {
+	r.cell.bg.Resize(size)
+	r.cell.bg.Move(fyne.NewPos(0, 0))
+
+	// Center the icon with padding inside the cell
+	pad := float32(8)
+	iconSize := fyne.NewSize(size.Width-pad*2, size.Height-pad*2)
+	r.cell.img.Resize(iconSize)
+	r.cell.img.Move(fyne.NewPos(pad, pad))
+}
+
+func (r *anchorCellRenderer) MinSize() fyne.Size {
+	return fyne.NewSize(64, 56)
+}
+
+func (r *anchorCellRenderer) Refresh() {
+	bgColor := anchorCellInactiveColor()
+	if r.cell.active {
+		bgColor = anchorCellActiveColor()
+	}
+	r.cell.bg.FillColor = bgColor
+	r.cell.bg.Refresh()
+	r.cell.img.Refresh()
+}
+
+func (r *anchorCellRenderer) Destroy() {}
+
+func (r *anchorCellRenderer) Objects() []fyne.CanvasObject {
+	return r.objects
+}
+
+// tappableContainer is a simple tappable wrapper for any content.
+type tappableContainer struct {
+	widget.BaseWidget
+	onTapped func()
+	content  fyne.CanvasObject
+}
+
+func newTappableContainer(onTapped func(), content fyne.CanvasObject) *tappableContainer {
+	t := &tappableContainer{onTapped: onTapped, content: content}
+	t.ExtendBaseWidget(t)
+	return t
+}
+
+func (t *tappableContainer) Tapped(_ *fyne.PointEvent) {
+	if t.onTapped != nil {
+		t.onTapped()
+	}
+}
+
+func (t *tappableContainer) CreateRenderer() fyne.WidgetRenderer {
+	return widget.NewSimpleRenderer(t.content)
+}
+
+// loadAnchorIcons derives all 9 directional icons from the existing next.png asset
+// via imaging transforms. For center, a clean crosshair is drawn programmatically.
+func (sa *SpiceApp) loadAnchorIcons(size int) [9]image.Image {
+	var icons [9]image.Image
+
+	// Load the existing next.png icon (glossy red arrow pointing →)
+	res, err := sa.assetMgr.GetIcon("next.png")
+	if err != nil {
+		utilLog.Printf("[WARN] Failed to load next.png for anchor icons: %v", err)
+		return icons
+	}
+
+	baseImg, _, err := image.Decode(bytes.NewReader(res.Content()))
+	if err != nil {
+		utilLog.Printf("[WARN] Failed to decode next.png: %v", err)
+		return icons
+	}
+
+	// Resize to target size for crisp display
+	arrow := imaging.Resize(baseImg, size, size, imaging.Lanczos)
+
+	// Grid layout:  ↖(0)  ↑(1)  ↗(2)
+	//               ←(3)  ●(4)  →(5)
+	//               ↙(6)  ↓(7)  ↘(8)
+
+	// Cardinal directions from the → base
+	icons[5] = arrow                    // → = original
+	icons[3] = imaging.FlipH(arrow)     // ← = flip horizontal
+	icons[1] = imaging.Rotate90(arrow)  // ↑ = rotate 90° CCW
+	icons[7] = imaging.Rotate270(arrow) // ↓ = rotate 90° CW
+
+	// Diagonal directions: rotate the base arrow 45°
+	diag := imaging.Rotate(arrow, 45, color.Transparent)
+	// Rotate produces a larger canvas; crop back to size
+	diag = imaging.CropCenter(diag, size, size)
+	icons[2] = diag                               // ↗ = 45° CCW
+	icons[0] = imaging.FlipH(diag)                // ↖ = flip horizontal
+	icons[8] = imaging.FlipV(diag)                // ↘ = flip vertical
+	icons[6] = imaging.FlipH(imaging.FlipV(diag)) // ↙ = flip both
+
+	// Center: draw a clean crosshair programmatically
+	icons[4] = drawCrosshair(size, color.NRGBA{R: 220, G: 60, B: 40, A: 255})
+
+	return icons
+}
+
+// drawCrosshair renders a simple crosshair/target icon with real alpha transparency.
+func drawCrosshair(size int, col color.NRGBA) image.Image {
+	img := image.NewNRGBA(image.Rect(0, 0, size, size))
+	cx, cy := size/2, size/2
+	radius := size * 3 / 8
+	thickness := max(size/12, 2)
+	dotRadius := max(size/10, 2)
+
+	// Draw circle outline
+	for y := 0; y < size; y++ {
+		for x := 0; x < size; x++ {
+			dx := x - cx
+			dy := y - cy
+			dist := dx*dx + dy*dy
+			outer := radius * radius
+			inner := (radius - thickness) * (radius - thickness)
+			if dist <= outer && dist >= inner {
+				img.SetNRGBA(x, y, col)
+			}
+		}
+	}
+
+	// Draw center dot
+	for y := cy - dotRadius; y <= cy+dotRadius; y++ {
+		for x := cx - dotRadius; x <= cx+dotRadius; x++ {
+			dx := x - cx
+			dy := y - cy
+			if dx*dx+dy*dy <= dotRadius*dotRadius {
+				img.SetNRGBA(x, y, col)
+			}
+		}
+	}
+
+	return img
+}
+
+// ShowAnchorPopup displays the 3×3 crop anchor selection popup.
+// This is the ADAPTER implementation — it owns window lifecycle and OpenGL recovery.
+// The window stays open after selection, showing a processing overlay and redrawing
+// with the updated active anchor when reprocessing completes.
+func (sa *SpiceApp) ShowAnchorPopup(monitorID int, currentAnchor provider.CropAnchor, labels [9]string, values [9]provider.CropAnchor, onSelect func(anchor provider.CropAnchor, onDone func())) {
+	sa.os.TransformToForeground()
+
+	title := fmt.Sprintf("%s — %s %d", i18n.T("Crop Anchor"), i18n.T("Display"), monitorID+1)
+
+	// Create window with OpenGL panic recovery (matches CreatePreferencesWindow pattern)
+	var w fyne.Window
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				errStr := fmt.Sprintf("%v", r)
+				utilLog.Printf("Recovered from anchor popup window creation panic: %v", errStr)
+				if strings.Contains(strings.ToLower(errStr), "apiunavailable") || strings.Contains(strings.ToLower(errStr), "wgl") || strings.Contains(strings.ToLower(errStr), "opengl") {
+					ShowNativeFallbackAlert(i18n.T("Graphics Error"), i18n.T("Spice requires OpenGL 2.0+ or hardware acceleration to show windows. The application will continue to run in the background, but the user interface may be unavailable."))
+				}
+			}
+		}()
+		w = sa.NewWindow(title)
+	}()
+
+	if w == nil {
+		utilLog.Println("Anchor popup window creation failed (returned nil or recovered)")
+		return
+	}
+
+	w.SetFixedSize(true)
+
+	// -- Load icons from existing next.png asset --
+	icons := sa.loadAnchorIcons(48)
+
+	// -- Shared state --
+	activeAnchor := currentAnchor
+	processing := false
+
+	// -- Mutable content container (swapped between grid and overlay) --
+	contentStack := container.NewStack()
+
+	// -- Build the interactive grid content --
+	var buildContent func()
+	buildContent = func() {
+		// -- Header --
+		headerText := canvas.NewText(i18n.T("Crop Anchor"), anchorHeaderColor())
+		headerText.TextSize = 14
+		headerText.TextStyle = fyne.TextStyle{Bold: true}
+		headerText.Alignment = fyne.TextAlignCenter
+
+		// -- Description label --
+		descText := canvas.NewText(i18n.T("Anchor Description"), anchorDescColor())
+		descText.TextSize = 10
+		descText.Alignment = fyne.TextAlignCenter
+
+		// -- Monitor label --
+		monitorText := canvas.NewText(
+			fmt.Sprintf("%s %d", i18n.T("Display"), monitorID+1),
+			anchorMonitorColor(),
+		)
+		monitorText.TextSize = 11
+		monitorText.TextStyle = fyne.TextStyle{Bold: true}
+		monitorText.Alignment = fyne.TextAlignCenter
+
+		// -- 3×3 grid of icon cells --
+		gridContainer := container.NewGridWithColumns(3)
+		for i := 0; i < 9; i++ {
+			idx := i
+			anchor := values[idx]
+			isActive := anchor == activeAnchor
+
+			cell := newAnchorCell(icons[idx], isActive, func() {
+				if processing {
+					return // Ignore clicks while processing
+				}
+				processing = true
+
+				// Show processing overlay
+				fyne.Do(func() {
+					overlayText := canvas.NewText(i18n.T("Applying..."), color.NRGBA{R: 240, G: 240, B: 245, A: 255})
+					overlayText.TextSize = 14
+					overlayText.TextStyle = fyne.TextStyle{Bold: true}
+					overlayText.Alignment = fyne.TextAlignCenter
+
+					// Semi-transparent dark overlay
+					overlayBg := canvas.NewRectangle(color.NRGBA{R: 30, G: 30, B: 35, A: 200})
+
+					overlay := container.NewStack(
+						overlayBg,
+						container.NewCenter(overlayText),
+					)
+					contentStack.Objects = []fyne.CanvasObject{overlay}
+					contentStack.Refresh()
+				})
+
+				// Dispatch anchor change with done callback
+				onSelect(anchor, func() {
+					activeAnchor = anchor
+					processing = false
+					// Redraw grid on UI thread with new active state
+					fyne.Do(func() {
+						buildContent()
+					})
+				})
+			})
+			gridContainer.Add(cell)
+		}
+
+		// -- Auto button (custom tappable — uses exact same highlight color as grid cells) --
+		autoActive := activeAnchor == provider.AnchorAuto || activeAnchor == 0
+		autoBgColor := anchorCellInactiveColor()
+		autoTextColor := anchorTextInactiveColor()
+		if autoActive {
+			autoBgColor = anchorCellActiveColor()
+			autoTextColor = anchorTextActiveColor()
+		}
+
+		autoBg := canvas.NewRectangle(autoBgColor)
+		autoBg.CornerRadius = 6
+		autoLabel := canvas.NewText(i18n.T("Auto"), autoTextColor)
+		autoLabel.TextSize = 14
+		autoLabel.TextStyle = fyne.TextStyle{Bold: true}
+		autoLabel.Alignment = fyne.TextAlignCenter
+
+		autoBtn := container.NewStack(autoBg, container.NewPadded(container.NewCenter(autoLabel)))
+
+		autoTap := newTappableContainer(func() {
+			if processing {
+				return
+			}
+			processing = true
+
+			fyne.Do(func() {
+				overlayText := canvas.NewText(i18n.T("Applying..."), color.NRGBA{R: 240, G: 240, B: 245, A: 255})
+				overlayText.TextSize = 14
+				overlayText.TextStyle = fyne.TextStyle{Bold: true}
+				overlayText.Alignment = fyne.TextAlignCenter
+
+				overlayBg := canvas.NewRectangle(color.NRGBA{R: 30, G: 30, B: 35, A: 200})
+
+				overlay := container.NewStack(
+					overlayBg,
+					container.NewCenter(overlayText),
+				)
+				contentStack.Objects = []fyne.CanvasObject{overlay}
+				contentStack.Refresh()
+			})
+
+			onSelect(provider.AnchorAuto, func() {
+				activeAnchor = provider.AnchorAuto
+				processing = false
+				fyne.Do(func() {
+					buildContent()
+				})
+			})
+		}, autoBtn)
+
+		// -- Separator line --
+		separator := canvas.NewRectangle(color.NRGBA{R: 70, G: 70, B: 80, A: 255})
+		separator.SetMinSize(fyne.NewSize(0, 1))
+
+		// -- Close button (same styling as Auto for consistency) --
+		closeBg := canvas.NewRectangle(anchorCellInactiveColor())
+		closeBg.CornerRadius = 6
+		closeLabel := canvas.NewText(i18n.T("Close"), anchorTextInactiveColor())
+		closeLabel.TextSize = 14
+		closeLabel.TextStyle = fyne.TextStyle{Bold: true}
+		closeLabel.Alignment = fyne.TextAlignCenter
+
+		closeBtnContent := container.NewStack(closeBg, container.NewPadded(container.NewCenter(closeLabel)))
+		closeTap := newTappableContainer(func() {
+			w.Close()
+		}, closeBtnContent)
+
+		// -- Assemble layout --
+		content := container.NewVBox(
+			container.NewCenter(headerText),
+			container.NewCenter(descText),
+			layout.NewSpacer(),
+			container.NewCenter(monitorText),
+			gridContainer,
+			layout.NewSpacer(),
+			separator,
+			autoTap,
+			closeTap,
+		)
+
+		contentStack.Objects = []fyne.CanvasObject{content}
+		contentStack.Refresh()
+	}
+
+	// Initial build
+	buildContent()
+
+	w.SetContent(container.NewPadded(contentStack))
+
+	// Size to content — no dead space
+	minSize := contentStack.MinSize()
+	w.Resize(fyne.NewSize(minSize.Width+32, minSize.Height+24))
+	w.CenterOnScreen()
+
+	w.SetOnClosed(func() {
+		sa.os.TransformToBackground()
+	})
+
+	w.Show()
 }

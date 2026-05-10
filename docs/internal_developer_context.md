@@ -337,21 +337,133 @@ Key logic patterns for the major providers in `pkg/wallpaper/providers/`. **All 
 - **Cross-Platform Picker**: `schema.FolderPickerItem` (Windows uses `cfd` shell picker)
 - **Recursive Scanning**: `filepath.WalkDir` with early-exit optimization
 
-## 8. Smart Fit 2.0 & Imaging Logic
+## 8. Smart Fit 2.0 — Image Processing Pipeline
 
-The imaging engine (`pkg/wallpaper/smart_image_processor.go`) implements the **Strategy Pattern**:
+The imaging engine (`pkg/wallpaper/smart_image_processor.go`, `pkg/wallpaper/crop_strategies.go`) is the core of Spice's content-aware cropping. It uses the **Strategy Pattern** to select the best cropping approach for each image.
 
-### 8.1 Strategy Selection
-1. **Analysis Phase**: Calculate Entropy (Energy), scan for Faces
-2. **`FaceCropStrategy`**: Selected if face found and Face Crop enabled
-3. **`SmartPanStrategy`**: Selected for "Face Boost" or low-energy fallback
-4. **`EntropyCropStrategy`**: Default. Contains the **Feet Guard**
+### 8.1 Pipeline Overview
 
-### 8.2 The Feet Guard
-If `smartcrop` suggests a crop starting very low, force Center Crop. This threshold relaxes for "High Energy" images and stays strict for "Low Energy" (sky/ground).
+```
+FitImage(img, targetW, targetH)
+  │
+  ├── SmartFit Off?        → return original
+  ├── CheckCompatibility() → reject incompatible aspect ratios
+  ├── Exact match/aspect?  → simple resize
+  │
+  ├── 1. analyzeFace()     → pigo face detection
+  ├── 2. calculateEnergy() → luminance std-dev (entropy proxy)
+  ├── 3. checkQualityGate()→ Quality mode rejection/rescue
+  ├── 4. selectStrategy()  → pick crop strategy
+  └── 5. strategy.Apply()  → execute crop + resize
+```
 
-### 8.3 Externalized Tuning (`pkg/wallpaper/tuning.go`)
-All magic numbers in `TuningConfig`: `AggressiveMultiplier`, `FaceRescueQThreshold`, `FeetGuardRatio`, etc. Structured for future remote hot-swap.
+### 8.2 The Entry Point: `FitImage()`
+
+Every image passes through `FitImage()` before being saved as a derivative. The function runs a fixed sequence:
+
+1. **Compatibility Check**: `CheckCompatibility()` applies aspect ratio thresholds based on SmartFit mode (Quality vs Flexibility). Quality mode rejects large mismatches; Flexibility mode uses a dynamic threshold scaled by image surplus resolution
+2. **Fast Paths**: Exact dimension matches or matching aspect ratios skip the full pipeline and go straight to resize
+3. **Analysis Phase**: Face detection (pigo) and energy calculation run unconditionally (both are needed for strategy selection and gate checks)
+4. **Quality Gate**: In Quality mode, images outside the aspect threshold are rejected — unless a strong face is detected ("Face Rescue"), which overrides the rejection
+5. **Strategy Selection**: `selectStrategy()` picks the best crop approach (see below)
+6. **Execution**: The chosen strategy's `Apply()` is called
+
+### 8.3 Strategy Selection: `selectStrategy()`
+
+The decision tree, in priority order:
+
+```go
+1. Flexibility Mode + No Face + Low Energy → SmartPanStrategy (center)
+   // Flat images (sky, solid backgrounds) — entropy crop would pick noise
+   
+2. Face Found + FaceCrop Enabled → FaceCropStrategy
+   // Tight crop centered on the face bounding box
+   
+3. Face Found + FaceCrop Disabled → SmartPanStrategy (face center)
+   // "Face Boost" — max crop panned toward the face
+   
+4. Default (no face) → EntropyCropStrategy
+   // Smartcrop analysis → extract center → SmartPan
+```
+
+> **Critical**: Face detection and smartcrop are **completely separate paths**. When a face is found, smartcrop is never called. The face center becomes the pan target directly.
+
+### 8.4 The Three Crop Strategies
+
+All strategies are defined in `crop_strategies.go` and implement the `CropStrategy` interface.
+
+#### FaceCropStrategy ("Face Crop")
+- **When**: Face detected AND `FaceCropEnabled=true`
+- **Logic**: `cropAroundFace()` builds a crop rectangle tightly centered on the face bounding box, sized to match the target aspect ratio. The crop dimensions are the maximum that fits the target aspect, centered on the face center point
+- **Result**: Aggressive zoom on the face — the face IS the composition. Surrounding scene may be heavily cropped
+- **Use case**: Portrait-style images where the subject's face is the primary interest
+
+#### SmartPanStrategy ("Face Boost" / Center Fallback)
+- **When**: Face detected but `FaceCropEnabled=false`, OR low-energy fallback
+- **Logic**: `smartPanAndResize()` calculates the **largest possible crop** matching the target aspect ratio, then **pans** it so the given center point (face center or image center) is included. The crop is clamped to image bounds
+- **Result**: Preserves maximum scene context while ensuring the focal point is in frame
+- **Use case**: Landscape images with a person — keep the scenery, just make sure the face isn't cut off
+
+#### EntropyCropStrategy (Smartcrop Fallback)
+- **When**: No face detected (the default fallback)
+- **Logic**:
+  1. Calls `muesli/smartcrop.FindBestCrop()` which generates thousands of candidate crop rectangles and scores each on edge detail (Green channel), skin tone (Red channel), and saturation (Blue channel). The scoring favors center-biased compositions with rule-of-thirds bonuses
+  2. Extracts the **center point** of the winning crop
+  3. Passes that center to `smartPanAndResize()` (same function as Face Boost)
+- **Feet Guard**: If smartcrop selects a crop starting very far down the image (suggesting the algorithm locked onto feet/ground texture), the strategy falls back to a center crop. The threshold relaxes for high-energy images and stays strict for low-energy (sky/ground) images
+- **Result**: Content-aware crop based on visual interest regions
+
+### 8.5 The Convergence Point: `smartPanAndResize()`
+
+All three strategies ultimately converge on this function. It takes a center point and:
+
+1. Calculates the **largest possible crop** matching the target aspect ratio (constrained by whichever image dimension is the limiting factor)
+2. Centers the crop rectangle on the given point
+3. Clamps to image bounds (slides the rectangle if it extends past edges)
+4. Sub-images the crop region
+5. Resizes to the exact target dimensions using Lanczos resampling
+
+This is why the crop anchor feature can integrate cleanly — it just needs to provide a center point to this existing function.
+
+### 8.6 Face Detection: `findBestFace()` (pigo)
+
+Uses the [pigo](https://github.com/esimov/pigo) face detection library (Pixel Intensity Comparison-based Object detection):
+
+1. Converts image to grayscale
+2. Runs cascade classifier with configurable min/max face size
+3. Clusters overlapping detections using IoU threshold
+4. Filters results:
+   - **Confidence floor**: Rejects low-Q detections (noise/shadows)
+   - **Edge safety**: Discards low-confidence detections in the bottom 30% of the frame (real faces rarely appear at the literal bottom edge of wallpapers)
+   - **Confidence-weighted selection**: Picks the face with highest `Q × Scale` score (prevents low-confidence large blobs from winning over high-confidence mid-sized faces)
+5. Expands the winning bounding box by 1.5× (pigo detects the "core" eyes/nose/mouth area — expansion covers forehead and chin)
+
+### 8.7 Energy Calculation
+
+`calculateImageEnergy()` computes the standard deviation of luminance across a downsampled thumbnail:
+
+- **Purpose**: Proxy for visual complexity ("entropy")
+- **Low energy** (< `MinEnergyThreshold`): Flat images (solid colors, gradients, clear skies). Entropy crop would pick noise, so the pipeline falls back to center crop
+- **High energy**: Complex textures, detailed scenes. Entropy crop can find meaningful focal points
+- **Also used by**: Feet Guard threshold relaxation — high-energy images are allowed more aggressive bottom-biased crops
+
+### 8.8 Compatibility Gates
+
+Before any cropping, `CheckCompatibility()` rejects images that are too far from the target aspect ratio:
+
+**Quality Mode** (`SmartFitNormal`):
+- Orientation mismatch with diff > 0.5 → reject
+- Aspect diff > 1.5 → reject
+- Exception: Strong face (Q > `FaceRescueQThreshold`) "rescues" the image despite aspect mismatch
+
+**Flexibility Mode** (`SmartFitAggressive`):
+- Dynamic threshold: `base × surplus × AggressiveMultiplier` (capped at 1.5)
+- Orientation mismatch: Threshold capped at 0.8 (allows 4:3→Portrait but blocks 16:9→Portrait)
+- Higher resolution images get more leeway (surplus factor)
+
+### 8.9 Externalized Tuning (`pkg/wallpaper/tuning.go`)
+
+All magic numbers live in `TuningConfig`: `AggressiveMultiplier`, `FaceRescueQThreshold`, `FeetGuardRatio`, `FeetGuardSlackThreshold`, `FaceDetectConfidence`, `FaceBottomEdgeThreshold`, `MinEnergyThreshold`, etc. Structured for future remote hot-swap via the museum-style config update pattern.
 
 ## 9. Extension Guide
 

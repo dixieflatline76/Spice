@@ -95,7 +95,7 @@ func TestDownloadAllImages(t *testing.T) {
 	mockProvider.On("EnrichImage", mock.Anything, mock.Anything).Return(img, nil)
 
 	// Expect FitImage call if SmartFit is enabled
-	mockIP.On("FitImage", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(imgRaw, nil)
+	mockIP.On("FitImage", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(imgRaw, nil)
 	mockIP.On("CheckCompatibility", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
 	// Create plugin instance manually to inject mocks
