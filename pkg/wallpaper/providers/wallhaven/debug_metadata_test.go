@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestLiveRateLimit(t *testing.T) {
@@ -13,7 +13,7 @@ func TestLiveRateLimit(t *testing.T) {
 	client := &http.Client{Timeout: 10 * time.Second}
 
 	resp, err := client.Get(apiURL)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer resp.Body.Close()
 
 	// Print Rate Limit Headers

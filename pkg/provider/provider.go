@@ -9,23 +9,107 @@ import (
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
 )
 
+// CropAnchor represents a user-selected focal point hint for Smart Fit cropping.
+// Values 200-209 align with Command channel values for zero-conversion dispatch.
+type CropAnchor int
+
+const (
+	AnchorAuto         CropAnchor = iota + 200 // 200 — No anchor (pipeline default)
+	AnchorTopLeft                              // 201
+	AnchorTopCenter                            // 202
+	AnchorTopRight                             // 203
+	AnchorMiddleLeft                           // 204
+	AnchorMiddleCenter                         // 205
+	AnchorMiddleRight                          // 206
+	AnchorBottomLeft                           // 207
+	AnchorBottomCenter                         // 208
+	AnchorBottomRight                          // 209
+)
+
+// Center returns the normalized (0-1) coordinates for this anchor position.
+func (a CropAnchor) Center() (float64, float64) {
+	switch a {
+	case AnchorTopLeft:
+		return 0.2, 0.2
+	case AnchorTopCenter:
+		return 0.5, 0.2
+	case AnchorTopRight:
+		return 0.8, 0.2
+	case AnchorMiddleLeft:
+		return 0.2, 0.5
+	case AnchorMiddleCenter:
+		return 0.5, 0.5
+	case AnchorMiddleRight:
+		return 0.8, 0.5
+	case AnchorBottomLeft:
+		return 0.2, 0.8
+	case AnchorBottomCenter:
+		return 0.5, 0.8
+	case AnchorBottomRight:
+		return 0.8, 0.8
+	default:
+		return 0.5, 0.5 // Auto/unknown → center
+	}
+}
+
+// String returns a human-readable name for the anchor position.
+func (a CropAnchor) String() string {
+	switch a {
+	case AnchorAuto:
+		return "Auto"
+	case AnchorTopLeft:
+		return "TopLeft"
+	case AnchorTopCenter:
+		return "TopCenter"
+	case AnchorTopRight:
+		return "TopRight"
+	case AnchorMiddleLeft:
+		return "MiddleLeft"
+	case AnchorMiddleCenter:
+		return "MiddleCenter"
+	case AnchorMiddleRight:
+		return "MiddleRight"
+	case AnchorBottomLeft:
+		return "BottomLeft"
+	case AnchorBottomCenter:
+		return "BottomCenter"
+	case AnchorBottomRight:
+		return "BottomRight"
+	default:
+		return "Unknown"
+	}
+}
+
 // Image represents a generic wallpaper image.
 type Image struct {
 	ID               string
-	Path             string            // URL to download the image
-	ViewURL          string            // URL to view the image in browser
-	FilePath         string            // Local path after download (optional/computed)
-	Attribution      string            // Photographer or Uploader name
-	Provider         string            // Source provider name
-	FileType         string            // Content type (e.g., "image/jpeg")
-	DownloadLocation string            // URL to trigger download event (Unsplash requirement)
-	ProcessingFlags  map[string]bool   // Flags indicating how the image was processed (e.g. "SmartFit", "FaceCrop")
-	DerivativePaths  map[string]string // Local file paths for different resolutions (e.g. "3440x1440" -> "/path/to/image.jpg")
-	SourceQueryID    string            // ID of the query that produced this image (for smart cache clearing)
-	Width            int               // Image Width (if available from source)
-	Height           int               // Image Height (if available from source)
-	IsFavorited      bool              // Flag to protect image from cache pruning
-	Seen             bool              // Flag for pagination/history logic
+	Path             string                // URL to download the image
+	ViewURL          string                // URL to view the image in browser
+	FilePath         string                // Local path after download (optional/computed)
+	Attribution      string                // Photographer or Uploader name
+	Provider         string                // Source provider name
+	FileType         string                // Content type (e.g., "image/jpeg")
+	DownloadLocation string                // URL to trigger download event (Unsplash requirement)
+	ProcessingFlags  map[string]bool       // Flags indicating how the image was processed (e.g. "SmartFit", "FaceCrop")
+	DerivativePaths  map[string]string     // Local file paths for different resolutions (e.g. "3440x1440" -> "/path/to/image.jpg")
+	SourceQueryID    string                // ID of the query that produced this image (for smart cache clearing)
+	Width            int                   // Image Width (if available from source)
+	Height           int                   // Image Height (if available from source)
+	CropAnchors      map[string]CropAnchor `json:",omitempty"` // Per-resolution crop anchor hints (key = "WxH", e.g. "3440x1440")
+	IsFavorited      bool                  // Flag to protect image from cache pruning
+	Seen             bool                  // Flag for pagination/history logic
+}
+
+// GetAnchor returns the crop anchor for a specific resolution key.
+// Returns AnchorAuto if no anchor is set for the given resolution.
+func (img Image) GetAnchor(resKey string) CropAnchor {
+	if img.CropAnchors == nil {
+		return AnchorAuto
+	}
+	if a, ok := img.CropAnchors[resKey]; ok {
+		return a
+	}
+	return AnchorAuto
 }
 
 // Favoriter defines the interface for providers that support favoriting images.

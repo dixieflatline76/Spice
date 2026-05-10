@@ -5,7 +5,7 @@ title: Architecture
 
 # Spice Architecture Documentation
 
-> **Status**: Current as of v2.3.1
+> **Status**: Current as of v2.3.2
 > **Scope**: System design, data flow, and component roles
 
 ## 1. Executive Summary
@@ -255,6 +255,34 @@ Providers are categorized by `provider.ProviderType` for UI placement:
 - **TypeOnline**: Remote APIs (Pexels, Wallhaven, Wikimedia, Museums). "Online" tab
 - **TypeLocal**: Local filesystem (Favorites, Local Folders). "Local" tab
 
+### 7.4 Smart Fit — Image Processing Pipeline
+
+When SmartFit is enabled, every image passes through a content-aware cropping pipeline before being saved as a monitor-specific derivative:
+
+```mermaid
+graph TD
+    classDef analysis fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#000;
+    classDef strategy fill:#fff3e0,stroke:#e65100,stroke-width:2px,color:#000;
+    classDef core fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px,color:#000;
+
+    A["FitImage()"]:::core --> B["analyzeFace() — pigo"]:::analysis
+    A --> C["calculateEnergy()"]:::analysis
+    B --> D{"selectStrategy()"}:::core
+    C --> D
+    D -->|"Face + Crop ON"| E["FaceCropStrategy"]:::strategy
+    D -->|"Face + Crop OFF"| F["SmartPanStrategy<br/>(Face Boost)"]:::strategy
+    D -->|"No Face"| G["EntropyCropStrategy<br/>(smartcrop)"]:::strategy
+    D -->|"Low Energy"| H["SmartPanStrategy<br/>(Center)"]:::strategy
+    E --> I["smartPanAndResize()"]:::core
+    F --> I
+    G --> I
+    H --> I
+```
+
+**Key design insight**: All strategies converge on `smartPanAndResize()`, which takes a center point and crops the largest possible region matching the target aspect ratio around that point. Face detection and smartcrop are **completely separate paths** — they never interact. This design makes extending the crop logic (e.g., user crop anchors) trivial: any new strategy just provides a center point.
+
+> For the full decision tree, strategy details, and tuning parameters, see [Internal Developer Context — Section 8](internal_developer_context.md#8-smart-fit-20--image-processing-pipeline).
+
 ## 8. ID Namespacing (Middleware)
 
 To prevent ID collisions across providers, IDs are namespaced at the ingestion boundary:
@@ -306,6 +334,7 @@ For verified providers (Museums), Spice treats `raw.githubusercontent.com` as a 
 | **Actor** | `pkg/wallpaper/monitor_controller.go`| Per-monitor state & wallpaper logic |
 | **Controller**| `pkg/wallpaper/wallpaper.go` | Main plugin orchestrator |
 | **Processor** | `pkg/wallpaper/smart_image_processor.go` | Face detection, cropping strategies |
+| **Crop Strategies** | `pkg/wallpaper/crop_strategies.go` | FaceCrop, SmartPan, EntropyCrop strategy implementations |
 | **Fetch Logic** | `pkg/wallpaper/fetch_logic.go` | Provider queries, pagination, dedup |
 | **Dispatcher** | `pkg/wallpaper/dispatcher.go` | Fair queue, per-provider rate limiting |
 | **Scheduler** | `pkg/wallpaper/scheduler.go` | Nightly maintenance, refresh cycles |

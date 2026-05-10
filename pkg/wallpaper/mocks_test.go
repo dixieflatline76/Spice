@@ -88,6 +88,9 @@ func (m *MockPluginManager) RebuildTrayMenu() {
 	m.Called()
 }
 
+func (m *MockPluginManager) ShowAnchorPopup(_ int, _ provider.CropAnchor, _ [9]string, _ [9]provider.CropAnchor, _ func(provider.CropAnchor, func())) {
+}
+
 // MockOS is a mock implementation of the OS interface.
 type MockOS struct {
 	mock.Mock
@@ -286,8 +289,8 @@ func (m *MockImageProcessor) EncodeImage(ctx context.Context, img image.Image, c
 	return args.Get(0).([]byte), args.Error(1)
 }
 
-func (m *MockImageProcessor) FitImage(ctx context.Context, img image.Image, targetWidth, targetHeight int) (image.Image, error) {
-	args := m.Called(ctx, img, targetWidth, targetHeight)
+func (m *MockImageProcessor) FitImage(ctx context.Context, img image.Image, targetWidth, targetHeight int, anchor provider.CropAnchor) (image.Image, error) {
+	args := m.Called(ctx, img, targetWidth, targetHeight, anchor)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}

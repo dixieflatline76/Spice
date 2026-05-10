@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
+	"github.com/dixieflatline76/Spice/v2/pkg/provider"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui"
 	"github.com/dixieflatline76/Spice/v2/pkg/wallpaper"
 	"github.com/dixieflatline76/Spice/v2/util/log"
@@ -24,6 +25,14 @@ const (
 	keyP     = hotkey.KeyP
 	keyO     = hotkey.KeyO
 	keyD     = hotkey.KeyD
+
+	// Anchor shortcuts (WASD + Q/E)
+	keyQ = hotkey.KeyQ // Auto
+	keyW = hotkey.KeyW // Up
+	keyE = hotkey.KeyE // Center
+	keyA = hotkey.KeyA // Left
+	keyS = hotkey.KeyS // Down
+	// keyD already defined above for Sync — reused for Anchor Right
 )
 
 // GetMonitorIDFromKey is a platform-specific helper.
@@ -220,6 +229,33 @@ func doStartListeners(mgr ui.PluginManager) {
 			wp.TogglePauseMonitorAction(-1)
 		}
 	})
+
+	// --- 3. Anchor Shortcuts (Targeted: modBase + WASD/QE) ---
+	hkAnchorQ := hotkey.New([]hotkey.Modifier{modBase}, keyQ)
+	hkAnchorW := hotkey.New([]hotkey.Modifier{modBase}, keyW)
+	hkAnchorE := hotkey.New([]hotkey.Modifier{modBase}, keyE)
+	hkAnchorA := hotkey.New([]hotkey.Modifier{modBase}, keyA)
+	hkAnchorS := hotkey.New([]hotkey.Modifier{modBase}, keyS)
+	hkAnchorD := hotkey.New([]hotkey.Modifier{modBase}, keyD)
+
+	registerAndListenTargeted(hkAnchorQ, "Anchor Auto", func() {
+		handleAnchor(mgr, provider.AnchorAuto)
+	})
+	registerAndListenTargeted(hkAnchorW, "Anchor Up", func() {
+		handleAnchor(mgr, provider.AnchorTopCenter)
+	})
+	registerAndListenTargeted(hkAnchorE, "Anchor Center", func() {
+		handleAnchor(mgr, provider.AnchorMiddleCenter)
+	})
+	registerAndListenTargeted(hkAnchorA, "Anchor Left", func() {
+		handleAnchor(mgr, provider.AnchorMiddleLeft)
+	})
+	registerAndListenTargeted(hkAnchorS, "Anchor Down", func() {
+		handleAnchor(mgr, provider.AnchorBottomCenter)
+	})
+	registerAndListenTargeted(hkAnchorD, "Anchor Right", func() {
+		handleAnchor(mgr, provider.AnchorMiddleRight)
+	})
 }
 
 func registerAndListen(hk *hotkey.Hotkey, name string, action func()) {
@@ -305,4 +341,16 @@ func handleTargeted(mgr ui.PluginManager, action func(mid int) string) {
 			mgr.NotifyUser(title, msg)
 		}()
 	}
+}
+
+// handleAnchor sets a crop anchor on the targeted monitor and sends a notification.
+func handleAnchor(mgr ui.PluginManager, anchor provider.CropAnchor) {
+	handleTargeted(mgr, func(mid int) string {
+		wp := wallpaper.GetInstance()
+		if wp != nil {
+			wp.SetCropAnchor(mid, anchor)
+			return i18n.Tf("Display {{.ID}}: Anchor {{.Anchor}}", map[string]any{"ID": mid + 1, "Anchor": anchor.String()})
+		}
+		return ""
+	})
 }

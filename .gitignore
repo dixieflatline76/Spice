@@ -55,3 +55,7 @@ report_output/
 # Certificates and Packages
 *.pfx
 *.msix
+
+# Test-generated verification images and regression source photos
+pkg/wallpaper/testdata/anchor_verify/
+pkg/wallpaper/testdata/regressions/

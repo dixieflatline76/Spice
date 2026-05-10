@@ -90,6 +90,9 @@ func (m *mockManager) GetAssetManager() *asset.Manager {
 	return nil
 }
 
+func (m *mockManager) ShowAnchorPopup(_ int, _ provider.CropAnchor, _ [9]string, _ [9]provider.CropAnchor, _ func(provider.CropAnchor, func())) {
+}
+
 func TestToggleFavorite_ResetsPageAndTriggersFetch(t *testing.T) {
 	// Setup
 	store := NewImageStore()

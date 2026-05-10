@@ -509,6 +509,13 @@ func (s *ImageStore) SaveCache() {
 			}
 			snapshot[i].DerivativePaths = paths
 		}
+		if img.CropAnchors != nil {
+			anchors := make(map[string]provider.CropAnchor)
+			for k, v := range img.CropAnchors {
+				anchors[k] = v
+			}
+			snapshot[i].CropAnchors = anchors
+		}
 	}
 	s.mu.RUnlock()
 

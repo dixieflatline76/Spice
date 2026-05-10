@@ -40,7 +40,7 @@ func TestFitImage_Protection_Strategies(t *testing.T) {
 		cfg.SetSmartFitMode(SmartFitOff)
 		img := createSolidImage(100, 100, color.White)
 
-		out, err := processor.FitImage(context.Background(), img, 50, 50)
+		out, err := processor.FitImage(context.Background(), img, 50, 50, 0)
 		require.NoError(t, err)
 		assert.Equal(t, img, out, "Should return original image object when Off")
 	})
@@ -55,7 +55,7 @@ func TestFitImage_Protection_Strategies(t *testing.T) {
 		// Fit Check: Diff 0.2 > 0.1 (Strict Limit). -> Expect Rejection.
 		img := createSolidImage(120, 100, color.White)
 
-		_, err := processor.FitImage(context.Background(), img, 100, 100)
+		_, err := processor.FitImage(context.Background(), img, 100, 100, 0)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "quality mode rejected")
 	})
@@ -68,7 +68,7 @@ func TestFitImage_Protection_Strategies(t *testing.T) {
 		img := createSolidImage(200, 200, color.White)
 
 		// Target 100x100
-		out, err := processor.FitImage(context.Background(), img, 100, 100)
+		out, err := processor.FitImage(context.Background(), img, 100, 100, 0)
 		require.NoError(t, err)
 
 		// We can't easily verify WHICH logic ran without logs/mocks,

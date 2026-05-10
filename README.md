@@ -46,6 +46,7 @@ Spice is more than a utility; it's a high-performance framework for desktop envi
 *   **⚡ Ultra-Responsive:** Engineered for zero-lag performance, ensuring the UI stays snappy even while handling high-resolution 4K content.
 *   **🖥️ Independent Multi-Monitor Suite:** Spice v2.0 detects every connected display and assigns it an autonomous controller. Every monitor can be controlled individually via dedicated hotkeys.
 *   **📐 Orientation Intelligence:** Spice understands the difference between landscape and portrait monitors. It picks images that match your screen's orientation before applying **SmartCrop**, so your vertical monitors get true portrait compositions.
+*   **🎯 Smart Crop Anchors:** Fine-tune composition with a 9-direction anchor grid. Override the automatic crop position using intuitive WASD-style keyboard shortcuts to keep the best part of any image in frame.
 *   **🍃 Organic Staggering:** Handled via decentralized monitor Actor loops to prevent sudden CPU spikes across all displays.
 
 ### 🎮 Control & Experience
@@ -62,6 +63,12 @@ Target a specific monitor (**1-9**) by holding that number key while pressing th
 | **Fav / Unfav** | `Command` + `1-9` + `↑` | `Alt` + `1-9` + `↑` |
 | **Del + Block** | `Command` + `1-9` + `↓` | `Alt` + `1-9` + `↓` |
 | **Pause Play** | `Command` + `1-9` + `P` | `Alt` + `1-9` + `P` |
+| **Anchor Up** | `Command` + `1-9` + `W` | `Alt` + `1-9` + `W` |
+| **Anchor Down** | `Command` + `1-9` + `S` | `Alt` + `1-9` + `S` |
+| **Anchor Left** | `Command` + `1-9` + `A` | `Alt` + `1-9` + `A` |
+| **Anchor Right** | `Command` + `1-9` + `D` | `Alt` + `1-9` + `D` |
+| **Anchor Center** | `Command` + `1-9` + `E` | `Alt` + `1-9` + `E` |
+| **Anchor Auto** | `Command` + `1-9` + `Q` | `Alt` + `1-9` + `Q` |
 
 #### Global Actions (All Monitors)
 These actions affect all displays simultaneously.

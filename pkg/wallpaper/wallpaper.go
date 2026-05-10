@@ -44,7 +44,7 @@ type OS interface {
 type ImageProcessor interface {
 	DecodeImage(ctx context.Context, imgBytes []byte, contentType string) (image.Image, string, error)
 	EncodeImage(ctx context.Context, img image.Image, contentType string) ([]byte, error)
-	FitImage(ctx context.Context, img image.Image, targetWidth, targetHeight int) (image.Image, error)
+	FitImage(ctx context.Context, img image.Image, targetWidth, targetHeight int, anchor provider.CropAnchor) (image.Image, error)
 	CheckCompatibility(imgWidth, imgHeight, targetWidth, targetHeight int) error
 }
 
@@ -756,6 +756,12 @@ func (wp *Plugin) GetOS() OS {
 func (wp *Plugin) TriggerFavorite(monitorID int) {
 	log.Debugf("TriggerFavorite called for monitor %d", monitorID)
 	wp.dispatch(monitorID, CmdFavorite)
+}
+
+// SetCropAnchor dispatches an anchor command to the target monitor controller.
+func (wp *Plugin) SetCropAnchor(monitorID int, anchor provider.CropAnchor) {
+	log.Debugf("SetCropAnchor called for monitor %d, anchor %v", monitorID, anchor)
+	wp.dispatch(monitorID, Command(anchor))
 }
 
 func (wp *Plugin) TriggerOpenSettings() {

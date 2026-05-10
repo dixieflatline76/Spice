@@ -68,7 +68,7 @@ func TestRegressionSuite(t *testing.T) {
 			}
 
 			// 3. Run	// FitImage should invoke cropping
-			processed, err := processor.FitImage(context.Background(), img, 1920, 1080)
+			processed, err := processor.FitImage(context.Background(), img, 1920, 1080, 0)
 			require.NoError(t, err)
 			fmt.Printf("Result Bounds: %v\n", processed.Bounds())
 		})
