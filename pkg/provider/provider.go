@@ -83,21 +83,21 @@ func (a CropAnchor) String() string {
 // Image represents a generic wallpaper image.
 type Image struct {
 	ID               string
-	Path             string            // URL to download the image
-	ViewURL          string            // URL to view the image in browser
-	FilePath         string            // Local path after download (optional/computed)
-	Attribution      string            // Photographer or Uploader name
-	Provider         string            // Source provider name
-	FileType         string            // Content type (e.g., "image/jpeg")
-	DownloadLocation string            // URL to trigger download event (Unsplash requirement)
-	ProcessingFlags  map[string]bool   // Flags indicating how the image was processed (e.g. "SmartFit", "FaceCrop")
-	DerivativePaths  map[string]string // Local file paths for different resolutions (e.g. "3440x1440" -> "/path/to/image.jpg")
-	SourceQueryID    string            // ID of the query that produced this image (for smart cache clearing)
-	Width            int               // Image Width (if available from source)
-	Height           int               // Image Height (if available from source)
+	Path             string                // URL to download the image
+	ViewURL          string                // URL to view the image in browser
+	FilePath         string                // Local path after download (optional/computed)
+	Attribution      string                // Photographer or Uploader name
+	Provider         string                // Source provider name
+	FileType         string                // Content type (e.g., "image/jpeg")
+	DownloadLocation string                // URL to trigger download event (Unsplash requirement)
+	ProcessingFlags  map[string]bool       // Flags indicating how the image was processed (e.g. "SmartFit", "FaceCrop")
+	DerivativePaths  map[string]string     // Local file paths for different resolutions (e.g. "3440x1440" -> "/path/to/image.jpg")
+	SourceQueryID    string                // ID of the query that produced this image (for smart cache clearing)
+	Width            int                   // Image Width (if available from source)
+	Height           int                   // Image Height (if available from source)
 	CropAnchors      map[string]CropAnchor `json:",omitempty"` // Per-resolution crop anchor hints (key = "WxH", e.g. "3440x1440")
-	IsFavorited      bool              // Flag to protect image from cache pruning
-	Seen             bool              // Flag for pagination/history logic
+	IsFavorited      bool                  // Flag to protect image from cache pruning
+	Seen             bool                  // Flag for pagination/history logic
 }
 
 // GetAnchor returns the crop anchor for a specific resolution key.
