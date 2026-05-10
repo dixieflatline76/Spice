@@ -530,6 +530,12 @@ func (mc *MonitorController) reprocessWithAnchor(anchor provider.CropAnchor) {
 		return
 	}
 
+	// Remove old derivative before writing new one to force a new filesystem
+	// inode. On macOS/APFS, imaging.Save → os.Create truncates in-place (same
+	// inode), and the OS serves stale cached image data. Deleting first ensures
+	// os.Create allocates a new inode, bypassing all file-level caching.
+	os.Remove(derivPath) // Ignore error — file may not exist yet
+
 	if err := imaging.Save(processedImg, derivPath); err != nil {
 		log.Printf("[ERROR] [Monitor %d] Failed to save derivative: %v", mc.ID, err)
 		return
