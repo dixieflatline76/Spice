@@ -66,10 +66,30 @@ int nativeSetWallpaper(const char *imagePath, int screenIndex) {
 
             NSScreen *screen = [screens objectAtIndex:screenIndex];
             NSError *error = nil;
+
+            // Cache-bust: NSWorkspace caches desktop images by file URL.
+            // When the file content changes but the path stays the same
+            // (e.g. anchor reprocessing overwrites the derivative in-place),
+            // macOS silently ignores the setDesktopImageURL call.
+            // Fix: if the current wallpaper URL matches the new one, briefly
+            // set to a different URL to invalidate the cache.
+            NSURL *currentURL = [[NSWorkspace sharedWorkspace] desktopImageURLForScreen:screen];
+            if (currentURL && [currentURL isEqual:imageURL]) {
+                // Use macOS built-in solid color as cache-bust target.
+                // This path exists on macOS 12+ (our minimum deployment target).
+                NSString *bustPath = @"/System/Library/Desktop Pictures/Solid Colors/Black.png";
+                if ([[NSFileManager defaultManager] fileExistsAtPath:bustPath]) {
+                    [[NSWorkspace sharedWorkspace] setDesktopImageURL:[NSURL fileURLWithPath:bustPath]
+                                                            forScreen:screen
+                                                              options:@{}
+                                                                error:nil];
+                }
+            }
+
             BOOL success = [[NSWorkspace sharedWorkspace] setDesktopImageURL:imageURL
-                                                                  forScreen:screen
-                                                                    options:@{}
-                                                                      error:&error];
+                                                                   forScreen:screen
+                                                                     options:@{}
+                                                                       error:&error];
             if (!success) {
                 NSLog(@"Spice: NSWorkspace setDesktopImageURL failed: %@",
                       error ? error.localizedDescription : @"unknown error");
