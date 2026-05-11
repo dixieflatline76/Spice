@@ -67,22 +67,28 @@ int nativeSetWallpaper(const char *imagePath, int screenIndex) {
             NSScreen *screen = [screens objectAtIndex:screenIndex];
             NSError *error = nil;
 
-            // Cache-bust: NSWorkspace caches desktop images by file URL.
-            // When the file content changes but the path stays the same
-            // (e.g. anchor reprocessing overwrites the derivative in-place),
-            // macOS silently ignores the setDesktopImageURL call.
-            // Fix: if the current wallpaper URL matches the new one, briefly
-            // set to a different URL to invalidate the cache.
+            // WindowServer cache bypass:
+            // macOS caches rendered wallpapers at multiple levels — both in
+            // NSWorkspace (by URL) and in WindowServer (by rendered texture).
+            // When a derivative file is overwritten in-place (same path, new
+            // content — e.g. after anchor reprocessing), neither cache is
+            // invalidated. The only reliable fix is presenting a genuinely
+            // different file URL to WindowServer.
+            //
+            // Strategy: if the current wallpaper URL matches the new one,
+            // create a hardlink with a ".spice_tmp" suffix. Hardlinks share
+            // the same data (zero extra disk space) but have a unique URL.
+            // The previous temp file is cleaned up on each call.
             NSURL *currentURL = [[NSWorkspace sharedWorkspace] desktopImageURLForScreen:screen];
             if (currentURL && [currentURL isEqual:imageURL]) {
-                // Use macOS built-in solid color as cache-bust target.
-                // This path exists on macOS 12+ (our minimum deployment target).
-                NSString *bustPath = @"/System/Library/Desktop Pictures/Solid Colors/Black.png";
-                if ([[NSFileManager defaultManager] fileExistsAtPath:bustPath]) {
-                    [[NSWorkspace sharedWorkspace] setDesktopImageURL:[NSURL fileURLWithPath:bustPath]
-                                                            forScreen:screen
-                                                              options:@{}
-                                                                error:nil];
+                NSString *tmpPath = [NSString stringWithFormat:@"%@.spice_tmp", path];
+
+                // Clean up previous temp hardlink
+                [[NSFileManager defaultManager] removeItemAtPath:tmpPath error:nil];
+
+                // Create hardlink: same inode data, unique directory entry
+                if (link([path UTF8String], [tmpPath UTF8String]) == 0) {
+                    imageURL = [NSURL fileURLWithPath:tmpPath];
                 }
             }
 
