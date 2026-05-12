@@ -263,7 +263,7 @@ func registerAndListen(hk *hotkey.Hotkey, name string, action func()) {
 		log.Printf("Failed to register hotkey %s: %v", name, err)
 		return
 	}
-	log.Debugf("Registered hotkey: %s", name)
+	log.Printf("[Hotkey] Registered: %s", name)
 	registeredHotkeys = append(registeredHotkeys, hk)
 
 	go func() {
@@ -290,7 +290,7 @@ func registerAndListen(hk *hotkey.Hotkey, name string, action func()) {
 func registerAndListenTargeted(hk *hotkey.Hotkey, name string, action func()) {
 	wp := wallpaper.GetInstance()
 	if wp != nil && (wp.GetTargetedShortcutsDisabled() || wp.GetShortcutsDisabled()) {
-		log.Debugf("Skipping targeted hotkey registration for %s (Disabled in Preferences)", name)
+		log.Printf("[Hotkey] Skipping targeted registration for %s (Disabled in Preferences)", name)
 		return
 	}
 
@@ -298,7 +298,7 @@ func registerAndListenTargeted(hk *hotkey.Hotkey, name string, action func()) {
 		log.Printf("Failed to register hotkey %s: %v", name, err)
 		return
 	}
-	log.Debugf("Registered Targeted hotkey: %s", name)
+	log.Printf("[Hotkey] Registered Targeted: %s", name)
 	registeredHotkeys = append(registeredHotkeys, hk)
 
 	go func() {
