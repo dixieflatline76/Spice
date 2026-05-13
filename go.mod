@@ -2,7 +2,7 @@ module github.com/dixieflatline76/Spice/v2
 
 go 1.25.0
 
-require fyne.io/fyne/v2 v2.7.3
+require fyne.io/fyne/v2 v2.7.4
 
 require (
 	github.com/danieljoos/wincred v1.2.3 // indirect
@@ -12,7 +12,9 @@ require (
 	github.com/hack-pad/go-indexeddb v0.3.2 // indirect
 	github.com/hack-pad/safejs v0.1.1 // indirect
 	github.com/kr/text v0.2.0 // indirect
+	github.com/mattn/go-runewidth v0.0.17 // indirect
 	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646 // indirect
+	github.com/rivo/uniseg v0.2.0 // indirect
 	github.com/stretchr/objx v0.5.3 // indirect
 )
 
