@@ -5,6 +5,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/theme"
 	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/schema"
@@ -194,6 +195,46 @@ func (b *PrefsPanelBuilder) BuildGeneralTabSchema() *schema.PanelSchema {
 			},
 		},
 	}
+}
+
+// BuildGeneralTabAccordion splits the general settings schema into accordion items,
+// one per section. The first section is open by default.
+func (b *PrefsPanelBuilder) BuildGeneralTabAccordion(sm setting.SettingsManager) []accordionItem {
+	generalSchema := b.BuildGeneralTabSchema()
+	var items []accordionItem
+
+	// Icons for each General section, in order:
+	// Wallpaper Cycle & Cache, Smart Fit & Face Detection, Toggles, Actions
+	sectionIcons := []fyne.Resource{
+		theme.HistoryIcon(),
+		theme.ViewFullScreenIcon(),
+		theme.CheckButtonCheckedIcon(),
+		theme.ComputerIcon(),
+	}
+
+	for i, section := range generalSchema.Sections {
+		// Strip title/description — the accordion header already shows these.
+		title := section.Title
+		section.Title = ""
+		section.Description = ""
+
+		sectionPanel := schema.PanelSchema{Sections: []schema.SectionSchema{section}}
+		sectionContent := sm.RenderSchema(sectionPanel)
+
+		var icon fyne.Resource
+		if i < len(sectionIcons) {
+			icon = sectionIcons[i]
+		}
+
+		items = append(items, accordionItem{
+			Title:   title,
+			Content: sectionContent,
+			Open:    i == 0,
+			Icon:    icon,
+		})
+	}
+
+	return items
 }
 
 // BuildProviderTabs creates the provider accordions (Community, Personal, Museums).

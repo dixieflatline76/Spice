@@ -210,9 +210,14 @@ func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 	// Register the wallpaper refresh function
 	sm.RegisterRefreshFunc(wp.RefreshImagesAndPulse)
 
-	// 1. Build General Settings
-	generalSchema := builder.BuildGeneralTabSchema()
-	generalTab := container.NewVScroll(sm.RenderSchema(*generalSchema))
+	// 1. Build General Settings as accordion (one section per accordion item)
+	generalItems := builder.BuildGeneralTabAccordion(sm)
+	generalTab, refreshGeneral := createAccordion(generalItems)
+	sm.RegisterOnSettingsSaved(func() {
+		if refreshGeneral != nil {
+			refreshGeneral()
+		}
+	})
 
 	// 2. Build Provider Tabs
 	onlineTab, localTab, museumTab, targetTabIndex := builder.BuildProviderTabs()
