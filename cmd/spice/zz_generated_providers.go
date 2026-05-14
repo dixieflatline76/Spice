@@ -9,6 +9,7 @@ import (
 	_ "github.com/dixieflatline76/Spice/v2/pkg/wallpaper/providers/localfolder"
 	_ "github.com/dixieflatline76/Spice/v2/pkg/wallpaper/providers/metmuseum"
 	_ "github.com/dixieflatline76/Spice/v2/pkg/wallpaper/providers/pexels"
+	_ "github.com/dixieflatline76/Spice/v2/pkg/wallpaper/providers/rijksmuseum"
 	_ "github.com/dixieflatline76/Spice/v2/pkg/wallpaper/providers/wallhaven"
 	_ "github.com/dixieflatline76/Spice/v2/pkg/wallpaper/providers/wikimedia"
 )

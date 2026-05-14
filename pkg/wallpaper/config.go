@@ -1237,6 +1237,34 @@ func (c *Config) GetArtInstituteChicagoQueries() []ImageQuery {
 	return queries
 }
 
+// AddRijksmuseumQuery adds a new Rijksmuseum query.
+func (c *Config) AddRijksmuseumQuery(description, url string, active bool) (string, error) {
+	return c.AddProviderQuery(description, url, "Rijksmuseum", active, false)
+}
+
+// EnableRijksmuseumQuery enables a Rijksmuseum query.
+func (c *Config) EnableRijksmuseumQuery(id string) error {
+	return c.EnableImageQuery(id)
+}
+
+// DisableRijksmuseumQuery disables a Rijksmuseum query.
+func (c *Config) DisableRijksmuseumQuery(id string) error {
+	return c.DisableImageQuery(id)
+}
+
+// GetRijksmuseumQueries returns a copy of the Rijksmuseum queries.
+func (c *Config) GetRijksmuseumQueries() []ImageQuery {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	var queries []ImageQuery
+	for _, q := range c.Queries {
+		if q.Provider == "Rijksmuseum" {
+			queries = append(queries, q)
+		}
+	}
+	return queries
+}
+
 // SetWallhavenSyncEnabled sets whether Wallhaven sync is enabled.
 func (c *Config) SetWallhavenSyncEnabled(enabled bool) {
 	c.mu.Lock()
