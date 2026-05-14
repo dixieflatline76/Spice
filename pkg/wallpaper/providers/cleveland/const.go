@@ -9,7 +9,7 @@ const (
 	ProviderName = "ClevelandMuseum"
 
 	// ProviderTitle is the user-facing name
-	ProviderTitle = "Cleveland Museum of Art"
+	ProviderTitle = "CMA"
 
 	// APIBaseURL is the base for all API calls (no auth required)
 	APIBaseURL = "https://openaccess-api.clevelandart.org/api/artworks/"
