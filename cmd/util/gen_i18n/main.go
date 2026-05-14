@@ -26,16 +26,18 @@ var allowIdenticalToEnglish = map[string]bool{
 	// Proper nouns — museum names used internationally in English
 	"Art Institute of Chicago":       true,
 	"The Metropolitan Museum of Art": true,
+	"Rijksmuseum":                    true,
+	"Cleveland Museum of Art":        true,
 
 	// International loanwords / identical across many languages
-	"AI":      true,
-	"App":     true,
-	"General": true,
-	"Images":  true,
-	"Local":   true,
-	"Online":  true,
-	"System":  true,
-	"Actions": true,
+	"App":       true,
+	"Community": true,
+	"General":   true,
+	"Images":    true,
+	"Museums":   true,
+	"Personal":  true,
+	"System":    true,
+	"Actions":   true,
 
 	// Brand names / tech terms kept in English
 	"Pexels":                  true,
@@ -48,8 +50,10 @@ var allowIdenticalToEnglish = map[string]bool{
 	"CC0 - Public Domain":     true,
 
 	// Locations kept in their international form
-	"Chicago, IL, USA":   true,
-	"New York City, USA": true,
+	"Chicago, IL, USA":       true,
+	"New York City, USA":     true,
+	"Amsterdam, Netherlands": true,
+	"Cleveland, OH, USA":     true,
 
 	// Short functional strings identical in many languages
 	"Error: ": true,

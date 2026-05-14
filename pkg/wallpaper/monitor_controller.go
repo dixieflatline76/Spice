@@ -270,12 +270,19 @@ func (mc *MonitorController) next(manual bool) {
 	mc.State.WaitingForImages = false
 	mc.State.ManualRecovery = false
 
-	// 3. Rebuild Shuffle if needed
-	// Optimization: We no longer reshuffle on every content change (pendingUpdate).
-	// We only reshuffle if the deck is exhausted (below) or if the current IDs have shifted length (safety).
+	// 3. Reconcile Shuffle with Bucket
+	// Incremental strategy: when the pool grows, scatter new images into the
+	// unplayed portion of the deck. This prevents provider clustering when
+	// images arrive in same-provider bursts. Full rebuilds only happen on
+	// deck exhaustion or pool shrinkage.
 	if len(mc.State.ShuffleIDs) != len(bucketIDs) {
-		log.Debugf("[Monitor %d] Shuffle list length mismatch (Bucket: %d, Current: %d). Rebuilding.", mc.ID, len(bucketIDs), len(mc.State.ShuffleIDs))
-		mc.rebuildShuffle(bucketIDs)
+		if len(bucketIDs) > len(mc.State.ShuffleIDs) && len(mc.State.ShuffleIDs) > 0 {
+			mc.growShuffle(bucketIDs)
+		} else {
+			// Pool shrank or was empty — full rebuild
+			log.Debugf("[Monitor %d] Shuffle full rebuild (Bucket: %d, Current: %d).", mc.ID, len(bucketIDs), len(mc.State.ShuffleIDs))
+			mc.rebuildShuffle(bucketIDs)
+		}
 	}
 	mc.pendingUpdate = false // Always consume the pending update
 
@@ -316,17 +323,68 @@ func (mc *MonitorController) next(manual bool) {
 	mc.State.ManualRecovery = manual
 }
 
+// rebuildShuffle performs a full shuffle of all IDs and resets position to 0.
+// Used on: initial build, deck exhaustion, pool shrinkage.
 func (mc *MonitorController) rebuildShuffle(ids []string) {
 	shuffled := make([]string, len(ids))
 	copy(shuffled, ids)
 
-	// Always shuffle in modern Spice
 	rand.Shuffle(len(shuffled), func(i, j int) {
 		shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
 	})
 
 	mc.State.ShuffleIDs = shuffled
 	mc.State.RandomPos = 0
+}
+
+// growShuffle incrementally inserts newly arrived images into the unplayed
+// portion of the deck. This preserves the current playback position and
+// prevents provider clustering when images arrive in same-provider bursts.
+func (mc *MonitorController) growShuffle(bucketIDs []string) {
+	// Build set of IDs already in the shuffle deck
+	existing := make(map[string]bool, len(mc.State.ShuffleIDs))
+	for _, id := range mc.State.ShuffleIDs {
+		existing[id] = true
+	}
+
+	// Collect new IDs not yet in the deck
+	var newIDs []string
+	for _, id := range bucketIDs {
+		if !existing[id] {
+			newIDs = append(newIDs, id)
+		}
+	}
+
+	if len(newIDs) == 0 {
+		return
+	}
+
+	// Shuffle the new arrivals
+	rand.Shuffle(len(newIDs), func(i, j int) {
+		newIDs[i], newIDs[j] = newIDs[j], newIDs[i]
+	})
+
+	// Insert new IDs at random positions in the UNPLAYED portion of the deck
+	// (everything from RandomPos onward). This scatters them among existing
+	// unseen images instead of clustering them at the end.
+	played := mc.State.ShuffleIDs[:mc.State.RandomPos]
+	unplayed := mc.State.ShuffleIDs[mc.State.RandomPos:]
+
+	// Merge: interleave new IDs into unplayed portion
+	merged := make([]string, 0, len(unplayed)+len(newIDs))
+	merged = append(merged, unplayed...)
+	merged = append(merged, newIDs...)
+
+	// Shuffle only the merged unplayed portion to scatter new arrivals
+	rand.Shuffle(len(merged), func(i, j int) {
+		merged[i], merged[j] = merged[j], merged[i]
+	})
+
+	// Reassemble: played portion stays intact, unplayed is now mixed
+	mc.State.ShuffleIDs = append(played, merged...)
+
+	log.Debugf("[Monitor %d] Incremental shuffle: inserted %d new images into unplayed deck (Pos: %d, Total: %d)",
+		mc.ID, len(newIDs), mc.State.RandomPos, len(mc.State.ShuffleIDs))
 }
 
 func (mc *MonitorController) updateShuffle() {

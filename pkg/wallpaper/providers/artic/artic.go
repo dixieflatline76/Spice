@@ -188,7 +188,7 @@ func (p *Provider) GetClient() *http.Client {
 }
 
 func (p *Provider) Type() provider.ProviderType {
-	return provider.TypeOnline
+	return provider.TypeMuseum
 }
 
 func (p *Provider) GetAttributionType() provider.AttributionType {
@@ -517,6 +517,7 @@ func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, _ string) *schem
 			Name:         ProviderName + "_" + key,
 			Label:        tour.Name,
 			InitialValue: active,
+			NeedsRefresh: true,
 			ApplyFunc: func(b bool) {
 				_, cid := getQuery(key)
 				if b {

@@ -39,7 +39,7 @@ func (m *MockPacedProvider) CreateSettingsPanel(sm setting.SettingsManager) *sch
 func (m *MockPacedProvider) GetProviderIcon() interface{} { return nil }
 func (m *MockPacedProvider) HomeURL() string              { return "" }
 func (m *MockPacedProvider) Title() string                { return m.id }
-func (m *MockPacedProvider) Type() provider.ProviderType  { return provider.TypeOnline }
+func (m *MockPacedProvider) Type() provider.ProviderType  { return provider.TypeCommunity }
 func (m *MockPacedProvider) GetAttributionType() provider.AttributionType {
 	return provider.AttributionBy
 }

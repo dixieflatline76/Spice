@@ -5,6 +5,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/theme"
 	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/schema"
@@ -196,10 +197,51 @@ func (b *PrefsPanelBuilder) BuildGeneralTabSchema() *schema.PanelSchema {
 	}
 }
 
-// BuildProviderTabs creates the provider accordions (Online, Local).
-func (b *PrefsPanelBuilder) BuildProviderTabs() (fyne.CanvasObject, fyne.CanvasObject, int) {
+// BuildGeneralTabAccordion splits the general settings schema into accordion items,
+// one per section. The first section is open by default.
+func (b *PrefsPanelBuilder) BuildGeneralTabAccordion(sm setting.SettingsManager) []accordionItem {
+	generalSchema := b.BuildGeneralTabSchema()
+	var items []accordionItem
+
+	// Icons for each General section, in order:
+	// Wallpaper Cycle & Cache, Smart Fit & Face Detection, Toggles, Actions
+	sectionIcons := []fyne.Resource{
+		theme.HistoryIcon(),
+		theme.ViewFullScreenIcon(),
+		theme.CheckButtonCheckedIcon(),
+		theme.ComputerIcon(),
+	}
+
+	for i, section := range generalSchema.Sections {
+		// Strip title/description — the accordion header already shows these.
+		title := section.Title
+		section.Title = ""
+		section.Description = ""
+
+		sectionPanel := schema.PanelSchema{Sections: []schema.SectionSchema{section}}
+		sectionContent := sm.RenderSchema(sectionPanel)
+
+		var icon fyne.Resource
+		if i < len(sectionIcons) {
+			icon = sectionIcons[i]
+		}
+
+		items = append(items, accordionItem{
+			Title:   title,
+			Content: sectionContent,
+			Open:    i == 0,
+			Icon:    icon,
+		})
+	}
+
+	return items
+}
+
+// BuildProviderTabs creates the provider accordions (Community, Personal, Museums).
+func (b *PrefsPanelBuilder) BuildProviderTabs() (fyne.CanvasObject, fyne.CanvasObject, fyne.CanvasObject, int) {
 	var onlineItems []accordionItem
 	var localItems []accordionItem
+	var museumItems []accordionItem
 	targetTabIndex := 0
 
 	names := b.getSortedProviderIDs()
@@ -218,15 +260,19 @@ func (b *PrefsPanelBuilder) BuildProviderTabs() (fyne.CanvasObject, fyne.CanvasO
 			continue
 		}
 
-		if p.Type() == provider.TypeLocal {
+		switch p.Type() {
+		case provider.TypePersonal:
 			localItems = append(localItems, *item)
-		} else if p.Type() == provider.TypeOnline {
+		case provider.TypeMuseum:
+			museumItems = append(museumItems, *item)
+		default:
 			onlineItems = append(onlineItems, *item)
 		}
 	}
 
 	onlineTab, refreshOnline := createAccordion(onlineItems)
 	localTab, refreshLocal := createAccordion(localItems)
+	museumTab, refreshMuseum := createAccordion(museumItems)
 
 	b.sm.RegisterOnSettingsSaved(func() {
 		if refreshOnline != nil {
@@ -234,6 +280,9 @@ func (b *PrefsPanelBuilder) BuildProviderTabs() (fyne.CanvasObject, fyne.CanvasO
 		}
 		if refreshLocal != nil {
 			refreshLocal()
+		}
+		if refreshMuseum != nil {
+			refreshMuseum()
 		}
 	})
 
@@ -245,9 +294,12 @@ func (b *PrefsPanelBuilder) BuildProviderTabs() (fyne.CanvasObject, fyne.CanvasO
 		if refreshLocal != nil {
 			refreshLocal()
 		}
+		if refreshMuseum != nil {
+			refreshMuseum()
+		}
 	})
 
-	return onlineTab, localTab, targetTabIndex
+	return onlineTab, localTab, museumTab, targetTabIndex
 }
 
 func (b *PrefsPanelBuilder) getSortedProviderIDs() []string {
@@ -279,9 +331,9 @@ func (b *PrefsPanelBuilder) createProviderAccordionItem(p provider.ImageProvider
 
 	if isPending {
 		switch p.Type() {
-		case provider.TypeLocal:
+		case provider.TypePersonal:
 			tabIndex = 2
-		case provider.TypeAI:
+		case provider.TypeMuseum:
 			tabIndex = 3
 		default:
 			tabIndex = 1

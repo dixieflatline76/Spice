@@ -9,7 +9,7 @@ const (
 	ProviderName = "ArtInstituteChicago"
 
 	// ProviderTitle is the user-facing name
-	ProviderTitle = "Art Institute of Chicago"
+	ProviderTitle = "AIC"
 
 	// APIBaseURL is the base for all API calls
 	APIBaseURL = "https://api.artic.edu/api/v1"

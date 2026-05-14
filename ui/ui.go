@@ -513,44 +513,31 @@ func (sa *SpiceApp) CreatePreferencesWindow(initialTab string) {
 		targetWidth = minSize.Width * 1.25
 	}
 
-	// We want a portrait/square look, so we tie the height to the width.
-	// Target slightly taller than wide (1.0) to shave off those final few vertical pixels.
-	targetHeight := targetWidth * 1.0
-
-	// Safety check: ensure the resulting height actually fits the vertical content
-	// Adding minimal vertical padding provides some room for scrolling.
-	if targetHeight < minSize.Height*1.05 {
-		targetHeight = minSize.Height * 1.05
-	}
-
-	// Prevent the window from expanding off the top/bottom on smaller physical screens.
-	// Since GetScreenDimensions() currently returns physical pixels on Windows,
-	// we translate that explicitly into Fyne's logical bounds.
+	// Derive height from actual screen height so it's always proportional to the display,
+	// regardless of scaling factor. Target 85% of logical screen height.
 	_, physHeight, err := sysinfo.GetScreenDimensions()
-	if err == nil {
-		logicalScreenHeight := float32(physHeight) / osScale
-		maxSafeHeight := logicalScreenHeight * 0.90 // Keep 10% breathing room for the taskbar/titlebar
+	logicalScreenHeight := float32(physHeight) / osScale
+	targetHeight := targetWidth * 1.0 // Default: square (fallback if screen detection fails)
 
-		if targetHeight > maxSafeHeight {
-			targetHeight = maxSafeHeight
+	if err == nil && logicalScreenHeight > 0 {
+		targetHeight = logicalScreenHeight * 0.85
 
-			// Maintain aspect ratio if we compress the height hard against screen edge
-			if targetWidth > targetHeight {
-				targetWidth = targetHeight
-			}
+		// Don't let the window be taller than it is wide
+		if targetHeight > targetWidth {
+			targetHeight = targetWidth
 		}
 	}
-
-	prefsWindow.Resize(fyne.NewSize(targetWidth, targetHeight))
-
-	prefsWindow.CenterOnScreen()
 	prefsWindow.SetOnClosed(func() {
 		sa.os.TransformToBackground()
 		sa.prefsWindow = nil // Clear reference on close
 		sa.prefsTabs = nil   // Clear tabs reference
 	})
 
+	// Fyne enforces content MinSize during Show(), silently overriding any prior Resize.
+	// We must Resize AFTER Show to override Fyne's minimum size enforcement.
 	prefsWindow.Show()
+	prefsWindow.Resize(fyne.NewSize(targetWidth, targetHeight))
+	prefsWindow.CenterOnScreen()
 }
 
 // RebuildPreferencesContent rebuilds the content of the preferences window.
@@ -757,9 +744,56 @@ func (sa *SpiceApp) RebuildPreferencesContent(initialTab string) {
 	// Layout: Tabs take up the main space, Apply/Close buttons at the bottom
 	prefsWindowLayout := container.NewBorder(nil, container.NewVBox(sm.GetApplySettingsButton(), container.NewHBox(layout.NewSpacer(), closeButton)), nil, nil, tabs)
 
-	sa.prefsWindow.SetContent(prefsWindowLayout)
+	// Wrap in a minSizeOverride so Fyne doesn't enforce the full content height
+	// as the window's minimum size. Without this, Fyne silently ignores Resize()
+	// when the content's MinSize exceeds the target (e.g., accordion panels at 1352px
+	// on a 1440px screen at 100% scaling).
+	sa.prefsWindow.SetContent(newMinSizeContainer(prefsWindowLayout))
 	sm.GetCheckAndEnableApplyFunc()() // Trigger initial UI dependency refresh
 }
+
+// minSizeContainer wraps a CanvasObject and overrides its MinSize to prevent
+// Fyne from enforcing the child's full content height as the window minimum.
+// The child is still laid out at the full available size.
+type minSizeContainer struct {
+	widget.BaseWidget
+	content fyne.CanvasObject
+}
+
+func newMinSizeContainer(content fyne.CanvasObject) *minSizeContainer {
+	c := &minSizeContainer{content: content}
+	c.ExtendBaseWidget(c)
+	return c
+}
+
+func (m *minSizeContainer) CreateRenderer() fyne.WidgetRenderer {
+	return &minSizeRenderer{content: m.content}
+}
+
+type minSizeRenderer struct {
+	content fyne.CanvasObject
+}
+
+func (r *minSizeRenderer) Layout(size fyne.Size) {
+	r.content.Resize(size)
+	r.content.Move(fyne.NewPos(0, 0))
+}
+
+func (r *minSizeRenderer) MinSize() fyne.Size {
+	// Report the content's width but a small height, so the window
+	// can be resized shorter than the content's natural height.
+	return fyne.NewSize(r.content.MinSize().Width, 100)
+}
+
+func (r *minSizeRenderer) Refresh() {
+	r.content.Refresh()
+}
+
+func (r *minSizeRenderer) Objects() []fyne.CanvasObject {
+	return []fyne.CanvasObject{r.content}
+}
+
+func (r *minSizeRenderer) Destroy() {}
 
 // spiceTheme wraps any Fyne theme to apply the Spice brand accent color.
 type spiceTheme struct {

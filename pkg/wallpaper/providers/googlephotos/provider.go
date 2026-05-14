@@ -70,7 +70,7 @@ func (p *Provider) Name() string {
 }
 
 func (p *Provider) Type() provider.ProviderType {
-	return provider.TypeOnline
+	return provider.TypePersonal
 }
 
 func (p *Provider) GetAttributionType() provider.AttributionType {

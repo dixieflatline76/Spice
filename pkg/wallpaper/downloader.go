@@ -219,7 +219,7 @@ func (wp *Plugin) enrichImage(ctx context.Context, img provider.Image, p provide
 	// Strip prefix so provider sees raw ID
 	originalID := img.ID
 	namespaced := false
-	if p.Type() == provider.TypeOnline {
+	if p.Type() != provider.TypePersonal {
 		prefix := p.ID() + "_"
 		if strings.HasPrefix(img.ID, prefix) {
 			img.ID = strings.TrimPrefix(img.ID, prefix)

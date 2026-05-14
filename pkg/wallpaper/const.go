@@ -204,6 +204,7 @@ const (
 	Cache300Images
 	Cache500Images
 	Cache1000Images
+	Cache5000Images
 )
 
 // CacheSizeValues maps CacheSize to its integer representation.
@@ -214,6 +215,7 @@ var CacheSizeValues = map[CacheSize]int{
 	Cache300Images:  300,
 	Cache500Images:  500,
 	Cache1000Images: 1000,
+	Cache5000Images: 5000,
 }
 
 // String returns the string representation of a CacheSize.
@@ -231,6 +233,8 @@ func (cs CacheSize) String() string {
 		return "500"
 	case Cache1000Images:
 		return "1000"
+	case Cache5000Images:
+		return "5000"
 	default:
 		return "Unknown"
 	}
@@ -250,6 +254,7 @@ func GetCacheSizes() []fmt.Stringer {
 		Cache300Images,
 		Cache500Images,
 		Cache1000Images,
+		Cache5000Images,
 	}
 	stringers := make([]fmt.Stringer, len(cacheSizes))
 	for i, cs := range cacheSizes {

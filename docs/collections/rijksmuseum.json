@@ -1,0 +1,190 @@
+{
+    "version": 1,
+    "description": "Rijksmuseum: Curated Collections",
+    "collections": [
+        {
+            "name": "⭐ Masterpieces",
+            "key": "rijks_masterpieces",
+            "type": "curated",
+            "items": [
+                {
+                    "object_id": "200107928",
+                    "object_number": "SK-C-5",
+                    "title": "The Night Watch",
+                    "artist": "Rembrandt van Rijn",
+                    "image_url": "https://iiif.micr.io/PJEZO/full/max/0/default.jpg"
+                },
+                {
+                    "object_id": "200108369",
+                    "object_number": "SK-A-2344",
+                    "title": "The Milkmaid",
+                    "artist": "Johannes Vermeer",
+                    "image_url": "https://iiif.micr.io/QkOGy/full/max/0/default.jpg"
+                },
+                {
+                    "object_id": "200107929",
+                    "object_number": "SK-C-6",
+                    "title": "The Syndics",
+                    "artist": "Rembrandt van Rijn",
+                    "image_url": "https://iiif.micr.io/cWWQE/full/max/0/default.jpg"
+                },
+                {
+                    "object_id": "200108370",
+                    "object_number": "SK-A-1595",
+                    "title": "The Love Letter",
+                    "artist": "Johannes Vermeer",
+                    "image_url": "https://iiif.micr.io/hqxQG/full/max/0/default.jpg"
+                },
+                {
+                    "object_id": "200108371",
+                    "object_number": "SK-A-2860",
+                    "title": "The Little Street",
+                    "artist": "Johannes Vermeer",
+                    "image_url": "https://iiif.micr.io/VWEov/full/max/0/default.jpg"
+                },
+                {
+                    "object_id": "200108372",
+                    "object_number": "SK-C-251",
+                    "title": "Woman in Blue Reading a Letter",
+                    "artist": "Johannes Vermeer",
+                    "image_url": "https://iiif.micr.io/aehHx/full/max/0/default.jpg"
+                },
+                {
+                    "object_id": "200107934",
+                    "object_number": "SK-C-216",
+                    "title": "The Jewish Bride",
+                    "artist": "Rembrandt van Rijn",
+                    "image_url": "https://iiif.micr.io/uRWXq/full/max/0/default.jpg"
+                },
+                {
+                    "object_id": "200107946",
+                    "object_number": "SK-A-3276",
+                    "title": "Jeremiah Lamenting the Destruction of Jerusalem",
+                    "artist": "Rembrandt van Rijn",
+                    "image_url": "https://iiif.micr.io/zQBxS/full/max/0/default.jpg"
+                },
+                {
+                    "object_id": "200109287",
+                    "object_number": "SK-C-371",
+                    "title": "The Company of Captain Albert Bas",
+                    "artist": "Govert Flinck",
+                    "image_url": "https://iiif.micr.io/URZpJ/full/max/0/default.jpg"
+                },
+                {
+                    "object_id": "200107930",
+                    "object_number": "SK-A-3340",
+                    "title": "Man in Oriental Dress",
+                    "artist": "Rembrandt van Rijn",
+                    "image_url": "https://iiif.micr.io/VzuFK/full/max/0/default.jpg"
+                },
+                {
+                    "object_id": "200107931",
+                    "object_number": "SK-A-3981",
+                    "title": "Still Life with Peacocks",
+                    "artist": "Rembrandt van Rijn",
+                    "image_url": "https://iiif.micr.io/vBXKy/full/max/0/default.jpg"
+                },
+                {
+                    "object_id": "200107933",
+                    "object_number": "SK-A-3137",
+                    "title": "St Peter's Denial",
+                    "artist": "Rembrandt van Rijn",
+                    "image_url": "https://iiif.micr.io/bAqDD/full/max/0/default.jpg"
+                },
+                {
+                    "object_id": "200107935",
+                    "object_number": "SK-A-4674",
+                    "title": "Musical Company",
+                    "artist": "Rembrandt van Rijn",
+                    "image_url": "https://iiif.micr.io/hdvov/full/max/0/default.jpg"
+                },
+                {
+                    "object_id": "200107945",
+                    "object_number": "SK-A-4717",
+                    "title": "Tobit and Anna with the Kid",
+                    "artist": "Rembrandt van Rijn",
+                    "image_url": "https://iiif.micr.io/myXdn/full/max/0/default.jpg"
+                },
+                {
+                    "object_id": "200107761",
+                    "object_number": "SK-A-1485",
+                    "title": "The Meeting of Jacob and Rachel",
+                    "artist": "Nicolaes Moeyaert",
+                    "image_url": "https://iiif.micr.io/NxFOh/full/max/0/default.jpg"
+                },
+                {
+                    "object_id": "200107004",
+                    "object_number": "SK-A-4",
+                    "title": "The Threatened Swan",
+                    "artist": "Jan Asselijn",
+                    "image_url": "https://iiif.micr.io/njLvs/full/max/0/default.jpg"
+                },
+                {
+                    "object_id": "200108171",
+                    "object_number": "SK-A-1718",
+                    "title": "Winter Landscape with Ice Skaters",
+                    "artist": "Hendrick Avercamp",
+                    "image_url": "https://iiif.micr.io/OkRwZ/full/max/0/default.jpg"
+                },
+                {
+                    "object_id": "200109326",
+                    "object_number": "SK-A-3262",
+                    "title": "Self-portrait",
+                    "artist": "Vincent van Gogh",
+                    "image_url": "https://iiif.micr.io/OUtXF/full/max/0/default.jpg"
+                },
+                {
+                    "object_id": "200107229",
+                    "object_number": "SK-C-229",
+                    "title": "The Merry Family",
+                    "artist": "Jan Steen",
+                    "image_url": "https://iiif.micr.io/bRWvw/full/max/0/default.jpg"
+                },
+                {
+                    "object_id": "200107874",
+                    "object_number": "SK-A-1115",
+                    "title": "The Battle of Waterloo",
+                    "artist": "Jan Willem Pieneman",
+                    "image_url": "https://iiif.micr.io/GebpD/full/max/0/default.jpg"
+                },
+                {
+                    "object_id": "200107374",
+                    "object_number": "SK-C-374",
+                    "title": "Militia Company of District XI (The Meagre Company)",
+                    "artist": "Frans Hals and Pieter Codde",
+                    "image_url": "https://iiif.micr.io/sUZPV/full/max/0/default.jpg"
+                }
+            ]
+        },
+        {
+            "name": "Dutch Golden Age",
+            "key": "rijks_golden_age",
+            "type": "search",
+            "search_params": "type=painting&creationDate.from=1600&creationDate.to=1700&imageAvailable=true"
+        },
+        {
+            "name": "Rembrandt",
+            "key": "rijks_rembrandt",
+            "type": "search",
+            "search_params": "type=painting&creator=Rembrandt+van+Rijn&imageAvailable=true"
+        },
+        {
+            "name": "Dutch Landscapes",
+            "key": "rijks_landscapes",
+            "type": "search",
+            "search_params": "type=painting&description=landscape&imageAvailable=true"
+        },
+        {
+            "name": "Vermeer",
+            "key": "rijks_vermeer",
+            "type": "search",
+            "search_params": "type=painting&creator=Johannes+Vermeer&imageAvailable=true"
+        },
+        {
+            "name": "Maritime & Seascapes",
+            "key": "rijks_maritime",
+            "type": "search",
+            "search_params": "type=painting&description=sea&imageAvailable=true"
+        }
+    ]
+}

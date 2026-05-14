@@ -1,0 +1,73 @@
+{
+    "version": 1,
+    "description": "Cleveland Museum of Art: Curated Collections",
+    "collections": [
+        {
+            "name": "⭐ Best of Cleveland",
+            "key": "cma_masterpieces",
+            "type": "curated",
+            "ids": [
+                141639,
+                92937,
+                151904,
+                106088,
+                93014,
+                135428,
+                143602,
+                145463,
+                136217,
+                170235,
+                110180,
+                134072,
+                172815,
+                171296,
+                136911,
+                150389,
+                145473,
+                140408,
+                125249,
+                125104,
+                122351,
+                136510,
+                155783,
+                147017,
+                128392,
+                138464,
+                115405,
+                135185,
+                142298,
+                92936
+            ]
+        },
+        {
+            "name": "American Painting",
+            "key": "cma_american",
+            "type": "search",
+            "search_params": "has_image=1&type=Painting&department=American+Painting+and+Sculpture"
+        },
+        {
+            "name": "European Painting",
+            "key": "cma_european",
+            "type": "search",
+            "search_params": "has_image=1&type=Painting&department=European+Painting+and+Sculpture"
+        },
+        {
+            "name": "Impressionism",
+            "key": "cma_impressionism",
+            "type": "search",
+            "search_params": "has_image=1&type=Painting&q=impressionism"
+        },
+        {
+            "name": "Asian Art",
+            "key": "cma_asian",
+            "type": "search",
+            "search_params": "has_image=1&type=Painting&department=Chinese+Art"
+        },
+        {
+            "name": "Modern & Contemporary",
+            "key": "cma_modern",
+            "type": "search",
+            "search_params": "has_image=1&type=Painting&department=Modern+European+Painting+and+Sculpture"
+        }
+    ]
+}

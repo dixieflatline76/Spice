@@ -210,22 +210,24 @@ func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 	// Register the wallpaper refresh function
 	sm.RegisterRefreshFunc(wp.RefreshImagesAndPulse)
 
-	// 1. Build General Settings
-	generalSchema := builder.BuildGeneralTabSchema()
-	generalTab := container.NewVScroll(sm.RenderSchema(*generalSchema))
+	// 1. Build General Settings as accordion (one section per accordion item)
+	generalItems := builder.BuildGeneralTabAccordion(sm)
+	generalTab, refreshGeneral := createAccordion(generalItems)
+	sm.RegisterOnSettingsSaved(func() {
+		if refreshGeneral != nil {
+			refreshGeneral()
+		}
+	})
 
 	// 2. Build Provider Tabs
-	onlineTab, localTab, targetTabIndex := builder.BuildProviderTabs()
+	onlineTab, localTab, museumTab, targetTabIndex := builder.BuildProviderTabs()
 
-	// 3. AI Tab Placeholder
-	aiTab := container.NewStack(widget.NewLabelWithStyle(i18n.T("AI features coming soon..."), fyne.TextAlignCenter, fyne.TextStyle{Italic: true}))
-
-	// 4. Assemble Tabs
+	// 3. Assemble Tabs
 	tabs := container.NewAppTabs(
 		container.NewTabItemWithIcon(i18n.T("General"), theme.SettingsIcon(), generalTab),
-		container.NewTabItemWithIcon(i18n.T("Online"), theme.GridIcon(), onlineTab),
-		container.NewTabItemWithIcon(i18n.T("Local"), theme.FolderIcon(), localTab),
-		container.NewTabItemWithIcon(i18n.T("AI"), theme.ComputerIcon(), aiTab),
+		container.NewTabItemWithIcon(i18n.T("Community"), theme.GridIcon(), onlineTab),
+		container.NewTabItemWithIcon(i18n.T("Personal"), theme.FolderIcon(), localTab),
+		container.NewTabItemWithIcon(i18n.T("Museums"), theme.ColorPaletteIcon(), museumTab),
 	)
 	wp.settingsTabs = tabs
 	tabs.SetTabLocation(container.TabLocationLeading)

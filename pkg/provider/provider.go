@@ -124,9 +124,9 @@ type Favoriter interface {
 type ProviderType int
 
 const (
-	TypeOnline ProviderType = iota
-	TypeLocal
-	TypeAI
+	TypeCommunity ProviderType = iota
+	TypePersonal
+	TypeMuseum
 )
 
 // AttributionType defines how an image's attribution should be phrased (e.g., "By Photographer" vs "In Folder").
