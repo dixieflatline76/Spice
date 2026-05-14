@@ -1265,6 +1265,34 @@ func (c *Config) GetRijksmuseumQueries() []ImageQuery {
 	return queries
 }
 
+// AddClevelandMuseumQuery adds a new Cleveland Museum query.
+func (c *Config) AddClevelandMuseumQuery(description, url string, active bool) (string, error) {
+	return c.AddProviderQuery(description, url, "ClevelandMuseum", active, false)
+}
+
+// EnableClevelandMuseumQuery enables a Cleveland Museum query.
+func (c *Config) EnableClevelandMuseumQuery(id string) error {
+	return c.EnableImageQuery(id)
+}
+
+// DisableClevelandMuseumQuery disables a Cleveland Museum query.
+func (c *Config) DisableClevelandMuseumQuery(id string) error {
+	return c.DisableImageQuery(id)
+}
+
+// GetClevelandMuseumQueries returns a copy of the Cleveland Museum queries.
+func (c *Config) GetClevelandMuseumQueries() []ImageQuery {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	var queries []ImageQuery
+	for _, q := range c.Queries {
+		if q.Provider == "ClevelandMuseum" {
+			queries = append(queries, q)
+		}
+	}
+	return queries
+}
+
 // SetWallhavenSyncEnabled sets whether Wallhaven sync is enabled.
 func (c *Config) SetWallhavenSyncEnabled(enabled bool) {
 	c.mu.Lock()

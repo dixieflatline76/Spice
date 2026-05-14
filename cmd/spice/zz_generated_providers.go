@@ -4,6 +4,7 @@ package main
 
 import (
 	_ "github.com/dixieflatline76/Spice/v2/pkg/wallpaper/providers/artic"
+	_ "github.com/dixieflatline76/Spice/v2/pkg/wallpaper/providers/cleveland"
 	_ "github.com/dixieflatline76/Spice/v2/pkg/wallpaper/providers/favorites"
 	_ "github.com/dixieflatline76/Spice/v2/pkg/wallpaper/providers/googlephotos"
 	_ "github.com/dixieflatline76/Spice/v2/pkg/wallpaper/providers/localfolder"

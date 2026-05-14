@@ -27,6 +27,7 @@ var allowIdenticalToEnglish = map[string]bool{
 	"Art Institute of Chicago":       true,
 	"The Metropolitan Museum of Art": true,
 	"Rijksmuseum":                    true,
+	"Cleveland Museum of Art":        true,
 
 	// International loanwords / identical across many languages
 	"App":       true,
@@ -52,6 +53,7 @@ var allowIdenticalToEnglish = map[string]bool{
 	"Chicago, IL, USA":       true,
 	"New York City, USA":     true,
 	"Amsterdam, Netherlands": true,
+	"Cleveland, OH, USA":     true,
 
 	// Short functional strings identical in many languages
 	"Error: ": true,
