@@ -196,10 +196,11 @@ func (b *PrefsPanelBuilder) BuildGeneralTabSchema() *schema.PanelSchema {
 	}
 }
 
-// BuildProviderTabs creates the provider accordions (Online, Local).
-func (b *PrefsPanelBuilder) BuildProviderTabs() (fyne.CanvasObject, fyne.CanvasObject, int) {
+// BuildProviderTabs creates the provider accordions (Community, Personal, Museums).
+func (b *PrefsPanelBuilder) BuildProviderTabs() (fyne.CanvasObject, fyne.CanvasObject, fyne.CanvasObject, int) {
 	var onlineItems []accordionItem
 	var localItems []accordionItem
+	var museumItems []accordionItem
 	targetTabIndex := 0
 
 	names := b.getSortedProviderIDs()
@@ -218,15 +219,19 @@ func (b *PrefsPanelBuilder) BuildProviderTabs() (fyne.CanvasObject, fyne.CanvasO
 			continue
 		}
 
-		if p.Type() == provider.TypeLocal {
+		switch p.Type() {
+		case provider.TypePersonal:
 			localItems = append(localItems, *item)
-		} else if p.Type() == provider.TypeOnline {
+		case provider.TypeMuseum:
+			museumItems = append(museumItems, *item)
+		default:
 			onlineItems = append(onlineItems, *item)
 		}
 	}
 
 	onlineTab, refreshOnline := createAccordion(onlineItems)
 	localTab, refreshLocal := createAccordion(localItems)
+	museumTab, refreshMuseum := createAccordion(museumItems)
 
 	b.sm.RegisterOnSettingsSaved(func() {
 		if refreshOnline != nil {
@@ -234,6 +239,9 @@ func (b *PrefsPanelBuilder) BuildProviderTabs() (fyne.CanvasObject, fyne.CanvasO
 		}
 		if refreshLocal != nil {
 			refreshLocal()
+		}
+		if refreshMuseum != nil {
+			refreshMuseum()
 		}
 	})
 
@@ -245,9 +253,12 @@ func (b *PrefsPanelBuilder) BuildProviderTabs() (fyne.CanvasObject, fyne.CanvasO
 		if refreshLocal != nil {
 			refreshLocal()
 		}
+		if refreshMuseum != nil {
+			refreshMuseum()
+		}
 	})
 
-	return onlineTab, localTab, targetTabIndex
+	return onlineTab, localTab, museumTab, targetTabIndex
 }
 
 func (b *PrefsPanelBuilder) getSortedProviderIDs() []string {
@@ -279,9 +290,9 @@ func (b *PrefsPanelBuilder) createProviderAccordionItem(p provider.ImageProvider
 
 	if isPending {
 		switch p.Type() {
-		case provider.TypeLocal:
+		case provider.TypePersonal:
 			tabIndex = 2
-		case provider.TypeAI:
+		case provider.TypeMuseum:
 			tabIndex = 3
 		default:
 			tabIndex = 1

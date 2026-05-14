@@ -104,7 +104,7 @@ func (p *Provider) GetProviderIcon() interface{} {
 }
 
 func (p *Provider) Type() provider.ProviderType {
-	return provider.TypeOnline
+	return provider.TypeMuseum
 }
 
 func (p *Provider) GetAttributionType() provider.AttributionType {

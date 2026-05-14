@@ -229,7 +229,8 @@ func (wp *Plugin) fetchFromProvider(fetchCtx context.Context, q ImageQuery, p pr
 
 		// *** NAMESPACING Middleware ***
 		// Ensure ID is unique across providers by prefixing it.
-		if p.Type() == provider.TypeOnline {
+		// Local providers use filesystem paths (already unique), all others need namespacing.
+		if p.Type() != provider.TypePersonal {
 			prefix := p.ID() + "_"
 			if !strings.HasPrefix(img.ID, prefix) {
 				img.ID = prefix + img.ID

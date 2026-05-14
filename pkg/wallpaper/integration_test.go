@@ -353,7 +353,7 @@ func (s *StubImageProvider) CreateSettingsPanel(sm setting.SettingsManager) *sch
 }
 
 func (s *StubImageProvider) Type() provider.ProviderType {
-	return provider.TypeOnline
+	return provider.TypeCommunity
 }
 
 func (s *StubImageProvider) SupportsUserQueries() bool {

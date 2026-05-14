@@ -28,14 +28,14 @@ var allowIdenticalToEnglish = map[string]bool{
 	"The Metropolitan Museum of Art": true,
 
 	// International loanwords / identical across many languages
-	"AI":      true,
-	"App":     true,
-	"General": true,
-	"Images":  true,
-	"Local":   true,
-	"Online":  true,
-	"System":  true,
-	"Actions": true,
+	"App":       true,
+	"Community": true,
+	"General":   true,
+	"Images":    true,
+	"Museums":   true,
+	"Personal":  true,
+	"System":    true,
+	"Actions":   true,
 
 	// Brand names / tech terms kept in English
 	"Pexels":                  true,

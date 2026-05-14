@@ -68,7 +68,7 @@ func (m *BenchMockProvider) EnrichImage(ctx context.Context, img provider.Image)
 	return img, nil
 }
 func (m *BenchMockProvider) Type() provider.ProviderType {
-	return provider.TypeOnline
+	return provider.TypeCommunity
 }
 
 func (m *BenchMockProvider) SupportsUserQueries() bool {

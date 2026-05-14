@@ -367,7 +367,7 @@ type MockProvider struct {
 func (m *MockProvider) ID() string                                   { return m.IDVal }
 func (m *MockProvider) Name() string                                 { return m.IDVal }
 func (m *MockProvider) Title() string                                { return m.TitleVal }
-func (m *MockProvider) Type() provider.ProviderType                  { return provider.TypeOnline }
+func (m *MockProvider) Type() provider.ProviderType                  { return provider.TypeCommunity }
 func (m *MockProvider) GetProviderIcon() interface{}                 { return nil }
 func (m *MockProvider) GetAttributionType() provider.AttributionType { return provider.AttributionBy }
 func (m *MockProvider) ParseURL(url string) (string, error)          { return "", nil }

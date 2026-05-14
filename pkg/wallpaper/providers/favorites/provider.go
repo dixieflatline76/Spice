@@ -156,7 +156,7 @@ func (p *Provider) GetFavoritesDisplayName() string {
 }
 
 func (p *Provider) Type() provider.ProviderType {
-	return provider.TypeLocal
+	return provider.TypePersonal
 }
 
 func (p *Provider) GetAttributionType() provider.AttributionType {

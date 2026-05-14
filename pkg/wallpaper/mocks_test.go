@@ -331,7 +331,7 @@ func (m *MockImageProvider) Name() string {
 }
 
 func (m *MockImageProvider) Type() provider.ProviderType {
-	return provider.TypeOnline
+	return provider.TypeCommunity
 }
 
 func (m *MockImageProvider) SupportsUserQueries() bool {
