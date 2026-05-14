@@ -111,6 +111,48 @@
                     "title": "The Meeting of Jacob and Rachel",
                     "artist": "Nicolaes Moeyaert",
                     "image_url": "https://iiif.micr.io/NxFOh/full/max/0/default.jpg"
+                },
+                {
+                    "object_id": "200107004",
+                    "object_number": "SK-A-4",
+                    "title": "The Threatened Swan",
+                    "artist": "Jan Asselijn",
+                    "image_url": "https://iiif.micr.io/njLvs/full/max/0/default.jpg"
+                },
+                {
+                    "object_id": "200108171",
+                    "object_number": "SK-A-1718",
+                    "title": "Winter Landscape with Ice Skaters",
+                    "artist": "Hendrick Avercamp",
+                    "image_url": "https://iiif.micr.io/OkRwZ/full/max/0/default.jpg"
+                },
+                {
+                    "object_id": "200109326",
+                    "object_number": "SK-A-3262",
+                    "title": "Self-portrait",
+                    "artist": "Vincent van Gogh",
+                    "image_url": "https://iiif.micr.io/OUtXF/full/max/0/default.jpg"
+                },
+                {
+                    "object_id": "200107229",
+                    "object_number": "SK-C-229",
+                    "title": "The Merry Family",
+                    "artist": "Jan Steen",
+                    "image_url": "https://iiif.micr.io/bRWvw/full/max/0/default.jpg"
+                },
+                {
+                    "object_id": "200107874",
+                    "object_number": "SK-A-1115",
+                    "title": "The Battle of Waterloo",
+                    "artist": "Jan Willem Pieneman",
+                    "image_url": "https://iiif.micr.io/GebpD/full/max/0/default.jpg"
+                },
+                {
+                    "object_id": "200107374",
+                    "object_number": "SK-C-374",
+                    "title": "Militia Company of District XI (The Meagre Company)",
+                    "artist": "Frans Hals and Pieter Codde",
+                    "image_url": "https://iiif.micr.io/sUZPV/full/max/0/default.jpg"
                 }
             ]
         },
