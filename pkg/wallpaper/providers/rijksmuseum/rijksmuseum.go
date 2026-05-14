@@ -637,6 +637,7 @@ func (p *Provider) makeCollectionItem(label, key string) schema.BoolItem {
 		Name:         p.ID() + "_" + key,
 		Label:        label,
 		InitialValue: active,
+		NeedsRefresh: true,
 		ApplyFunc: func(b bool) {
 			_, cid := getQuery(key)
 			if b {

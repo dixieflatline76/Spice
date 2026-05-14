@@ -517,6 +517,7 @@ func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, _ string) *schem
 			Name:         ProviderName + "_" + key,
 			Label:        tour.Name,
 			InitialValue: active,
+			NeedsRefresh: true,
 			ApplyFunc: func(b bool) {
 				_, cid := getQuery(key)
 				if b {
