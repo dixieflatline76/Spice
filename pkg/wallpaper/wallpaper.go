@@ -634,6 +634,8 @@ func (wp *Plugin) TogglePauseMonitorAction(monitorID int) {
 }
 
 // IsMonitorPaused returns the current pause state of a specific monitor.
+// NOTE: State.Paused is written by the MC actor goroutine (single writer).
+// This read is safe for UI display purposes; exact timing is not critical.
 func (wp *Plugin) IsMonitorPaused(monitorID int) bool {
 	wp.monMu.RLock()
 	defer wp.monMu.RUnlock()
@@ -859,7 +861,7 @@ func (wp *Plugin) ToggleFavorite(img provider.Image) {
 	wp.monMu.RUnlock()
 
 	for _, id := range syncIDs {
-		wp.updateTrayMenuUI(img, id)
+		go wp.updateTrayMenuUI(img, id)
 	}
 
 	// Dispatch sync command outside of lock to avoid reentrancy issues
@@ -1070,9 +1072,8 @@ func (wp *Plugin) updateTrayMenuUI(img provider.Image, monitorID int) {
 		return
 	}
 	wp.runOnUI(func() {
-		wp.monMu.RLock()
+		// No lock needed — monitorMenu is only accessed on the Fyne main thread
 		mItems, ok := wp.monitorMenu[monitorID]
-		wp.monMu.RUnlock()
 		if !ok {
 			return
 		}

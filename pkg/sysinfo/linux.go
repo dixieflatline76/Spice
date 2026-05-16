@@ -45,3 +45,13 @@ func GetScreenDimensions() (int, int, error) {
 func GetOSDisplayScale() float32 {
 	return 1.0
 }
+
+// IsRemoteSession returns false on Linux — not implemented.
+func IsRemoteSession() bool {
+	return false
+}
+
+// CanCreateWindows always returns true on Linux.
+func CanCreateWindows() bool {
+	return true
+}

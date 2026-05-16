@@ -13,6 +13,8 @@ import (
 	"github.com/dixieflatline76/Spice/v2/config"
 	"github.com/dixieflatline76/Spice/v2/ui"
 
+	"fyne.io/fyne/v2/app"
+
 	"github.com/dixieflatline76/Spice/v2/pkg/api"
 	"github.com/dixieflatline76/Spice/v2/pkg/hotkey"
 	"github.com/dixieflatline76/Spice/v2/pkg/wallpaper"
@@ -32,6 +34,21 @@ func init() {
 }
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "-probe-gl" {
+		// Suppress Windows Error Reporting crash dialogs for this subprocess.
+		// When OpenGL is broken, Fyne calls os.Exit(1) — we want that to happen
+		// silently without showing "Spice has stopped working" to the user.
+		suppressCrashDialogs()
+
+		// Run a bare minimum Fyne window creation.
+		// If OpenGL is unavailable, Fyne will log the error and call os.Exit(1).
+		// If it succeeds, it will proceed to os.Exit(0).
+		// This protects the main app from Fyne's hard crash.
+		a := app.New()
+		a.NewWindow("Probe")
+		os.Exit(0)
+	}
+
 	breadcrumb("main() entered")
 
 	// Create a mutex to ensure only one instance is running
