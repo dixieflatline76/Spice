@@ -40,6 +40,20 @@ favProvider.mu (independent — accessed via Favoriter interface)
 - `mc.mu.RLock()` is safe from any goroutine **except** the MC's own actor goroutine (which holds `mc.mu.Lock()` in `handleCommand`).
 - `store.mu` is always the innermost lock — no code holds `store.mu` while acquiring another lock.
 - `downloadMutex` protects `queryPages`, `stopNightlyRefresh`, and fetch state. Never nested with `monMu`.
+- **`monMu` must never be held when calling into Fyne's main thread** (via `fyne.Do`, menu updates, or widget operations). The Fyne main thread may itself need `monMu` to read monitor state, creating a deadlock. `CreateTrayMenuItems` snapshots all monitor state under `monMu` at the top, releases it, then builds menu items lock-free. `updateTrayMenuUI`'s `fyne.Do` callback must not acquire `monMu`.
+- **`OpenPreferences` must use `fyne.Do`** to marshal window creation onto Fyne's main thread. This is called from the local API HTTP server (browser extension), which runs on a background goroutine. macOS forbids window creation from background threads.
+
+### 1.6 OpenGL Safety Guard (Windows)
+
+On Windows, Fyne's GLFW driver hard-codes `os.Exit(1)` when OpenGL context creation fails (e.g., after a GPU driver auto-update that leaves OpenGL broken until reboot). Go's `recover()` cannot catch this because it occurs in C code.
+
+**Solution**: `CanCreateWindows()` (`pkg/sysinfo/windows.go`) spawns the app binary as a hidden subprocess with `-probe-gl`. The subprocess attempts to create a minimal Fyne window:
+- Exit 0 → OpenGL works → proceed normally
+- Exit 1 → OpenGL broken → show native Win32 MessageBox alert, keep background rotation alive
+
+The probe subprocess calls `SetErrorMode(SEM_NOGPFAULTERRORBOX | SEM_FAILCRITICALERRORS)` before Fyne initialization to suppress Windows Error Reporting crash dialogs (`cmd/spice/probe_windows.go`).
+
+On macOS, `CanCreateWindows()` always returns `true` — Metal/OpenGL is always available regardless of connection method.
 
 ### 1.3 The Store (`pkg/wallpaper/store.go`)
 

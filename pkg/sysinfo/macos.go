@@ -86,3 +86,13 @@ func parseResolutionString(s string) (int, int, error) {
 func GetOSDisplayScale() float32 {
 	return 1.0
 }
+
+// IsRemoteSession returns false on macOS — OpenGL is always available.
+func IsRemoteSession() bool {
+	return false
+}
+
+// CanCreateWindows always returns true on macOS — Metal/OpenGL is always available.
+func CanCreateWindows() bool {
+	return true
+}

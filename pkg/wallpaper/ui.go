@@ -28,38 +28,57 @@ func asResource(icon interface{}, name string) fyne.Resource {
 	return nil
 }
 
-// CreateTrayMenuItems creates the menu items for the tray menu
+// CreateTrayMenuItems creates the menu items for the tray menu.
+// THREADING: This function runs exclusively on the Fyne main thread (via fyne.Do).
+// All monMu usage is confined to a fast snapshot at the top; the rest is lock-free.
 func (wp *Plugin) CreateTrayMenuItems() []*fyne.MenuItem {
+	// ── Snapshot phase: read all needed monitor data under monMu ──
+	type monSnap struct {
+		id          int
+		mc          *MonitorController
+		image       provider.Image
+		initialized bool
+		paused      bool
+		displayName string
+	}
+
 	wp.monMu.RLock()
-	monitorIDs := make([]int, 0, len(wp.Monitors))
-	for id := range wp.Monitors {
-		monitorIDs = append(monitorIDs, id)
+	snaps := make([]monSnap, 0, len(wp.Monitors))
+	for id, mc := range wp.Monitors {
+		mc.mu.RLock()
+		s := monSnap{
+			id:          id,
+			mc:          mc,
+			image:       mc.State.CurrentImage,
+			initialized: mc.State.CurrentID != "",
+			paused:      mc.State.Paused,
+		}
+		mc.mu.RUnlock()
+
+		// Build display name while we have the monitor reference
+		s.displayName = i18n.Tf("Display {{.ID}}", map[string]any{"ID": id + 1})
+		if mc.Monitor.Name != "" && mc.Monitor.Name != "Primary" && !strings.HasPrefix(mc.Monitor.Name, "Monitor ") {
+			s.displayName = i18n.Tf("Display {{.ID}} ({{.Name}})", map[string]any{"ID": id + 1, "Name": mc.Monitor.Name})
+		}
+
+		snaps = append(snaps, s)
 	}
 	wp.monMu.RUnlock()
-	sort.Ints(monitorIDs)
+	// ── monMu released. Everything below is lock-free. ──
 
-	wp.monMu.Lock()
+	sort.Slice(snaps, func(i, j int) bool { return snaps[i].id < snaps[j].id })
+
+	// Reset menu map — no lock needed (main thread affinity)
 	wp.monitorMenu = make(map[int]*MonitorMenuItems)
-	wp.monMu.Unlock()
 
 	items := []*fyne.MenuItem{}
 
 	// --- HELPER: Create Monitor Section Items ---
-	createMonitorItems := func(mID int) []*fyne.MenuItem {
-		wp.monMu.RLock()
-		mc, hasMC := wp.Monitors[mID]
-		wp.monMu.RUnlock()
-
-		var currentImage provider.Image
-		isInitialized := false
-		isPaused := false
-		if hasMC {
-			mc.mu.RLock()
-			currentImage = mc.State.CurrentImage
-			isInitialized = mc.State.CurrentID != ""
-			isPaused = mc.State.Paused
-			mc.mu.RUnlock()
-		}
+	createMonitorItems := func(snap monSnap) []*fyne.MenuItem {
+		mID := snap.id
+		currentImage := snap.image
+		isInitialized := snap.initialized
+		isPaused := snap.paused
 
 		// Actions
 		nextItem := wp.manager.CreateMenuItem(i18n.T("Next Wallpaper"), func() { go wp.SetNextWallpaper(mID, true) }, "next.png")
@@ -144,9 +163,8 @@ func (wp *Plugin) CreateTrayMenuItems() []*fyne.MenuItem {
 			go wp.DeleteCurrentImage(mID)
 		}, "delete.png")
 
-		wp.monMu.Lock()
+		// No lock needed — main thread affinity
 		wp.monitorMenu[mID] = mItems
-		wp.monMu.Unlock()
 
 		res := []*fyne.MenuItem{
 			nextItem,
@@ -173,33 +191,29 @@ func (wp *Plugin) CreateTrayMenuItems() []*fyne.MenuItem {
 	}
 
 	// --- 1. Primary Monitor (Monitor 0) ---
-	items = append(items, createMonitorItems(0)...)
+	// Find the primary monitor snapshot
+	for _, snap := range snaps {
+		if snap.id == 0 {
+			items = append(items, createMonitorItems(snap)...)
+			break
+		}
+	}
 
 	// --- 2. Other Monitors (Submenus) ---
-	if len(monitorIDs) > 1 {
+	if len(snaps) > 1 {
 		items = append(items, fyne.NewMenuItemSeparator())
-		for _, mID := range monitorIDs {
-			if mID == 0 {
+		for _, snap := range snaps {
+			if snap.id == 0 {
 				continue // Skip primary
 			}
 
-			displayName := i18n.Tf("Display {{.ID}}", map[string]any{"ID": mID + 1})
-			wp.monMu.RLock()
-			if m, ok := wp.Monitors[mID]; ok && m.Monitor.Name != "" {
-				// Only append the name if it's a real device name (not a generic "Monitor N" index)
-				if m.Monitor.Name != "Primary" && !strings.HasPrefix(m.Monitor.Name, "Monitor ") {
-					displayName = i18n.Tf("Display {{.ID}} ({{.Name}})", map[string]any{"ID": mID + 1, "Name": m.Monitor.Name})
-				}
-			}
-			wp.monMu.RUnlock()
-
-			subMenu := wp.manager.CreateMenuItem(displayName, nil, "display.png")
-			subMenu.ChildMenu = fyne.NewMenu(displayName, createMonitorItems(mID)...)
+			subMenu := wp.manager.CreateMenuItem(snap.displayName, nil, "display.png")
+			subMenu.ChildMenu = fyne.NewMenu(snap.displayName, createMonitorItems(snap)...)
 			items = append(items, subMenu)
 		}
 	}
 
-	utilLog.Debugf("Finished Generating Tray Menu Items for %d monitors.", len(monitorIDs))
+	utilLog.Debugf("Finished Generating Tray Menu Items for %d monitors.", len(snaps))
 	return items
 }
 

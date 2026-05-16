@@ -8,6 +8,7 @@ import (
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
 	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
+	"github.com/dixieflatline76/Spice/v2/pkg/sysinfo"
 	"github.com/dixieflatline76/Spice/v2/util"
 	utilLog "github.com/dixieflatline76/Spice/v2/util/log"
 )
@@ -16,6 +17,17 @@ import (
 // If the user declines, the application will quit.
 // If the EULA has been accepted, the application will proceed to setup.
 func (sa *SpiceApp) verifyEULA() {
+	// Probe OpenGL availability before attempting window creation.
+	// Fyne's GLFW crashes the process at the C level when OpenGL is unavailable
+	// (e.g. RDP, broken GPU driver) — Go's recover() cannot catch this.
+	if !sysinfo.CanCreateWindows() {
+		utilLog.Println("OpenGL unavailable — skipping EULA and splash windows")
+		// Don't create any windows — proceed directly to background mode.
+		// The app will run headless with tray menu and hotkeys.
+		sa.os.TransformToBackground()
+		return
+	}
+
 	// Check if the EULA has been accepted
 	if util.HasAcceptedEULA(sa.Preferences()) {
 		sa.CreateSplashScreen(startupSplashTime) // Show the splash screen if the EULA has been accepted
