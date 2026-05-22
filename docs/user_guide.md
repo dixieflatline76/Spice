@@ -31,6 +31,7 @@ When one display is connected, the tray menu shows actions directly:
 | :--- | :--- |
 | **Next Wallpaper** | Immediately advance to the next wallpaper |
 | **Prev Wallpaper** | Go back to the previous wallpaper |
+| **Shuffle** | Reshuffle the wallpaper rotation order on this display |
 | **Pause Play** | Pause automatic rotation (changes to **Resume Play** when paused) |
 | *(separator)* | |
 | **Source:** | Shows the image provider (e.g., *Wallhaven*, *Met Museum*) |
@@ -71,6 +72,8 @@ These shortcuts perform actions across every connected monitor simultaneously.
 | :--- | :--- | :--- |
 | **Next Wallpaper** | `Ctrl` + `Alt` + `→` | `Cmd` + `Ctrl` + `→` |
 | **Previous Wallpaper** | `Ctrl` + `Alt` + `←` | `Cmd` + `Ctrl` + `←` |
+| **Shuffle (All Displays)** | `Ctrl` + `Alt` + `R` | `Cmd` + `Ctrl` + `R` |
+| **Info (Primary Display)** | `Ctrl` + `Alt` + `I` | `Cmd` + `Ctrl` + `I` |
 | **Sync / Detect Displays** | `Ctrl` + `Alt` + `D` | `Cmd` + `Ctrl` + `D` |
 | **Open Preferences** | `Ctrl` + `Alt` + `O` | `Cmd` + `Ctrl` + `O` |
 
@@ -84,6 +87,8 @@ Hold a **number key (1–9)** alongside the modifier to target a specific displa
 | **Block / Delete** | `Alt` + `N` + `↓` | `Command` + `N` + `↓` |
 | **Add to Favorites** | `Alt` + `N` + `↑` | `Command` + `N` + `↑` |
 | **Pause / Play** | `Alt` + `N` + `P` | `Command` + `N` + `P` |
+| **Shuffle** | `Alt` + `N` + `R` | `Command` + `N` + `R` |
+| **Info** | `Alt` + `N` + `I` | `Command` + `N` + `I` |
 | **Anchor Up** | `Alt` + `N` + `W` | `Command` + `N` + `W` |
 | **Anchor Down** | `Alt` + `N` + `S` | `Command` + `N` + `S` |
 | **Anchor Left** | `Alt` + `N` + `A` | `Command` + `N` + `A` |
@@ -245,6 +250,8 @@ Art has no borders. Spice integrates with the world’s leading cultural institu
 **Available Museums:**
 - **Metropolitan Museum of Art** (New York City, USA)
 - **Art Institute of Chicago** (Chicago, IL, USA)
+- **Cleveland Museum of Art** (Cleveland, OH, USA)
+- **Rijksmuseum** (Amsterdam, Netherlands)
 
 **The "Director's Cut" Collections:**
 Each museum provides curated collections designed to showcase institutional highlights:
