@@ -760,6 +760,13 @@ func (wp *Plugin) TriggerFavorite(monitorID int) {
 	wp.dispatch(monitorID, CmdFavorite)
 }
 
+// TriggerShuffle forces a reshuffle of the wallpaper rotation deck for the target monitor(s).
+// Pass -1 to reshuffle all monitors simultaneously.
+func (wp *Plugin) TriggerShuffle(monitorID int) {
+	log.Debugf("TriggerShuffle called for monitor %d", monitorID)
+	wp.dispatch(monitorID, CmdUpdateShuffle)
+}
+
 // SetCropAnchor dispatches an anchor command to the target monitor controller.
 func (wp *Plugin) SetCropAnchor(monitorID int, anchor provider.CropAnchor) {
 	log.Debugf("SetCropAnchor called for monitor %d, anchor %v", monitorID, anchor)

@@ -163,6 +163,11 @@ func (wp *Plugin) CreateTrayMenuItems() []*fyne.MenuItem {
 			go wp.DeleteCurrentImage(mID)
 		}, "delete.png")
 
+		shuffleItem := wp.manager.CreateMenuItem(i18n.T("Shuffle"), func() {
+			go wp.TriggerShuffle(mID)
+		}, "shuffle.png")
+		mItems.ShuffleMenuItem = shuffleItem
+
 		// No lock needed — main thread affinity
 		wp.monitorMenu[mID] = mItems
 
@@ -173,6 +178,7 @@ func (wp *Plugin) CreateTrayMenuItems() []*fyne.MenuItem {
 		if wp.cfg.GetWallpaperChangeFrequency() != FrequencyNever {
 			res = append(res, pauseItem)
 		}
+		res = append(res, shuffleItem)
 		res = append(res, fyne.NewMenuItemSeparator())
 		res = append(res, mItems.ProviderMenuItem)
 		res = append(res, mItems.ArtistMenuItem)
