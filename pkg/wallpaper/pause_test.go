@@ -1,6 +1,7 @@
 package wallpaper
 
 import (
+	"sync"
 	"testing"
 	"time"
 
@@ -12,14 +13,19 @@ import (
 )
 
 func TestPauseLogic(t *testing.T) {
-	// Setup
+	// Setup — use a mutex to serialize runOnUI like fyne.Do does on the main thread
+	var uiMu sync.Mutex
 	wp := &Plugin{
 		store:       &MockImageStore{},
 		manager:     &MockPluginManager{},
 		cfg:         GetConfig(NewMockPreferences()),
 		Monitors:    make(map[int]*MonitorController),
 		monitorMenu: make(map[int]*MonitorMenuItems),
-		runOnUI:     func(f func()) { f() },
+		runOnUI: func(f func()) {
+			uiMu.Lock()
+			defer uiMu.Unlock()
+			f()
+		},
 	}
 
 	ms := wp.store.(*MockImageStore)
@@ -65,7 +71,10 @@ func TestPauseLogic(t *testing.T) {
 	defer mc.Stop()
 
 	// 1. Initial State: Unpaused
-	assert.False(t, mc.State.Paused)
+	mc.mu.RLock()
+	initPaused := mc.State.Paused
+	mc.mu.RUnlock()
+	assert.False(t, initPaused)
 
 	// 2. Toggle Pause
 	wp.TogglePauseMonitorAction(0)
@@ -73,9 +82,15 @@ func TestPauseLogic(t *testing.T) {
 	// Wait for actor to process CmdPause
 	time.Sleep(200 * time.Millisecond)
 
-	assert.True(t, mc.State.Paused, "Monitor should be paused after toggle")
+	assert.Eventually(t, func() bool {
+		mc.mu.RLock()
+		defer mc.mu.RUnlock()
+		return mc.State.Paused
+	}, time.Second, 50*time.Millisecond, "Monitor should be paused after toggle")
 	mm.AssertCalled(t, "NotifyUser", "Wallpaper Rotation", "Display 1: Pausing Play")
-	assert.Equal(t, "Resume Play", mItems.PauseMenuItem.Label)
+	assert.Eventually(t, func() bool {
+		return mItems.PauseMenuItem.Label == "Resume Play"
+	}, time.Second, 50*time.Millisecond, "Pause menu label should update to Resume Play")
 
 	// 3. Test Automatic Transition skipping
 	// Give mc a current image
@@ -103,9 +118,15 @@ func TestPauseLogic(t *testing.T) {
 	// 5. Toggle Resume
 	wp.TogglePauseMonitorAction(0)
 	time.Sleep(200 * time.Millisecond)
-	assert.False(t, mc.State.Paused, "Monitor should be unpaused after second toggle")
+	assert.Eventually(t, func() bool {
+		mc.mu.RLock()
+		defer mc.mu.RUnlock()
+		return !mc.State.Paused
+	}, time.Second, 50*time.Millisecond, "Monitor should be unpaused after second toggle")
 	mm.AssertCalled(t, "NotifyUser", "Wallpaper Rotation", "Display 1: Resuming Play")
-	assert.Equal(t, "Pause Play", mItems.PauseMenuItem.Label)
+	assert.Eventually(t, func() bool {
+		return mItems.PauseMenuItem.Label == "Pause Play"
+	}, time.Second, 50*time.Millisecond, "Pause menu label should update to Pause Play")
 }
 
 func TestGlobalPauseToggle(t *testing.T) {

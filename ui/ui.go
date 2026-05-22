@@ -100,7 +100,17 @@ func (sa *SpiceApp) Deregister(plugin ui.Plugin) {
 
 // OpenPreferences opens the preferences window
 func (sa *SpiceApp) OpenPreferences(tab string) {
-	sa.CreatePreferencesWindow(tab)
+	// Must execute on Fyne's main thread, as this can be called from background goroutines
+	// (e.g. the local API HTTP server triggered by the browser extension)
+	// macOS explicitly forbids window creation from background threads.
+	if sa.App != nil {
+		fyne.Do(func() {
+			sa.CreatePreferencesWindow(tab)
+		})
+	} else {
+		// Fallback for tests or extreme edge cases before app is fully initialized
+		sa.CreatePreferencesWindow(tab)
+	}
 }
 
 // ... (Lines 91-348 unrelated mostly, but Line 176 calls CreatePreferencesWindow)
@@ -382,6 +392,13 @@ func (sa *SpiceApp) addVersionWatermark(img image.Image) (image.Image, error) {
 
 // CreateSplashScreen creates a splash screen for the application
 func (sa *SpiceApp) CreateSplashScreen(seconds int) {
+	// Guard: skip splash if OpenGL is unavailable (Fyne GLFW would crash).
+	if !sysinfo.CanCreateWindows() {
+		utilLog.Println("OpenGL unavailable — skipping splash screen")
+		sa.os.TransformToBackground()
+		return
+	}
+
 	defer func() {
 		if r := recover(); r != nil {
 			errStr := fmt.Sprintf("%v", r)
@@ -451,6 +468,13 @@ func (sa *SpiceApp) CreateSplashScreen(seconds int) {
 // CreatePreferencesWindow creates and displays the preferences window.
 // If the window is already open, it brings it to the front.
 func (sa *SpiceApp) CreatePreferencesWindow(initialTab string) {
+	// Guard: skip if OpenGL is unavailable (Fyne GLFW would crash process)
+	if !sysinfo.CanCreateWindows() {
+		utilLog.Println("OpenGL unavailable — preferences window cannot be created")
+		ShowNativeFallbackAlert(i18n.T("Graphics Error"), i18n.T("Spice requires OpenGL 2.0+ or hardware acceleration to show windows. The application will continue to run in the background, but the user interface may be unavailable."))
+		return
+	}
+
 	sa.os.TransformToForeground()
 
 	// If window already exists, just show it and switch tab if requested
@@ -487,57 +511,74 @@ func (sa *SpiceApp) CreatePreferencesWindow(initialTab string) {
 		return
 	}
 
-	sa.prefsWindow = prefsWindow // Store reference
+	// Wrap the entire window setup in recovery — Fyne can return a non-nil but broken
+	// window when OpenGL is unavailable (e.g. Remote Desktop). The actual crash often
+	// happens at Show() or Content().MinSize(), not at NewWindow().
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				utilLog.Printf("Recovered from preferences window setup panic: %v", r)
+				ShowNativeFallbackAlert(i18n.T("Graphics Error"), i18n.T("Spice requires OpenGL 2.0+ or hardware acceleration to show windows. The application will continue to run in the background, but the user interface may be unavailable."))
+				// Clean up the broken window reference
+				sa.prefsWindow = nil
+				sa.prefsTabs = nil
+			}
+		}()
 
-	// Build and bind the UI contents first, so the layout engine knows existing elements.
-	sa.RebuildPreferencesContent(initialTab)
+		sa.prefsWindow = prefsWindow // Store reference
 
-	// Fyne is notoriously stubborn about window minimum sizes.
-	// Since UI scales dynamically, we cannot rely on hardcoded logical or physical sizes.
-	// We read the layout engine's absolute Minimum Size for this content:
-	minSize := prefsWindow.Content().MinSize()
+		// Build and bind the UI contents first, so the layout engine knows existing elements.
+		sa.RebuildPreferencesContent(initialTab)
 
-	// The user concluded that ~700 logical pixels at 175% Windows scaling was the perfect physical width.
-	// 700 * 1.75 = 1225 physical pixels.
-	// To prevent the window from being "microscopic" when Windows is set to 100% scaling,
-	// we calculate the required Fyne logical width to maintain a ~1225px physical footprint on screen.
-	osScale := sysinfo.GetOSDisplayScale()
-	if osScale <= 0 {
-		osScale = 1.0
-	}
+		// Fyne is notoriously stubborn about window minimum sizes.
+		// Since UI scales dynamically, we cannot rely on hardcoded logical or physical sizes.
+		// We read the layout engine's absolute Minimum Size for this content:
+		minSize := prefsWindow.Content().MinSize()
 
-	targetWidth := float32(1225) / osScale
-
-	// Protect against Fyne's layout engine crushing the form fields if the text size demands more space.
-	if targetWidth < minSize.Width*1.25 {
-		targetWidth = minSize.Width * 1.25
-	}
-
-	// Derive height from actual screen height so it's always proportional to the display,
-	// regardless of scaling factor. Target 85% of logical screen height.
-	_, physHeight, err := sysinfo.GetScreenDimensions()
-	logicalScreenHeight := float32(physHeight) / osScale
-	targetHeight := targetWidth * 1.0 // Default: square (fallback if screen detection fails)
-
-	if err == nil && logicalScreenHeight > 0 {
-		targetHeight = logicalScreenHeight * 0.85
-
-		// Don't let the window be taller than it is wide
-		if targetHeight > targetWidth {
-			targetHeight = targetWidth
+		// The user concluded that ~700 logical pixels at 175% Windows scaling was the perfect physical width.
+		// 700 * 1.75 = 1225 physical pixels.
+		// To prevent the window from being "microscopic" when Windows is set to 100% scaling,
+		// we calculate the required Fyne logical width to maintain a ~1225px physical footprint on screen.
+		osScale := sysinfo.GetOSDisplayScale()
+		if osScale <= 0 {
+			osScale = 1.0
 		}
-	}
-	prefsWindow.SetOnClosed(func() {
-		sa.os.TransformToBackground()
-		sa.prefsWindow = nil // Clear reference on close
-		sa.prefsTabs = nil   // Clear tabs reference
-	})
 
-	// Fyne enforces content MinSize during Show(), silently overriding any prior Resize.
-	// We must Resize AFTER Show to override Fyne's minimum size enforcement.
-	prefsWindow.Show()
-	prefsWindow.Resize(fyne.NewSize(targetWidth, targetHeight))
-	prefsWindow.CenterOnScreen()
+		targetWidth := float32(1225) / osScale
+
+		// Protect against Fyne's layout engine crushing the form fields if the text size demands more space.
+		if targetWidth < minSize.Width*1.25 {
+			targetWidth = minSize.Width * 1.25
+		}
+
+		// Derive height from actual screen height so it's always proportional to the display,
+		// regardless of scaling factor. Target 85% of logical screen height.
+		_, physHeight, err := sysinfo.GetScreenDimensions()
+		logicalScreenHeight := float32(physHeight) / osScale
+		targetHeight := targetWidth * 1.0 // Default: square (fallback if screen detection fails)
+
+		if err == nil && logicalScreenHeight > 0 {
+			targetHeight = logicalScreenHeight * 0.85
+
+			// Don't let the window be taller than it is wide
+			if targetHeight > targetWidth {
+				targetHeight = targetWidth
+			}
+		}
+		prefsWindow.SetOnClosed(func() {
+			sa.os.TransformToBackground()
+			sa.prefsWindow = nil // Clear reference on close
+			sa.prefsTabs = nil   // Clear tabs reference
+		})
+
+		// Now that targetWidth and targetHeight are guaranteed to be >= MinSize,
+		// we can safely call Resize before Show. This ensures macOS and Wayland
+		// allocate the correct framebuffer size before the first paint, preventing
+		// viewport clipping and the need for manual resizing/refresh hacks.
+		prefsWindow.Resize(fyne.NewSize(targetWidth, targetHeight))
+		prefsWindow.CenterOnScreen()
+		prefsWindow.Show()
+	}()
 }
 
 // RebuildPreferencesContent rebuilds the content of the preferences window.
@@ -1363,6 +1404,13 @@ func drawCrosshair(size int, col color.NRGBA) image.Image {
 // The window stays open after selection, showing a processing overlay and redrawing
 // with the updated active anchor when reprocessing completes.
 func (sa *SpiceApp) ShowAnchorPopup(monitorID int, currentAnchor provider.CropAnchor, labels [9]string, values [9]provider.CropAnchor, onSelect func(anchor provider.CropAnchor, onDone func())) {
+	// Guard: skip if OpenGL is unavailable.
+	if !sysinfo.CanCreateWindows() {
+		utilLog.Println("OpenGL unavailable — anchor popup cannot be created")
+		ShowNativeFallbackAlert(i18n.T("Graphics Error"), i18n.T("Spice requires OpenGL 2.0+ or hardware acceleration to show windows. The application will continue to run in the background, but the user interface may be unavailable."))
+		return
+	}
+
 	sa.os.TransformToForeground()
 
 	title := fmt.Sprintf("%s — %s %d", i18n.T("Crop Anchor"), i18n.T("Display"), monitorID+1)
