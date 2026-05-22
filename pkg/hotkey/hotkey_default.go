@@ -33,6 +33,10 @@ const (
 	keyA = hotkey.KeyA // Left
 	keyS = hotkey.KeyS // Down
 	// keyD already defined above for Sync — reused for Anchor Right
+
+	// Shuffle + Info shortcuts
+	keyR = hotkey.KeyR // Shuffle
+	keyI = hotkey.KeyI // Info
 )
 
 // GetMonitorIDFromKey is a platform-specific helper.
@@ -255,6 +259,45 @@ func doStartListeners(mgr ui.PluginManager) {
 	})
 	registerAndListenTargeted(hkAnchorD, "Anchor Right", func() {
 		handleAnchor(mgr, provider.AnchorMiddleRight)
+	})
+
+	// --- 4. Shuffle Shortcuts ---
+	hkTargetedShuffle := hotkey.New([]hotkey.Modifier{modBase}, keyR)
+	hkGlobalShuffle := hotkey.New([]hotkey.Modifier{modBase, modExtra}, keyR)
+
+	registerAndListenTargeted(hkTargetedShuffle, "Targeted Shuffle", func() {
+		handleTargeted(mgr, func(mid int) string {
+			if wp != nil {
+				wp.TriggerShuffle(mid)
+				return i18n.Tf("Display {{.ID}}: Shuffled", map[string]any{"ID": mid + 1})
+			}
+			return ""
+		})
+	})
+
+	registerAndListen(hkGlobalShuffle, "Global Shuffle", func() {
+		if wp != nil {
+			wp.TriggerShuffle(-1)
+		}
+	})
+
+	// --- 5. Info Shortcuts ---
+	hkTargetedInfo := hotkey.New([]hotkey.Modifier{modBase}, keyI)
+	hkGlobalInfo := hotkey.New([]hotkey.Modifier{modBase, modExtra}, keyI)
+
+	registerAndListenTargeted(hkTargetedInfo, "Targeted Info", func() {
+		handleTargeted(mgr, func(mid int) string {
+			if wp != nil {
+				wp.ViewCurrentImageOnWeb(mid)
+			}
+			return ""
+		})
+	})
+
+	registerAndListen(hkGlobalInfo, "Info (Primary Display)", func() {
+		if wp != nil {
+			wp.ViewCurrentImageOnWeb(0)
+		}
 	})
 }
 

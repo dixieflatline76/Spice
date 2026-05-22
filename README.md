@@ -32,7 +32,7 @@ Spice is more than a utility; it's a high-performance framework for desktop envi
 
 ### 🌎 Infinite Sources
 *   **🔗 Browser Companion:** Use our [**Chrome Extension**](https://chromewebstore.google.com/detail/ekodikedjmhnganfcfleabcfohdjkoeb) or [**Firefox Add-on**](https://addons.mozilla.org/en-US/firefox/addon/spice-wallpaper-manager/) to seamlessly send any image from the web to your desktop.
-*   **🏛️ The Museum Experience:** Turn your desk into a gallery with 4K+ Open Access masterpieces from **The Met** and **Art Institute of Chicago**.
+*   **🏛️ The Museum Experience:** Turn your desk into a gallery with 4K+ Open Access masterpieces from **The Met**, **Art Institute of Chicago**, **Cleveland Museum of Art**, and the **Rijksmuseum** (Amsterdam).
 *   **📸 Curated Sources:** Native support for **Wallhaven**, **Pexels**, and **Wikimedia Commons**.
 *   **☁️ Personal Collections:** Seamlessly cycle your own memories with **Google Photos** integration.
 *   **📁 Local Folders:** Point Spice to any directory on your computer to use your existing wallpaper library.
@@ -63,6 +63,8 @@ Target a specific monitor (**1-9**) by holding that number key while pressing th
 | **Fav / Unfav** | `Command` + `1-9` + `↑` | `Alt` + `1-9` + `↑` |
 | **Del + Block** | `Command` + `1-9` + `↓` | `Alt` + `1-9` + `↓` |
 | **Pause Play** | `Command` + `1-9` + `P` | `Alt` + `1-9` + `P` |
+| **Shuffle** | `Command` + `1-9` + `R` | `Alt` + `1-9` + `R` |
+| **Info** | `Command` + `1-9` + `I` | `Alt` + `1-9` + `I` |
 | **Anchor Up** | `Command` + `1-9` + `W` | `Alt` + `1-9` + `W` |
 | **Anchor Down** | `Command` + `1-9` + `S` | `Alt` + `1-9` + `S` |
 | **Anchor Left** | `Command` + `1-9` + `A` | `Alt` + `1-9` + `A` |
@@ -77,6 +79,8 @@ These actions affect all displays simultaneously.
 | :--- | :--- | :--- |
 | **Next (All Displays)** | `Cmd + Ctrl + →` | `Ctrl + Alt + →` |
 | **Previous (All Displays)** | `Cmd + Ctrl + ←` | `Ctrl + Alt + ←` |
+| **Shuffle (All Displays)** | `Cmd + Ctrl + R` | `Ctrl + Alt + R` |
+| **Info (Primary Display)** | `Cmd + Ctrl + I` | `Ctrl + Alt + I` |
 | **All Settings** | `Cmd + Ctrl + O` | `Ctrl + Alt + O` |
 | **Global Sync** | `Cmd + Ctrl + D` | `Ctrl + Alt + D` |
  
@@ -137,7 +141,7 @@ Note: The compiled App Store releases include production OAuth credentials. If y
 We have big plans for Spice!
 
 * **Linux & Intel Mac Support:** While we currently focus on Apple Silicon (arm64), we plan to expand our official builds to Intel Macs and Linux.
-* **More Providers:** Adding support for other wallpaper sources like **Pixabay**, **Cleveland Museum of Art**, and the **Rijksmuseum** (Amsterdam).
+* **More Providers:** Adding support for other wallpaper sources like **Pixabay**.
 * **Customizable Keyboard Shortcuts:** Full control over modifier keys and hotkey combinations to avoid OS-level conflicts.
 
 ## ⚠️ Known Limitations
