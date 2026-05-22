@@ -46,6 +46,10 @@ type apiResponse struct {
 	Data []apiArtwork `json:"data"`
 }
 
+type apiSingleResponse struct {
+	Data apiArtwork `json:"data"`
+}
+
 type apiInfo struct {
 	Total int `json:"total"`
 }
@@ -146,7 +150,7 @@ var iconData []byte
 func (p *Provider) GetAPIPacing() time.Duration { return 500 * time.Millisecond }
 
 // GetProcessPacing implements PacedProvider.
-func (p *Provider) GetProcessPacing() time.Duration { return 500 * time.Millisecond }
+func (p *Provider) GetProcessPacing() time.Duration { return 1500 * time.Millisecond }
 
 // ParseURL checks if a URL matches a Cleveland Museum object page.
 func (p *Provider) ParseURL(url string) (string, error) {
@@ -225,6 +229,8 @@ func (p *Provider) fetchByAccessionNumber(ctx context.Context, accNum string) ([
 }
 
 // fetchCurated fetches images for curated (ID-based) collections.
+// Each artwork is fetched individually via /api/artworks/{id} since the CMA API
+// does not support batch ID lookups.
 func (p *Provider) fetchCurated(ctx context.Context, entry *CollectionEntry, page int) ([]provider.Image, error) {
 	ids := make([]int, len(entry.IDs))
 	copy(ids, entry.IDs)
@@ -246,26 +252,35 @@ func (p *Provider) fetchCurated(ctx context.Context, entry *CollectionEntry, pag
 
 	pageIDs := ids[start:end]
 
-	// Build comma-separated ID list for batch fetch
-	idStrs := make([]string, len(pageIDs))
-	for i, id := range pageIDs {
-		idStrs[i] = strconv.Itoa(id)
-	}
-
-	url := fmt.Sprintf("%s?ids=%s", APIBaseURL, strings.Join(idStrs, ","))
-	artworks, err := p.fetchAPI(ctx, url)
-	if err != nil {
-		return nil, err
-	}
-
 	var images []provider.Image
-	for _, art := range artworks {
-		if img := p.artworkToImage(&art); img != nil {
-			images = append(images, *img)
-		}
+	var mu sync.Mutex
+
+	// Fetch each artwork individually with bounded concurrency
+	sem := make(chan struct{}, 5)
+	var wg sync.WaitGroup
+
+	for _, id := range pageIDs {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			art, err := p.fetchSingleArtwork(ctx, id)
+			if err != nil {
+				log.Debugf("Cleveland: Error fetching artwork %d: %v", id, err)
+				return
+			}
+			if img := p.artworkToImage(art); img != nil {
+				mu.Lock()
+				images = append(images, *img)
+				mu.Unlock()
+			}
+		}(id)
 	}
 
-	log.Debugf("Cleveland: Curated page %d: %d images", page, len(images))
+	wg.Wait()
+	log.Debugf("Cleveland: Curated page %d: %d images from %d IDs", page, len(images), len(pageIDs))
 	return images, nil
 }
 
@@ -347,15 +362,12 @@ func (p *Provider) fetchSearch(ctx context.Context, entry *CollectionEntry, page
 		}
 
 		// Fetch individually if not cached
-		url := fmt.Sprintf("%s?ids=%d", APIBaseURL, id)
-		artworks, err := p.fetchAPI(ctx, url)
+		art, err := p.fetchSingleArtwork(ctx, id)
 		if err != nil {
 			continue
 		}
-		for _, art := range artworks {
-			if img := p.artworkToImage(&art); img != nil {
-				images = append(images, *img)
-			}
+		if img := p.artworkToImage(art); img != nil {
+			images = append(images, *img)
 		}
 	}
 
@@ -363,7 +375,33 @@ func (p *Provider) fetchSearch(ctx context.Context, entry *CollectionEntry, page
 	return images, nil
 }
 
-// fetchAPI performs a GET request and returns the parsed artworks.
+// fetchSingleArtwork fetches a single artwork by its Athena ID via /api/artworks/{id}.
+func (p *Provider) fetchSingleArtwork(ctx context.Context, id int) (*apiArtwork, error) {
+	url := fmt.Sprintf("%s%d", APIBaseURL, id)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := p.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API returned %s for artwork %d", resp.Status, id)
+	}
+
+	var result apiSingleResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return &result.Data, nil
+}
+
+// fetchAPI performs a GET request and returns the parsed artworks (list endpoint).
 func (p *Provider) fetchAPI(ctx context.Context, url string) ([]apiArtwork, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {

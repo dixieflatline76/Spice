@@ -126,7 +126,7 @@ func (p *Provider) GetAPIPacing() time.Duration {
 
 // GetProcessPacing implements the PacedProvider interface.
 func (p *Provider) GetProcessPacing() time.Duration {
-	return 1 * time.Second
+	return 2 * time.Second
 }
 
 // ParseURL checks if a URL matches a Rijksmuseum object page.
