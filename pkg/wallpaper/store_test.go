@@ -1,6 +1,7 @@
 package wallpaper
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -143,8 +144,8 @@ func TestStoreSync_Validation(t *testing.T) {
 	// img1: Master Exists.
 	// img2: Master Missing.
 
-	img1 := provider.Image{ID: "img1", Path: "http://url/1.jpg"} // Master -> 1.jpg
-	img2 := provider.Image{ID: "img2", Path: "http://url/2.png"} // Master -> 2.png
+	img1 := provider.Image{ID: "img1", Path: "http://url/1.jpg", DerivativePaths: map[string]string{"1920x1080": "d1.jpg"}} // Master -> 1.jpg
+	img2 := provider.Image{ID: "img2", Path: "http://url/2.png", DerivativePaths: map[string]string{"1920x1080": "d2.jpg"}} // Master -> 2.png
 
 	// Create Master file for img1
 	master1, _ := fm.GetMasterPath("img1", ".jpg")
@@ -185,7 +186,7 @@ func TestStoreSync_Grooming(t *testing.T) {
 		assert.NoError(t, err)
 		err = os.WriteFile(master, []byte(id), 0644)
 		assert.NoError(t, err)
-		store.Add(provider.Image{ID: id, Path: "http://url/" + id + ".jpg"})
+		store.Add(provider.Image{ID: id, Path: "http://url/" + id + ".jpg", DerivativePaths: map[string]string{"1920x1080": id + "_d.jpg"}})
 	}
 
 	// Sync with Limit 2
@@ -220,6 +221,7 @@ func TestStoreSync_CacheInvalidation(t *testing.T) {
 	img1 := provider.Image{
 		ID:              "img1",
 		ProcessingFlags: map[string]bool{"SmartFit": true},
+		DerivativePaths: map[string]string{"1920x1080": "d1.jpg"},
 	}
 	// Create master so it survives validation check
 	master1, _ := fm.GetMasterPath("img1", ".jpg")
@@ -372,16 +374,16 @@ func TestStoreSync_StrictPruning(t *testing.T) {
 	store.SetFileManager(fm, cacheFile)
 
 	// img1: Active Query "qA"
-	img1 := provider.Image{ID: "img1", SourceQueryID: "qA", FilePath: filepath.Join(tmpDir, "img1.jpg")}
+	img1 := provider.Image{ID: "img1", SourceQueryID: "qA", FilePath: filepath.Join(tmpDir, "img1.jpg"), DerivativePaths: map[string]string{"1920x1080": "d1.jpg"}}
 	// img2: Inactive Query "qB"
-	img2 := provider.Image{ID: "img2", SourceQueryID: "qB", FilePath: filepath.Join(tmpDir, "img2.jpg")}
+	img2 := provider.Image{ID: "img2", SourceQueryID: "qB", FilePath: filepath.Join(tmpDir, "img2.jpg"), DerivativePaths: map[string]string{"1920x1080": "d2.jpg"}}
 	// img3: No Query ID (Manual/Legacy) -> Should be kept?
 	// Logic says: if SourceQueryID != "" && !active...
 	// So empty SourceQueryID should correspond to "no active filter apply"?
 	// Or should we delete orphans?
 	// Code: if img.SourceQueryID != "" && !activeQueryIDs[img.SourceQueryID]
 	// So img3 (empty ID) is SAFE.
-	img3 := provider.Image{ID: "img3", SourceQueryID: "", FilePath: filepath.Join(tmpDir, "img3.jpg")}
+	img3 := provider.Image{ID: "img3", SourceQueryID: "", FilePath: filepath.Join(tmpDir, "img3.jpg"), DerivativePaths: map[string]string{"1920x1080": "d3.jpg"}}
 
 	// Create dummy files
 	assert.NoError(t, os.WriteFile(img1.FilePath, []byte("1"), 0644))
@@ -743,7 +745,18 @@ func TestNightlyGroomingSimulation(t *testing.T) {
 	// Expected: Oldest images pruned to fit within cache limit.
 	// =========================================================================
 	t.Run("CacheLimit_PrunesOldest", func(t *testing.T) {
-		// Currently 4 images remain. Sync with limit 2 should prune the 2 oldest.
+		// After ModeChange_InvalidatesAll, all images have empty DerivativePaths.
+		// The zombie recovery logic would delete them. Restore derivatives so
+		// we actually test the cache limit pruning path.
+		for i, img := range store.List() {
+			img.DerivativePaths = map[string]string{
+				"3440x1440": filepath.Join(tmpDir, "fitted", fmt.Sprintf("img%d_3440x1440.jpg", i)),
+			}
+			store.Update(img)
+		}
+		assert.Equal(t, 4, store.Count(), "All 4 images should still be present before pruning")
+
+		// Now Sync with limit 2 should prune the 2 oldest.
 		store.Sync(2, nil, nil)
 		assert.Equal(t, 2, store.Count(), "Should prune down to cache limit of 2")
 	})
@@ -998,10 +1011,10 @@ func TestBlocklist_SyncPrunesBlockedImages(t *testing.T) {
 	store.SetAsyncSave(false)
 	store.SetFileManager(fm, filepath.Join(tmpDir, "cache.json"))
 
-	// Add images first
-	img1 := provider.Image{ID: "good_img", SourceQueryID: "q1"}
-	img2 := provider.Image{ID: "bad_img", SourceQueryID: "q1"}
-	img3 := provider.Image{ID: "also_good", SourceQueryID: "q1"}
+	// Add images with DerivativePaths (required to avoid zombie recovery deletion)
+	img1 := provider.Image{ID: "good_img", SourceQueryID: "q1", DerivativePaths: map[string]string{"1920x1080": "good.jpg"}}
+	img2 := provider.Image{ID: "bad_img", SourceQueryID: "q1", DerivativePaths: map[string]string{"1920x1080": "bad.jpg"}}
+	img3 := provider.Image{ID: "also_good", SourceQueryID: "q1", DerivativePaths: map[string]string{"1920x1080": "also.jpg"}}
 
 	createMasterFile(t, fm, "good_img")
 	createMasterFile(t, fm, "bad_img")
@@ -1159,4 +1172,398 @@ func TestBlocklist_ResolutionBucketsAfterSyncPrune(t *testing.T) {
 
 	ids := store.GetIDsForResolution("3440x1440")
 	assert.Equal(t, "clean_img", ids[0])
+}
+
+// =============================================================================
+// Zombie Image Recovery Integration Tests
+// =============================================================================
+//
+// Context: The "flagsMatch length comparison" bug caused nightly grooming to
+// invalidate ALL images. Invalidation wipes DerivativePaths and resets
+// ProcessingFlags. After multiple nights, the store was full of "zombie" images:
+//   - Master files exist on disk
+//   - ProcessingFlags match the target (set correctly during invalidation)
+//   - DerivativePaths is empty → invisible to monitors (no resolution buckets)
+//   - store.Exists(id) returns true → blocks re-fetching
+//
+// The zombie recovery in determineSyncAction detects and deletes these images
+// so they can be re-downloaded and reprocessed.
+// =============================================================================
+
+// newZombieTestStore creates a fresh ImageStore with a FileManager rooted in tmpDir.
+func newZombieTestStore(t *testing.T, tmpDir string) (*ImageStore, *FileManager) {
+	t.Helper()
+	fm := NewFileManager(tmpDir)
+	store := NewImageStore()
+	store.SetAsyncSave(false)
+	store.SetFileManager(fm, filepath.Join(tmpDir, "cache.json"))
+	return store, fm
+}
+
+// defaultTargetFlags returns the standard 5-flag target for testing.
+func defaultTargetFlags() map[string]bool {
+	return map[string]bool{
+		"SmartFit":  true,
+		"FaceCrop":  false,
+		"FaceBoost": false,
+		"Upscale":   false,
+		"Fill":      false,
+	}
+}
+
+// newHealthyImage creates an image with master file, correct flags, and derivatives.
+func newHealthyImage(t *testing.T, fm *FileManager, id, queryID, resolution string, flags map[string]bool) provider.Image {
+	t.Helper()
+	createMasterFile(t, fm, id)
+	derivPath := filepath.Join(fm.rootDir, "fitted", id+"_"+resolution+".jpg")
+	return provider.Image{
+		ID:              id,
+		SourceQueryID:   queryID,
+		ProcessingFlags: copyFlags(flags),
+		DerivativePaths: map[string]string{resolution: derivPath},
+	}
+}
+
+// newZombieImage creates an image with master file and correct flags but empty derivatives.
+func newZombieImage(t *testing.T, fm *FileManager, id, queryID string, flags map[string]bool) provider.Image {
+	t.Helper()
+	createMasterFile(t, fm, id)
+	return provider.Image{
+		ID:              id,
+		SourceQueryID:   queryID,
+		ProcessingFlags: copyFlags(flags),
+		DerivativePaths: map[string]string{},
+	}
+}
+
+func TestZombieRecovery_BasicDetection(t *testing.T) {
+	// Zombie with empty DerivativePaths map is detected and deleted.
+	// Healthy image with derivatives survives.
+	store, fm := newZombieTestStore(t, t.TempDir())
+	flags := defaultTargetFlags()
+
+	store.Add(newHealthyImage(t, fm, "healthy", "q1", "3440x1440", flags))
+	store.Add(newZombieImage(t, fm, "zombie", "q1", flags))
+	assert.Equal(t, 2, store.Count())
+
+	store.Sync(100, flags, nil)
+
+	assert.Equal(t, 1, store.Count())
+	known := store.GetKnownIDs()
+	assert.True(t, known["healthy"])
+	assert.False(t, known["zombie"])
+}
+
+func TestZombieRecovery_NilDerivativePaths(t *testing.T) {
+	// Some corrupted images may have nil DerivativePaths (not just empty map).
+	// This must also trigger zombie cleanup.
+	store, fm := newZombieTestStore(t, t.TempDir())
+	flags := defaultTargetFlags()
+
+	createMasterFile(t, fm, "nil_deriv")
+	nilImg := provider.Image{
+		ID:              "nil_deriv",
+		SourceQueryID:   "q1",
+		ProcessingFlags: copyFlags(flags),
+		DerivativePaths: nil, // nil, not empty map
+	}
+	store.Add(nilImg)
+	store.Add(newHealthyImage(t, fm, "ok", "q1", "1920x1080", flags))
+
+	store.Sync(100, flags, nil)
+
+	assert.Equal(t, 1, store.Count())
+	known := store.GetKnownIDs()
+	assert.False(t, known["nil_deriv"], "nil DerivativePaths should be treated as zombie")
+	assert.True(t, known["ok"])
+}
+
+func TestZombieRecovery_PartialDerivativesNotZombie(t *testing.T) {
+	// An image that has SOME derivatives (even just one) is NOT a zombie.
+	// Only images with zero derivatives are zombies.
+	store, fm := newZombieTestStore(t, t.TempDir())
+	flags := defaultTargetFlags()
+
+	partialImg := newHealthyImage(t, fm, "partial", "q1", "1920x1080", flags)
+	// Only has 1920x1080 derivative, missing 3440x1440 — but that's fine
+	store.Add(partialImg)
+
+	store.Sync(100, flags, nil)
+
+	assert.Equal(t, 1, store.Count(), "Image with partial derivatives should survive")
+}
+
+func TestZombieRecovery_ReAddAfterDeletion(t *testing.T) {
+	// After a zombie is deleted from the store, the same image ID can be
+	// re-added with proper derivatives (simulating a re-fetch by the pipeline).
+	store, fm := newZombieTestStore(t, t.TempDir())
+	flags := defaultTargetFlags()
+
+	store.Add(newZombieImage(t, fm, "revived", "q1", flags))
+	assert.Equal(t, 1, store.Count())
+	assert.True(t, store.Exists("revived"))
+
+	// Zombie gets cleaned
+	store.Sync(100, flags, nil)
+	assert.Equal(t, 0, store.Count())
+	assert.False(t, store.Exists("revived"))
+
+	// Re-add with proper derivatives (simulates pipeline re-download)
+	revivedImg := newHealthyImage(t, fm, "revived", "q1", "3440x1440", flags)
+	added := store.Add(revivedImg)
+	assert.True(t, added, "Zombie should be re-addable after deletion")
+	assert.Equal(t, 1, store.Count())
+
+	// Survives a second Sync (it's healthy now)
+	store.Sync(100, flags, nil)
+	assert.Equal(t, 1, store.Count(), "Re-added healthy image should survive Sync")
+}
+
+func TestZombieRecovery_MultiQueryZombies(t *testing.T) {
+	// Zombies from different source queries are all detected and cleaned.
+	store, fm := newZombieTestStore(t, t.TempDir())
+	flags := defaultTargetFlags()
+
+	store.Add(newZombieImage(t, fm, "z_wallhaven", "wallhaven_q", flags))
+	store.Add(newZombieImage(t, fm, "z_pexels", "pexels_q", flags))
+	store.Add(newZombieImage(t, fm, "z_wikimedia", "wiki_q", flags))
+	store.Add(newHealthyImage(t, fm, "h_wallhaven", "wallhaven_q", "3440x1440", flags))
+	assert.Equal(t, 4, store.Count())
+
+	store.Sync(100, flags, nil)
+
+	assert.Equal(t, 1, store.Count())
+	known := store.GetKnownIDs()
+	assert.True(t, known["h_wallhaven"], "Healthy image survives")
+	assert.False(t, known["z_wallhaven"])
+	assert.False(t, known["z_pexels"])
+	assert.False(t, known["z_wikimedia"])
+}
+
+func TestZombieRecovery_ZombieAndBlocklistInteraction(t *testing.T) {
+	// A zombie that is also in the blocklist should be deleted.
+	// The blocklist check runs before the zombie check, so it's deleted
+	// by the avoidSet path — either way, it's removed.
+	store, fm := newZombieTestStore(t, t.TempDir())
+	flags := defaultTargetFlags()
+
+	store.Add(newZombieImage(t, fm, "blocked_zombie", "q1", flags))
+	store.Add(newHealthyImage(t, fm, "clean", "q1", "1920x1080", flags))
+	store.LoadAvoidSet(map[string]bool{"blocked_zombie": true})
+
+	store.Sync(100, flags, nil)
+
+	assert.Equal(t, 1, store.Count())
+	assert.False(t, store.GetKnownIDs()["blocked_zombie"])
+	assert.True(t, store.GetKnownIDs()["clean"])
+}
+
+func TestZombieRecovery_PostInvalidationCycle(t *testing.T) {
+	// Simulates the full corruption lifecycle:
+	// 1. Image starts healthy with correct flags + derivatives
+	// 2. Mode change causes invalidation → derivatives wiped, new flags set
+	// 3. Next Sync: flags match now, but derivatives are empty → zombie → deleted
+	store, fm := newZombieTestStore(t, t.TempDir())
+
+	oldFlags := map[string]bool{
+		"SmartFit": false, "FaceCrop": true, "FaceBoost": true,
+		"Upscale": false, "Fill": false,
+	}
+	newFlags := map[string]bool{
+		"SmartFit": true, "FaceCrop": false, "FaceBoost": false,
+		"Upscale": false, "Fill": false,
+	}
+
+	// Step 1: Image is healthy with old flags
+	img := newHealthyImage(t, fm, "transitioning", "q1", "1920x1080", oldFlags)
+	store.Add(img)
+	assert.Equal(t, 1, store.Count())
+
+	// Step 2: User changes mode — Sync invalidates (flags mismatch)
+	store.Sync(100, newFlags, nil)
+
+	// After invalidation: image should still be in store but with new flags and empty derivatives
+	assert.Equal(t, 1, store.Count(), "Image should survive invalidation")
+	updated, ok := store.Get(0)
+	assert.True(t, ok)
+	assert.Empty(t, updated.DerivativePaths, "Derivatives should be wiped after invalidation")
+	assert.Equal(t, newFlags["SmartFit"], updated.ProcessingFlags["SmartFit"])
+
+	// Step 3: NEXT Sync — flags now match, but no derivatives → zombie → delete
+	store.Sync(100, newFlags, nil)
+	assert.Equal(t, 0, store.Count(), "Post-invalidation zombie should be cleaned on next Sync")
+}
+
+func TestZombieRecovery_MassCorruption(t *testing.T) {
+	// Simulates real-world scenario: ALL images in the store were corrupted
+	// by the nightly grooming bug. Every single one is a zombie.
+	// After recovery, the store should be empty and ready for fresh downloads.
+	store, fm := newZombieTestStore(t, t.TempDir())
+	flags := defaultTargetFlags()
+
+	// Add 20 zombie images (simulating a full cache worth of corrupted images)
+	for i := 0; i < 20; i++ {
+		id := fmt.Sprintf("zombie_%03d", i)
+		store.Add(newZombieImage(t, fm, id, "q1", flags))
+	}
+	assert.Equal(t, 20, store.Count())
+
+	// Run Sync — all should be cleaned
+	store.Sync(100, flags, nil)
+	assert.Equal(t, 0, store.Count(), "All 20 zombies should be deleted")
+
+	// Verify store is completely clean
+	assert.Equal(t, 0, store.SeenCount())
+	assert.Empty(t, store.GetKnownIDs())
+}
+
+func TestZombieRecovery_CacheLimitInteraction(t *testing.T) {
+	// When zombies coexist with healthy images and a cache limit is applied,
+	// zombies are deleted first (by zombie detection), THEN the cache limit
+	// prunes the oldest remaining healthy images.
+	store, fm := newZombieTestStore(t, t.TempDir())
+	flags := defaultTargetFlags()
+
+	// Add 3 healthy images
+	store.Add(newHealthyImage(t, fm, "h1", "q1", "3440x1440", flags))
+	store.Add(newHealthyImage(t, fm, "h2", "q1", "3440x1440", flags))
+	store.Add(newHealthyImage(t, fm, "h3", "q1", "3440x1440", flags))
+	// Add 2 zombies
+	store.Add(newZombieImage(t, fm, "z1", "q1", flags))
+	store.Add(newZombieImage(t, fm, "z2", "q1", flags))
+	assert.Equal(t, 5, store.Count())
+
+	// Sync with cache limit of 2: zombies deleted first, then oldest pruned
+	store.Sync(2, flags, nil)
+
+	assert.Equal(t, 2, store.Count(), "Should have exactly 2 healthy images after limit")
+	known := store.GetKnownIDs()
+	assert.False(t, known["z1"], "Zombie should be gone")
+	assert.False(t, known["z2"], "Zombie should be gone")
+	// h1 is oldest and should be pruned by cache limit
+	assert.False(t, known["h1"], "Oldest healthy image should be pruned")
+	assert.True(t, known["h2"], "h2 should survive")
+	assert.True(t, known["h3"], "h3 (newest) should survive")
+}
+
+func TestZombieRecovery_ResolutionBucketIntegrity(t *testing.T) {
+	// After zombie cleanup, resolution buckets must be rebuilt correctly.
+	// Only healthy images should appear in buckets.
+	store, fm := newZombieTestStore(t, t.TempDir())
+	flags := defaultTargetFlags()
+
+	store.Add(newHealthyImage(t, fm, "h_4k", "q1", "3840x2160", flags))
+	store.Add(newHealthyImage(t, fm, "h_uw", "q1", "3440x1440", flags))
+	store.Add(newZombieImage(t, fm, "z1", "q1", flags))
+	store.Add(newZombieImage(t, fm, "z2", "q1", flags))
+
+	assert.Equal(t, 4, store.Count())
+	assert.Equal(t, 1, store.GetBucketSize("3840x2160"))
+	assert.Equal(t, 1, store.GetBucketSize("3440x1440"))
+
+	store.Sync(100, flags, nil)
+
+	assert.Equal(t, 2, store.Count())
+	assert.Equal(t, 1, store.GetBucketSize("3840x2160"), "4K bucket should have h_4k")
+	assert.Equal(t, 1, store.GetBucketSize("3440x1440"), "UW bucket should have h_uw")
+
+	// Verify the correct IDs are in each bucket
+	ids4k := store.GetIDsForResolution("3840x2160")
+	assert.Contains(t, ids4k, "h_4k")
+	idsUW := store.GetIDsForResolution("3440x1440")
+	assert.Contains(t, idsUW, "h_uw")
+}
+
+func TestZombieRecovery_WithQueryFilter(t *testing.T) {
+	// When Sync is called with activeQueryIDs (strict mode), zombies from
+	// active queries are cleaned by zombie detection. Zombies from inactive
+	// queries are cleaned by the query filter (ImageActionDelete).
+	// Both paths result in deletion — test that nothing leaks.
+	store, fm := newZombieTestStore(t, t.TempDir())
+	flags := defaultTargetFlags()
+
+	store.Add(newZombieImage(t, fm, "z_active", "active_q", flags))
+	store.Add(newZombieImage(t, fm, "z_inactive", "dead_q", flags))
+	store.Add(newHealthyImage(t, fm, "h_active", "active_q", "1920x1080", flags))
+
+	activeQueries := map[string]bool{"active_q": true}
+	store.Sync(100, flags, activeQueries)
+
+	assert.Equal(t, 1, store.Count())
+	known := store.GetKnownIDs()
+	assert.True(t, known["h_active"], "Healthy image from active query survives")
+	assert.False(t, known["z_active"], "Zombie from active query deleted by zombie check")
+	assert.False(t, known["z_inactive"], "Zombie from inactive query deleted by query filter")
+}
+
+func TestZombieRecovery_NoFalsePositivesWithFlags(t *testing.T) {
+	// When Sync is called with empty/nil targetFlags, the zombie check
+	// should still work (it's independent of flag matching).
+	store, fm := newZombieTestStore(t, t.TempDir())
+	flags := defaultTargetFlags()
+
+	store.Add(newZombieImage(t, fm, "z1", "q1", flags))
+	store.Add(newHealthyImage(t, fm, "h1", "q1", "1920x1080", flags))
+
+	// Sync with nil targetFlags (like a basic cache-limit-only sync)
+	store.Sync(100, nil, nil)
+
+	assert.Equal(t, 1, store.Count())
+	assert.True(t, store.GetKnownIDs()["h1"])
+	assert.False(t, store.GetKnownIDs()["z1"])
+}
+
+func TestZombieRecovery_PersistenceAcrossRestart(t *testing.T) {
+	// Simulates app restart: store is loaded from cache.json containing
+	// zombie images. After loading + Sync, zombies are cleaned.
+	tmpDir := t.TempDir()
+	store1, fm := newZombieTestStore(t, tmpDir)
+	flags := defaultTargetFlags()
+
+	// Session 1: Add zombie + healthy, save to disk
+	store1.Add(newZombieImage(t, fm, "z_persist", "q1", flags))
+	store1.Add(newHealthyImage(t, fm, "h_persist", "q1", "1920x1080", flags))
+	store1.SaveCache()
+
+	// Session 2: New store, load from cache
+	store2, _ := newZombieTestStore(t, tmpDir)
+	store2.LoadCache()
+	assert.Equal(t, 2, store2.Count(), "Both images should be loaded from cache")
+
+	// Sync detects and cleans zombie
+	store2.Sync(100, flags, nil)
+	assert.Equal(t, 1, store2.Count())
+	assert.True(t, store2.GetKnownIDs()["h_persist"])
+	assert.False(t, store2.GetKnownIDs()["z_persist"], "Zombie should be cleaned after restart")
+}
+
+func TestZombieRecovery_SeenCountReset(t *testing.T) {
+	// Zombies that were previously marked as "seen" should have their
+	// seen count contribution removed when they're deleted.
+	store, fm := newZombieTestStore(t, t.TempDir())
+	flags := defaultTargetFlags()
+
+	// Create zombie with a FilePath (MarkSeen uses filePath, not ID)
+	zImg := newZombieImage(t, fm, "z_seen", "q1", flags)
+	zImg.FilePath = "/fake/z_seen.jpg"
+	store.Add(zImg)
+	store.Add(newHealthyImage(t, fm, "h_unseen", "q1", "1920x1080", flags))
+
+	// Mark zombie as seen using its FilePath
+	store.MarkSeen(zImg.FilePath)
+	assert.Equal(t, 1, store.SeenCount(), "One image should be marked seen")
+
+	// Sync cleans zombie
+	store.Sync(100, flags, nil)
+
+	assert.Equal(t, 1, store.Count())
+	assert.Equal(t, 0, store.SeenCount(), "Seen count should drop when zombie is deleted")
+}
+
+func copyFlags(src map[string]bool) map[string]bool {
+	dst := make(map[string]bool, len(src))
+	for k, v := range src {
+		dst[k] = v
+	}
+	return dst
 }

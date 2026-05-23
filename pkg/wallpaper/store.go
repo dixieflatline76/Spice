@@ -690,6 +690,16 @@ func (s *ImageStore) determineSyncAction(img provider.Image, activeQueryIDs map[
 		}
 	}
 
+	// Recovery: Detect zombie images from prior invalidation bugs.
+	// If an image has a master file and matching flags but zero derivatives,
+	// it was corrupted by the old flagsMatch length-comparison bug and is
+	// permanently invisible to monitors. Delete it so the fetcher can
+	// re-download and reprocess it on the next cycle.
+	if len(img.DerivativePaths) == 0 {
+		log.Debugf("[Sync] Recovery: deleting zombie image %s (master exists, flags match, but no derivatives)", img.ID)
+		return ImageActionDelete
+	}
+
 	return ImageActionKeep
 }
 
