@@ -192,7 +192,7 @@
   "Source: Initializing...": "來源：正在初始化...",
   "Source: {{.Provider}}": "來源：{{.Provider}}",
   "Spice EULA": "Spice 最終使用者授權合約",
-  "Spice requires OpenGL 2.0+ or hardware acceleration to show windows. The application will continue to run in the background, but the user interface may be unavailable.": "Spice 需要 OpenGL 2.0+ 或硬體加速才能顯示視窗。應用程式將繼續在背景執行，但使用者介面可能無法使用。",
+  "Spice requires OpenGL 2.0+ or hardware acceleration to show windows. The application will continue to run in the background. Please try rebooting your machine to restore graphics functionality.": "Spice 需要 OpenGL 2.0+ 或硬體加速才能顯示視窗。應用程式將繼續在背景執行，但使用者介面可能無法使用。",
   "Spice: Update Available": "Spice：有可用更新",
   "Stagger monitor changes:": "交替顯示器更換：",
   "Status: Authorized (Ready to Select)": "狀態：已授權（準備選擇）",

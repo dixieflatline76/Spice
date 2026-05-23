@@ -192,7 +192,7 @@
   "Source: Initializing...": "Source: Initializing...",
   "Source: {{.Provider}}": "Source: {{.Provider}}",
   "Spice EULA": "Spice EULA",
-  "Spice requires OpenGL 2.0+ or hardware acceleration to show windows. The application will continue to run in the background, but the user interface may be unavailable.": "Spice requires OpenGL 2.0+ or hardware acceleration to show windows. The application will continue to run in the background, but the user interface may be unavailable.",
+  "Spice requires OpenGL 2.0+ or hardware acceleration to show windows. The application will continue to run in the background. Please try rebooting your machine to restore graphics functionality.": "Spice requires OpenGL 2.0+ or hardware acceleration to show windows. The application will continue to run in the background. Please try rebooting your machine to restore graphics functionality.",
   "Spice: Update Available": "Spice: Update Available",
   "Stagger monitor changes:": "Stagger monitor changes:",
   "Status: Authorized (Ready to Select)": "Status: Authorized (Ready to Select)",

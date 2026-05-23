@@ -404,7 +404,7 @@ func (sa *SpiceApp) CreateSplashScreen(seconds int) {
 			errStr := fmt.Sprintf("%v", r)
 			utilLog.Printf("Recovered from splash screen creation panic: %v", errStr)
 			if strings.Contains(strings.ToLower(errStr), "apiunavailable") || strings.Contains(strings.ToLower(errStr), "wgl") || strings.Contains(strings.ToLower(errStr), "opengl") {
-				ShowNativeFallbackAlert(i18n.T("Graphics Error"), i18n.T("Spice requires OpenGL 2.0+ or hardware acceleration to show windows. The application will continue to run in the background, but the user interface may be unavailable."))
+				ShowNativeFallbackAlert(i18n.T("Graphics Error"), i18n.T("Spice requires OpenGL 2.0+ or hardware acceleration to show windows. The application will continue to run in the background. Please try rebooting your machine to restore graphics functionality."))
 			}
 		}
 	}()
@@ -420,7 +420,7 @@ func (sa *SpiceApp) CreateSplashScreen(seconds int) {
 		splashWindow := drv.CreateSplashWindow()
 		if splashWindow == nil {
 			utilLog.Println("Failed to create splash window (driver returned nil)")
-			ShowNativeFallbackAlert(i18n.T("Graphics Error"), i18n.T("Spice requires OpenGL 2.0+ or hardware acceleration to show windows. The application will continue to run in the background, but the user interface may be unavailable."))
+			ShowNativeFallbackAlert(i18n.T("Graphics Error"), i18n.T("Spice requires OpenGL 2.0+ or hardware acceleration to show windows. The application will continue to run in the background. Please try rebooting your machine to restore graphics functionality."))
 			return
 		}
 
@@ -471,7 +471,7 @@ func (sa *SpiceApp) CreatePreferencesWindow(initialTab string) {
 	// Guard: skip if OpenGL is unavailable (Fyne GLFW would crash process)
 	if !sysinfo.CanCreateWindows() {
 		utilLog.Println("OpenGL unavailable — preferences window cannot be created")
-		ShowNativeFallbackAlert(i18n.T("Graphics Error"), i18n.T("Spice requires OpenGL 2.0+ or hardware acceleration to show windows. The application will continue to run in the background, but the user interface may be unavailable."))
+		ShowNativeFallbackAlert(i18n.T("Graphics Error"), i18n.T("Spice requires OpenGL 2.0+ or hardware acceleration to show windows. The application will continue to run in the background. Please try rebooting your machine to restore graphics functionality."))
 		return
 	}
 
@@ -498,7 +498,7 @@ func (sa *SpiceApp) CreatePreferencesWindow(initialTab string) {
 				errStr := fmt.Sprintf("%v", r)
 				utilLog.Printf("Recovered from preferences window creation panic: %v", errStr)
 				if strings.Contains(strings.ToLower(errStr), "apiunavailable") || strings.Contains(strings.ToLower(errStr), "wgl") || strings.Contains(strings.ToLower(errStr), "opengl") {
-					ShowNativeFallbackAlert(i18n.T("Graphics Error"), i18n.T("Spice requires OpenGL 2.0+ or hardware acceleration to show windows. The application will continue to run in the background, but the user interface may be unavailable."))
+					ShowNativeFallbackAlert(i18n.T("Graphics Error"), i18n.T("Spice requires OpenGL 2.0+ or hardware acceleration to show windows. The application will continue to run in the background. Please try rebooting your machine to restore graphics functionality."))
 				}
 			}
 		}()
@@ -507,7 +507,7 @@ func (sa *SpiceApp) CreatePreferencesWindow(initialTab string) {
 
 	if prefsWindow == nil {
 		utilLog.Println("Preferences window creation failed (returned nil or recovered)")
-		ShowNativeFallbackAlert(i18n.T("Graphics Error"), i18n.T("Spice requires OpenGL 2.0+ or hardware acceleration to show windows. The application will continue to run in the background, but the user interface may be unavailable."))
+		ShowNativeFallbackAlert(i18n.T("Graphics Error"), i18n.T("Spice requires OpenGL 2.0+ or hardware acceleration to show windows. The application will continue to run in the background. Please try rebooting your machine to restore graphics functionality."))
 		return
 	}
 
@@ -518,7 +518,7 @@ func (sa *SpiceApp) CreatePreferencesWindow(initialTab string) {
 		defer func() {
 			if r := recover(); r != nil {
 				utilLog.Printf("Recovered from preferences window setup panic: %v", r)
-				ShowNativeFallbackAlert(i18n.T("Graphics Error"), i18n.T("Spice requires OpenGL 2.0+ or hardware acceleration to show windows. The application will continue to run in the background, but the user interface may be unavailable."))
+				ShowNativeFallbackAlert(i18n.T("Graphics Error"), i18n.T("Spice requires OpenGL 2.0+ or hardware acceleration to show windows. The application will continue to run in the background. Please try rebooting your machine to restore graphics functionality."))
 				// Clean up the broken window reference
 				sa.prefsWindow = nil
 				sa.prefsTabs = nil
@@ -1076,7 +1076,7 @@ func (sa *SpiceApp) CreateAboutSplash() {
 			errStr := fmt.Sprintf("%v", r)
 			utilLog.Printf("ERROR: PANIC in CreateAboutSplash (likely stale GLFW context): %v", errStr)
 			if strings.Contains(strings.ToLower(errStr), "apiunavailable") || strings.Contains(strings.ToLower(errStr), "wgl") || strings.Contains(strings.ToLower(errStr), "opengl") {
-				ShowNativeFallbackAlert(i18n.T("Graphics Error"), i18n.T("Spice requires OpenGL 2.0+ or hardware acceleration to show windows. The application will continue to run in the background, but the user interface may be unavailable."))
+				ShowNativeFallbackAlert(i18n.T("Graphics Error"), i18n.T("Spice requires OpenGL 2.0+ or hardware acceleration to show windows. The application will continue to run in the background. Please try rebooting your machine to restore graphics functionality."))
 			}
 		}
 	}()
@@ -1407,7 +1407,7 @@ func (sa *SpiceApp) ShowAnchorPopup(monitorID int, currentAnchor provider.CropAn
 	// Guard: skip if OpenGL is unavailable.
 	if !sysinfo.CanCreateWindows() {
 		utilLog.Println("OpenGL unavailable — anchor popup cannot be created")
-		ShowNativeFallbackAlert(i18n.T("Graphics Error"), i18n.T("Spice requires OpenGL 2.0+ or hardware acceleration to show windows. The application will continue to run in the background, but the user interface may be unavailable."))
+		ShowNativeFallbackAlert(i18n.T("Graphics Error"), i18n.T("Spice requires OpenGL 2.0+ or hardware acceleration to show windows. The application will continue to run in the background. Please try rebooting your machine to restore graphics functionality."))
 		return
 	}
 
@@ -1423,7 +1423,7 @@ func (sa *SpiceApp) ShowAnchorPopup(monitorID int, currentAnchor provider.CropAn
 				errStr := fmt.Sprintf("%v", r)
 				utilLog.Printf("Recovered from anchor popup window creation panic: %v", errStr)
 				if strings.Contains(strings.ToLower(errStr), "apiunavailable") || strings.Contains(strings.ToLower(errStr), "wgl") || strings.Contains(strings.ToLower(errStr), "opengl") {
-					ShowNativeFallbackAlert(i18n.T("Graphics Error"), i18n.T("Spice requires OpenGL 2.0+ or hardware acceleration to show windows. The application will continue to run in the background, but the user interface may be unavailable."))
+					ShowNativeFallbackAlert(i18n.T("Graphics Error"), i18n.T("Spice requires OpenGL 2.0+ or hardware acceleration to show windows. The application will continue to run in the background. Please try rebooting your machine to restore graphics functionality."))
 				}
 			}
 		}()

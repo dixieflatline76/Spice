@@ -6,6 +6,7 @@ package sysinfo
 import (
 	"os"
 	"os/exec"
+	"sync"
 	"syscall"
 
 	"golang.org/x/sys/windows"
@@ -71,10 +72,21 @@ func IsRemoteSession() bool {
 // an OpenGL window, we cannot simply use recover() in the main app.
 // Instead, we spawn ourselves as a subprocess with a special flag. If the subprocess
 // exits with 0, OpenGL works. If it exits with 1, OpenGL failed.
-// We run this dynamically every time to catch state changes (e.g. RDP reconnects).
+//
+// The probe runs once at first call and the result is cached for the lifetime of
+// the process. If OpenGL state changes mid-session (e.g. RDP reconnect, driver
+// crash), the user should restart Spice.
 func CanCreateWindows() bool {
-	return probeOpenGLSubprocess()
+	glProbeOnce.Do(func() {
+		glProbeResult = probeOpenGLSubprocess()
+	})
+	return glProbeResult
 }
+
+var (
+	glProbeOnce   sync.Once
+	glProbeResult bool
+)
 
 func probeOpenGLSubprocess() bool {
 
