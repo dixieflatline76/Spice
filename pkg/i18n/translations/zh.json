@@ -192,7 +192,7 @@
   "Source: Initializing...": "来源：正在初始化...",
   "Source: {{.Provider}}": "来源：{{.Provider}}",
   "Spice EULA": "Spice 最终用户许可协议",
-  "Spice requires OpenGL 2.0+ or hardware acceleration to show windows. The application will continue to run in the background, but the user interface may be unavailable.": "Spice 需要 OpenGL 2.0+ 或硬件加速才能显示窗口。应用程序将继续在后台运行，但用户界面可能无法使用。",
+  "Spice requires OpenGL 2.0+ or hardware acceleration to show windows. The application will continue to run in the background. Please try rebooting your machine to restore graphics functionality.": "Spice 需要 OpenGL 2.0+ 或硬件加速才能显示窗口。应用程序将继续在后台运行，但用户界面可能无法使用。",
   "Spice: Update Available": "Spice：有可用更新",
   "Stagger monitor changes:": "交错显示器更换：",
   "Status: Authorized (Ready to Select)": "状态：已授权（准备选择）",

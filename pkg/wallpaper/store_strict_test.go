@@ -21,7 +21,7 @@ func TestStrictSync_LegacySafety(t *testing.T) {
 	store.SetFileManager(fm, cacheFile)
 
 	// Setup: Image with a SourceID
-	img1 := provider.Image{ID: "img1", SourceQueryID: "q1", FilePath: filepath.Join(tmpDir, "img1.jpg")}
+	img1 := provider.Image{ID: "img1", SourceQueryID: "q1", FilePath: filepath.Join(tmpDir, "img1.jpg"), DerivativePaths: map[string]string{"1920x1080": "d1.jpg"}}
 	assert.NoError(t, os.WriteFile(img1.FilePath, []byte("data"), 0644))
 	store.Add(img1)
 
@@ -49,9 +49,9 @@ func TestStrictSync_UncheckAll(t *testing.T) {
 	store.SetFileManager(fm, cacheFile)
 
 	// img1: From q1
-	img1 := provider.Image{ID: "img1", SourceQueryID: "q1", FilePath: filepath.Join(tmpDir, "img1.jpg")}
+	img1 := provider.Image{ID: "img1", SourceQueryID: "q1", FilePath: filepath.Join(tmpDir, "img1.jpg"), DerivativePaths: map[string]string{"1920x1080": "d1.jpg"}}
 	// img2: Manual/Untagged (should remain)
-	img2 := provider.Image{ID: "img2", SourceQueryID: "", FilePath: filepath.Join(tmpDir, "img2.jpg")}
+	img2 := provider.Image{ID: "img2", SourceQueryID: "", FilePath: filepath.Join(tmpDir, "img2.jpg"), DerivativePaths: map[string]string{"1920x1080": "d2.jpg"}}
 
 	assert.NoError(t, os.WriteFile(img1.FilePath, []byte("1"), 0644))
 	assert.NoError(t, os.WriteFile(img2.FilePath, []byte("2"), 0644))
@@ -91,10 +91,10 @@ func TestStrictSync_MixedState(t *testing.T) {
 	// 3. qA (Active, but file missing) -> Delete (Validation logic)
 	// 4. Untagged -> Keep
 
-	img1 := provider.Image{ID: "img1", SourceQueryID: "qA", FilePath: filepath.Join(tmpDir, "img1.jpg")}
-	img2 := provider.Image{ID: "img2", SourceQueryID: "qB", FilePath: filepath.Join(tmpDir, "img2.jpg")}
-	img3 := provider.Image{ID: "img3", SourceQueryID: "qA", FilePath: filepath.Join(tmpDir, "img3.jpg")}
-	img4 := provider.Image{ID: "img4", SourceQueryID: "", FilePath: filepath.Join(tmpDir, "img4.jpg")}
+	img1 := provider.Image{ID: "img1", SourceQueryID: "qA", FilePath: filepath.Join(tmpDir, "img1.jpg"), DerivativePaths: map[string]string{"1920x1080": "d1.jpg"}}
+	img2 := provider.Image{ID: "img2", SourceQueryID: "qB", FilePath: filepath.Join(tmpDir, "img2.jpg"), DerivativePaths: map[string]string{"1920x1080": "d2.jpg"}}
+	img3 := provider.Image{ID: "img3", SourceQueryID: "qA", FilePath: filepath.Join(tmpDir, "img3.jpg"), DerivativePaths: map[string]string{"1920x1080": "d3.jpg"}}
+	img4 := provider.Image{ID: "img4", SourceQueryID: "", FilePath: filepath.Join(tmpDir, "img4.jpg"), DerivativePaths: map[string]string{"1920x1080": "d4.jpg"}}
 
 	// Create files for 1, 2, 4. Skip 3.
 	assert.NoError(t, os.WriteFile(img1.FilePath, []byte("1"), 0644))
