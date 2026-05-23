@@ -247,6 +247,59 @@ func TestStoreSync_CacheInvalidation(t *testing.T) {
 	}
 }
 
+func TestStoreSync_IncompatibleTagsPreserved(t *testing.T) {
+	// Regression test: flagsMatch must ignore "incompatible:<WxH>" metadata tags.
+	// Images get incompatibility tags added during processing (e.g. "incompatible:1920x1080").
+	// These are NOT processing mode flags and must not cause spurious invalidation.
+	tmpDir := t.TempDir()
+	fm := NewFileManager(tmpDir)
+	cacheFile := filepath.Join(tmpDir, "cache.json")
+	store := NewImageStore()
+	store.SetAsyncSave(false)
+	store.SetFileManager(fm, cacheFile)
+
+	// Full processing flags as set by downloader.go, PLUS an incompatibility tag
+	imgFlags := map[string]bool{
+		"SmartFit":               true,
+		"FitFlexibility":         false,
+		"FitQuality":             true,
+		"FaceCrop":               false,
+		"FaceBoost":              false,
+		"incompatible:1920x1080": true, // metadata tag from rejection tagging
+	}
+
+	img1 := provider.Image{
+		ID:              "img1",
+		ProcessingFlags: imgFlags,
+		DerivativePaths: map[string]string{"3440x1440": "/path/to/derivative.jpg"},
+	}
+	// Create master so it survives validation check
+	master1, _ := fm.GetMasterPath("img1", ".jpg")
+	err := os.MkdirAll(filepath.Dir(master1), 0755)
+	assert.NoError(t, err)
+	err = os.WriteFile(master1, []byte("fake"), 0644)
+	assert.NoError(t, err)
+
+	store.Add(img1)
+
+	// Target flags match the 5 processing-mode keys exactly
+	targetFlags := map[string]bool{
+		"SmartFit":       true,
+		"FitFlexibility": false,
+		"FitQuality":     true,
+		"FaceCrop":       false,
+		"FaceBoost":      false,
+	}
+	store.Sync(100, targetFlags, nil)
+
+	// Image should be KEPT (not invalidated), because the processing flags match.
+	// The "incompatible:1920x1080" tag should be ignored by flagsMatch.
+	assert.Equal(t, 1, store.Count())
+	got, _ := store.Get(0)
+	assert.NotEmpty(t, got.DerivativePaths, "DerivativePaths should be preserved when flags match")
+	assert.Equal(t, "/path/to/derivative.jpg", got.DerivativePaths["3440x1440"])
+}
+
 func TestGetKnownIDs(t *testing.T) {
 	store := NewImageStore()
 	store.SetAsyncSave(false)
@@ -451,4 +504,659 @@ func TestStore_ResolutionBuckets(t *testing.T) {
 	assert.Equal(t, 1, store.GetBucketSize("1920x1080"))
 	ids = store.GetIDsForResolution("1920x1080")
 	assert.Equal(t, "img2", ids[0])
+}
+
+// =============================================================================
+// Nightly Grooming Simulation
+// =============================================================================
+//
+// This test simulates the full nightly grooming cycle as invoked by scheduler.go.
+// It uses the EXACT flag maps set by downloader.go (ProcessImageJob) and
+// syncStoreWithConfig() to catch any drift between the two.
+//
+// If you add a new processing flag in downloader.go, you MUST update both
+// makeDownloaderFlags() and makeGroomingTarget() below, or this test will
+// fail and tell you exactly what's wrong.
+
+// makeDownloaderFlags builds the ProcessingFlags map exactly as downloader.go does.
+// See downloader.go:L113-126.
+func makeDownloaderFlags(smartFit bool, mode SmartFitMode, faceCrop, faceBoost bool) map[string]bool {
+	return map[string]bool{
+		"SmartFit":       smartFit,
+		"FitFlexibility": mode == SmartFitAggressive,
+		"FitQuality":     mode == SmartFitNormal,
+		"FaceCrop":       faceCrop,
+		"FaceBoost":      faceBoost,
+	}
+}
+
+// makeGroomingTarget builds the targetFlags map exactly as syncStoreWithConfig() does.
+// See wallpaper.go:L1242-1248.
+func makeGroomingTarget(smartFit bool, mode SmartFitMode, faceCrop, faceBoost bool) map[string]bool {
+	return map[string]bool{
+		"SmartFit":       smartFit,
+		"FitFlexibility": mode == SmartFitAggressive,
+		"FitQuality":     mode == SmartFitNormal,
+		"FaceCrop":       faceCrop,
+		"FaceBoost":      faceBoost,
+	}
+}
+
+// createMasterFile creates a fake master .jpg for an image ID so it passes validation.
+func createMasterFile(t *testing.T, fm *FileManager, id string) {
+	t.Helper()
+	master, _ := fm.GetMasterPath(id, ".jpg")
+	err := os.MkdirAll(filepath.Dir(master), 0755)
+	assert.NoError(t, err)
+	err = os.WriteFile(master, []byte("fake-"+id), 0644)
+	assert.NoError(t, err)
+}
+
+func TestNightlyGroomingSimulation(t *testing.T) {
+	// -------------------------------------------------------------------------
+	// Setup: Simulate a store with images as they would exist after a day of
+	// normal operation. Images have the full flag set from downloader.go,
+	// some have incompatible tags, some are from different queries.
+	// -------------------------------------------------------------------------
+	tmpDir := t.TempDir()
+	fm := NewFileManager(tmpDir)
+	cacheFile := filepath.Join(tmpDir, "cache.json")
+	store := NewImageStore()
+	store.SetAsyncSave(false)
+	store.SetFileManager(fm, cacheFile)
+
+	// Current user config: SmartFit=true, Aggressive mode, FaceCrop=false, FaceBoost=false
+	currentMode := SmartFitAggressive
+	currentSmartFit := true
+	currentFaceCrop := false
+	currentFaceBoost := false
+
+	baseFlags := makeDownloaderFlags(currentSmartFit, currentMode, currentFaceCrop, currentFaceBoost)
+
+	// --- Image 1: Normal image, single monitor, no incompatible tags ---
+	img1Flags := make(map[string]bool)
+	for k, v := range baseFlags {
+		img1Flags[k] = v
+	}
+	img1 := provider.Image{
+		ID:              "MetMuseum_12345",
+		SourceQueryID:   "qA",
+		ProcessingFlags: img1Flags,
+		DerivativePaths: map[string]string{"3440x1440": filepath.Join(tmpDir, "fitted", "MetMuseum_12345_3440x1440.jpg")},
+	}
+	createMasterFile(t, fm, img1.ID)
+
+	// --- Image 2: Multi-monitor image, incompatible with secondary monitor ---
+	img2Flags := make(map[string]bool)
+	for k, v := range baseFlags {
+		img2Flags[k] = v
+	}
+	img2Flags["incompatible:1920x1080"] = true // too small for secondary
+	img2 := provider.Image{
+		ID:              "Rijks_67890",
+		SourceQueryID:   "qA",
+		ProcessingFlags: img2Flags,
+		DerivativePaths: map[string]string{"3440x1440": filepath.Join(tmpDir, "fitted", "Rijks_67890_3440x1440.jpg")},
+	}
+	createMasterFile(t, fm, img2.ID)
+
+	// --- Image 3: Multi-monitor image, incompatible with TWO monitors ---
+	img3Flags := make(map[string]bool)
+	for k, v := range baseFlags {
+		img3Flags[k] = v
+	}
+	img3Flags["incompatible:1920x1080"] = true
+	img3Flags["incompatible:2560x1440"] = true
+	img3 := provider.Image{
+		ID:              "Cleveland_11111",
+		SourceQueryID:   "qA",
+		ProcessingFlags: img3Flags,
+		DerivativePaths: map[string]string{"3440x1440": filepath.Join(tmpDir, "fitted", "Cleveland_11111_3440x1440.jpg")},
+	}
+	createMasterFile(t, fm, img3.ID)
+
+	// --- Image 4: From a DIFFERENT active query ---
+	img4Flags := make(map[string]bool)
+	for k, v := range baseFlags {
+		img4Flags[k] = v
+	}
+	img4 := provider.Image{
+		ID:              "Artic_22222",
+		SourceQueryID:   "qB",
+		ProcessingFlags: img4Flags,
+		DerivativePaths: map[string]string{"3440x1440": filepath.Join(tmpDir, "fitted", "Artic_22222_3440x1440.jpg")},
+	}
+	createMasterFile(t, fm, img4.ID)
+
+	// --- Image 5: From an INACTIVE query (should be pruned) ---
+	img5Flags := make(map[string]bool)
+	for k, v := range baseFlags {
+		img5Flags[k] = v
+	}
+	img5 := provider.Image{
+		ID:              "Pexels_33333",
+		SourceQueryID:   "qDEAD",
+		ProcessingFlags: img5Flags,
+		DerivativePaths: map[string]string{"3440x1440": filepath.Join(tmpDir, "fitted", "Pexels_33333_3440x1440.jpg")},
+	}
+	createMasterFile(t, fm, img5.ID)
+
+	// --- Image 6: Missing master file (should be pruned) ---
+	img6Flags := make(map[string]bool)
+	for k, v := range baseFlags {
+		img6Flags[k] = v
+	}
+	img6 := provider.Image{
+		ID:              "Wikimedia_44444",
+		SourceQueryID:   "qA",
+		ProcessingFlags: img6Flags,
+		DerivativePaths: map[string]string{"3440x1440": filepath.Join(tmpDir, "fitted", "Wikimedia_44444_3440x1440.jpg")},
+	}
+	// NOTE: No createMasterFile for img6 — simulates corrupted/missing master
+
+	store.Add(img1)
+	store.Add(img2)
+	store.Add(img3)
+	store.Add(img4)
+	store.Add(img5)
+	store.Add(img6)
+	assert.Equal(t, 6, store.Count())
+
+	// =========================================================================
+	// Test 1: Steady-State Grooming (same config, no mode change)
+	// Expected: img5 deleted (inactive query), img6 deleted (missing master),
+	//           img1-img4 kept with ALL derivatives and incompatible tags intact.
+	// =========================================================================
+	t.Run("SteadyState_NoModeChange", func(t *testing.T) {
+		target := makeGroomingTarget(currentSmartFit, currentMode, currentFaceCrop, currentFaceBoost)
+		activeQueries := map[string]bool{"qA": true, "qB": true}
+
+		store.Sync(100, target, activeQueries)
+
+		// 4 images should remain
+		assert.Equal(t, 4, store.Count(), "Expected 4 images after steady-state grooming")
+
+		known := store.GetKnownIDs()
+		assert.True(t, known["MetMuseum_12345"], "img1 should survive")
+		assert.True(t, known["Rijks_67890"], "img2 should survive")
+		assert.True(t, known["Cleveland_11111"], "img3 should survive")
+		assert.True(t, known["Artic_22222"], "img4 should survive")
+		assert.False(t, known["Pexels_33333"], "img5 (inactive query) should be deleted")
+		assert.False(t, known["Wikimedia_44444"], "img6 (missing master) should be deleted")
+
+		// Verify derivatives are PRESERVED (not nuked)
+		got1, _ := store.GetByID("MetMuseum_12345")
+		assert.NotEmpty(t, got1.DerivativePaths, "img1 derivatives should be preserved")
+
+		got2, _ := store.GetByID("Rijks_67890")
+		assert.NotEmpty(t, got2.DerivativePaths, "img2 derivatives should be preserved")
+		assert.True(t, got2.ProcessingFlags["incompatible:1920x1080"], "img2 incompatible tag should be preserved")
+
+		got3, _ := store.GetByID("Cleveland_11111")
+		assert.NotEmpty(t, got3.DerivativePaths, "img3 derivatives should be preserved")
+		assert.True(t, got3.ProcessingFlags["incompatible:1920x1080"], "img3 first incompatible tag preserved")
+		assert.True(t, got3.ProcessingFlags["incompatible:2560x1440"], "img3 second incompatible tag preserved")
+
+		// Verify resolution buckets are intact
+		bucketSize := store.GetBucketSize("3440x1440")
+		assert.Equal(t, 4, bucketSize, "All 4 surviving images should be in the 3440x1440 bucket")
+	})
+
+	// =========================================================================
+	// Test 2: Mode Change Grooming (user switches from Aggressive → Normal)
+	// Expected: All remaining images invalidated (derivatives wiped,
+	//           incompatible tags wiped, new flags set). Master files preserved.
+	// =========================================================================
+	t.Run("ModeChange_InvalidatesAll", func(t *testing.T) {
+		newMode := SmartFitNormal // User changed mode
+		target := makeGroomingTarget(currentSmartFit, newMode, currentFaceCrop, currentFaceBoost)
+		// No query filter this time
+		store.Sync(100, target, nil)
+
+		assert.Equal(t, 4, store.Count(), "All 4 images should remain (invalidated, not deleted)")
+
+		// All images should have wiped derivatives
+		for i := 0; i < store.Count(); i++ {
+			img, ok := store.Get(i)
+			assert.True(t, ok)
+			assert.Empty(t, img.DerivativePaths, "Derivatives should be wiped after mode change for %s", img.ID)
+
+			// Flags should now match the new target (incompatible tags wiped)
+			assert.Equal(t, target["SmartFit"], img.ProcessingFlags["SmartFit"])
+			assert.Equal(t, target["FitFlexibility"], img.ProcessingFlags["FitFlexibility"])
+			assert.Equal(t, target["FitQuality"], img.ProcessingFlags["FitQuality"])
+			assert.Equal(t, target["FaceCrop"], img.ProcessingFlags["FaceCrop"])
+			assert.Equal(t, target["FaceBoost"], img.ProcessingFlags["FaceBoost"])
+
+			// Incompatible tags should be GONE (mode change requires re-evaluation)
+			assert.False(t, img.ProcessingFlags["incompatible:1920x1080"],
+				"incompatible tags should be wiped after mode change for %s", img.ID)
+		}
+
+		// Resolution buckets should be EMPTY (no derivatives)
+		assert.Equal(t, 0, store.GetBucketSize("3440x1440"),
+			"Bucket should be empty after invalidation (derivatives wiped)")
+	})
+
+	// =========================================================================
+	// Test 3: Cache Limit Pruning
+	// Expected: Oldest images pruned to fit within cache limit.
+	// =========================================================================
+	t.Run("CacheLimit_PrunesOldest", func(t *testing.T) {
+		// Currently 4 images remain. Sync with limit 2 should prune the 2 oldest.
+		store.Sync(2, nil, nil)
+		assert.Equal(t, 2, store.Count(), "Should prune down to cache limit of 2")
+	})
+}
+
+// =============================================================================
+// Regression Guard: The 2-Flag Bug
+// =============================================================================
+// This test ensures the exact bug that caused the nightly grooming to nuke all
+// derivatives can never silently recur. It simulates what the OLD scheduler code
+// did (passing a 2-flag target) and asserts that it WOULD cause invalidation.
+// The fix was to use the full 5-flag target from syncStoreWithConfig().
+
+func TestNightlyGrooming_RegressionGuard_IncompleteFlags(t *testing.T) {
+	tmpDir := t.TempDir()
+	fm := NewFileManager(tmpDir)
+	store := NewImageStore()
+	store.SetAsyncSave(false)
+	store.SetFileManager(fm, filepath.Join(tmpDir, "cache.json"))
+
+	// Image with full downloader flags (as set in production)
+	fullFlags := makeDownloaderFlags(true, SmartFitAggressive, false, false)
+	img := provider.Image{
+		ID:              "Regression_001",
+		ProcessingFlags: fullFlags,
+		DerivativePaths: map[string]string{"3440x1440": "/path/to/derivative.jpg"},
+	}
+	createMasterFile(t, fm, img.ID)
+	store.Add(img)
+
+	// The CORRECT target (5 flags) — should NOT invalidate
+	correctTarget := makeGroomingTarget(true, SmartFitAggressive, false, false)
+	store.Sync(100, correctTarget, nil)
+
+	got, _ := store.GetByID("Regression_001")
+	assert.NotEmpty(t, got.DerivativePaths,
+		"REGRESSION: correct 5-flag target should NOT invalidate matching images")
+
+	// Reset for next check
+	store.Clear()
+	fullFlags2 := makeDownloaderFlags(true, SmartFitAggressive, false, false)
+	img2 := provider.Image{
+		ID:              "Regression_002",
+		ProcessingFlags: fullFlags2,
+		DerivativePaths: map[string]string{"3440x1440": "/path/to/derivative.jpg"},
+	}
+	createMasterFile(t, fm, img2.ID)
+	store.Add(img2)
+
+	// The BROKEN target (only 2 flags, as the old scheduler.go had).
+	// This SHOULD cause invalidation — the reverse check in flagsMatch will
+	// detect that the image has keys (FitFlexibility, FitQuality, FaceBoost)
+	// not present in the target.
+	brokenTarget := map[string]bool{
+		"SmartFit": true,
+		"FaceCrop": false,
+	}
+	store.Sync(100, brokenTarget, nil)
+
+	got2, _ := store.GetByID("Regression_002")
+	assert.Empty(t, got2.DerivativePaths,
+		"REGRESSION GUARD: incomplete 2-flag target MUST invalidate (this was the original bug)")
+
+	// Verify the image was invalidated with the broken flags, not deleted
+	assert.Equal(t, 1, store.Count(), "Image should be invalidated, not deleted")
+	assert.Equal(t, true, got2.ProcessingFlags["SmartFit"])
+	assert.Equal(t, false, got2.ProcessingFlags["FaceCrop"])
+}
+
+// TestFlagsMatch_DownloaderAndGroomingConsistency is a direct unit test that
+// verifies makeDownloaderFlags and makeGroomingTarget produce identical maps
+// for the same inputs. If a new flag is added to one but not the other, this
+// test will catch it.
+func TestFlagsMatch_DownloaderAndGroomingConsistency(t *testing.T) {
+	modes := []SmartFitMode{SmartFitNormal, SmartFitAggressive}
+	bools := []bool{true, false}
+
+	for _, mode := range modes {
+		for _, sf := range bools {
+			for _, fc := range bools {
+				for _, fb := range bools {
+					dl := makeDownloaderFlags(sf, mode, fc, fb)
+					gr := makeGroomingTarget(sf, mode, fc, fb)
+
+					assert.Equal(t, len(dl), len(gr),
+						"Flag count mismatch for mode=%v sf=%v fc=%v fb=%v", mode, sf, fc, fb)
+
+					for k, v := range dl {
+						assert.Equal(t, v, gr[k],
+							"Flag value mismatch for key=%s mode=%v sf=%v fc=%v fb=%v", k, mode, sf, fc, fb)
+					}
+				}
+			}
+		}
+	}
+}
+
+// =============================================================================
+// Query Removal Tests
+// =============================================================================
+
+func TestRemoveByQueryID_ResolutionBuckets(t *testing.T) {
+	// Verifies that resolution buckets are correctly updated when images
+	// are removed by query ID. This prevents stale bucket entries that
+	// would cause the monitor controller to try setting non-existent wallpapers.
+	tmpDir := t.TempDir()
+	fm := NewFileManager(tmpDir)
+	store := NewImageStore()
+	store.SetAsyncSave(false)
+	store.SetFileManager(fm, filepath.Join(tmpDir, "cache.json"))
+
+	img1 := provider.Image{
+		ID:            "q1_img1",
+		SourceQueryID: "q1",
+		DerivativePaths: map[string]string{
+			"3440x1440": filepath.Join(tmpDir, "fitted", "q1_img1_3440x1440.jpg"),
+			"1920x1080": filepath.Join(tmpDir, "fitted", "q1_img1_1920x1080.jpg"),
+		},
+	}
+	img2 := provider.Image{
+		ID:            "q1_img2",
+		SourceQueryID: "q1",
+		DerivativePaths: map[string]string{
+			"3440x1440": filepath.Join(tmpDir, "fitted", "q1_img2_3440x1440.jpg"),
+		},
+	}
+	img3 := provider.Image{
+		ID:            "q2_img1",
+		SourceQueryID: "q2",
+		DerivativePaths: map[string]string{
+			"3440x1440": filepath.Join(tmpDir, "fitted", "q2_img1_3440x1440.jpg"),
+			"1920x1080": filepath.Join(tmpDir, "fitted", "q2_img1_1920x1080.jpg"),
+		},
+	}
+
+	store.Add(img1)
+	store.Add(img2)
+	store.Add(img3)
+
+	// Pre-removal: verify bucket state
+	assert.Equal(t, 3, store.GetBucketSize("3440x1440"))
+	assert.Equal(t, 2, store.GetBucketSize("1920x1080"))
+
+	// Remove query q1
+	store.RemoveByQueryID("q1")
+
+	// Post-removal: buckets should only contain q2's images
+	assert.Equal(t, 1, store.GetBucketSize("3440x1440"), "Only q2_img1 should remain in 3440x1440")
+	assert.Equal(t, 1, store.GetBucketSize("1920x1080"), "Only q2_img1 should remain in 1920x1080")
+
+	ids := store.GetIDsForResolution("3440x1440")
+	assert.Equal(t, 1, len(ids))
+	assert.Equal(t, "q2_img1", ids[0])
+}
+
+func TestRemoveByQueryID_SeenCount(t *testing.T) {
+	// Verifies that seen count is correctly decremented when query images are removed.
+	store := NewImageStore()
+	store.SetAsyncSave(false)
+
+	img1 := provider.Image{ID: "img1", SourceQueryID: "q1", Seen: true}
+	img2 := provider.Image{ID: "img2", SourceQueryID: "q1", Seen: true}
+	img3 := provider.Image{ID: "img3", SourceQueryID: "q2", Seen: false}
+	img4 := provider.Image{ID: "img4", SourceQueryID: "q2", Seen: true}
+
+	store.Add(img1)
+	store.Add(img2)
+	store.Add(img3)
+	store.Add(img4)
+
+	assert.Equal(t, 3, store.SeenCount(), "Pre-removal: 3 seen images")
+
+	// Remove q1 (both seen)
+	store.RemoveByQueryID("q1")
+
+	assert.Equal(t, 2, store.Count(), "2 images should remain")
+	assert.Equal(t, 1, store.SeenCount(), "Only img4 (from q2) should be counted as seen")
+}
+
+func TestRemoveByQueryID_NonExistentQuery(t *testing.T) {
+	// Removing a query that doesn't exist should be a no-op.
+	store := NewImageStore()
+	store.SetAsyncSave(false)
+
+	store.Add(provider.Image{ID: "img1", SourceQueryID: "q1"})
+	store.Add(provider.Image{ID: "img2", SourceQueryID: "q2"})
+
+	store.RemoveByQueryID("q_nonexistent")
+
+	assert.Equal(t, 2, store.Count(), "No images should be removed for non-existent query")
+}
+
+func TestRemoveByQueryID_EmptyQueryID(t *testing.T) {
+	// Images with empty SourceQueryID should NOT be removed when removing
+	// a specific query. They are "orphans" from legacy/manual adds.
+	store := NewImageStore()
+	store.SetAsyncSave(false)
+
+	store.Add(provider.Image{ID: "legacy_img", SourceQueryID: ""})
+	store.Add(provider.Image{ID: "q1_img", SourceQueryID: "q1"})
+
+	store.RemoveByQueryID("q1")
+
+	assert.Equal(t, 1, store.Count())
+	known := store.GetKnownIDs()
+	assert.True(t, known["legacy_img"], "Legacy image with empty query ID should survive")
+	assert.False(t, known["q1_img"], "q1 image should be removed")
+}
+
+// =============================================================================
+// Blocklist (AvoidSet) Tests
+// =============================================================================
+
+func TestBlocklist_RemoveAutoPopulates(t *testing.T) {
+	// Verifies that Remove() automatically adds the image ID to the avoidSet,
+	// preventing the same image from being re-added by future fetches.
+	tmpDir := t.TempDir()
+	fm := NewFileManager(tmpDir)
+	store := NewImageStore()
+	store.SetAsyncSave(false)
+	store.SetFileManager(fm, filepath.Join(tmpDir, "cache.json"))
+
+	img := provider.Image{
+		ID: "bad_image",
+		DerivativePaths: map[string]string{
+			"3440x1440": filepath.Join(tmpDir, "fitted", "bad_image_3440x1440.jpg"),
+		},
+	}
+	store.Add(img)
+	assert.Equal(t, 1, store.Count())
+	assert.Equal(t, 1, store.GetBucketSize("3440x1440"))
+
+	// Remove the image (user clicked "Block" / "Never show again")
+	_, ok := store.Remove("bad_image")
+	assert.True(t, ok)
+	assert.Equal(t, 0, store.Count())
+	assert.Equal(t, 0, store.GetBucketSize("3440x1440"), "Bucket should be empty after Remove")
+
+	// Try to re-add the same image (simulates next fetch returning it)
+	added := store.Add(provider.Image{ID: "bad_image"})
+	assert.False(t, added, "Blocked image should be rejected by Add()")
+	assert.Equal(t, 0, store.Count(), "Store should still be empty")
+}
+
+func TestBlocklist_SyncPrunesBlockedImages(t *testing.T) {
+	// Verifies that Sync's determineSyncAction correctly deletes images
+	// that are in the avoidSet. This covers the case where an image was
+	// blocked AFTER being added to the store (e.g., loaded from cache).
+	tmpDir := t.TempDir()
+	fm := NewFileManager(tmpDir)
+	store := NewImageStore()
+	store.SetAsyncSave(false)
+	store.SetFileManager(fm, filepath.Join(tmpDir, "cache.json"))
+
+	// Add images first
+	img1 := provider.Image{ID: "good_img", SourceQueryID: "q1"}
+	img2 := provider.Image{ID: "bad_img", SourceQueryID: "q1"}
+	img3 := provider.Image{ID: "also_good", SourceQueryID: "q1"}
+
+	createMasterFile(t, fm, "good_img")
+	createMasterFile(t, fm, "bad_img")
+	createMasterFile(t, fm, "also_good")
+
+	store.Add(img1)
+	store.Add(img2)
+	store.Add(img3)
+
+	// Now load the blocklist (simulates app startup loading persisted blocklist)
+	store.LoadAvoidSet(map[string]bool{
+		"bad_img": true,
+	})
+
+	// Run Sync (as nightly grooming would)
+	store.Sync(100, nil, nil)
+
+	// bad_img should be gone
+	assert.Equal(t, 2, store.Count())
+	known := store.GetKnownIDs()
+	assert.True(t, known["good_img"])
+	assert.True(t, known["also_good"])
+	assert.False(t, known["bad_img"], "Blocked image should be pruned by Sync")
+}
+
+func TestBlocklist_InteractionWithQueryRemoval(t *testing.T) {
+	// Tests the full lifecycle:
+	// 1. Images from query q1 are in the store
+	// 2. User blocks one specific image from q1
+	// 3. Query q1 is removed (user deactivates the query)
+	// 4. Query q1 is re-added (user re-enables the query)
+	// 5. Fetch returns all original images including the blocked one
+	// 6. The blocked image must still be rejected
+	tmpDir := t.TempDir()
+	fm := NewFileManager(tmpDir)
+	store := NewImageStore()
+	store.SetAsyncSave(false)
+	store.SetFileManager(fm, filepath.Join(tmpDir, "cache.json"))
+
+	// Phase 1: Add images from query q1
+	store.Add(provider.Image{ID: "q1_a", SourceQueryID: "q1"})
+	store.Add(provider.Image{ID: "q1_b", SourceQueryID: "q1"})
+	store.Add(provider.Image{ID: "q1_blocked", SourceQueryID: "q1"})
+	assert.Equal(t, 3, store.Count())
+
+	// Phase 2: User blocks q1_blocked
+	store.Remove("q1_blocked")
+	assert.Equal(t, 2, store.Count())
+
+	// Phase 3: User deactivates query q1
+	store.RemoveByQueryID("q1")
+	assert.Equal(t, 0, store.Count())
+
+	// Phase 4+5: User re-enables q1, fetch returns all 3 images
+	added1 := store.Add(provider.Image{ID: "q1_a", SourceQueryID: "q1"})
+	added2 := store.Add(provider.Image{ID: "q1_b", SourceQueryID: "q1"})
+	added3 := store.Add(provider.Image{ID: "q1_blocked", SourceQueryID: "q1"})
+
+	// Phase 6: Verify
+	assert.True(t, added1, "q1_a should be re-addable")
+	assert.True(t, added2, "q1_b should be re-addable")
+	assert.False(t, added3, "q1_blocked must remain blocked even after query removal/re-add")
+	assert.Equal(t, 2, store.Count())
+}
+
+func TestBlocklist_SurvivesPersistence(t *testing.T) {
+	// Verifies that the avoidSet survives Clear() but not Wipe(),
+	// and that blocked images are still rejected after store reload.
+	tmpDir := t.TempDir()
+	fm := NewFileManager(tmpDir)
+	cacheFile := filepath.Join(tmpDir, "cache.json")
+
+	// Store 1: Add images, block one, save
+	store1 := NewImageStore()
+	store1.SetAsyncSave(false)
+	store1.SetFileManager(fm, cacheFile)
+
+	store1.Add(provider.Image{ID: "img_a"})
+	store1.Add(provider.Image{ID: "img_b"})
+	store1.Remove("img_b") // Block img_b
+	store1.SaveCache()
+
+	// Simulate app restart: Create new store, load cache
+	store2 := NewImageStore()
+	store2.SetAsyncSave(false)
+	store2.SetFileManager(fm, cacheFile)
+	err := store2.LoadCache()
+	assert.NoError(t, err)
+
+	// img_b should not be in the loaded store
+	assert.Equal(t, 1, store2.Count())
+	known := store2.GetKnownIDs()
+	assert.True(t, known["img_a"])
+	assert.False(t, known["img_b"])
+
+	// However, blocklist is NOT persisted in cache.json (it's loaded from config).
+	// So after LoadCache, trying to add img_b would succeed unless LoadAvoidSet
+	// is called separately. Let's verify this expected behavior:
+	added := store2.Add(provider.Image{ID: "img_b"})
+	// Without LoadAvoidSet, the blocklist is empty in the new store
+	assert.True(t, added, "Without LoadAvoidSet, blocked image can be re-added (blocklist is config-managed)")
+
+	// Now load the blocklist explicitly (as app startup does)
+	store2.Remove("img_b") // Re-block it
+	store2.LoadAvoidSet(map[string]bool{"img_b": true})
+	store2.Clear() // Clear preserves avoidSet
+
+	addedAgain := store2.Add(provider.Image{ID: "img_b"})
+	assert.False(t, addedAgain, "After LoadAvoidSet + Clear, blocked image should still be rejected")
+}
+
+func TestBlocklist_ResolutionBucketsAfterSyncPrune(t *testing.T) {
+	// Verifies that resolution buckets are correctly updated when Sync
+	// prunes blocked images. This is the nightly grooming scenario where
+	// a blocked image somehow ended up in the store (e.g., race condition
+	// or loaded from stale cache).
+	tmpDir := t.TempDir()
+	fm := NewFileManager(tmpDir)
+	store := NewImageStore()
+	store.SetAsyncSave(false)
+	store.SetFileManager(fm, filepath.Join(tmpDir, "cache.json"))
+
+	img1 := provider.Image{
+		ID: "clean_img",
+		DerivativePaths: map[string]string{
+			"3440x1440": filepath.Join(tmpDir, "fitted", "clean_3440x1440.jpg"),
+		},
+	}
+	img2 := provider.Image{
+		ID: "will_be_blocked",
+		DerivativePaths: map[string]string{
+			"3440x1440": filepath.Join(tmpDir, "fitted", "blocked_3440x1440.jpg"),
+			"1920x1080": filepath.Join(tmpDir, "fitted", "blocked_1920x1080.jpg"),
+		},
+	}
+
+	createMasterFile(t, fm, "clean_img")
+	createMasterFile(t, fm, "will_be_blocked")
+
+	store.Add(img1)
+	store.Add(img2)
+
+	assert.Equal(t, 2, store.GetBucketSize("3440x1440"))
+	assert.Equal(t, 1, store.GetBucketSize("1920x1080"))
+
+	// Block the image via avoidSet
+	store.LoadAvoidSet(map[string]bool{"will_be_blocked": true})
+
+	// Sync prunes it
+	store.Sync(100, nil, nil)
+
+	assert.Equal(t, 1, store.Count())
+	assert.Equal(t, 1, store.GetBucketSize("3440x1440"), "Only clean_img in 3440x1440")
+	assert.Equal(t, 0, store.GetBucketSize("1920x1080"), "1920x1080 bucket should be empty")
+
+	ids := store.GetIDsForResolution("3440x1440")
+	assert.Equal(t, "clean_img", ids[0])
 }

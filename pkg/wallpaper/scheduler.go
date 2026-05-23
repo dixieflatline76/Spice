@@ -96,12 +96,7 @@ func (wp *Plugin) checkAndRunRefresh(now time.Time, lastRefreshDay int, isInitia
 
 		// Maintenance: Grooming & Cleanup
 		log.Print("Nightly Maintenance: Starting cache grooming...")
-		targetFlags := map[string]bool{
-			"SmartFit": wp.cfg.GetSmartFit(),
-			"FaceCrop": wp.cfg.GetFaceCropEnabled(),
-		}
-		// Sync Store (Groom old images)
-		wp.store.Sync(int(wp.cfg.GetCacheSize().Size()), targetFlags, wp.cfg.GetActiveQueryIDs())
+		wp.syncStoreWithConfig()
 
 		// Cleanup Orphans (Delete unknown files)
 		// We get known IDs from store (thread-safe)

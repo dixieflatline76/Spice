@@ -724,11 +724,22 @@ func (s *ImageStore) masterFileExists(id string) bool {
 }
 
 func (s *ImageStore) flagsMatch(img provider.Image, target map[string]bool) bool {
-	if len(img.ProcessingFlags) != len(target) {
-		return false
-	}
+	// Compare only the processing-mode keys from `target`.
+	// img.ProcessingFlags may also contain "incompatible:<WxH>" metadata tags
+	// that are NOT part of the processing mode, so a strict length comparison
+	// would always fail for images that have any incompatibility tags.
 	for k, v := range target {
 		if img.ProcessingFlags[k] != v {
+			return false
+		}
+	}
+	// Reverse check: ensure the image doesn't have processing-mode keys
+	// that aren't in target (guards against future flag additions).
+	for k, v := range img.ProcessingFlags {
+		if strings.HasPrefix(k, "incompatible:") {
+			continue // skip metadata tags
+		}
+		if target[k] != v {
 			return false
 		}
 	}
