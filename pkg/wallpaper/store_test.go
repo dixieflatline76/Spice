@@ -1308,6 +1308,11 @@ func TestZombieRecovery_ReAddAfterDeletion(t *testing.T) {
 	assert.Equal(t, 0, store.Count())
 	assert.False(t, store.Exists("revived"))
 
+	// Wait for async DeepDeleteBatch goroutine to finish before re-creating
+	// the master file with the same ID. Without this, the goroutine can race
+	// and delete the newly re-created master file on fast platforms (macOS).
+	time.Sleep(100 * time.Millisecond)
+
 	// Re-add with proper derivatives (simulates pipeline re-download)
 	revivedImg := newHealthyImage(t, fm, "revived", "q1", "3440x1440", flags)
 	added := store.Add(revivedImg)
