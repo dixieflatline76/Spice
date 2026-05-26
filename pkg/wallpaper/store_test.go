@@ -1998,3 +1998,421 @@ func TestFavoritesUpsert_NonFavoritesQueryStillRejected(t *testing.T) {
 	got, _ := store.GetByID("Wallhaven_abc")
 	assert.Equal(t, "original artist", got.Attribution, "Original attribution should be unchanged")
 }
+
+// =============================================================================
+// Incremental Bucket Operation Tests (Issue 4)
+//
+// These tests verify that addToBucketsLocked/removeFromBucketsLocked produce
+// identical results to the old rebuildBucketsLocked for every mutation path.
+// =============================================================================
+
+// TestBuckets_Replace_SameResolutions verifies that replace() with the same
+// resolutions keeps buckets correct (remove old + add new = no change).
+func TestBuckets_Replace_SameResolutions(t *testing.T) {
+	store := NewImageStore()
+	store.SetAsyncSave(false)
+
+	img := provider.Image{
+		ID:              "img1",
+		DerivativePaths: map[string]string{"1920x1080": "/old.jpg", "3440x1440": "/old_uw.jpg"},
+	}
+	store.Add(img)
+
+	assert.Equal(t, 1, store.GetBucketSize("1920x1080"))
+	assert.Equal(t, 1, store.GetBucketSize("3440x1440"))
+
+	// Replace with same resolutions, different paths
+	updated := provider.Image{
+		ID:              "img1",
+		DerivativePaths: map[string]string{"1920x1080": "/new.jpg", "3440x1440": "/new_uw.jpg"},
+	}
+	store.replace(updated)
+
+	assert.Equal(t, 1, store.GetBucketSize("1920x1080"), "Bucket size should remain 1")
+	assert.Equal(t, 1, store.GetBucketSize("3440x1440"), "Bucket size should remain 1")
+	assert.Contains(t, store.GetIDsForResolution("1920x1080"), "img1")
+	assert.Contains(t, store.GetIDsForResolution("3440x1440"), "img1")
+}
+
+// TestBuckets_Replace_DifferentResolutions verifies that replace() correctly
+// handles resolution changes — old resolutions removed, new ones added.
+func TestBuckets_Replace_DifferentResolutions(t *testing.T) {
+	store := NewImageStore()
+	store.SetAsyncSave(false)
+
+	img := provider.Image{
+		ID:              "img1",
+		DerivativePaths: map[string]string{"1920x1080": "/hd.jpg"},
+	}
+	store.Add(img)
+	assert.Equal(t, 1, store.GetBucketSize("1920x1080"))
+	assert.Equal(t, 0, store.GetBucketSize("3440x1440"))
+
+	// Replace with DIFFERENT resolution
+	updated := provider.Image{
+		ID:              "img1",
+		DerivativePaths: map[string]string{"3440x1440": "/uw.jpg"},
+	}
+	store.replace(updated)
+
+	assert.Equal(t, 0, store.GetBucketSize("1920x1080"), "Old resolution should be removed from buckets")
+	assert.Equal(t, 1, store.GetBucketSize("3440x1440"), "New resolution should be added to buckets")
+	assert.Contains(t, store.GetIDsForResolution("3440x1440"), "img1")
+}
+
+// TestBuckets_Replace_AddResolution verifies that replace() adding a new
+// resolution to an existing image updates buckets correctly.
+func TestBuckets_Replace_AddResolution(t *testing.T) {
+	store := NewImageStore()
+	store.SetAsyncSave(false)
+
+	img := provider.Image{
+		ID:              "img1",
+		DerivativePaths: map[string]string{"1920x1080": "/hd.jpg"},
+	}
+	store.Add(img)
+
+	// Replace adding a second resolution
+	updated := provider.Image{
+		ID:              "img1",
+		DerivativePaths: map[string]string{"1920x1080": "/hd.jpg", "3440x1440": "/uw.jpg"},
+	}
+	store.replace(updated)
+
+	assert.Equal(t, 1, store.GetBucketSize("1920x1080"), "Existing resolution should remain")
+	assert.Equal(t, 1, store.GetBucketSize("3440x1440"), "New resolution should be added")
+}
+
+// TestBuckets_Replace_ClearAllDerivatives verifies that replace() with empty
+// DerivativePaths removes all bucket entries for that image.
+func TestBuckets_Replace_ClearAllDerivatives(t *testing.T) {
+	store := NewImageStore()
+	store.SetAsyncSave(false)
+
+	img := provider.Image{
+		ID:              "img1",
+		DerivativePaths: map[string]string{"1920x1080": "/hd.jpg", "3440x1440": "/uw.jpg"},
+	}
+	store.Add(img)
+	assert.Equal(t, 1, store.GetBucketSize("1920x1080"))
+	assert.Equal(t, 1, store.GetBucketSize("3440x1440"))
+
+	// Replace with empty DerivativePaths
+	updated := provider.Image{
+		ID:              "img1",
+		DerivativePaths: map[string]string{},
+	}
+	store.replace(updated)
+
+	assert.Equal(t, 0, store.GetBucketSize("1920x1080"), "Old resolution buckets should be empty")
+	assert.Equal(t, 0, store.GetBucketSize("3440x1440"), "Old resolution buckets should be empty")
+}
+
+// TestBuckets_ClearDerivatives verifies that ClearDerivatives() removes
+// all bucket entries for the cleared image without affecting others.
+func TestBuckets_ClearDerivatives(t *testing.T) {
+	store := NewImageStore()
+	store.SetAsyncSave(false)
+
+	img1 := provider.Image{
+		ID:              "img1",
+		DerivativePaths: map[string]string{"1920x1080": "/img1_hd.jpg", "3440x1440": "/img1_uw.jpg"},
+	}
+	img2 := provider.Image{
+		ID:              "img2",
+		DerivativePaths: map[string]string{"1920x1080": "/img2_hd.jpg"},
+	}
+	store.Add(img1)
+	store.Add(img2)
+
+	assert.Equal(t, 2, store.GetBucketSize("1920x1080"))
+	assert.Equal(t, 1, store.GetBucketSize("3440x1440"))
+
+	// Clear derivatives for img1 only
+	store.ClearDerivatives("img1")
+
+	assert.Equal(t, 1, store.GetBucketSize("1920x1080"), "Only img2 should remain in 1920x1080 bucket")
+	assert.Equal(t, 0, store.GetBucketSize("3440x1440"), "3440x1440 bucket should be empty")
+	ids := store.GetIDsForResolution("1920x1080")
+	assert.Equal(t, []string{"img2"}, ids, "Only img2 should be in bucket")
+}
+
+// TestBuckets_Remove_MultiImage verifies that Remove() correctly removes
+// one image's bucket entries while preserving other images' entries.
+func TestBuckets_Remove_MultiImage(t *testing.T) {
+	store := NewImageStore()
+	store.SetAsyncSave(false)
+
+	img1 := provider.Image{
+		ID:              "img1",
+		DerivativePaths: map[string]string{"1920x1080": "/1.jpg", "3440x1440": "/1_uw.jpg"},
+	}
+	img2 := provider.Image{
+		ID:              "img2",
+		DerivativePaths: map[string]string{"1920x1080": "/2.jpg", "3440x1440": "/2_uw.jpg"},
+	}
+	img3 := provider.Image{
+		ID:              "img3",
+		DerivativePaths: map[string]string{"1920x1080": "/3.jpg"},
+	}
+	store.Add(img1)
+	store.Add(img2)
+	store.Add(img3)
+
+	assert.Equal(t, 3, store.GetBucketSize("1920x1080"))
+	assert.Equal(t, 2, store.GetBucketSize("3440x1440"))
+
+	// Remove img2 (middle)
+	store.Remove("img2")
+
+	assert.Equal(t, 2, store.GetBucketSize("1920x1080"), "Should have img1+img3")
+	assert.Equal(t, 1, store.GetBucketSize("3440x1440"), "Should have img1 only")
+
+	ids1080 := store.GetIDsForResolution("1920x1080")
+	assert.Contains(t, ids1080, "img1")
+	assert.NotContains(t, ids1080, "img2")
+	assert.Contains(t, ids1080, "img3")
+
+	ids1440 := store.GetIDsForResolution("3440x1440")
+	assert.Contains(t, ids1440, "img1")
+	assert.NotContains(t, ids1440, "img2")
+}
+
+// TestBuckets_Replace_OtherImagesUnaffected verifies that replace() on one
+// image does NOT corrupt bucket entries for other images sharing the same
+// resolution bucket.
+func TestBuckets_Replace_OtherImagesUnaffected(t *testing.T) {
+	store := NewImageStore()
+	store.SetAsyncSave(false)
+
+	img1 := provider.Image{
+		ID:              "img1",
+		DerivativePaths: map[string]string{"1920x1080": "/1.jpg"},
+	}
+	img2 := provider.Image{
+		ID:              "img2",
+		DerivativePaths: map[string]string{"1920x1080": "/2.jpg"},
+	}
+	img3 := provider.Image{
+		ID:              "img3",
+		DerivativePaths: map[string]string{"1920x1080": "/3.jpg"},
+	}
+	store.Add(img1)
+	store.Add(img2)
+	store.Add(img3)
+	assert.Equal(t, 3, store.GetBucketSize("1920x1080"))
+
+	// Replace img2 (middle of the bucket slice) — resolution stays the same
+	updated := provider.Image{
+		ID:              "img2",
+		DerivativePaths: map[string]string{"1920x1080": "/2_new.jpg"},
+	}
+	store.replace(updated)
+
+	// All 3 should still be in the bucket
+	assert.Equal(t, 3, store.GetBucketSize("1920x1080"))
+	ids := store.GetIDsForResolution("1920x1080")
+	assert.Contains(t, ids, "img1")
+	assert.Contains(t, ids, "img2")
+	assert.Contains(t, ids, "img3")
+}
+
+// TestBuckets_NoDerivatives_NoBucketEntry verifies that images with no
+// DerivativePaths don't pollute buckets on Add, replace, or ClearDerivatives.
+func TestBuckets_NoDerivatives_NoBucketEntry(t *testing.T) {
+	store := NewImageStore()
+	store.SetAsyncSave(false)
+
+	// Add image with no derivatives
+	img := provider.Image{ID: "img1"}
+	store.Add(img)
+	assert.Equal(t, 0, store.GetBucketSize("1920x1080"))
+
+	// Replace with no derivatives
+	store.replace(provider.Image{ID: "img1"})
+	assert.Equal(t, 0, store.GetBucketSize("1920x1080"))
+
+	// ClearDerivatives on image with no derivatives — should not panic
+	store.ClearDerivatives("img1")
+	assert.Equal(t, 0, store.GetBucketSize("1920x1080"))
+}
+
+// TestBuckets_IncrementalMatchesFullRebuild verifies that the incremental
+// bucket operations produce IDENTICAL state to a full rebuildBucketsLocked().
+// This is the definitive correctness test: run a complex mutation sequence,
+// snapshot the incremental result, force a full rebuild, and compare.
+func TestBuckets_IncrementalMatchesFullRebuild(t *testing.T) {
+	store := NewImageStore()
+	store.SetAsyncSave(false)
+
+	// Build up a complex state with many mutations
+	store.Add(provider.Image{
+		ID:              "img1",
+		DerivativePaths: map[string]string{"1920x1080": "/1_hd.jpg", "3440x1440": "/1_uw.jpg"},
+	})
+	store.Add(provider.Image{
+		ID:              "img2",
+		DerivativePaths: map[string]string{"1920x1080": "/2_hd.jpg", "2560x1440": "/2_2k.jpg"},
+	})
+	store.Add(provider.Image{
+		ID:              "img3",
+		DerivativePaths: map[string]string{"1920x1080": "/3_hd.jpg", "3440x1440": "/3_uw.jpg", "2560x1440": "/3_2k.jpg"},
+	})
+	store.Add(provider.Image{
+		ID:              "img4",
+		DerivativePaths: map[string]string{"3840x2160": "/4_4k.jpg"},
+	})
+	store.Add(provider.Image{ID: "img5"}) // No derivatives
+
+	// Mutation 1: replace img1 — swap resolutions
+	store.replace(provider.Image{
+		ID:              "img1",
+		DerivativePaths: map[string]string{"2560x1440": "/1_2k.jpg"}, // lost 1920x1080 and 3440x1440, gained 2560x1440
+	})
+
+	// Mutation 2: ClearDerivatives on img3
+	store.ClearDerivatives("img3")
+
+	// Mutation 3: Remove img2
+	store.Remove("img2")
+
+	// Mutation 4: replace img4 — add a resolution
+	store.replace(provider.Image{
+		ID:              "img4",
+		DerivativePaths: map[string]string{"3840x2160": "/4_4k.jpg", "1920x1080": "/4_hd.jpg"},
+	})
+
+	// Mutation 5: replace img5 — from nothing to something
+	store.replace(provider.Image{
+		ID:              "img5",
+		DerivativePaths: map[string]string{"3440x1440": "/5_uw.jpg"},
+	})
+
+	// Snapshot the incremental result
+	incrementalBuckets := snapshotBuckets(store)
+
+	// Force a full rebuild and snapshot
+	store.mu.Lock()
+	store.rebuildBucketsLocked()
+	store.mu.Unlock()
+	rebuildBuckets := snapshotBuckets(store)
+
+	// Compare: every resolution should have the same sorted ID list
+	assert.Equal(t, len(rebuildBuckets), len(incrementalBuckets),
+		"Bucket count mismatch: rebuild=%d, incremental=%d", len(rebuildBuckets), len(incrementalBuckets))
+
+	for res, rebuildIDs := range rebuildBuckets {
+		incrementalIDs, exists := incrementalBuckets[res]
+		assert.True(t, exists, "Resolution %s exists in rebuild but not in incremental", res)
+		assert.ElementsMatch(t, rebuildIDs, incrementalIDs,
+			"Resolution %s: rebuild=%v, incremental=%v", res, rebuildIDs, incrementalIDs)
+	}
+	for res := range incrementalBuckets {
+		_, exists := rebuildBuckets[res]
+		assert.True(t, exists, "Resolution %s exists in incremental but not in rebuild", res)
+	}
+}
+
+// snapshotBuckets returns a deep copy of the resolution buckets for comparison.
+func snapshotBuckets(store *ImageStore) map[string][]string {
+	store.mu.RLock()
+	defer store.mu.RUnlock()
+	result := make(map[string][]string)
+	for res, ids := range store.resolutionBuckets {
+		cp := make([]string, len(ids))
+		copy(cp, ids)
+		result[res] = cp
+	}
+	return result
+}
+
+// TestBuckets_ConcurrentMutations runs Add, replace, Remove, and
+// ClearDerivatives from multiple goroutines simultaneously.
+// Run with `go test -race` to detect data races.
+func TestBuckets_ConcurrentMutations(t *testing.T) {
+	store := NewImageStore()
+	store.SetAsyncSave(false)
+
+	// Pre-populate
+	for i := 0; i < 50; i++ {
+		store.Add(provider.Image{
+			ID:              fmt.Sprintf("img_%d", i),
+			DerivativePaths: map[string]string{"1920x1080": fmt.Sprintf("/%d_hd.jpg", i)},
+		})
+	}
+
+	done := make(chan bool)
+
+	// Writer 1: Add new images
+	go func() {
+		for i := 50; i < 100; i++ {
+			store.Add(provider.Image{
+				ID: fmt.Sprintf("img_%d", i),
+				DerivativePaths: map[string]string{
+					"1920x1080": fmt.Sprintf("/%d_hd.jpg", i),
+					"3440x1440": fmt.Sprintf("/%d_uw.jpg", i),
+				},
+			})
+		}
+		done <- true
+	}()
+
+	// Writer 2: Replace existing images with different resolutions
+	go func() {
+		for i := 0; i < 25; i++ {
+			store.replace(provider.Image{
+				ID:              fmt.Sprintf("img_%d", i),
+				DerivativePaths: map[string]string{"3440x1440": fmt.Sprintf("/%d_uw_new.jpg", i)},
+			})
+		}
+		done <- true
+	}()
+
+	// Writer 3: ClearDerivatives on some images
+	go func() {
+		for i := 25; i < 40; i++ {
+			store.ClearDerivatives(fmt.Sprintf("img_%d", i))
+		}
+		done <- true
+	}()
+
+	// Writer 4: Remove some images
+	go func() {
+		for i := 40; i < 50; i++ {
+			store.Remove(fmt.Sprintf("img_%d", i))
+		}
+		done <- true
+	}()
+
+	// Reader: Continuously read bucket sizes
+	go func() {
+		for i := 0; i < 200; i++ {
+			store.GetBucketSize("1920x1080")
+			store.GetBucketSize("3440x1440")
+			store.GetIDsForResolution("1920x1080")
+		}
+		done <- true
+	}()
+
+	// Wait for all goroutines
+	for i := 0; i < 5; i++ {
+		<-done
+	}
+
+	// Verify consistency: force rebuild and compare
+	incrementalBuckets := snapshotBuckets(store)
+	store.mu.Lock()
+	store.rebuildBucketsLocked()
+	store.mu.Unlock()
+	rebuildBuckets := snapshotBuckets(store)
+
+	assert.Equal(t, len(rebuildBuckets), len(incrementalBuckets),
+		"After concurrent mutations, bucket count should match rebuild")
+
+	for res, rebuildIDs := range rebuildBuckets {
+		incrementalIDs := incrementalBuckets[res]
+		assert.ElementsMatch(t, rebuildIDs, incrementalIDs,
+			"After concurrent mutations, resolution %s should match: rebuild=%v, incremental=%v",
+			res, rebuildIDs, incrementalIDs)
+	}
+}

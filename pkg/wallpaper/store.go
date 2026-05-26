@@ -116,8 +116,10 @@ func (s *ImageStore) replace(img provider.Image) bool {
 			if len(img.DerivativePaths) == 0 && len(existing.DerivativePaths) > 0 {
 				log.Debugf("[Store] WARNING: replace() clearing DerivativePaths for %s (had %d paths)", img.ID, len(existing.DerivativePaths))
 			}
+			// Incremental bucket update: remove old entries, add new ones
+			s.removeFromBucketsLocked(existing.ID, existing.DerivativePaths)
 			s.images[i] = img
-			s.rebuildBucketsLocked() // Rebuild because DerivativePaths might have changed
+			s.addToBucketsLocked(img.ID, img.DerivativePaths)
 			s.scheduleSaveLocked()
 			return true
 		}
@@ -168,9 +170,10 @@ func (s *ImageStore) ClearDerivatives(id string) bool {
 	defer s.mu.Unlock()
 	for i := range s.images {
 		if s.images[i].ID == id {
+			// Incremental bucket update: remove this image's entries
+			s.removeFromBucketsLocked(id, s.images[i].DerivativePaths)
 			s.images[i].DerivativePaths = make(map[string]string)
 			s.images[i].ProcessingFlags = make(map[string]bool)
-			s.rebuildBucketsLocked()
 			s.scheduleSaveLocked()
 			return true
 		}
@@ -178,13 +181,41 @@ func (s *ImageStore) ClearDerivatives(id string) bool {
 	return false
 }
 
-// rebuildBucketsLocked re-scans all images and builds resolution buckets.
-// CALLER MUST HOLD s.mu.Lock() or s.mu.RLock() - no, wait, it modifies buckets so must be WRITE LOCK.
+// rebuildBucketsLocked re-scans ALL images and rebuilds resolution buckets from scratch.
+// Use only for batch operations (e.g. RemoveByQueryID, Sync). For single-image
+// mutations, prefer addToBucketsLocked/removeFromBucketsLocked.
+// CALLER MUST HOLD s.mu.Lock().
 func (s *ImageStore) rebuildBucketsLocked() {
 	s.resolutionBuckets = make(map[string][]string)
 	for _, img := range s.images {
 		for res := range img.DerivativePaths {
 			s.resolutionBuckets[res] = append(s.resolutionBuckets[res], img.ID)
+		}
+	}
+}
+
+// addToBucketsLocked adds a single image's derivative paths to the resolution buckets.
+// CALLER MUST HOLD s.mu.Lock().
+func (s *ImageStore) addToBucketsLocked(id string, derivativePaths map[string]string) {
+	for res := range derivativePaths {
+		s.resolutionBuckets[res] = append(s.resolutionBuckets[res], id)
+	}
+}
+
+// removeFromBucketsLocked removes a single image's entries from the resolution buckets.
+// CALLER MUST HOLD s.mu.Lock().
+func (s *ImageStore) removeFromBucketsLocked(id string, derivativePaths map[string]string) {
+	for res := range derivativePaths {
+		ids := s.resolutionBuckets[res]
+		for j, bucketID := range ids {
+			if bucketID == id {
+				s.resolutionBuckets[res] = append(ids[:j], ids[j+1:]...)
+				break
+			}
+		}
+		// Clean up empty bucket entries
+		if len(s.resolutionBuckets[res]) == 0 {
+			delete(s.resolutionBuckets, res)
 		}
 	}
 }
@@ -406,7 +437,7 @@ func (s *ImageStore) Remove(id string) (provider.Image, bool) {
 		}
 	}
 
-	s.rebuildBucketsLocked() // Ensure buckets are updated after removal
+	s.removeFromBucketsLocked(id, img.DerivativePaths) // Incremental bucket removal
 	s.avoidSet[id] = true
 	s.scheduleSaveLocked()
 
