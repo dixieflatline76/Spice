@@ -301,8 +301,8 @@ func TestFavScenario5_ReconcileSkipsFavoritesProvider(t *testing.T) {
 	// IsFavorited should NOT be called for Provider=Favorites image
 	// Only called for Wallhaven and MetMuseum images
 	mockFav.On("IsFavorited", ghostFav).Return(false) // ghost: provider disagrees
-	mockFav.On("IsFavorited", realFav).Return(true)    // real: provider agrees
-	mockFav.On("IsFavorited", normal).Return(false)    // normal: both agree
+	mockFav.On("IsFavorited", realFav).Return(true)   // real: provider agrees
+	mockFav.On("IsFavorited", normal).Return(false)   // normal: both agree
 
 	wp := &Plugin{
 		store:     store,
@@ -457,4 +457,84 @@ func TestFavCrossCutting_IsFavoritedDoesNotAffectPruning(t *testing.T) {
 
 	_, ok = store.GetByID("Wallhaven_abc")
 	assert.True(t, ok, "Favorited image with active query should NOT be pruned")
+}
+
+// --- Race Condition: AddFavorite async job vs immediate RequestFetch ---
+// Simulates the exact production race:
+// 1. User favorites a MetMuseum image → AddFavorite queues async job
+// 2. ToggleFavorite calls store.SetFavorited(img.ID, true)
+// 3. ToggleFavorite immediately fires RequestFetch("Favorites")
+// 4. Fetch hits local API before the async job wrote metadata.json
+// 5. FetchImages returns the image with EMPTY attribution/ViewURL
+// 6. Add() upsert fires — must preserve existing attribution/ViewURL
+// 7. Later, the async job writes metadata.json
+// 8. Next fetch cycle returns the image WITH proper attribution
+// 9. Add() upsert fires — updates attribution to the correct value
+func TestFavRaceCondition_AsyncAddVsImmediateFetch(t *testing.T) {
+	store := NewImageStore()
+	store.SetAsyncSave(false)
+
+	// Step 1-2: Original MetMuseum image exists, user just favorited it
+	originalImg := provider.Image{
+		ID:              "MetMuseum_436528",
+		Provider:        "MetMuseum",
+		Attribution:     "Vincent van Gogh - Irises",
+		ViewURL:         "https://www.metmuseum.org/art/collection/search/436528",
+		IsFavorited:     true, // Just set by ToggleFavorite
+		SourceQueryID:   "met_query_1",
+		FilePath:        "/downloads/MetMuseum_436528.jpg",
+		DerivativePaths: map[string]string{"3440x1440": "/fitted/met.jpg"},
+		ProcessingFlags: map[string]bool{"SmartFit": true},
+		Width:           4000,
+		Height:          3000,
+	}
+	store.Add(originalImg)
+
+	// Step 3-5: Fetch races with metadata.json write — returns empty attribution
+	raceFetchImg := provider.Image{
+		ID:            "MetMuseum_436528",
+		Provider:      "Favorites",
+		Path:          "http://127.0.0.1:49452/local/favorites/favorite_images/assets/MetMuseum_436528.jpg",
+		Attribution:   "", // EMPTY — metadata.json not written yet
+		ViewURL:       "", // EMPTY — falls through to file:// fallback in API
+		IsFavorited:   true,
+		SourceQueryID: FavoritesQueryID,
+	}
+	result := store.Add(raceFetchImg)
+	assert.True(t, result, "Upsert should succeed")
+
+	// Step 6: Verify attribution was PRESERVED (non-empty-wins)
+	got, ok := store.GetByID("MetMuseum_436528")
+	require.True(t, ok)
+	assert.Equal(t, "Vincent van Gogh - Irises", got.Attribution,
+		"RACE FIX: Attribution must be preserved when fetch races with metadata write")
+	assert.Equal(t, "https://www.metmuseum.org/art/collection/search/436528", got.ViewURL,
+		"RACE FIX: ViewURL must be preserved when fetch races with metadata write")
+
+	// Verify store-managed fields survived the upsert
+	assert.Equal(t, "Favorites", got.Provider, "Provider should be updated")
+	assert.Equal(t, FavoritesQueryID, got.SourceQueryID, "SourceQueryID should be updated")
+	assert.Equal(t, map[string]string{"3440x1440": "/fitted/met.jpg"}, got.DerivativePaths,
+		"DerivativePaths must survive upsert")
+	assert.Equal(t, 4000, got.Width, "Width must survive upsert")
+	assert.Equal(t, 3000, got.Height, "Height must survive upsert")
+
+	// Step 7-8: Next fetch cycle — async job has written metadata.json by now
+	normalFetchImg := provider.Image{
+		ID:            "MetMuseum_436528",
+		Provider:      "Favorites",
+		Path:          "http://127.0.0.1:49452/local/favorites/favorite_images/assets/MetMuseum_436528.jpg",
+		Attribution:   "Vincent van Gogh - Irises", // Now properly populated
+		ViewURL:       "https://www.metmuseum.org/art/collection/search/436528",
+		IsFavorited:   true,
+		SourceQueryID: FavoritesQueryID,
+	}
+	store.Add(normalFetchImg)
+
+	// Step 9: Verify attribution is updated (non-empty incoming wins)
+	got, _ = store.GetByID("MetMuseum_436528")
+	assert.Equal(t, "Vincent van Gogh - Irises", got.Attribution,
+		"Attribution should be set from the normal fetch")
+	assert.Equal(t, "https://www.metmuseum.org/art/collection/search/436528", got.ViewURL,
+		"ViewURL should be set from the normal fetch")
 }

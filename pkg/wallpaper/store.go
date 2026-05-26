@@ -217,22 +217,48 @@ func (s *ImageStore) Add(img provider.Image) bool {
 	defer s.mu.Unlock()
 
 	if _, exists := s.idSet[img.ID]; exists {
-		// Targeted Fix: If the new image comes from Favorites provider, update the existing entry.
-		// This ensures favored copies (persistent) displace original temporary source downloads.
+		// Favorites Upsert: selectively update only the fields the Favorites
+		// provider can authoritatively set, preserving all store-managed metadata
+		// (DerivativePaths, ProcessingFlags, CropAnchors, Width, Height, etc.).
+		//
+		// Uses non-empty-wins for Attribution/ViewURL because AddFavorite is
+		// async (queues a job), but RequestFetch fires immediately after — the
+		// fetch can race with the metadata.json write, arriving with empty fields.
 		if img.SourceQueryID == FavoritesQueryID {
 			for i, existing := range s.images {
 				if existing.ID == img.ID {
-					if existing.FilePath != "" {
-						delete(s.pathSet, existing.FilePath)
+					// Provider-authoritative fields: always update
+					s.images[i].Provider = img.Provider
+					s.images[i].SourceQueryID = img.SourceQueryID
+					s.images[i].IsFavorited = true
+
+					// Download URL: always update (Favorites provider serves via local API)
+					if img.Path != "" {
+						s.images[i].Path = img.Path
 					}
-					// Preserve seen state
+
+					// Non-empty-wins: preserve existing if incoming is empty (race protection)
+					if img.Attribution != "" {
+						s.images[i].Attribution = img.Attribution
+					}
+					if img.ViewURL != "" {
+						s.images[i].ViewURL = img.ViewURL
+					}
+
+					// Seen: preserve if already seen
 					if existing.Seen && !img.Seen {
-						img.Seen = true
+						s.images[i].Seen = true
 					}
-					s.images[i] = img
-					if img.FilePath != "" {
+
+					// FilePath: update pathSet if changed
+					if img.FilePath != "" && img.FilePath != existing.FilePath {
+						if existing.FilePath != "" {
+							delete(s.pathSet, existing.FilePath)
+						}
+						s.images[i].FilePath = img.FilePath
 						s.pathSet[img.FilePath] = i
 					}
+
 					s.scheduleSaveLocked()
 					return true
 				}

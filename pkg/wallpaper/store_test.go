@@ -1836,3 +1836,165 @@ func TestReplace_StillWorks(t *testing.T) {
 	ids := store.GetIDsForResolution("3440x1440")
 	assert.Contains(t, ids, "test1")
 }
+
+// =============================================================================
+// Favorites Upsert Tests (Issue 2)
+// =============================================================================
+
+// TestFavoritesUpsert_PreservesStoreMetadata verifies that when Add() receives
+// a FavoritesQueryID image that already exists, it selectively updates only
+// provider-authoritative fields and preserves store-managed metadata.
+func TestFavoritesUpsert_PreservesStoreMetadata(t *testing.T) {
+	store := NewImageStore()
+	store.SetAsyncSave(false)
+
+	// Existing image with full store-managed metadata (already processed by pipeline)
+	existing := provider.Image{
+		ID:              "Wallhaven_4yd58l",
+		Provider:        "Wallhaven",
+		Path:            "https://wallhaven.cc/4yd58l.jpg",
+		Attribution:     "nexed",
+		ViewURL:         "https://whvn.cc/4yd58l",
+		IsFavorited:     true,
+		SourceQueryID:   "wallhaven_query_1",
+		FilePath:        "/downloads/Wallhaven_4yd58l.jpg",
+		DerivativePaths: map[string]string{"3440x1440": "/fitted/wh.jpg"},
+		ProcessingFlags: map[string]bool{"SmartFit": true, "FaceCrop": true},
+		CropAnchors:     map[string]provider.CropAnchor{"3440x1440": provider.AnchorTopCenter},
+		Width:           3840,
+		Height:          2160,
+		Seen:            true,
+	}
+	store.Add(existing)
+
+	// Favorites provider fetches the same image — has only provider-level fields
+	incoming := provider.Image{
+		ID:            "Wallhaven_4yd58l",
+		Provider:      "Favorites",
+		Path:          "http://127.0.0.1:49452/local/favorites/favorite_images/assets/Wallhaven_4yd58l.jpg",
+		Attribution:   "nexed",
+		ViewURL:       "https://whvn.cc/4yd58l",
+		IsFavorited:   true,
+		SourceQueryID: FavoritesQueryID,
+		// No DerivativePaths, ProcessingFlags, CropAnchors, Width, Height, FilePath
+	}
+	result := store.Add(incoming)
+	assert.True(t, result, "Upsert should return true")
+
+	got, ok := store.GetByID("Wallhaven_4yd58l")
+	assert.True(t, ok)
+
+	// Provider-authoritative fields should be updated
+	assert.Equal(t, "Favorites", got.Provider, "Provider should be updated to Favorites")
+	assert.Equal(t, FavoritesQueryID, got.SourceQueryID, "SourceQueryID should be updated")
+	assert.True(t, got.IsFavorited, "IsFavorited should be true")
+	assert.Equal(t, incoming.Path, got.Path, "Path should be updated to local API URL")
+
+	// Store-managed fields should be PRESERVED
+	assert.Equal(t, map[string]string{"3440x1440": "/fitted/wh.jpg"}, got.DerivativePaths, "DerivativePaths must be preserved")
+	assert.Equal(t, map[string]bool{"SmartFit": true, "FaceCrop": true}, got.ProcessingFlags, "ProcessingFlags must be preserved")
+	assert.Equal(t, provider.AnchorTopCenter, got.CropAnchors["3440x1440"], "CropAnchors must be preserved")
+	assert.Equal(t, 3840, got.Width, "Width must be preserved")
+	assert.Equal(t, 2160, got.Height, "Height must be preserved")
+	assert.Equal(t, "/downloads/Wallhaven_4yd58l.jpg", got.FilePath, "FilePath must be preserved when incoming is empty")
+	assert.True(t, got.Seen, "Seen must be preserved")
+}
+
+// TestFavoritesUpsert_NonEmptyWins_Attribution verifies the race condition
+// protection: when the Favorites provider sends an image with empty Attribution
+// (because metadata.json hasn't been written yet), the existing Attribution is
+// preserved. When it sends a non-empty Attribution, it overwrites.
+func TestFavoritesUpsert_NonEmptyWins_Attribution(t *testing.T) {
+	store := NewImageStore()
+	store.SetAsyncSave(false)
+
+	// Existing image with attribution
+	existing := provider.Image{
+		ID:            "MetMuseum_436528",
+		Provider:      "MetMuseum",
+		Attribution:   "Vincent van Gogh - Irises",
+		ViewURL:       "https://www.metmuseum.org/art/collection/search/436528",
+		SourceQueryID: "met_query_1",
+	}
+	store.Add(existing)
+
+	// Race scenario: Favorites fetch arrives with EMPTY attribution
+	raceImg := provider.Image{
+		ID:            "MetMuseum_436528",
+		Provider:      "Favorites",
+		Attribution:   "", // Empty due to race with metadata.json write
+		ViewURL:       "", // Also empty
+		SourceQueryID: FavoritesQueryID,
+		IsFavorited:   true,
+	}
+	store.Add(raceImg)
+
+	got, _ := store.GetByID("MetMuseum_436528")
+	assert.Equal(t, "Vincent van Gogh - Irises", got.Attribution, "Attribution must be preserved when incoming is empty")
+	assert.Equal(t, "https://www.metmuseum.org/art/collection/search/436528", got.ViewURL, "ViewURL must be preserved when incoming is empty")
+
+	// Normal scenario: Favorites fetch arrives WITH attribution (metadata was written)
+	normalImg := provider.Image{
+		ID:            "MetMuseum_436528",
+		Provider:      "Favorites",
+		Attribution:   "Vincent van Gogh - Irises (Updated)",
+		ViewURL:       "https://updated.url",
+		SourceQueryID: FavoritesQueryID,
+		IsFavorited:   true,
+	}
+	store.Add(normalImg)
+
+	got, _ = store.GetByID("MetMuseum_436528")
+	assert.Equal(t, "Vincent van Gogh - Irises (Updated)", got.Attribution, "Attribution should be updated when incoming is non-empty")
+	assert.Equal(t, "https://updated.url", got.ViewURL, "ViewURL should be updated when incoming is non-empty")
+}
+
+// TestFavoritesUpsert_NewImageStillAdded verifies that completely new
+// Favorites images (not yet in store) are still added normally.
+func TestFavoritesUpsert_NewImageStillAdded(t *testing.T) {
+	store := NewImageStore()
+	store.SetAsyncSave(false)
+
+	newFav := provider.Image{
+		ID:            "LocalFolder_favorite_images_Wallhaven_new",
+		Provider:      "Favorites",
+		Attribution:   "artist",
+		SourceQueryID: FavoritesQueryID,
+		IsFavorited:   true,
+	}
+	result := store.Add(newFav)
+	assert.True(t, result)
+	assert.Equal(t, 1, store.Count())
+
+	got, ok := store.GetByID("LocalFolder_favorite_images_Wallhaven_new")
+	assert.True(t, ok)
+	assert.Equal(t, "artist", got.Attribution)
+}
+
+// TestFavoritesUpsert_NonFavoritesQueryStillRejected verifies that non-Favorites
+// duplicate images are still rejected by Add() (existing behavior preserved).
+func TestFavoritesUpsert_NonFavoritesQueryStillRejected(t *testing.T) {
+	store := NewImageStore()
+	store.SetAsyncSave(false)
+
+	original := provider.Image{
+		ID:            "Wallhaven_abc",
+		Provider:      "Wallhaven",
+		Attribution:   "original artist",
+		SourceQueryID: "wallhaven_query_1",
+	}
+	store.Add(original)
+
+	// Same ID, different query (not Favorites) — should be rejected
+	duplicate := provider.Image{
+		ID:            "Wallhaven_abc",
+		Provider:      "Wallhaven",
+		Attribution:   "different artist",
+		SourceQueryID: "wallhaven_query_2",
+	}
+	result := store.Add(duplicate)
+	assert.False(t, result, "Non-Favorites duplicate should be rejected")
+
+	got, _ := store.GetByID("Wallhaven_abc")
+	assert.Equal(t, "original artist", got.Attribution, "Original attribution should be unchanged")
+}
