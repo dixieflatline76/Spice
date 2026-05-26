@@ -69,9 +69,7 @@ func (wp *Plugin) ProcessImageJob(ctx context.Context, job DownloadJob) (resultI
 		if err == nil {
 			img.Width = w
 			img.Height = h
-			log.Debugf("Probed dimensions for %s: %dx%d. Persisting...", img.ID, w, h)
-			// Save back to store permanently so we never have to probe again
-			wp.store.Update(img)
+			log.Debugf("Probed dimensions for %s: %dx%d.", img.ID, w, h)
 		} else {
 			log.Printf("Warning: Failed to probe dimensions for %s: %v", img.ID, err)
 		}
@@ -102,8 +100,8 @@ func (wp *Plugin) ProcessImageJob(ctx context.Context, job DownloadJob) (resultI
 		}
 	}
 
-	// Persist the rejection tags
-	wp.store.Update(img)
+	// Note: Rejection tags are persisted when the fully-processed image
+	// lands in the store via stateManagerLoop (Add or Update fallback).
 
 	if incompatibleCount == len(resolutions) && len(resolutions) > 0 {
 		return img, fmt.Errorf("incompatible image skipped (fits zero monitors)")

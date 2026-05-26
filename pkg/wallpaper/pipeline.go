@@ -144,7 +144,11 @@ func (p *Pipeline) stateManagerLoop() {
 				p.logPipelineError(res.Error)
 				continue
 			}
-			p.store.Add(res.Image)
+			if !p.store.Add(res.Image) {
+				// Image already exists (re-processed via backlog healing).
+				// Update so the fully-processed result with DerivativePaths lands.
+				p.store.Update(res.Image)
+			}
 
 		case cmd := <-p.cmdChan:
 			switch cmd.Type {

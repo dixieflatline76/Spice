@@ -1565,6 +1565,127 @@ func TestZombieRecovery_SeenCountReset(t *testing.T) {
 	assert.Equal(t, 0, store.SeenCount(), "Seen count should drop when zombie is deleted")
 }
 
+// =============================================================================
+// Regression: Pipeline Add-or-Update Fallback
+// =============================================================================
+// Verifies that the Add-or-Update pattern in stateManagerLoop correctly handles
+// backlog healing: when an image already exists in the store but is missing
+// derivatives, the pipeline re-processes it and the fully-populated result
+// must land in the store via Update() after Add() is rejected.
+
+func TestPipeline_AddFallbackToUpdate(t *testing.T) {
+	store := NewImageStore()
+	store.SetAsyncSave(false)
+
+	// Step 1: Image in store with partial data (no derivatives — zombie state)
+	partial := provider.Image{
+		ID:              "img1",
+		Width:           4000,
+		Height:          3000,
+		ProcessingFlags: map[string]bool{"SmartFit": true},
+		// No DerivativePaths — this is the corrupted state
+	}
+	store.Add(partial)
+	assert.Equal(t, 0, store.GetBucketSize("3440x1440"), "No derivatives → no bucket entry")
+
+	// Step 2: Pipeline produces the fully-processed result
+	fullResult := provider.Image{
+		ID:       "img1",
+		Width:    4000,
+		Height:   3000,
+		FilePath: "/path/to/file.jpg",
+		DerivativePaths: map[string]string{
+			"3440x1440": "/path/to/fitted/img1.jpg",
+		},
+		ProcessingFlags: map[string]bool{"SmartFit": true, "FaceCrop": true},
+	}
+
+	// Step 3: Simulate the fixed stateManagerLoop pattern
+	if !store.Add(fullResult) {
+		store.Update(fullResult)
+	}
+
+	// Step 4: Verify the fully-processed result landed
+	got, ok := store.GetByID("img1")
+	assert.True(t, ok)
+	assert.NotEmpty(t, got.DerivativePaths, "Fully-processed DerivativePaths must be in store")
+	assert.Equal(t, "/path/to/fitted/img1.jpg", got.DerivativePaths["3440x1440"])
+	assert.Equal(t, "/path/to/file.jpg", got.FilePath)
+	assert.Equal(t, 1, store.GetBucketSize("3440x1440"), "Bucket should now have the image")
+}
+
+// =============================================================================
+// Regression: Nightly Cycle Does Not Clobber
+// =============================================================================
+// Full lifecycle test simulating the exact scenario that caused the production bug:
+// 1. Store has healthy images with derivatives
+// 2. Nightly grooming runs (syncStoreWithConfig → store.Sync)
+// 3. Pipeline re-processes images (backlog healing)
+// 4. Verify derivatives survive the entire cycle
+
+func TestNightlyCycle_ProcessImageJobDoesNotClobber(t *testing.T) {
+	tmpDir := t.TempDir()
+	fm := NewFileManager(tmpDir)
+	store := NewImageStore()
+	store.SetAsyncSave(false)
+	store.SetFileManager(fm, filepath.Join(tmpDir, "cache.json"))
+
+	flags := makeDownloaderFlags(true, SmartFitAggressive, true, false)
+	target := makeGroomingTarget(true, SmartFitAggressive, true, false)
+
+	// Step 1: Store has 5 healthy images
+	for i := 0; i < 5; i++ {
+		id := fmt.Sprintf("img_%d", i)
+		img := newHealthyImage(t, fm, id, "q1", "3440x1440", flags)
+		img.Width = 4000
+		img.Height = 3000
+		img.FilePath = filepath.Join(tmpDir, id+".jpg")
+		store.Add(img)
+	}
+	assert.Equal(t, 5, store.GetBucketSize("3440x1440"))
+
+	// Step 2: Grooming pass
+	activeQueries := map[string]bool{"q1": true}
+	store.Sync(100, target, activeQueries)
+	assert.Equal(t, 5, store.Count())
+
+	// Step 3: Simulate pipeline re-processing
+	// With the intermediate updates removed, ProcessImageJob is purely functional.
+	// The stateManagerLoop uses Add-or-Update to persist the final result.
+	for i := 0; i < 5; i++ {
+		id := fmt.Sprintf("img_%d", i)
+
+		fullResult := provider.Image{
+			ID:            id,
+			SourceQueryID: "q1",
+			Width:         5000, // Probed width updated
+			Height:        3000,
+			FilePath:      filepath.Join(tmpDir, id+".jpg"),
+			DerivativePaths: map[string]string{
+				"3440x1440": filepath.Join(tmpDir, "fitted", id+"_3440x1440.jpg"),
+			},
+			ProcessingFlags: copyFlags(flags),
+		}
+		fullResult.ProcessingFlags["incompatible:1920x1080"] = true // Tagged
+
+		// Pipeline stateManagerLoop Add-or-Update
+		if !store.Add(fullResult) {
+			store.Update(fullResult)
+		}
+	}
+
+	// Step 4: Verify everything survived and was updated
+	for i := 0; i < 5; i++ {
+		id := fmt.Sprintf("img_%d", i)
+		got, _ := store.GetByID(id)
+		assert.NotEmpty(t, got.DerivativePaths, "%s should have derivatives", id)
+		assert.Equal(t, 5000, got.Width, "%s should have updated width", id)
+		assert.True(t, got.ProcessingFlags["incompatible:1920x1080"])
+	}
+
+	assert.Equal(t, 5, store.GetBucketSize("3440x1440"), "All images should still be in the bucket")
+}
+
 func copyFlags(src map[string]bool) map[string]bool {
 	dst := make(map[string]bool, len(src))
 	for k, v := range src {

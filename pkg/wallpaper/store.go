@@ -105,6 +105,12 @@ func (s *ImageStore) Update(img provider.Image) bool {
 
 	for i, existing := range s.images {
 		if existing.ID == img.ID {
+			// Diagnostic: Log when DerivativePaths are being cleared.
+			// This is legitimate when files are missing (applyImage stale detection),
+			// but suspicious if it happens during pipeline processing.
+			if len(img.DerivativePaths) == 0 && len(existing.DerivativePaths) > 0 {
+				log.Debugf("[Store] WARNING: Update() clearing DerivativePaths for %s (had %d paths)", img.ID, len(existing.DerivativePaths))
+			}
 			s.images[i] = img
 			s.rebuildBucketsLocked() // Rebuild because DerivativePaths might have changed
 			s.scheduleSaveLocked()
