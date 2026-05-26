@@ -323,8 +323,6 @@ func registerAndListen(hk *hotkey.Hotkey, name string, action func()) {
 			now := time.Now().Format("15:04:05.000")
 			log.Debugf("[%s] Hotkey triggered: %s", now, name)
 			action()
-			// Safety throttle to prevent accidental double-triggers
-			time.Sleep(200 * time.Millisecond)
 		}
 		log.Printf("[Hotkey] Listener loop exited for %s", name)
 	}()
@@ -359,8 +357,6 @@ func registerAndListenTargeted(hk *hotkey.Hotkey, name string, action func()) {
 			now := time.Now().Format("15:04:05.000")
 			log.Debugf("[%s] Targeted hotkey triggered: %s", now, name)
 			action()
-			// Safety throttle to prevent accidental double-triggers
-			time.Sleep(200 * time.Millisecond)
 		}
 		log.Printf("[Hotkey] Targeted Listener loop exited for %s", name)
 	}()
