@@ -80,7 +80,7 @@ func TestStore_Persistence_Debounce(t *testing.T) {
 
 	// 1. Rapid Updates (Burst)
 	for i := 0; i < 10; i++ {
-		store.Update(provider.Image{ID: "img1"})
+		store.replace(provider.Image{ID: "img1"})
 		// No sleep, or very short sleep < debounce
 		time.Sleep(1 * time.Millisecond)
 	}
@@ -110,14 +110,14 @@ func TestStore_Persistence_Debounce(t *testing.T) {
 
 	// 2. Spaced Updates
 	saveCount = 0 // Reset
-	store.Update(provider.Image{ID: "img1"})
+	store.replace(provider.Image{ID: "img1"})
 
 	// Wait for save
 	<-saveChan
 
 	// Wait > debounce
 	time.Sleep(100 * time.Millisecond)
-	store.Update(provider.Image{ID: "img1"})
+	store.replace(provider.Image{ID: "img1"})
 
 	// Wait for save
 	<-saveChan
@@ -752,7 +752,7 @@ func TestNightlyGroomingSimulation(t *testing.T) {
 			img.DerivativePaths = map[string]string{
 				"3440x1440": filepath.Join(tmpDir, "fitted", fmt.Sprintf("img%d_3440x1440.jpg", i)),
 			}
-			store.Update(img)
+			store.replace(img)
 		}
 		assert.Equal(t, 4, store.Count(), "All 4 images should still be present before pruning")
 
@@ -1602,7 +1602,7 @@ func TestPipeline_AddFallbackToUpdate(t *testing.T) {
 
 	// Step 3: Simulate the fixed stateManagerLoop pattern
 	if !store.Add(fullResult) {
-		store.Update(fullResult)
+		store.replace(fullResult)
 	}
 
 	// Step 4: Verify the fully-processed result landed
@@ -1670,7 +1670,7 @@ func TestNightlyCycle_ProcessImageJobDoesNotClobber(t *testing.T) {
 
 		// Pipeline stateManagerLoop Add-or-Update
 		if !store.Add(fullResult) {
-			store.Update(fullResult)
+			store.replace(fullResult)
 		}
 	}
 
@@ -1692,4 +1692,147 @@ func copyFlags(src map[string]bool) map[string]bool {
 		dst[k] = v
 	}
 	return dst
+}
+
+// === Issue 1: Purpose-Built Method Tests ===
+
+func TestSetFavorited_OnlyChangesFlag(t *testing.T) {
+	store := NewImageStore()
+	store.SetAsyncSave(false)
+
+	img := provider.Image{
+		ID:              "test1",
+		Width:           4000,
+		Height:          3000,
+		DerivativePaths: map[string]string{"3440x1440": "/path/to/deriv.jpg"},
+		ProcessingFlags: map[string]bool{"SmartFit": true},
+		IsFavorited:     false,
+	}
+	store.Add(img)
+
+	// Set favorited
+	ok := store.SetFavorited("test1", true)
+	assert.True(t, ok)
+
+	got, found := store.GetByID("test1")
+	assert.True(t, found)
+	assert.True(t, got.IsFavorited, "IsFavorited should be true")
+
+	// All other fields must be untouched
+	assert.Equal(t, 4000, got.Width, "Width should be untouched")
+	assert.Equal(t, 3000, got.Height, "Height should be untouched")
+	assert.Equal(t, "/path/to/deriv.jpg", got.DerivativePaths["3440x1440"], "DerivativePaths should be untouched")
+	assert.True(t, got.ProcessingFlags["SmartFit"], "ProcessingFlags should be untouched")
+
+	// Unfavorite
+	store.SetFavorited("test1", false)
+	got, _ = store.GetByID("test1")
+	assert.False(t, got.IsFavorited, "IsFavorited should be false")
+}
+
+func TestSetFavorited_NotFound(t *testing.T) {
+	store := NewImageStore()
+	ok := store.SetFavorited("nonexistent", true)
+	assert.False(t, ok)
+}
+
+func TestSetCropAnchor_SetAndClear(t *testing.T) {
+	store := NewImageStore()
+	store.SetAsyncSave(false)
+
+	img := provider.Image{
+		ID:              "test1",
+		DerivativePaths: map[string]string{"3440x1440": "/path/to/deriv.jpg"},
+	}
+	store.Add(img)
+
+	// Set an anchor
+	ok := store.SetCropAnchor("test1", "3440x1440", provider.AnchorTopCenter)
+	assert.True(t, ok)
+
+	got, _ := store.GetByID("test1")
+	assert.Equal(t, provider.AnchorTopCenter, got.CropAnchors["3440x1440"])
+
+	// DerivativePaths must be untouched
+	assert.Equal(t, "/path/to/deriv.jpg", got.DerivativePaths["3440x1440"], "DerivativePaths should be untouched")
+
+	// Clear anchor with AnchorAuto
+	store.SetCropAnchor("test1", "3440x1440", provider.AnchorAuto)
+	got, _ = store.GetByID("test1")
+	_, exists := got.CropAnchors["3440x1440"]
+	assert.False(t, exists, "Anchor should be removed with AnchorAuto")
+}
+
+func TestSetCropAnchor_NotFound(t *testing.T) {
+	store := NewImageStore()
+	ok := store.SetCropAnchor("nonexistent", "3440x1440", provider.AnchorTopCenter)
+	assert.False(t, ok)
+}
+
+func TestClearDerivatives_RemovesFromBuckets(t *testing.T) {
+	store := NewImageStore()
+	store.SetAsyncSave(false)
+
+	img := provider.Image{
+		ID:              "test1",
+		DerivativePaths: map[string]string{"3440x1440": "/path/to/deriv.jpg"},
+		ProcessingFlags: map[string]bool{"SmartFit": true},
+	}
+	store.Add(img)
+
+	// Verify image is in the resolution bucket
+	ids := store.GetIDsForResolution("3440x1440")
+	assert.Contains(t, ids, "test1")
+
+	// Clear derivatives
+	ok := store.ClearDerivatives("test1")
+	assert.True(t, ok)
+
+	// Verify image is removed from the bucket
+	ids = store.GetIDsForResolution("3440x1440")
+	assert.NotContains(t, ids, "test1", "Image should be removed from bucket after ClearDerivatives")
+
+	// Verify the image still exists but has empty maps
+	got, found := store.GetByID("test1")
+	assert.True(t, found, "Image should still be in the store")
+	assert.Empty(t, got.DerivativePaths, "DerivativePaths should be empty")
+	assert.Empty(t, got.ProcessingFlags, "ProcessingFlags should be empty")
+}
+
+func TestClearDerivatives_NotFound(t *testing.T) {
+	store := NewImageStore()
+	ok := store.ClearDerivatives("nonexistent")
+	assert.False(t, ok)
+}
+
+func TestReplace_StillWorks(t *testing.T) {
+	store := NewImageStore()
+	store.SetAsyncSave(false)
+
+	// Add an initial image (like from pipeline first Add)
+	initial := provider.Image{
+		ID:    "test1",
+		Width: 4000,
+	}
+	store.Add(initial)
+
+	// Replace with fully-processed result (like stateManagerLoop does)
+	full := provider.Image{
+		ID:              "test1",
+		Width:           4000,
+		Height:          3000,
+		DerivativePaths: map[string]string{"3440x1440": "/path/to/deriv.jpg"},
+		ProcessingFlags: map[string]bool{"SmartFit": true},
+	}
+	ok := store.replace(full)
+	assert.True(t, ok)
+
+	got, found := store.GetByID("test1")
+	assert.True(t, found)
+	assert.Equal(t, 3000, got.Height, "Height should be updated by replace")
+	assert.Equal(t, "/path/to/deriv.jpg", got.DerivativePaths["3440x1440"], "DerivativePaths should be set by replace")
+
+	// Verify bucket is updated
+	ids := store.GetIDsForResolution("3440x1440")
+	assert.Contains(t, ids, "test1")
 }

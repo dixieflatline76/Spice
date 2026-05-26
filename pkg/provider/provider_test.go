@@ -36,7 +36,7 @@ func TestMergeExistingMetadata_ProcessingFlags(t *testing.T) {
 		ID: "test1",
 		ProcessingFlags: map[string]bool{
 			"incompatible:1920x1080": true,
-			"SmartFit":              true,
+			"SmartFit":               true,
 		},
 	}
 

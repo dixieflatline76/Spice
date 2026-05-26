@@ -369,7 +369,7 @@ func (wp *Plugin) Activate() {
 	}
 	// Create a new context for this activation cycle
 	wp.ctx, wp.cancel = context.WithCancel(context.Background())
-	wp.pipeline = NewPipeline(wp.ctx, wp.cfg, wp.store, wp.ProcessImageJob, wp.getAPILimiter, wp.getProcessLimiter)
+	wp.pipeline = NewPipeline(wp.ctx, wp.cfg, wp.store.(*ImageStore), wp.ProcessImageJob, wp.getAPILimiter, wp.getProcessLimiter)
 	wp.jobSubmitter = wp.pipeline
 
 	if err := wp.fm.EnsureDirs(); err != nil {
@@ -828,7 +828,7 @@ func (wp *Plugin) ToggleFavorite(img provider.Image) {
 			}
 			wp.monMu.RUnlock()
 		} else {
-			wp.store.Update(img)
+			wp.store.SetFavorited(img.ID, false)
 		}
 		wp.manager.NotifyUser(i18n.T("Favorites"), i18n.T("Removed from favorites."))
 	} else {
@@ -838,7 +838,7 @@ func (wp *Plugin) ToggleFavorite(img provider.Image) {
 			return
 		}
 		img.IsFavorited = true
-		wp.store.Update(img)
+		wp.store.SetFavorited(img.ID, true)
 
 		// Responsiveness Fix: Reset Favorites page counter so the new file is detected immediately
 		wp.downloadMutex.Lock()
@@ -901,8 +901,7 @@ func (wp *Plugin) reconcileFavorites() {
 		} else {
 			// Non-Favorites image with stale IsFavorited flag — correct it.
 			log.Debugf("[Reconcile] %s: IsFavorited %v→%v", img.ID, img.IsFavorited, actual)
-			img.IsFavorited = actual
-			wp.store.Update(img)
+			wp.store.SetFavorited(img.ID, actual)
 			corrected++
 		}
 	}

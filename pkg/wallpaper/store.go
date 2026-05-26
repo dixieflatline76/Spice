@@ -99,7 +99,12 @@ func (s *ImageStore) SetFileManager(fm *FileManager, cacheFile string) {
 	s.cachePath = cacheFile
 }
 
-func (s *ImageStore) Update(img provider.Image) bool {
+// replace performs a full struct replacement for an existing image.
+// This is unexported because full replacement is dangerous — callers who only
+// need to change one field should use SetFavorited, SetCropAnchor, or ClearDerivatives.
+// The only legitimate caller is stateManagerLoop (pipeline), which always has
+// a fully-populated Image from ProcessImageJob.
+func (s *ImageStore) replace(img provider.Image) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -109,10 +114,63 @@ func (s *ImageStore) Update(img provider.Image) bool {
 			// This is legitimate when files are missing (applyImage stale detection),
 			// but suspicious if it happens during pipeline processing.
 			if len(img.DerivativePaths) == 0 && len(existing.DerivativePaths) > 0 {
-				log.Debugf("[Store] WARNING: Update() clearing DerivativePaths for %s (had %d paths)", img.ID, len(existing.DerivativePaths))
+				log.Debugf("[Store] WARNING: replace() clearing DerivativePaths for %s (had %d paths)", img.ID, len(existing.DerivativePaths))
 			}
 			s.images[i] = img
 			s.rebuildBucketsLocked() // Rebuild because DerivativePaths might have changed
+			s.scheduleSaveLocked()
+			return true
+		}
+	}
+	return false
+}
+
+// SetFavorited updates only the IsFavorited flag for an image.
+func (s *ImageStore) SetFavorited(id string, favorited bool) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.images {
+		if s.images[i].ID == id {
+			s.images[i].IsFavorited = favorited
+			s.scheduleSaveLocked()
+			return true
+		}
+	}
+	return false
+}
+
+// SetCropAnchor updates the crop anchor for a specific resolution on an image.
+// Pass AnchorAuto to remove the override.
+func (s *ImageStore) SetCropAnchor(id string, resKey string, anchor provider.CropAnchor) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.images {
+		if s.images[i].ID == id {
+			if s.images[i].CropAnchors == nil {
+				s.images[i].CropAnchors = make(map[string]provider.CropAnchor)
+			}
+			if anchor == provider.AnchorAuto {
+				delete(s.images[i].CropAnchors, resKey)
+			} else {
+				s.images[i].CropAnchors[resKey] = anchor
+			}
+			s.scheduleSaveLocked()
+			return true
+		}
+	}
+	return false
+}
+
+// ClearDerivatives resets an image's DerivativePaths and ProcessingFlags.
+// Used by monitor_controller when a derivative file is missing from disk.
+func (s *ImageStore) ClearDerivatives(id string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.images {
+		if s.images[i].ID == id {
+			s.images[i].DerivativePaths = make(map[string]string)
+			s.images[i].ProcessingFlags = make(map[string]bool)
+			s.rebuildBucketsLocked()
 			s.scheduleSaveLocked()
 			return true
 		}

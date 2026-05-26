@@ -177,8 +177,18 @@ func (m *MockImageStore) GetByID(id string) (provider.Image, bool) {
 	return args.Get(0).(provider.Image), args.Bool(1)
 }
 
-func (m *MockImageStore) Update(img provider.Image) bool {
-	args := m.Called(img)
+func (m *MockImageStore) SetFavorited(id string, favorited bool) bool {
+	args := m.Called(id, favorited)
+	return args.Bool(0)
+}
+
+func (m *MockImageStore) SetCropAnchor(id string, resKey string, anchor provider.CropAnchor) bool {
+	args := m.Called(id, resKey, anchor)
+	return args.Bool(0)
+}
+
+func (m *MockImageStore) ClearDerivatives(id string) bool {
+	args := m.Called(id)
 	return args.Bool(0)
 }
 
