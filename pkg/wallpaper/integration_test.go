@@ -165,7 +165,7 @@ func TestLifecycle_BlockPersistence(t *testing.T) {
 		wp2.Activate()
 		// Re-inject dummy pipeline to use dummyProcessor
 		// Fast-failing processor
-		wp2.pipeline = NewPipeline(wp2.ctx, wp2.cfg, wp2.store, func(ctx context.Context, job DownloadJob) (provider.Image, error) {
+		wp2.pipeline = NewPipeline(wp2.ctx, wp2.cfg, wp2.store.(*ImageStore), func(ctx context.Context, job DownloadJob) (provider.Image, error) {
 			return job.Image, errors.New("simulated processing error")
 		}, nil, nil)
 		wp2.jobSubmitter = wp2.pipeline
@@ -188,7 +188,7 @@ func TestLifecycle_BlockPersistence(t *testing.T) {
 		wp3 := setupTestPlugin(t, persistentPrefs)
 		wp3.Activate()
 		// Create a smaller pipeline to speed up tests, avoiding rate limiting for tests
-		wp3.pipeline = NewPipeline(wp3.ctx, wp3.cfg, wp3.store, func(ctx context.Context, job DownloadJob) (provider.Image, error) {
+		wp3.pipeline = NewPipeline(wp3.ctx, wp3.cfg, wp3.store.(*ImageStore), func(ctx context.Context, job DownloadJob) (provider.Image, error) {
 			return job.Image, nil
 		}, nil, nil)
 		wp3.jobSubmitter = wp3.pipeline
@@ -237,7 +237,7 @@ func TestLifecycle_BlockPersistence(t *testing.T) {
 		wp4 := setupTestPlugin(t, persistentPrefs)
 		wp4.Activate()
 		// Re-inject dummy pipeline
-		wp4.pipeline = NewPipeline(wp4.ctx, wp4.cfg, wp4.store, func(ctx context.Context, job DownloadJob) (provider.Image, error) { return job.Image, nil }, nil, nil)
+		wp4.pipeline = NewPipeline(wp4.ctx, wp4.cfg, wp4.store.(*ImageStore), func(ctx context.Context, job DownloadJob) (provider.Image, error) { return job.Image, nil }, nil, nil)
 		wp4.jobSubmitter = wp4.pipeline
 		wp4.pipeline.Start(1)
 

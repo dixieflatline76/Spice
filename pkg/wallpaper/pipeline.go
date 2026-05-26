@@ -21,7 +21,7 @@ type Pipeline struct {
 	ctx        context.Context
 	cancel     context.CancelFunc
 	config     *Config
-	store      StoreInterface
+	store      *ImageStore
 	processor  ProcessFunc
 }
 
@@ -55,7 +55,7 @@ type StateCmd struct {
 }
 
 // NewPipeline creates a new pipeline with the given configuration and store.
-func NewPipeline(ctx context.Context, cfg *Config, store StoreInterface, processor ProcessFunc, apiLim func(provider.ImageProvider) *rate.Limiter, procLim func(provider.ImageProvider) *rate.Limiter) *Pipeline {
+func NewPipeline(ctx context.Context, cfg *Config, store *ImageStore, processor ProcessFunc, apiLim func(provider.ImageProvider) *rate.Limiter, procLim func(provider.ImageProvider) *rate.Limiter) *Pipeline {
 	ctx, cancel := context.WithCancel(ctx)
 	p := &Pipeline{
 		jobChan:    make(chan DownloadJob), // Unbuffered to strictly guarantee pacing execution
@@ -144,7 +144,11 @@ func (p *Pipeline) stateManagerLoop() {
 				p.logPipelineError(res.Error)
 				continue
 			}
-			p.store.Add(res.Image)
+			if !p.store.Add(res.Image) {
+				// Image already exists (re-processed via backlog healing).
+				// Update so the fully-processed result with DerivativePaths lands.
+				p.store.replace(res.Image)
+			}
 
 		case cmd := <-p.cmdChan:
 			switch cmd.Type {

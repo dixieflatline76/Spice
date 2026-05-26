@@ -609,6 +609,7 @@ func (p *Provider) FetchImages(ctx context.Context, apiURL string, page int) ([]
 			ViewURL:       d.ProductURL, // Map local API 'product_url' to 'ViewURL'
 			Provider:      ProviderName,
 			SourceQueryID: wallpaper.FavoritesQueryID,
+			IsFavorited:   true, // Images from the Favorites provider are, by definition, favorites
 		}
 	}
 	return images, nil

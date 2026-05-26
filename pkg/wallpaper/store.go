@@ -99,14 +99,27 @@ func (s *ImageStore) SetFileManager(fm *FileManager, cacheFile string) {
 	s.cachePath = cacheFile
 }
 
-func (s *ImageStore) Update(img provider.Image) bool {
+// replace performs a full struct replacement for an existing image.
+// This is unexported because full replacement is dangerous — callers who only
+// need to change one field should use SetFavorited, SetCropAnchor, or ClearDerivatives.
+// The only legitimate caller is stateManagerLoop (pipeline), which always has
+// a fully-populated Image from ProcessImageJob.
+func (s *ImageStore) replace(img provider.Image) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	for i, existing := range s.images {
 		if existing.ID == img.ID {
+			// Diagnostic: Log when DerivativePaths are being cleared.
+			// This is legitimate when files are missing (applyImage stale detection),
+			// but suspicious if it happens during pipeline processing.
+			if len(img.DerivativePaths) == 0 && len(existing.DerivativePaths) > 0 {
+				log.Debugf("[Store] WARNING: replace() clearing DerivativePaths for %s (had %d paths)", img.ID, len(existing.DerivativePaths))
+			}
+			// Incremental bucket update: remove old entries, add new ones
+			s.removeFromBucketsLocked(existing.ID, existing.DerivativePaths)
 			s.images[i] = img
-			s.rebuildBucketsLocked() // Rebuild because DerivativePaths might have changed
+			s.addToBucketsLocked(img.ID, img.DerivativePaths)
 			s.scheduleSaveLocked()
 			return true
 		}
@@ -114,13 +127,95 @@ func (s *ImageStore) Update(img provider.Image) bool {
 	return false
 }
 
-// rebuildBucketsLocked re-scans all images and builds resolution buckets.
-// CALLER MUST HOLD s.mu.Lock() or s.mu.RLock() - no, wait, it modifies buckets so must be WRITE LOCK.
+// SetFavorited updates only the IsFavorited flag for an image.
+func (s *ImageStore) SetFavorited(id string, favorited bool) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.images {
+		if s.images[i].ID == id {
+			s.images[i].IsFavorited = favorited
+			s.scheduleSaveLocked()
+			return true
+		}
+	}
+	return false
+}
+
+// SetCropAnchor updates the crop anchor for a specific resolution on an image.
+// Pass AnchorAuto to remove the override.
+func (s *ImageStore) SetCropAnchor(id string, resKey string, anchor provider.CropAnchor) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.images {
+		if s.images[i].ID == id {
+			if s.images[i].CropAnchors == nil {
+				s.images[i].CropAnchors = make(map[string]provider.CropAnchor)
+			}
+			if anchor == provider.AnchorAuto {
+				delete(s.images[i].CropAnchors, resKey)
+			} else {
+				s.images[i].CropAnchors[resKey] = anchor
+			}
+			s.scheduleSaveLocked()
+			return true
+		}
+	}
+	return false
+}
+
+// ClearDerivatives resets an image's DerivativePaths and ProcessingFlags.
+// Used by monitor_controller when a derivative file is missing from disk.
+func (s *ImageStore) ClearDerivatives(id string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.images {
+		if s.images[i].ID == id {
+			// Incremental bucket update: remove this image's entries
+			s.removeFromBucketsLocked(id, s.images[i].DerivativePaths)
+			s.images[i].DerivativePaths = make(map[string]string)
+			s.images[i].ProcessingFlags = make(map[string]bool)
+			s.scheduleSaveLocked()
+			return true
+		}
+	}
+	return false
+}
+
+// rebuildBucketsLocked re-scans ALL images and rebuilds resolution buckets from scratch.
+// Use only for batch operations (e.g. RemoveByQueryID, Sync). For single-image
+// mutations, prefer addToBucketsLocked/removeFromBucketsLocked.
+// CALLER MUST HOLD s.mu.Lock().
 func (s *ImageStore) rebuildBucketsLocked() {
 	s.resolutionBuckets = make(map[string][]string)
 	for _, img := range s.images {
 		for res := range img.DerivativePaths {
 			s.resolutionBuckets[res] = append(s.resolutionBuckets[res], img.ID)
+		}
+	}
+}
+
+// addToBucketsLocked adds a single image's derivative paths to the resolution buckets.
+// CALLER MUST HOLD s.mu.Lock().
+func (s *ImageStore) addToBucketsLocked(id string, derivativePaths map[string]string) {
+	for res := range derivativePaths {
+		s.resolutionBuckets[res] = append(s.resolutionBuckets[res], id)
+	}
+}
+
+// removeFromBucketsLocked removes a single image's entries from the resolution buckets.
+// CALLER MUST HOLD s.mu.Lock().
+func (s *ImageStore) removeFromBucketsLocked(id string, derivativePaths map[string]string) {
+	for res := range derivativePaths {
+		ids := s.resolutionBuckets[res]
+		for j, bucketID := range ids {
+			if bucketID == id {
+				s.resolutionBuckets[res] = append(ids[:j], ids[j+1:]...)
+				break
+			}
+		}
+		// Clean up empty bucket entries
+		if len(s.resolutionBuckets[res]) == 0 {
+			delete(s.resolutionBuckets, res)
 		}
 	}
 }
@@ -153,22 +248,48 @@ func (s *ImageStore) Add(img provider.Image) bool {
 	defer s.mu.Unlock()
 
 	if _, exists := s.idSet[img.ID]; exists {
-		// Targeted Fix: If the new image comes from Favorites provider, update the existing entry.
-		// This ensures favored copies (persistent) displace original temporary source downloads.
+		// Favorites Upsert: selectively update only the fields the Favorites
+		// provider can authoritatively set, preserving all store-managed metadata
+		// (DerivativePaths, ProcessingFlags, CropAnchors, Width, Height, etc.).
+		//
+		// Uses non-empty-wins for Attribution/ViewURL because AddFavorite is
+		// async (queues a job), but RequestFetch fires immediately after — the
+		// fetch can race with the metadata.json write, arriving with empty fields.
 		if img.SourceQueryID == FavoritesQueryID {
 			for i, existing := range s.images {
 				if existing.ID == img.ID {
-					if existing.FilePath != "" {
-						delete(s.pathSet, existing.FilePath)
+					// Provider-authoritative fields: always update
+					s.images[i].Provider = img.Provider
+					s.images[i].SourceQueryID = img.SourceQueryID
+					s.images[i].IsFavorited = true
+
+					// Download URL: always update (Favorites provider serves via local API)
+					if img.Path != "" {
+						s.images[i].Path = img.Path
 					}
-					// Preserve seen state
+
+					// Non-empty-wins: preserve existing if incoming is empty (race protection)
+					if img.Attribution != "" {
+						s.images[i].Attribution = img.Attribution
+					}
+					if img.ViewURL != "" {
+						s.images[i].ViewURL = img.ViewURL
+					}
+
+					// Seen: preserve if already seen
 					if existing.Seen && !img.Seen {
-						img.Seen = true
+						s.images[i].Seen = true
 					}
-					s.images[i] = img
-					if img.FilePath != "" {
+
+					// FilePath: update pathSet if changed
+					if img.FilePath != "" && img.FilePath != existing.FilePath {
+						if existing.FilePath != "" {
+							delete(s.pathSet, existing.FilePath)
+						}
+						s.images[i].FilePath = img.FilePath
 						s.pathSet[img.FilePath] = i
 					}
+
 					s.scheduleSaveLocked()
 					return true
 				}
@@ -316,7 +437,7 @@ func (s *ImageStore) Remove(id string) (provider.Image, bool) {
 		}
 	}
 
-	s.rebuildBucketsLocked() // Ensure buckets are updated after removal
+	s.removeFromBucketsLocked(id, img.DerivativePaths) // Incremental bucket removal
 	s.avoidSet[id] = true
 	s.scheduleSaveLocked()
 

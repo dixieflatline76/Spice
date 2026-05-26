@@ -150,46 +150,44 @@ func TestReconcileFavorites_NilFavoriter(t *testing.T) {
 	wp.reconcileFavorites()
 }
 
-// TestReconcileFavorites_RemovesDeadFavoritesEntry is a regression test for the
-// ghost favorites bug where a Provider=Favorites image whose file was deleted from
-// the favorites folder was never cleaned up. The old IsFavorited() had a short-circuit
-// `if img.Provider == "Favorites" { return true }` that bypassed the favMap check,
-// preventing reconcileFavorites from detecting the orphan.
-func TestReconcileFavorites_RemovesDeadFavoritesEntry(t *testing.T) {
+// TestReconcileFavorites_SkipsFavoritesProviderImages verifies that reconcileFavorites
+// does not attempt to validate Provider=Favorites images against favMap.
+// In production, these images have LocalFolder-prefixed IDs (e.g.
+// LocalFolder_favorite_images_Wikimedia_14921563) which never match the favMap
+// keys (bare IDs like Wikimedia_14921563). Their lifecycle is managed by
+// Sync via activeQueryIDs instead.
+func TestReconcileFavorites_SkipsFavoritesProviderImages(t *testing.T) {
 	tmpDir := t.TempDir()
 	store := NewImageStore()
 	fm := NewFileManager(tmpDir)
 	store.SetFileManager(fm, filepath.Join(tmpDir, "cache.json"))
 
-	// Stale Provider=Favorites entry — file was deleted from favorites folder.
-	// loadInitialMetadata's orphan validator removed it from favMap, so
-	// IsFavorited should return false. reconcileFavorites should Remove() it.
-	staleFav := provider.Image{
-		ID:            "Wallhaven_21z536",
+	// Provider=Favorites image with realistic LocalFolder-prefixed ID
+	// favMap will never have this key, but reconcile should skip it entirely
+	favImg := provider.Image{
+		ID:            "LocalFolder_favorite_images_Wikimedia_14921563",
 		Provider:      "Favorites",
 		IsFavorited:   true,
 		SourceQueryID: FavoritesQueryID,
-		FilePath:      filepath.Join(tmpDir, "Wallhaven_21z536.jpg"),
+		FilePath:      filepath.Join(tmpDir, "LocalFolder_favorite_images_Wikimedia_14921563.jpg"),
 	}
-	require.NoError(t, os.WriteFile(staleFav.FilePath, []byte("fake"), 0644))
-	store.Add(staleFav)
+	require.NoError(t, os.WriteFile(favImg.FilePath, []byte("fake"), 0644))
+	store.Add(favImg)
 
-	// Healthy favorite — file exists, favMap has it
-	healthyFav := provider.Image{
-		ID:            "Wallhaven_abc123",
-		Provider:      "Favorites",
-		IsFavorited:   true,
-		SourceQueryID: FavoritesQueryID,
-		FilePath:      filepath.Join(tmpDir, "Wallhaven_abc123.jpg"),
+	// Non-Favorites image with stale flag — this SHOULD be corrected
+	staleImg := provider.Image{
+		ID:          "Wallhaven_abc123",
+		Provider:    "Wallhaven",
+		IsFavorited: true,
+		FilePath:    filepath.Join(tmpDir, "Wallhaven_abc123.jpg"),
 	}
-	require.NoError(t, os.WriteFile(healthyFav.FilePath, []byte("fake"), 0644))
-	store.Add(healthyFav)
+	require.NoError(t, os.WriteFile(staleImg.FilePath, []byte("fake"), 0644))
+	store.Add(staleImg)
 
 	fav := &mockFavoriter{}
-	// Stale: favMap says NOT favorited (orphan validator cleaned it)
-	fav.On("IsFavorited", staleFav).Return(false)
-	// Healthy: favMap says IS favorited
-	fav.On("IsFavorited", healthyFav).Return(true)
+	// The favoriter should NOT be called for the Favorites-provider image
+	// (reconcile skips it). Only called for the Wallhaven image.
+	fav.On("IsFavorited", staleImg).Return(false)
 
 	wp := &Plugin{
 		store:     store,
@@ -198,13 +196,14 @@ func TestReconcileFavorites_RemovesDeadFavoritesEntry(t *testing.T) {
 
 	wp.reconcileFavorites()
 
-	// Stale entry should be REMOVED from store entirely (not just flag-flipped)
-	_, ok := store.GetByID("Wallhaven_21z536")
-	assert.False(t, ok, "stale Provider=Favorites entry should have been removed from store")
+	// Favorites-provider image should be UNTOUCHED (not removed, not modified)
+	img, ok := store.GetByID("LocalFolder_favorite_images_Wikimedia_14921563")
+	require.True(t, ok, "Favorites-provider image should not be touched by reconcile")
+	assert.True(t, img.IsFavorited, "IsFavorited should remain true")
+	assert.Equal(t, "Favorites", img.Provider)
 
-	// Healthy favorite should remain untouched
-	img, ok := store.GetByID("Wallhaven_abc123")
+	// Stale Wallhaven image should have its flag corrected
+	img, ok = store.GetByID("Wallhaven_abc123")
 	require.True(t, ok)
-	assert.True(t, img.IsFavorited, "healthy favorite should still be favorited")
-	assert.Equal(t, "Favorites", img.Provider, "healthy favorite should still be Provider=Favorites")
+	assert.False(t, img.IsFavorited, "stale Wallhaven favorite flag should be corrected to false")
 }

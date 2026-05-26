@@ -35,8 +35,8 @@ func TestMonitorController_ApplyImage_StateConsistency(t *testing.T) {
 	// Expect Stat to fail
 	mockOS.On("Stat", "/tmp/missing.jpg").Return(nil, os.ErrNotExist)
 
-	// Expect Store Update (clearing metadata)
-	mockStore.On("Update", mock.Anything).Return(true)
+	// Expect Store ClearDerivatives (clearing metadata)
+	mockStore.On("ClearDerivatives", mock.Anything).Return(true)
 
 	// Expect FetchRequest (triggered on failure)
 	fetchRequested := false

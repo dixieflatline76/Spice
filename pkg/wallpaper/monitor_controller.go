@@ -49,7 +49,9 @@ type StoreInterface interface {
 	GetByID(id string) (provider.Image, bool)
 	Exists(id string) bool
 	Remove(id string) (provider.Image, bool)
-	Update(img provider.Image) bool
+	SetFavorited(id string, favorited bool) bool
+	SetCropAnchor(id string, resKey string, anchor provider.CropAnchor) bool
+	ClearDerivatives(id string) bool
 	Add(img provider.Image) bool
 	Clear()
 	MarkSeen(filePath string)
@@ -497,9 +499,7 @@ func (mc *MonitorController) applyImage(img provider.Image) {
 	if _, err := mc.os.Stat(path); os.IsNotExist(err) {
 		log.Printf("[Monitor %d] ERROR: Wallpaper file missing: %s. Metadata is stale. Requesting refetch...", mc.ID, path)
 		// Clear local metadata that is proven stale so it's not chosen again
-		img.DerivativePaths = make(map[string]string)
-		img.ProcessingFlags = make(map[string]bool)
-		mc.Store.Update(img)
+		mc.Store.ClearDerivatives(img.ID)
 		if mc.OnFetchRequest != nil {
 			mc.OnFetchRequest()
 		}
@@ -534,15 +534,7 @@ func (mc *MonitorController) reprocessWithAnchor(anchor provider.CropAnchor) {
 
 	// 1. Update anchor in image metadata for this monitor's resolution and persist
 	resKey := fmt.Sprintf("%dx%d", mc.Monitor.Rect.Dx(), mc.Monitor.Rect.Dy())
-	if img.CropAnchors == nil {
-		img.CropAnchors = make(map[string]provider.CropAnchor)
-	}
-	if anchor == provider.AnchorAuto {
-		delete(img.CropAnchors, resKey) // Auto = remove override
-	} else {
-		img.CropAnchors[resKey] = anchor
-	}
-	mc.Store.Update(img)
+	mc.Store.SetCropAnchor(img.ID, resKey, anchor)
 
 	// 2. Find master path
 	ext := filepath.Ext(img.FilePath)

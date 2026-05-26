@@ -91,9 +91,7 @@ func TestToggleFavorite_DeepDeleteLogic(t *testing.T) {
 		}
 
 		mf.On("RemoveFavorite", img).Return(nil)
-		ms.On("Update", mock.MatchedBy(func(i provider.Image) bool {
-			return i.ID == img.ID && i.IsFavorited == false
-		})).Return(true)
+		ms.On("SetFavorited", "wallhaven_456", false).Return(true)
 		mm.On("NotifyUser", mock.Anything, mock.Anything).Return()
 
 		// Background telemetry calls should be ignored
@@ -130,9 +128,7 @@ func TestToggleFavorite_DeepDeleteLogic(t *testing.T) {
 		}
 
 		mf.On("AddFavorite", img).Return(nil)
-		ms.On("Update", mock.MatchedBy(func(i provider.Image) bool {
-			return i.ID == img.ID && i.IsFavorited == true
-		})).Return(true)
+		ms.On("SetFavorited", "wallhaven_789", true).Return(true)
 		mm.On("NotifyUser", mock.Anything, mock.Anything).Return()
 
 		// Background telemetry calls should be ignored

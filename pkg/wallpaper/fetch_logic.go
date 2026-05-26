@@ -252,14 +252,7 @@ func (wp *Plugin) fetchFromProvider(fetchCtx context.Context, q ImageQuery, p pr
 			}
 			log.Debugf("Image %s exists but is missing derivatives. Allowing re-processing for backlog healing.", img.ID)
 			// Merge existing metadata (like already probed dimensions) into the fetch-result image
-			img.Width = existing.Width
-			img.Height = existing.Height
-			if img.ProcessingFlags == nil {
-				img.ProcessingFlags = make(map[string]bool)
-			}
-			for k, v := range existing.ProcessingFlags {
-				img.ProcessingFlags[k] = v
-			}
+			img.MergeExistingMetadata(existing)
 		}
 		job := DownloadJob{
 			Ctx:      queryCtx,

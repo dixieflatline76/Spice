@@ -114,7 +114,7 @@ func (wp *Plugin) CreateTrayMenuItems() []*fyne.MenuItem {
 				}
 				artistLabel = i18n.Tf(key, map[string]any{"Attribution": attribution})
 			}
-			if currentImage.IsFavorited {
+			if currentImage.IsFavorited || currentImage.Provider == "Favorites" {
 				favoriteLabel = i18n.T("Remove from Favorites")
 				favoriteIcon = "unfavorite.png"
 			}
