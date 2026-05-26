@@ -800,8 +800,8 @@ func (wp *Plugin) ToggleFavorite(img provider.Image) {
 		return
 	}
 
-	// Toggle logic
-	if img.IsFavorited {
+	// Toggle logic: Provider=Favorites images are favorites by definition
+	if img.IsFavorited || img.Provider == "Favorites" {
 		// Remove
 		if err := wp.favoriter.RemoveFavorite(img); err != nil {
 			log.Printf("Failed to remove favorite: %v", err)
@@ -880,33 +880,34 @@ func (wp *Plugin) ToggleFavorite(img provider.Image) {
 // reconcileFavorites validates all IsFavorited flags in the image cache against the
 // live favorites provider. This prevents "ghost favorites" where the tray menu shows
 // an image as favorited even though its file was deleted from the favorites folder.
-// It also removes stale Provider=Favorites entries whose source files no longer exist.
+//
+// NOTE: Provider=Favorites images are skipped because their store IDs
+// (LocalFolder_favorite_images_*) don't match the favMap keys (bare IDs
+// like Wikimedia_14921563). Their lifecycle is managed by Sync via activeQueryIDs.
 func (wp *Plugin) reconcileFavorites() {
 	if wp.favoriter == nil {
 		return
 	}
 	corrected := 0
-	removed := 0
 	for _, img := range wp.store.List() {
+		// Skip Favorites-provider images — favMap uses a different ID namespace
+		// and can never validate them. These are favorites by definition.
+		if img.Provider == "Favorites" {
+			continue
+		}
+
 		actual := wp.favoriter.IsFavorited(img)
 		if img.IsFavorited == actual {
 			continue
 		}
 
-		if img.Provider == "Favorites" && !actual {
-			// Source file was deleted from favorites folder — remove dead entry entirely.
-			log.Debugf("[Reconcile] %s: Provider=Favorites but no longer in favMap. Removing from store.", img.ID)
-			wp.store.Remove(img.ID)
-			removed++
-		} else {
-			// Non-Favorites image with stale IsFavorited flag — correct it.
-			log.Debugf("[Reconcile] %s: IsFavorited %v→%v", img.ID, img.IsFavorited, actual)
-			wp.store.SetFavorited(img.ID, actual)
-			corrected++
-		}
+		// Non-Favorites image with stale IsFavorited flag — correct it.
+		log.Debugf("[Reconcile] %s: IsFavorited %v→%v", img.ID, img.IsFavorited, actual)
+		wp.store.SetFavorited(img.ID, actual)
+		corrected++
 	}
-	if corrected > 0 || removed > 0 {
-		log.Debugf("[Reconcile] Fixed %d stale flags, removed %d dead favorites entries", corrected, removed)
+	if corrected > 0 {
+		log.Debugf("[Reconcile] Fixed %d stale favorite flags", corrected)
 	}
 }
 
@@ -1122,7 +1123,7 @@ func (wp *Plugin) updateTrayMenuUI(img provider.Image, monitorID int) {
 
 		// Update Favorite State
 		if mItems.FavoriteMenuItem != nil {
-			if img.IsFavorited {
+			if img.IsFavorited || img.Provider == "Favorites" {
 				mItems.FavoriteMenuItem.Label = i18n.T("Remove from Favorites")
 				mItems.FavoriteMenuItem.Icon, _ = wp.manager.GetAssetManager().GetIcon("unfavorite.png")
 			} else {
