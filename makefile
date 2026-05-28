@@ -196,7 +196,7 @@ build-darwin-appstore-arm64: build-extension
 	mkdir -p dist
 	mv Spice.pkg dist/Spice-$(VERSION)-macos-arm64-AppStore.pkg
 
-build-msix: build-win-amd64
+build-msix:
 	@echo "Preparing MSIX staging directory..."
 	pwsh -Command "if (Test-Path dist/msix-staging) { Remove-Item -Recurse -Force dist/msix-staging }"
 	pwsh -Command "New-Item -ItemType Directory -Force -Path dist/msix-staging/Assets"

@@ -71,6 +71,9 @@ jobs:
     name: Build Windows
     runs-on: windows-latest
     if: github.event.action == 'published'
+    env:
+      GOOGLE_PHOTOS_CLIENT_ID: ${{ secrets.GOOGLE_PHOTOS_CLIENT_ID }}
+      GOOGLE_PHOTOS_CLIENT_SECRET: ${{ secrets.GOOGLE_PHOTOS_CLIENT_SECRET }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -93,9 +96,6 @@ jobs:
         shell: pwsh
 
       - name: Build Application
-        env:
-          GOOGLE_PHOTOS_CLIENT_ID: ${{ secrets.GOOGLE_PHOTOS_CLIENT_ID }}
-          GOOGLE_PHOTOS_CLIENT_SECRET: ${{ secrets.GOOGLE_PHOTOS_CLIENT_SECRET }}
         run: make build-win-amd64
 
       - name: Sign Inner Executable
