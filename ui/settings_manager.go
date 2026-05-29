@@ -1237,8 +1237,23 @@ func (sm *SettingsManager) RenderSchema(p schema.PanelSchema) fyne.CanvasObject 
 						if err != nil || path == "" {
 							return
 						}
-						_ = v.OnFolderSelected(path)
+						queryID, err := v.OnFolderSelected(path)
+						if err != nil || queryID == "" {
+							return
+						}
+						// Seed baseline as inactive so the pending change shows as checked.
+						sm.SeedBaseline(queryID, false)
+						// Register a pending callback to enable the query when Apply is clicked.
+						enableQuery := v.EnableQuery
+						sm.SetSettingChangedCallback(queryID, func() {
+							if enableQuery != nil {
+								_ = enableQuery(queryID)
+							}
+							sm.SeedBaseline(queryID, true)
+						})
+						sm.SetRefreshFlag(queryID)
 						sm.fullRefresh()
+						sm.checkAndEnableApply()
 					})
 				})
 				sectionContainer.Add(btn)

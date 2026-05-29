@@ -182,10 +182,10 @@ func TestDefaultConfigMuseumQueryKeysExist(t *testing.T) {
 
 	// Map provider names to their JSON file paths
 	providerFiles := map[string]string{
-		"MetMuseum":          "docs/collections/met.json",
+		"MetMuseum":           "docs/collections/met.json",
 		"ArtInstituteChicago": "docs/collections/artic.json",
-		"Rijksmuseum":        "docs/collections/rijksmuseum.json",
-		"ClevelandMuseum":    "docs/collections/cleveland.json",
+		"Rijksmuseum":         "docs/collections/rijksmuseum.json",
+		"ClevelandMuseum":     "docs/collections/cleveland.json",
 	}
 
 	for _, q := range cfg.Queries {
