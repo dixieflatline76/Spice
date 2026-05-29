@@ -10,6 +10,8 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/mod/semver"
+
 	"github.com/dixieflatline76/Spice/v2/config"
 	"github.com/dixieflatline76/Spice/v2/pkg/wallpaper"
 	"github.com/dixieflatline76/Spice/v2/util/log"
@@ -19,7 +21,7 @@ import (
 // All collection definitions (curated ID lists, search queries, department filters)
 // are driven from this structure, which is loaded from JSON.
 type Collection struct {
-	Version     int               `json:"version"`
+	Version     string            `json:"version"`
 	Description string            `json:"description"`
 	Entries     []CollectionEntry `json:"collections"`
 
@@ -36,7 +38,7 @@ func (c *Collection) migrate() {
 		return // Already new format, or nothing to migrate
 	}
 
-	log.Printf("MET: Migrating legacy collection v%d to entries format (%d curated IDs)", c.Version, len(c.LegacyIDs))
+	log.Printf("MET: Migrating legacy collection %s to entries format (%d curated IDs)", c.Version, len(c.LegacyIDs))
 	c.Entries = []CollectionEntry{
 		{Name: "Best of The Met", Key: CollectionSpiceMelange, Type: "curated", IDs: c.LegacyIDs},
 		{Name: "American Paintings", Key: CollectionAmerican, Type: "search", Query: "American Paintings"},
@@ -103,14 +105,14 @@ func InitRemoteCollection(cfg *wallpaper.Config) (*Collection, error) {
 			return
 		}
 
-		if col.Version >= embeddedCollection.Version {
+		if semver.Compare(col.Version, embeddedCollection.Version) >= 0 {
 			fetchedCollection = col
 			// Update Cache
 			if err := saveCache(cachePath, col); err != nil {
 				log.Printf("MET: Failed to save cache: %v", err)
 			}
 		} else {
-			log.Printf("MET: Remote collection (v%d) is older than embedded (v%d), ignoring remote", col.Version, embeddedCollection.Version)
+			log.Printf("MET: Remote collection (%s) is older than embedded (%s), ignoring remote", col.Version, embeddedCollection.Version)
 			fetchErr <- fmt.Errorf("remote version older than embedded")
 		}
 	}()
@@ -125,7 +127,7 @@ func InitRemoteCollection(cfg *wallpaper.Config) (*Collection, error) {
 	select {
 	case <-c:
 		if fetchedCollection != nil {
-			log.Printf("MET: Successfully loaded remote collection (v%d, %d entries)", fetchedCollection.Version, len(fetchedCollection.Entries))
+			log.Printf("MET: Successfully loaded remote collection (%s, %d entries)", fetchedCollection.Version, len(fetchedCollection.Entries))
 			return fetchedCollection, nil
 		}
 		log.Printf("MET: Remote fetch failed: %v", <-fetchErr)
@@ -135,17 +137,17 @@ func InitRemoteCollection(cfg *wallpaper.Config) (*Collection, error) {
 
 	// 4. Fallback to Cache
 	if cacheCol, err := loadCache(cachePath); err == nil {
-		if cacheCol.Version >= embeddedCollection.Version {
-			log.Printf("MET: Loaded cached collection (v%d)", cacheCol.Version)
+		if semver.Compare(cacheCol.Version, embeddedCollection.Version) >= 0 {
+			log.Printf("MET: Loaded cached collection (%s)", cacheCol.Version)
 			return cacheCol, nil
 		}
-		log.Printf("MET: Cached collection (v%d) is older than embedded (v%d), ignoring cache", cacheCol.Version, embeddedCollection.Version)
+		log.Printf("MET: Cached collection (%s) is older than embedded (%s), ignoring cache", cacheCol.Version, embeddedCollection.Version)
 	} else {
 		log.Printf("MET: Failed to load cache: %v", err)
 	}
 
 	// 5. Fallback to Embedded
-	log.Printf("MET: Using embedded collection (v%d)", embeddedCollection.Version)
+	log.Printf("MET: Using embedded collection (%s)", embeddedCollection.Version)
 	return &embeddedCollection, nil
 }
 
@@ -186,7 +188,7 @@ func RefreshRemoteCollection() (*Collection, error) {
 		return nil, err
 	}
 
-	if col.Version >= embeddedCollection.Version {
+	if semver.Compare(col.Version, embeddedCollection.Version) >= 0 {
 		cacheDir := filepath.Join(config.GetWorkingDir(), "cache", "met")
 		cachePath := filepath.Join(cacheDir, cacheFileName)
 		_ = os.MkdirAll(cacheDir, 0755)
@@ -196,7 +198,7 @@ func RefreshRemoteCollection() (*Collection, error) {
 		return col, nil
 	}
 
-	log.Printf("MET: Remote collection (v%d) is not newer than embedded (v%d), no update needed", col.Version, embeddedCollection.Version)
+	log.Printf("MET: Remote collection (%s) is not newer than embedded (%s), no update needed", col.Version, embeddedCollection.Version)
 	return nil, nil
 }
 

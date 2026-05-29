@@ -98,7 +98,7 @@ func (b *aicLockedBody) Close() error {
 }
 
 type CuratedList struct {
-	Version     int                 `json:"version"`
+	Version     string              `json:"version"`
 	Description string              `json:"description"`
 	Tours       map[string]TourData `json:"tours"`
 }

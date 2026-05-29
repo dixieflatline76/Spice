@@ -1,5 +1,5 @@
 {
-    "version": 1,
+    "version": "v2.5.5",
     "description": "Rijksmuseum: Curated Collections",
     "collections": [
         {
@@ -153,6 +153,69 @@
                     "title": "Militia Company of District XI (The Meagre Company)",
                     "artist": "Frans Hals and Pieter Codde",
                     "image_url": "https://iiif.micr.io/sUZPV/full/max/0/default.jpg"
+                },
+                {
+                    "object_id": "200108385",
+                    "object_number": "SK-A-4688",
+                    "title": "Italian Landscape with Umbrella Pines",
+                    "artist": "Hendrik Voogd",
+                    "image_url": "https://iiif.micr.io/FDLZM/full/max/0/default.jpg"
+                },
+                {
+                    "object_id": "200107611",
+                    "object_number": "SK-A-3224",
+                    "title": "Landscape in Brazil",
+                    "artist": "Frans Jansz. Post",
+                    "image_url": "https://iiif.micr.io/zherJ/full/max/0/default.jpg"
+                },
+                {
+                    "object_id": "200107516",
+                    "object_number": "SK-A-1559",
+                    "title": "Mountainous Landscape",
+                    "artist": "Joos de Momper (II)",
+                    "image_url": "https://iiif.micr.io/VShfh/full/max/0/default.jpg"
+                },
+                {
+                    "object_id": "200107102",
+                    "object_number": "SK-A-349",
+                    "title": "Winter Landscape",
+                    "artist": "Jacob van Ruisdael",
+                    "image_url": "https://iiif.micr.io/LkJYZ/full/max/0/default.jpg"
+                },
+                {
+                    "object_id": "200107104",
+                    "object_number": "SK-A-351",
+                    "title": "View of Haarlem with Bleaching Fields",
+                    "artist": "Jacob van Ruisdael",
+                    "image_url": "https://iiif.micr.io/dNkMA/full/max/0/default.jpg"
+                },
+                {
+                    "object_id": "200107006",
+                    "object_number": "SK-A-2313",
+                    "title": "Italian Landscape with the Ponte Lucano",
+                    "artist": "Jan Asselijn",
+                    "image_url": "https://iiif.micr.io/rSqZv/full/max/0/default.jpg"
+                },
+                {
+                    "object_id": "200109312",
+                    "object_number": "SK-C-211",
+                    "title": "The Windmill at Wijk bij Duurstede",
+                    "artist": "Jacob van Ruisdael",
+                    "image_url": "https://iiif.micr.io/XWEFp/full/max/0/default.jpg"
+                },
+                {
+                    "object_id": "200107940",
+                    "object_number": "SK-A-1935",
+                    "title": "Landscape with a Stone Bridge",
+                    "artist": "Rembrandt van Rijn",
+                    "image_url": "https://iiif.micr.io/hodeb/full/max/0/default.jpg"
+                },
+                {
+                    "object_id": "200108460",
+                    "object_number": "SK-A-4133",
+                    "title": "The Cannon Shot",
+                    "artist": "Willem van de Velde (II)",
+                    "image_url": "https://iiif.micr.io/DCMua/full/max/0/default.jpg"
                 }
             ]
         },

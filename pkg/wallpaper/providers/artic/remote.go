@@ -10,6 +10,8 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/mod/semver"
+
 	"github.com/dixieflatline76/Spice/v2/config"
 	"github.com/dixieflatline76/Spice/v2/util/log"
 )
@@ -55,14 +57,14 @@ func InitRemoteCollection() (*CuratedList, error) {
 			return
 		}
 
-		if col.Version >= embeddedCollection.Version {
+		if semver.Compare(col.Version, embeddedCollection.Version) >= 0 {
 			fetchedCollection = col
 			// Update Cache
 			if err := saveCache(cachePath, col); err != nil {
 				log.Printf("AIC: Failed to save cache: %v", err)
 			}
 		} else {
-			log.Printf("AIC: Remote collection (v%d) is older than embedded (v%d), ignoring remote", col.Version, embeddedCollection.Version)
+			log.Printf("AIC: Remote collection (%s) is older than embedded (%s), ignoring remote", col.Version, embeddedCollection.Version)
 			fetchErr <- fmt.Errorf("remote version older than embedded")
 		}
 	}()
@@ -77,7 +79,7 @@ func InitRemoteCollection() (*CuratedList, error) {
 	select {
 	case <-c:
 		if fetchedCollection != nil {
-			log.Printf("AIC: Successfully loaded remote collection (v%d)", fetchedCollection.Version)
+			log.Printf("AIC: Successfully loaded remote collection (%s)", fetchedCollection.Version)
 			return fetchedCollection, nil
 		}
 		log.Printf("AIC: Remote fetch failed: %v", <-fetchErr)
@@ -87,15 +89,15 @@ func InitRemoteCollection() (*CuratedList, error) {
 
 	// 4. Fallback to Cache
 	if cacheCol, err := loadCache(cachePath); err == nil {
-		if cacheCol.Version >= embeddedCollection.Version {
-			log.Printf("AIC: Loaded cached collection (v%d)", cacheCol.Version)
+		if semver.Compare(cacheCol.Version, embeddedCollection.Version) >= 0 {
+			log.Printf("AIC: Loaded cached collection (%s)", cacheCol.Version)
 			return cacheCol, nil
 		}
-		log.Printf("AIC: Cached collection (v%d) is older than embedded (v%d), ignoring cache", cacheCol.Version, embeddedCollection.Version)
+		log.Printf("AIC: Cached collection (%s) is older than embedded (%s), ignoring cache", cacheCol.Version, embeddedCollection.Version)
 	}
 
 	// 5. Fallback to Embedded
-	log.Printf("AIC: Using embedded collection (v%d)", embeddedCollection.Version)
+	log.Printf("AIC: Using embedded collection (%s)", embeddedCollection.Version)
 	return &embeddedCollection, nil
 }
 
@@ -125,7 +127,7 @@ func RefreshRemoteCollection() (*CuratedList, error) {
 		return nil, err
 	}
 
-	if col.Version >= embeddedCollection.Version {
+	if semver.Compare(col.Version, embeddedCollection.Version) >= 0 {
 		cacheDir := filepath.Join(config.GetWorkingDir(), "cache", "artic")
 		cachePath := filepath.Join(cacheDir, cacheFileName)
 		_ = os.MkdirAll(cacheDir, 0755)
@@ -135,7 +137,7 @@ func RefreshRemoteCollection() (*CuratedList, error) {
 		return col, nil
 	}
 
-	log.Printf("AIC: Remote collection (v%d) is not newer than embedded (v%d), no update needed", col.Version, embeddedCollection.Version)
+	log.Printf("AIC: Remote collection (%s) is not newer than embedded (%s), no update needed", col.Version, embeddedCollection.Version)
 	return nil, nil
 }
 
