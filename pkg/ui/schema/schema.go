@@ -195,10 +195,12 @@ type FolderPickerItem struct {
 	Help       string
 	ButtonText string
 	// OnFolderSelected is called when a folder is picked.
-	// It is up to the provider logic to then add the query.
-	OnFolderSelected func(path string) error
-	EnabledIf        func() bool
-	VisibleIf        func() bool
+	// It should add the query (inactive) and return its ID.
+	OnFolderSelected func(path string) (string, error)
+	// EnableQuery activates a query by its ID when Apply is clicked.
+	EnableQuery func(id string) error
+	EnabledIf   func() bool
+	VisibleIf   func() bool
 }
 
 func (FolderPickerItem) isItemSchema() {}

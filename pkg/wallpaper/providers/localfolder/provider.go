@@ -210,14 +210,14 @@ func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, _ string) *schem
 					schema.FolderPickerItem{
 						Name:       "local_folder_add",
 						ButtonText: i18n.T("Add Folder"),
-						OnFolderSelected: func(path string) error {
+						OnFolderSelected: func(path string) (string, error) {
 							desc := path
 							if len(desc) > 100 {
 								desc = desc[:100]
 							}
-							_, err := p.cfg.AddLocalFolderQuery(desc, path, true)
-							return err
+							return p.cfg.AddLocalFolderQuery(desc, path, false)
 						},
+						EnableQuery: p.cfg.EnableImageQuery,
 					},
 					schema.QueryListItem{
 						GetQueries: func() []schema.Query {

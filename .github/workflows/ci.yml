@@ -95,6 +95,9 @@ jobs:
           echo "${{ github.event.release.tag_name }}" | Out-File -Encoding UTF8 version.txt
         shell: pwsh
 
+      - name: Sync Museum Collections
+        run: go run cmd/util/sync_collections/main.go -provider all -release ${{ github.event.release.tag_name }}
+
       - name: Build Application
         run: make build-win-amd64
 
@@ -163,6 +166,9 @@ jobs:
 
       - name: Update version.txt
         run: echo "${{ github.event.release.tag_name }}" > version.txt
+
+      - name: Sync Museum Collections
+        run: go run cmd/util/sync_collections/main.go -provider all -release ${{ github.event.release.tag_name }}
         
       - name: Import Apple Certificates
         run: |
@@ -265,6 +271,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+          cache: true
+
       - name: Download Windows Artifacts
         uses: actions/download-artifact@v4
         with:
@@ -340,6 +352,17 @@ jobs:
         env:
           SPICE_RELEASER_TOKEN: ${{ secrets.GORELEASER_GITHUB_TOKEN }}
           SKIP_DISTRIBUTION: ${{ github.event.release.prerelease }}
+
+      - name: Commit Synced Collections
+        run: |
+          go run cmd/util/sync_collections/main.go -provider all -release ${{ github.event.release.tag_name }}
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/collections/*.json pkg/wallpaper/providers/*/*.json
+          git commit -m "chore: sync museum collections for ${{ github.event.release.tag_name }}" || echo "No changes to commit"
+          git push origin HEAD:main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   distribute-release:
     name: Distribute (Prerelease Promotion)

@@ -10,6 +10,8 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/mod/semver"
+
 	"github.com/dixieflatline76/Spice/v2/config"
 	"github.com/dixieflatline76/Spice/v2/pkg/wallpaper"
 	"github.com/dixieflatline76/Spice/v2/util/log"
@@ -20,7 +22,7 @@ import (
 //   - "curated":  Pre-resolved image URLs for guaranteed masterpieces
 //   - "search":   Live queries via the Linked Art search API
 type Collection struct {
-	Version     int               `json:"version"`
+	Version     string            `json:"version"`
 	Description string            `json:"description"`
 	Entries     []CollectionEntry `json:"collections"`
 }
@@ -88,13 +90,13 @@ func InitRemoteCollection(cfg *wallpaper.Config) (*Collection, error) {
 			return
 		}
 
-		if col.Version >= embeddedCollection.Version {
+		if semver.Compare(col.Version, embeddedCollection.Version) >= 0 {
 			fetchedCollection = col
 			if err := saveCache(cachePath, col); err != nil {
 				log.Printf("Rijksmuseum: Failed to save cache: %v", err)
 			}
 		} else {
-			log.Printf("Rijksmuseum: Remote collection (v%d) is older than embedded (v%d), ignoring", col.Version, embeddedCollection.Version)
+			log.Printf("RIJKS: Remote collection (%s) is older than embedded (%s), ignoring remote", col.Version, embeddedCollection.Version)
 			fetchErr <- fmt.Errorf("remote version older than embedded")
 		}
 	}()
@@ -109,7 +111,7 @@ func InitRemoteCollection(cfg *wallpaper.Config) (*Collection, error) {
 	select {
 	case <-c:
 		if fetchedCollection != nil {
-			log.Printf("Rijksmuseum: Loaded remote collection (v%d, %d entries)", fetchedCollection.Version, len(fetchedCollection.Entries))
+			log.Printf("RIJKS: Successfully loaded remote collection (%s, %d entries)", fetchedCollection.Version, len(fetchedCollection.Entries))
 			return fetchedCollection, nil
 		}
 		log.Printf("Rijksmuseum: Remote fetch failed: %v", <-fetchErr)
@@ -119,17 +121,17 @@ func InitRemoteCollection(cfg *wallpaper.Config) (*Collection, error) {
 
 	// 4. Fallback to Cache
 	if cacheCol, err := loadCache(cachePath); err == nil {
-		if cacheCol.Version >= embeddedCollection.Version {
-			log.Printf("Rijksmuseum: Loaded cached collection (v%d)", cacheCol.Version)
+		if semver.Compare(cacheCol.Version, embeddedCollection.Version) >= 0 {
+			log.Printf("RIJKS: Loaded cached collection (%s)", cacheCol.Version)
 			return cacheCol, nil
 		}
-		log.Printf("Rijksmuseum: Cached collection (v%d) is older than embedded (v%d), ignoring", cacheCol.Version, embeddedCollection.Version)
+		log.Printf("RIJKS: Cached collection (%s) is older than embedded (%s), ignoring cache", cacheCol.Version, embeddedCollection.Version)
 	} else {
 		log.Printf("Rijksmuseum: Failed to load cache: %v", err)
 	}
 
 	// 5. Fallback to Embedded
-	log.Printf("Rijksmuseum: Using embedded collection (v%d)", embeddedCollection.Version)
+	log.Printf("RIJKS: Using embedded collection (%s)", embeddedCollection.Version)
 	return &embeddedCollection, nil
 }
 
@@ -150,7 +152,7 @@ func RefreshRemoteCollection() (*Collection, error) {
 		return nil, err
 	}
 
-	if col.Version >= embeddedCollection.Version {
+	if semver.Compare(col.Version, embeddedCollection.Version) >= 0 {
 		cacheDir := filepath.Join(config.GetWorkingDir(), "cache", "rijksmuseum")
 		cachePath := filepath.Join(cacheDir, cacheFileName)
 		_ = os.MkdirAll(cacheDir, 0755)
@@ -160,7 +162,7 @@ func RefreshRemoteCollection() (*Collection, error) {
 		return col, nil
 	}
 
-	log.Printf("Rijksmuseum: Remote collection (v%d) is not newer than embedded (v%d)", col.Version, embeddedCollection.Version)
+	log.Printf("RIJKS: Remote collection (%s) is not newer than embedded (%s), no update needed", col.Version, embeddedCollection.Version)
 	return nil, nil
 }
 

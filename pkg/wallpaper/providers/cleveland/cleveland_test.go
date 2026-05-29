@@ -61,8 +61,8 @@ func TestEmbeddedCollection(t *testing.T) {
 		t.Fatalf("failed to parse embedded collection: %v", err)
 	}
 
-	if col.Version < 1 {
-		t.Errorf("expected version >= 1, got %d", col.Version)
+	if col.Version == "" {
+		t.Error("expected non-empty version string")
 	}
 
 	if len(col.Entries) == 0 {

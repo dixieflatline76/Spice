@@ -27,14 +27,24 @@ func main() {
 
 	bumpType := os.Args[1]
 
-	// Safety Check: Ensure we are on 'main'
+	// Ensure we are on 'main', switching if necessary
 	currentBranch, err := getCurrentBranch()
 	if err != nil {
 		fmt.Println("Error determining current branch:", err)
 		os.Exit(1)
 	}
 	if currentBranch != "main" {
-		fmt.Printf("Error: Release bumps must be performed on 'main'. Current branch: '%s'\n", currentBranch)
+		fmt.Printf("Currently on '%s', switching to 'main'...\n", currentBranch)
+		if err := runGit("checkout", "main"); err != nil {
+			fmt.Println("Error checking out main:", err)
+			os.Exit(1)
+		}
+	}
+
+	// Always pull latest from origin
+	fmt.Println("Pulling latest from origin/main...")
+	if err := runGit("pull", "origin", "main"); err != nil {
+		fmt.Println("Error pulling from origin:", err)
 		os.Exit(1)
 	}
 
@@ -82,6 +92,15 @@ func main() {
 		fmt.Println("Error creating Git tag:", err)
 		os.Exit(1)
 	}
+
+	// Push the commit to main
+	fmt.Println("Pushing commit to origin/main...")
+	if err := runGit("push", "origin", "main"); err != nil {
+		fmt.Println("Error pushing to origin:", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("Successfully bumped to %s, tagged, and pushed.\n", newVersion.String())
 }
 
 // updateManifestVersion reads the manifest, updates the "version" field, and writes it back.
@@ -222,4 +241,12 @@ func getCurrentBranch() (string, error) {
 		return "", fmt.Errorf("git branch failed: %w", err)
 	}
 	return strings.TrimSpace(string(output)), nil
+}
+
+// runGit executes a git command with the given arguments.
+func runGit(args ...string) error {
+	cmd := exec.Command("git", args...) //nolint:gosec // Dev tool, input controlled
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }
