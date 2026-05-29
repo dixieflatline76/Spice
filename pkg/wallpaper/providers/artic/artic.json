@@ -1,9 +1,14 @@
 {
-    "version": "v2.5.5",
     "description": "Art Institute of Chicago: Landscape Masterpieces",
     "tours": {
+        "artic_asia": {
+            "ids": [
+                24645,
+                87008
+            ],
+            "name": "Asian Prints"
+        },
         "artic_highlights": {
-            "name": "⭐ Best of AIC",
             "ids": [
                 27992,
                 20684,
@@ -35,10 +40,10 @@
                 6010,
                 16564,
                 16568
-            ]
+            ],
+            "name": "⭐ Best of AIC"
         },
         "artic_impressionism": {
-            "name": "Impressionist Vistas",
             "ids": [
                 27992,
                 20684,
@@ -51,14 +56,9 @@
                 14598,
                 81537,
                 14624
-            ]
-        },
-        "artic_asia": {
-            "name": "Asian Prints",
-            "ids": [
-                24645,
-                87008
-            ]
+            ],
+            "name": "Impressionist Vistas"
         }
-    }
+    },
+    "version": "v2.5.6"
 }

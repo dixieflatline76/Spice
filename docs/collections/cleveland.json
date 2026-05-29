@@ -1,11 +1,6 @@
 {
-    "version": "v2.5.5",
-    "description": "Cleveland Museum of Art: Curated Collections",
     "collections": [
         {
-            "name": "⭐ Best of Cleveland",
-            "key": "cma_masterpieces",
-            "type": "curated",
             "ids": [
                 141639,
                 92937,
@@ -37,37 +32,42 @@
                 135185,
                 142298,
                 92936
-            ]
+            ],
+            "key": "cma_masterpieces",
+            "name": "⭐ Best of Cleveland",
+            "type": "curated"
         },
         {
-            "name": "American Painting",
             "key": "cma_american",
-            "type": "search",
-            "search_params": "has_image=1&type=Painting&department=American+Painting+and+Sculpture"
+            "name": "American Painting",
+            "search_params": "has_image=1\u0026type=Painting\u0026department=American+Painting+and+Sculpture",
+            "type": "search"
         },
         {
-            "name": "European Painting",
             "key": "cma_european",
-            "type": "search",
-            "search_params": "has_image=1&type=Painting&department=European+Painting+and+Sculpture"
+            "name": "European Painting",
+            "search_params": "has_image=1\u0026type=Painting\u0026department=European+Painting+and+Sculpture",
+            "type": "search"
         },
         {
-            "name": "Impressionism",
             "key": "cma_impressionism",
-            "type": "search",
-            "search_params": "has_image=1&type=Painting&q=impressionism"
+            "name": "Impressionism",
+            "search_params": "has_image=1\u0026type=Painting\u0026q=impressionism",
+            "type": "search"
         },
         {
-            "name": "Asian Art",
             "key": "cma_asian",
-            "type": "search",
-            "search_params": "has_image=1&type=Painting&department=Chinese+Art"
+            "name": "Asian Art",
+            "search_params": "has_image=1\u0026type=Painting\u0026department=Chinese+Art",
+            "type": "search"
         },
         {
-            "name": "Modern & Contemporary",
             "key": "cma_modern",
-            "type": "search",
-            "search_params": "has_image=1&type=Painting&department=Modern+European+Painting+and+Sculpture"
+            "name": "Modern \u0026 Contemporary",
+            "search_params": "has_image=1\u0026type=Painting\u0026department=Modern+European+Painting+and+Sculpture",
+            "type": "search"
         }
-    ]
+    ],
+    "description": "Cleveland Museum of Art: Curated Collections",
+    "version": "v2.5.6"
 }
