@@ -201,8 +201,11 @@ build-msix:
 	pwsh -Command "if (Test-Path dist/msix-staging) { Remove-Item -Recurse -Force dist/msix-staging }"
 	pwsh -Command "New-Item -ItemType Directory -Force -Path dist/msix-staging/Assets"
 	
+	@echo "Building MSIX binary with msstore tag..."
+	set GOOS=windows&& set GOARCH=amd64&& go build -tags "release msstore" -o bin/Spice-msstore.exe -ldflags "-H=windowsgui $(LDFLAGS_COMMON)" ./cmd/spice
+
 	@echo "Copying application and assets..."
-	pwsh -Command "Copy-Item bin/Spice.exe dist/msix-staging/"
+	pwsh -Command "Copy-Item bin/Spice-msstore.exe dist/msix-staging/Spice.exe"
 	pwsh -Command "Copy-Item msix/AppxManifest.xml dist/msix-staging/"
 	pwsh -Command "Copy-Item msix/Assets/* dist/msix-staging/Assets/"
 	
