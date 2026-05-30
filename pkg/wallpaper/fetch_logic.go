@@ -113,7 +113,7 @@ func (wp *Plugin) FetchNewImages(force bool, providerID ...string) {
 
 			// Batch Reshuffle Optimization (User Approach):
 			// Signal monitors to update their shuffle lists only after the entire batch is processed.
-			if totalQueued.Value() > 0 {
+			if totalQueued.Value() > 0 && (wp.interrupt == nil || !wp.interrupt.Value()) {
 				log.Debugf("[Fetch] Processed %d new images. Broadcasting shuffle update to monitors...", totalQueued.Value())
 				wp.dispatch(-1, CmdUpdateShuffle)
 
