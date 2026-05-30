@@ -13,6 +13,12 @@ import (
 	"github.com/dixieflatline76/Spice/v2/util/log"
 )
 
+const (
+	cachePrefetchMaxIdleRounds = 3
+	cachePrefetchRoundPause    = 2 * time.Second
+	cachePrefetchWaitPerRound  = 5 * time.Minute
+)
+
 // FetchNewImages iterates over active queries and submits new image jobs to the pipeline.
 // If force is true, it proceeds even if another fetch is in progress (ignoring the debounce lock).
 // If providerID is specified, only queries for that provider are fetched.
@@ -30,112 +36,122 @@ func (wp *Plugin) FetchNewImages(force bool, providerID ...string) {
 			if !isFavRequest && !force {
 				defer wp.fetchingInProgress.Set(false)
 			}
-			log.Debugf("Starting image fetch (Target: %s)...", func() string {
-				if targetProvider == "" {
-					return "ALL"
-				}
-				return targetProvider
-			}())
-
-			wp.downloadMutex.RLock()
-			if wp.cfg == nil {
-				wp.downloadMutex.RUnlock()
-				return
-			}
-			wp.cfg.mu.Lock()
-			queries := make([]ImageQuery, len(wp.cfg.Queries))
-			copy(queries, wp.cfg.Queries)
-			wp.cfg.mu.Unlock()
-			wp.downloadMutex.RUnlock()
-
-			totalQueued := util.NewSafeInt()
-			activeSources := make(map[string]bool)
-			var sourcesMutex sync.Mutex
-
-			// Initialize the global fetch context to allow remote aborts
-			fetchCtx := wp.StartFetchContext()
-
-			// Semaphore to limit concurrent fetches
-			sem := make(chan struct{}, 5)
-			var wg sync.WaitGroup
-
-			for _, q := range queries {
-				if !q.Active {
-					continue
-				}
-
-				// Targeted Fetch filter
-				if targetProvider != "" && q.Provider != targetProvider {
-					continue
-				}
-
-				p, ok := wp.providers[q.Provider]
-				if !ok {
-					log.Printf("Provider %s not found for query %s", q.Provider, q.ID)
-					continue
-				}
-
-				wg.Add(1)
-				go func(q ImageQuery, p provider.ImageProvider) {
-					defer wg.Done()
-
-					// Pattern: Early Exit (Circuit Breaker)
-					if tp, ok := p.(provider.ThrottledProvider); ok {
-						if tp.IsThrottled() {
-							log.Printf("Provider %s is currently throttled. Skipping fetch for query %s.", p.ID(), q.ID)
-							return
-						}
-					}
-
-					// Pattern: Pacing Penalty OUTSIDE of CPU semaphore
-					// Wait freely without holding any execution lock so we don't starve fast providers!
-					if limiter := wp.getAPILimiter(p); limiter != nil {
-						log.Debugf("[Pacing] Waiting for API rate limiter slot for provider %s...", p.ID())
-						if err := limiter.Wait(fetchCtx); err != nil {
-							log.Printf("Provider %s fetch aborted due to context cancellation during pacing: %v", p.ID(), err)
-							return
-						}
-					}
-
-					log.Debugf("[Fetch] %s Waiting for slot... (Lane Load: %d/%d)", p.ID(), len(sem), cap(sem))
-					select {
-					case sem <- struct{}{}:
-						defer func() { <-sem }()
-					case <-fetchCtx.Done():
-						return
-					}
-
-					wp.fetchFromProvider(fetchCtx, q, p, isFavRequest, &sourcesMutex, activeSources, totalQueued)
-				}(q, p)
-			}
-
-			wg.Wait()
-
-			// Batch Reshuffle Optimization (User Approach):
-			// Signal monitors to update their shuffle lists only after the entire batch is processed.
-			if totalQueued.Value() > 0 {
-				log.Debugf("[Fetch] Processed %d new images. Broadcasting shuffle update to monitors...", totalQueued.Value())
-				wp.dispatch(-1, CmdUpdateShuffle)
-
-				sources := []string{}
-				for s := range activeSources {
-					sources = append(sources, s)
-				}
-				sourceStr := strings.Join(sources, ", ")
-				if sourceStr != "" {
-					wp.manager.NotifyUser(i18n.T("Wallpaper Fetch"), i18n.Tf("Downloading {{.Count}} new images from {{.Sources}}...", map[string]any{"Count": totalQueued.Value(), "Sources": sourceStr}))
-				} else {
-					wp.manager.NotifyUser(i18n.T("Wallpaper Fetch"), i18n.Tf("Downloading {{.Count}} new images...", map[string]any{"Count": totalQueued.Value()}))
-				}
-			} else {
-				log.Println("Fetch returned 0 new images from all active queries.")
-			}
-
-			log.Println("Fetch cycle completed.")
+			wp.runFetchCycle(targetProvider, isFavRequest)
 		}()
 	} else {
 		log.Println("Fetch skipped - already in progress.")
 	}
+}
+
+// runFetchCycle executes a single provider fetch pass and returns how many jobs were queued.
+func (wp *Plugin) runFetchCycle(targetProvider string, isFavRequest bool) int {
+	log.Debugf("Starting image fetch (Target: %s)...", func() string {
+		if targetProvider == "" {
+			return "ALL"
+		}
+		return targetProvider
+	}())
+
+	wp.downloadMutex.RLock()
+	if wp.cfg == nil {
+		wp.downloadMutex.RUnlock()
+		return 0
+	}
+	wp.cfg.mu.Lock()
+	queries := make([]ImageQuery, len(wp.cfg.Queries))
+	copy(queries, wp.cfg.Queries)
+	wp.cfg.mu.Unlock()
+	wp.downloadMutex.RUnlock()
+
+	totalQueued := util.NewSafeInt()
+	activeSources := make(map[string]bool)
+	var sourcesMutex sync.Mutex
+
+	// Initialize the global fetch context to allow remote aborts
+	fetchCtx := wp.StartFetchContext()
+
+	// Semaphore to limit concurrent fetches
+	sem := make(chan struct{}, 5)
+	var wg sync.WaitGroup
+
+	for _, q := range queries {
+		if !q.Active {
+			continue
+		}
+
+		// Targeted Fetch filter
+		if targetProvider != "" && q.Provider != targetProvider {
+			continue
+		}
+
+		p, ok := wp.providers[q.Provider]
+		if !ok {
+			log.Printf("Provider %s not found for query %s", q.Provider, q.ID)
+			continue
+		}
+
+		wg.Add(1)
+		go func(q ImageQuery, p provider.ImageProvider) {
+			defer wg.Done()
+
+			// Pattern: Early Exit (Circuit Breaker)
+			if tp, ok := p.(provider.ThrottledProvider); ok {
+				if tp.IsThrottled() {
+					log.Printf("Provider %s is currently throttled. Skipping fetch for query %s.", p.ID(), q.ID)
+					return
+				}
+			}
+
+			// Pattern: Pacing Penalty OUTSIDE of CPU semaphore
+			// Wait freely without holding any execution lock so we don't starve fast providers!
+			if limiter := wp.getAPILimiter(p); limiter != nil {
+				log.Debugf("[Pacing] Waiting for API rate limiter slot for provider %s...", p.ID())
+				if err := limiter.Wait(fetchCtx); err != nil {
+					log.Printf("Provider %s fetch aborted due to context cancellation during pacing: %v", p.ID(), err)
+					return
+				}
+			}
+
+			log.Debugf("[Fetch] %s Waiting for slot... (Lane Load: %d/%d)", p.ID(), len(sem), cap(sem))
+			select {
+			case sem <- struct{}{}:
+				defer func() { <-sem }()
+			case <-fetchCtx.Done():
+				return
+			}
+
+			wp.fetchFromProvider(fetchCtx, q, p, isFavRequest, &sourcesMutex, activeSources, totalQueued)
+		}(q, p)
+	}
+
+	wg.Wait()
+
+	queued := totalQueued.Value()
+
+	// Batch Reshuffle Optimization (User Approach):
+	// Signal monitors to update their shuffle lists only after the entire batch is processed.
+	if queued > 0 {
+		log.Debugf("[Fetch] Processed %d new images. Broadcasting shuffle update to monitors...", queued)
+		wp.dispatch(-1, CmdUpdateShuffle)
+
+		if wp.manager != nil {
+			sources := []string{}
+			for s := range activeSources {
+				sources = append(sources, s)
+			}
+			sourceStr := strings.Join(sources, ", ")
+			if sourceStr != "" {
+				wp.manager.NotifyUser(i18n.T("Wallpaper Fetch"), i18n.Tf("Downloading {{.Count}} new images from {{.Sources}}...", map[string]any{"Count": queued, "Sources": sourceStr}))
+			} else {
+				wp.manager.NotifyUser(i18n.T("Wallpaper Fetch"), i18n.Tf("Downloading {{.Count}} new images...", map[string]any{"Count": queued}))
+			}
+		}
+	} else {
+		log.Println("Fetch returned 0 new images from all active queries.")
+	}
+
+	log.Println("Fetch cycle completed.")
+	return queued
 }
 
 // RefreshImagesAndPulse triggers a fetch and then updates the wallpaper.
@@ -171,7 +187,101 @@ func (wp *Plugin) RefreshImagesAndPulse() {
 			log.Println("[Init] Initial pulse timeout. Triggering anyway.")
 			wp.dispatch(-1, CmdNext)
 		}
+
+		// Backfill the cache toward the configured target (e.g. 1000 images).
+		wp.StartCachePrefetch()
 	}()
+}
+
+// StartCachePrefetch downloads additional pages in the background until the cache
+// target is reached or the active sources stop yielding new images.
+func (wp *Plugin) StartCachePrefetch() {
+	if wp.cfg == nil {
+		return
+	}
+	target := wp.cfg.GetCacheSize().Size()
+	if target <= 0 {
+		return
+	}
+	if wp.store.Count() >= target {
+		return
+	}
+
+	wp.prefetchMu.Lock()
+	if wp.prefetchRunning {
+		wp.prefetchMu.Unlock()
+		return
+	}
+	wp.prefetchRunning = true
+	wp.prefetchMu.Unlock()
+
+	go func() {
+		defer func() {
+			wp.prefetchMu.Lock()
+			wp.prefetchRunning = false
+			wp.prefetchMu.Unlock()
+		}()
+		wp.prefetchCacheUntilFull(target)
+	}()
+}
+
+func (wp *Plugin) prefetchCacheUntilFull(target int) {
+	log.Printf("[Prefetch] Starting cache backfill (%d/%d images)...", wp.store.Count(), target)
+
+	idleRounds := 0
+	for wp.store.Count() < target && idleRounds < cachePrefetchMaxIdleRounds {
+		startCount := wp.store.Count()
+
+		for wp.fetchingInProgress != nil && wp.fetchingInProgress.Value() {
+			time.Sleep(200 * time.Millisecond)
+		}
+
+		if !wp.fetchingInProgress.CompareAndSwap(false, true) {
+			time.Sleep(500 * time.Millisecond)
+			continue
+		}
+
+		queued := wp.runFetchCycle("", false)
+		wp.fetchingInProgress.Set(false)
+
+		wp.waitForStoreGrowth(startCount, cachePrefetchWaitPerRound)
+
+		endCount := wp.store.Count()
+		if endCount >= target {
+			log.Printf("[Prefetch] Cache target reached: %d/%d images.", endCount, target)
+			return
+		}
+
+		if endCount <= startCount && queued == 0 {
+			idleRounds++
+			log.Printf("[Prefetch] No progress this round (%d/%d). Idle streak: %d/%d.",
+				endCount, target, idleRounds, cachePrefetchMaxIdleRounds)
+		} else {
+			idleRounds = 0
+			log.Printf("[Prefetch] Progress: %d -> %d images (target %d).", startCount, endCount, target)
+		}
+
+		time.Sleep(cachePrefetchRoundPause)
+	}
+
+	log.Printf("[Prefetch] Stopped at %d/%d images.", wp.store.Count(), target)
+}
+
+func (wp *Plugin) waitForStoreGrowth(from int, timeout time.Duration) {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if wp.store.Count() > from {
+			return
+		}
+		if wp.fetchingInProgress != nil && !wp.fetchingInProgress.Value() {
+			// Fetch cycle finished; give the pipeline a moment to ingest results.
+			time.Sleep(750 * time.Millisecond)
+			if wp.store.Count() > from {
+				return
+			}
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
 }
 
 func (wp *Plugin) fetchFromProvider(fetchCtx context.Context, q ImageQuery, p provider.ImageProvider, isFavRequest bool, sourcesMutex *sync.Mutex, activeSources map[string]bool, totalQueued *util.SafeCounter) {

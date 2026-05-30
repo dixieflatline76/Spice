@@ -117,6 +117,10 @@ type Plugin struct {
 	globalFetchCancel context.CancelFunc
 	globalFetchMu     sync.Mutex
 
+	// Cache prefetch backfill
+	prefetchMu      sync.Mutex
+	prefetchRunning bool
+
 	// Timer Interrupt
 	resetTimerCh chan struct{}
 	tickerCancel context.CancelFunc
@@ -472,6 +476,7 @@ func (wp *Plugin) Activate() {
 		// Sync Collections and then fetch
 		wp.SyncProviders()
 		wp.FetchNewImages(false)
+		wp.StartCachePrefetch()
 	}
 	wp.ChangeWallpaperFrequency(wp.cfg.GetWallpaperChangeFrequency(), false)
 
