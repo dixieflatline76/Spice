@@ -536,6 +536,19 @@ func (mc *MonitorController) reprocessWithAnchor(anchor provider.CropAnchor) {
 	resKey := fmt.Sprintf("%dx%d", mc.Monitor.Rect.Dx(), mc.Monitor.Rect.Dy())
 	mc.Store.SetCropAnchor(img.ID, resKey, anchor)
 
+	// Mirror the anchor change into the local image copy so that
+	// mc.State.CurrentImage stays in sync with the store. Without this,
+	// the anchor popup would show the stale (pre-change) anchor until
+	// the user navigates away and back.
+	if img.CropAnchors == nil {
+		img.CropAnchors = make(map[string]provider.CropAnchor)
+	}
+	if anchor == provider.AnchorAuto {
+		delete(img.CropAnchors, resKey)
+	} else {
+		img.CropAnchors[resKey] = anchor
+	}
+
 	// 2. Find master path
 	ext := filepath.Ext(img.FilePath)
 	if ext == "" {
