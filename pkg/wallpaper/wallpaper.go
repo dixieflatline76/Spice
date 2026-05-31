@@ -486,6 +486,11 @@ func (wp *Plugin) Activate() {
 func (wp *Plugin) Deactivate() {
 	log.Print("Deactivating wallpaper plugin...")
 
+	// Cancel the fetch context FIRST to abort any in-progress fetch cycle.
+	// This must happen before stopAllWorkers() which blocks waiting for
+	// downloads, giving the fetch goroutine time to send a spurious notification.
+	wp.CancelFetchContext()
+
 	wp.downloadMutex.Lock()
 	if wp.stopNightlyRefresh != nil {
 		close(wp.stopNightlyRefresh)
@@ -509,7 +514,7 @@ func (wp *Plugin) Deactivate() {
 	if wp.pipeline != nil {
 		wp.pipeline.Stop()
 	}
-	wp.CancelFetchContext()
+	// Note: CancelFetchContext() already called at top of Deactivate().
 
 	// Stop Monitors
 	wp.monMu.Lock() // Write lock needed for map modification if we were to delete, but here just stopping

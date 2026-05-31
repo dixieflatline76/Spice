@@ -640,6 +640,7 @@ func (sa *SpiceApp) RebuildPreferencesContent(initialTab string) {
 						ApplyFunc: func(b bool) {
 							sa.appConfig.SetUpdateCheckEnabled(b)
 						},
+						VisibleIf: func() bool { return !config.IsStoreDistribution() },
 					},
 					schema.BoolItem{
 						Name:         "enableShortcuts",
@@ -866,7 +867,9 @@ func (sa *SpiceApp) Start() {
 
 	// Create the tray menu
 	saInstance.CreateTrayMenu()
-	go sa.StartStartupUpdateCheck()
+	if !config.IsStoreDistribution() {
+		go sa.StartStartupUpdateCheck()
+	}
 
 	// Activate all plugins
 	go func() {

@@ -425,10 +425,13 @@ func (sm *SettingsManager) renderBoolSetting(cfg *boolConfig, header *fyne.Conta
 		}
 	}
 
+	// Keep a reference to the label row so we can manage its visibility
+	var labelRow fyne.CanvasObject
 	if labelIsEmpty {
 		header.Add(check)
 	} else {
-		header.Add(NewSplitRow(label, check, SplitProportion.OneThird))
+		labelRow = NewSplitRow(label, check, SplitProportion.OneThird)
+		header.Add(labelRow)
 	}
 	if cfg.HelpContent != nil {
 		header.Add(cfg.HelpContent)
@@ -458,13 +461,29 @@ func (sm *SettingsManager) renderBoolSetting(cfg *boolConfig, header *fyne.Conta
 		return check.Checked
 	}
 
-	// Track if it has an EnabledIf or VisibleIf condition
+	// Track if it has an EnabledIf or VisibleIf condition.
+	// When VisibleIf is set, also register the label row and help text
+	// so they are hidden/shown together with the checkbox.
 	if cfg.EnabledIf != nil || cfg.VisibleIf != nil {
 		sm.managedWidgets = append(sm.managedWidgets, managedWidget{
 			widget:    check,
 			enabledIf: cfg.EnabledIf,
 			visibleIf: cfg.VisibleIf,
 		})
+		if cfg.VisibleIf != nil {
+			if labelRow != nil {
+				sm.managedWidgets = append(sm.managedWidgets, managedWidget{
+					widget:    labelRow,
+					visibleIf: cfg.VisibleIf,
+				})
+			}
+			if cfg.HelpContent != nil {
+				sm.managedWidgets = append(sm.managedWidgets, managedWidget{
+					widget:    cfg.HelpContent,
+					visibleIf: cfg.VisibleIf,
+				})
+			}
+		}
 	}
 
 	sm.allWidgets[cfg.Name] = check

@@ -168,6 +168,10 @@ func (w *windowsOS) getPrimaryMonitorFallback() ([]Monitor, error) {
 // SetWallpaper sets the desktop wallpaper
 // TODO(Stage 6): Use IDesktopWallpaper for per-monitor support (monitorID)
 func (w *windowsOS) SetWallpaper(imagePath string, monitorID int) error {
+	// Resolve MSIX-virtualized path so explorer.exe (outside the container)
+	// can find the file when setting it via IDesktopWallpaper COM API.
+	imagePath = resolveMSIXPath(imagePath)
+
 	imagePathUTF16, err := syscall.UTF16PtrFromString(imagePath)
 	if err != nil {
 		return err
