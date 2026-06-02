@@ -17,7 +17,7 @@ Spice is a premium wallpaper manager that automatically cycles high-quality wall
 **Note:** Spice lives in your **Windows system tray** or **macOS menu bar**, giving you instant control over your desktop environment.
 
 <p align="center">
-  <img src="images/screen3.png" alt="Spice Screenshot" width="1000">
+  <img src="images/screen4-jwst.webp" alt="Spice Screenshot" width="1000">
 </p>
 
 ## ⚙️ Why Spice? (A Modular Desktop Engine)
