@@ -12,7 +12,7 @@
   <a href="https://addons.mozilla.org/en-US/firefox/addon/spice-wallpaper-manager/"><img src="https://img.shields.io/amo/v/spice-wallpaper-manager?style=flat&color=orange&label=Firefox%20Add-ons" alt="Firefox Add-ons"></a>
 </p>
 
-Spice is a premium wallpaper manager that automatically cycles high-quality wallpapers from Wallhaven, Pexels, curated museum collections, your personal Google Photos, and Wikimedia Commons. It is available on the **Mac App Store** and runs quietly in the background, keeping your workspace fresh without interrupting your flow.
+Spice is a premium wallpaper manager that automatically cycles high-quality wallpapers from Wallhaven, Pexels, curated museum collections, your personal Google Photos, and Wikimedia Commons. It is available on the **Mac App Store** and **Microsoft Store** and runs quietly in the background, keeping your workspace fresh without interrupting your flow.
 
 **Note:** Spice lives in your **Windows system tray** or **macOS menu bar**, giving you instant control over your desktop environment.
 
@@ -111,11 +111,12 @@ brew install --cask spice
 *Alternatively, download the `.dmg` from the [Releases Page](https://github.com/dixieflatline76/Spice/releases/latest).*
 
 ### For Windows
-Install silently via Winget:
+Install directly from the [**Microsoft Store**](https://apps.microsoft.com/detail/9NPBQ3C91WPF).
+
+Alternatively, install silently via Winget:
 ```powershell
 winget install DixieFlatline76.Spice
 ```
-*Alternatively, download the `.exe` installer from the [Releases Page](https://github.com/dixieflatline76/Spice/releases/latest).*
 
 ### 🌐 Browser Companion Extension
 
