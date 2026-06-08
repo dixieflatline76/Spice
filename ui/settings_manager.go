@@ -726,8 +726,12 @@ func (sm *SettingsManager) renderButtonSetting(cfg *buttonConfig, header *fyne.C
 		}
 	}
 
+	// Keep a reference to the label row so we can manage its visibility
+	var labelRow fyne.CanvasObject
+
 	if !labelIsEmpty {
-		header.Add(NewSplitRow(cfg.Label, button, SplitProportion.OneThird))
+		labelRow = NewSplitRow(cfg.Label, button, SplitProportion.OneThird)
+		header.Add(labelRow)
 	} else {
 		header.Add(button)
 	}
@@ -736,13 +740,29 @@ func (sm *SettingsManager) renderButtonSetting(cfg *buttonConfig, header *fyne.C
 		header.Add(cfg.HelpContent)
 	}
 
-	// Track if it has an EnabledIf or VisibleIf condition
+	// Track if it has an EnabledIf or VisibleIf condition.
+	// When VisibleIf is set, also register the label row and help text
+	// so they are hidden/shown together with the button.
 	if cfg.EnabledIf != nil || cfg.VisibleIf != nil {
 		sm.managedWidgets = append(sm.managedWidgets, managedWidget{
 			widget:    button,
 			enabledIf: cfg.EnabledIf,
 			visibleIf: cfg.VisibleIf,
 		})
+		if cfg.VisibleIf != nil {
+			if labelRow != nil {
+				sm.managedWidgets = append(sm.managedWidgets, managedWidget{
+					widget:    labelRow,
+					visibleIf: cfg.VisibleIf,
+				})
+			}
+			if cfg.HelpContent != nil {
+				sm.managedWidgets = append(sm.managedWidgets, managedWidget{
+					widget:    cfg.HelpContent,
+					visibleIf: cfg.VisibleIf,
+				})
+			}
+		}
 	}
 }
 
