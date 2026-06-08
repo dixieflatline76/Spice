@@ -257,6 +257,12 @@ func (sa *SpiceApp) CreateTrayMenu() {
 	}, "prefs.png"))
 
 	items = append(items, fyne.NewMenuItemSeparator())
+	items = append(items, sa.CreateMenuItem(i18n.T("Help"), func() {
+		u, _ := url.Parse("https://spicebox.dev/support.html")
+		if u != nil {
+			_ = sa.OpenURL(u)
+		}
+	}, "help.png"))
 	items = append(items, sa.CreateMenuItem(i18n.T("About Spice"), func() {
 		sa.CreateAboutSplash()
 	}, "tray.png"))
