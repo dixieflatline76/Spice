@@ -9,6 +9,7 @@ import (
 	"image/gif"
 	"net/url"
 	"os"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -256,6 +257,12 @@ func (sa *SpiceApp) CreateTrayMenu() {
 	}, "prefs.png"))
 
 	items = append(items, fyne.NewMenuItemSeparator())
+	items = append(items, sa.CreateMenuItem(i18n.T("Help"), func() {
+		u, _ := url.Parse("https://spicebox.dev/support.html")
+		if u != nil {
+			_ = sa.OpenURL(u)
+		}
+	}, "help.png"))
 	items = append(items, sa.CreateMenuItem(i18n.T("About Spice"), func() {
 		sa.CreateAboutSplash()
 	}, "tray.png"))
@@ -623,6 +630,21 @@ func (sa *SpiceApp) RebuildPreferencesContent(initialTab string) {
 			{
 				Title: i18n.T("General Application Settings"),
 				Items: []schema.ItemSchema{
+					schema.ButtonItem{
+						Name:       "manageWindowsStartup",
+						Label:      i18n.T("Start with Windows:"),
+						Help:       i18n.T("Spice registers itself to start with Windows. Click to open Windows Settings to enable or disable this feature."),
+						ButtonText: i18n.T("Manage in Windows Settings"),
+						OnPressed: func() {
+							u, _ := url.Parse("ms-settings:startupapps")
+							if u != nil {
+								_ = sa.OpenURL(u)
+							}
+						},
+						VisibleIf: func() bool {
+							return runtime.GOOS == "windows"
+						},
+					},
 					schema.BoolItem{
 						Name:         "enableNotifications",
 						InitialValue: sa.appConfig.GetAppNotificationsEnabled(),
