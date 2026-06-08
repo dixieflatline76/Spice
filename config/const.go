@@ -38,10 +38,11 @@ func GetWorkingDir() string {
 var appDir string
 
 func init() {
-	if runtime.GOOS == "windows" {
+	switch runtime.GOOS {
+	case "windows":
 		userCacheDir, _ := os.UserCacheDir()
 		appDir = filepath.Join(userCacheDir, AppName)
-	} else if runtime.GOOS == "darwin" {
+	case "darwin":
 		// macOS: Use standard Application Support for sandbox compliance.
 		// os.UserConfigDir() correctly points to the sandbox container when enabled.
 		configDir, err := os.UserConfigDir()
@@ -52,7 +53,7 @@ func init() {
 			userHomeDir, _ := os.UserHomeDir()
 			appDir = filepath.Join(userHomeDir, "."+strings.ToLower(AppName))
 		}
-	} else {
+	default:
 		userHomeDir, _ := os.UserHomeDir()
 		appDir = filepath.Join(userHomeDir, "."+strings.ToLower(AppName))
 	}
