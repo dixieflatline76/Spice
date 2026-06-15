@@ -116,6 +116,19 @@ func (s *ImageStore) replace(img provider.Image) bool {
 			if len(img.DerivativePaths) == 0 && len(existing.DerivativePaths) > 0 {
 				log.Debugf("[Store] WARNING: replace() clearing DerivativePaths for %s (had %d paths)", img.ID, len(existing.DerivativePaths))
 			}
+			// Preserve user-set CropAnchors — the store is authoritative for user metadata.
+			// The pipeline never writes CropAnchors, so existing store values always win.
+			// The else branch ensures that if the user removed all anchors (via AnchorAuto)
+			// while the pipeline was in-flight, stale anchors from MergeExistingMetadata
+			// are not resurrected.
+			if len(existing.CropAnchors) > 0 {
+				img.CropAnchors = make(map[string]provider.CropAnchor, len(existing.CropAnchors))
+				for k, v := range existing.CropAnchors {
+					img.CropAnchors[k] = v
+				}
+			} else {
+				img.CropAnchors = nil
+			}
 			// Incremental bucket update: remove old entries, add new ones
 			s.removeFromBucketsLocked(existing.ID, existing.DerivativePaths)
 			s.images[i] = img
@@ -817,6 +830,13 @@ func (s *ImageStore) determineSyncAction(img provider.Image, activeQueryIDs map[
 	// permanently invisible to monitors. Delete it so the fetcher can
 	// re-download and reprocess it on the next cycle.
 	if len(img.DerivativePaths) == 0 {
+		// Preserve images with user-set CropAnchors: they are legitimately invalidated
+		// (not true zombies) and will be reprocessed via backlog healing on the next
+		// fetch cycle, where MergeExistingMetadata will copy the anchors forward.
+		if len(img.CropAnchors) > 0 {
+			log.Debugf("[Sync] Keeping invalidated image %s (has %d crop anchors)", img.ID, len(img.CropAnchors))
+			return ImageActionKeep
+		}
 		log.Debugf("[Sync] Recovery: deleting zombie image %s (master exists, flags match, but no derivatives)", img.ID)
 		return ImageActionDelete
 	}
