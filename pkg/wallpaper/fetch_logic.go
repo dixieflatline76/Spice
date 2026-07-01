@@ -38,8 +38,9 @@ func (wp *Plugin) FetchNewImages(force bool, providerID ...string) {
 			}())
 
 			wp.downloadMutex.RLock()
-			if wp.cfg == nil {
+			if wp.cfg == nil || wp.jobSubmitter == nil {
 				wp.downloadMutex.RUnlock()
+				log.Println("Fetch skipped - plugin not fully activated yet (pipeline not ready).")
 				return
 			}
 			wp.cfg.mu.Lock()
@@ -220,6 +221,17 @@ func (wp *Plugin) fetchFromProvider(fetchCtx context.Context, q ImageQuery, p pr
 
 	queuedForThisQuery := 0
 
+	// Defense in depth: the pipeline may not be ready yet (pre-Activate window) or may
+	// have been torn down by a concurrent Deactivate. Bail out without advancing pagination
+	// instead of dereferencing a nil jobSubmitter interface.
+	wp.downloadMutex.RLock()
+	submitter := wp.jobSubmitter
+	wp.downloadMutex.RUnlock()
+	if submitter == nil {
+		log.Printf("Fetch aborted for query %s: pipeline not available (plugin activating or deactivating).", q.ID)
+		return
+	}
+
 	// Instantiate the background cancellation context for this specific query
 	queryCtx := wp.GetOrCreateQueryContext(q.ID)
 
@@ -260,7 +272,7 @@ func (wp *Plugin) fetchFromProvider(fetchCtx context.Context, q ImageQuery, p pr
 			Provider: p,
 		}
 		// Submit blocking (until buffer clears or fetchCtx aborts)
-		if wp.jobSubmitter.Submit(fetchCtx, job) {
+		if submitter.Submit(fetchCtx, job) {
 			totalQueued.Increment()
 			queuedForThisQuery++
 		} else {

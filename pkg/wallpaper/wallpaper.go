@@ -369,8 +369,13 @@ func (wp *Plugin) Activate() {
 	}
 	// Create a new context for this activation cycle
 	wp.ctx, wp.cancel = context.WithCancel(context.Background())
-	wp.pipeline = NewPipeline(wp.ctx, wp.cfg, wp.store.(*ImageStore), wp.ProcessImageJob, wp.getAPILimiter, wp.getProcessLimiter)
-	wp.jobSubmitter = wp.pipeline
+	pipeline := NewPipeline(wp.ctx, wp.cfg, wp.store.(*ImageStore), wp.ProcessImageJob, wp.getAPILimiter, wp.getProcessLimiter)
+	// Publish the pipeline/submitter under the same lock used by the fetch goroutines that
+	// read wp.jobSubmitter, so the pre-Activate nil guard is race-free.
+	wp.downloadMutex.Lock()
+	wp.pipeline = pipeline
+	wp.jobSubmitter = pipeline
+	wp.downloadMutex.Unlock()
 
 	if err := wp.fm.EnsureDirs(); err != nil {
 		log.Printf("Warning: Error ensuring directories: %v. Some features may be limited.", err)
@@ -510,9 +515,15 @@ func (wp *Plugin) Deactivate() {
 
 	wp.stopAllWorkers()
 
-	// Stop Pipeline
-	if wp.pipeline != nil {
-		wp.pipeline.Stop()
+	// Stop Pipeline and clear the submitter so any fetch goroutine racing past the
+	// context cancellation bails out via the nil guard instead of using a stopped pipeline.
+	wp.downloadMutex.Lock()
+	pipeline := wp.pipeline
+	wp.jobSubmitter = nil
+	wp.pipeline = nil
+	wp.downloadMutex.Unlock()
+	if pipeline != nil {
+		pipeline.Stop()
 	}
 	// Note: CancelFetchContext() already called at top of Deactivate().
 
