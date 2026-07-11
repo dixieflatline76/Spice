@@ -5,7 +5,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
-	"math/rand"
+
 	"net/http"
 	"sort"
 	"strings"
@@ -190,17 +190,6 @@ func (p *Provider) fetchCurated(entry *CollectionEntry, page int) ([]provider.Im
 		return nil, nil
 	}
 
-	// Apply shuffle if enabled
-	if p.cfg.GetImgShuffle() {
-		shuffled := make([]CuratedItem, len(items))
-		copy(shuffled, items)
-		r := rand.New(rand.NewSource(time.Now().UnixNano())) //nolint:gosec // Not security-sensitive
-		r.Shuffle(len(shuffled), func(i, j int) {
-			shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
-		})
-		items = shuffled
-	}
-
 	// Paginate
 	const pageSize = 20
 	start := (page - 1) * pageSize
@@ -339,14 +328,6 @@ func (p *Provider) resolveSearchIDs(ctx context.Context, entry *CollectionEntry)
 
 	// Sort for stable pagination
 	sort.Strings(allIDs)
-
-	// Shuffle if enabled
-	if p.cfg.GetImgShuffle() {
-		r := rand.New(rand.NewSource(time.Now().UnixNano())) //nolint:gosec // Not security-sensitive
-		r.Shuffle(len(allIDs), func(i, j int) {
-			allIDs[i], allIDs[j] = allIDs[j], allIDs[i]
-		})
-	}
 
 	// Cache
 	p.searchCacheMu.Lock()

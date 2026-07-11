@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math/rand"
+
 	"net/http"
 	"sort"
 	"strings"
@@ -312,11 +312,6 @@ func (p *Provider) resolveQueryToIDs(ctx context.Context, query string) ([]int, 
 		idsCopy := make([]int, len(ids))
 		copy(idsCopy, ids)
 
-		if p.cfg.GetImgShuffle() {
-			rand.Shuffle(len(idsCopy), func(i, j int) {
-				idsCopy[i], idsCopy[j] = idsCopy[j], idsCopy[i]
-			})
-		}
 		ids = idsCopy
 	}
 

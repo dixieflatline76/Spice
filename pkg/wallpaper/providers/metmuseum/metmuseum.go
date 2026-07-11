@@ -5,7 +5,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
-	"math/rand"
+
 	"net/http"
 	"sort"
 	"strconv"
@@ -311,14 +311,6 @@ func (p *Provider) resolveQueryToIDs(ctx context.Context, query string) ([]int, 
 	// Logic: Stable Sort -> Optional Shuffle -> Cache
 	// 1. Sort to ensure deterministic baseline (fix random API order)
 	sort.Ints(ids)
-
-	// 2. Shuffle if enabled (Stable per session)
-	if p.cfg.GetImgShuffle() {
-		r := rand.New(rand.NewSource(time.Now().UnixNano())) //nolint:gosec // Not security-sensitive (UI Shuffle)
-		r.Shuffle(len(ids), func(i, j int) {
-			ids[i], ids[j] = ids[j], ids[i]
-		})
-	}
 
 	// 3. Cache it
 	p.idCacheMu.Lock()

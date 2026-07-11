@@ -5,7 +5,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
-	"math/rand"
+
 	"net/http"
 	"sort"
 	"strconv"
@@ -235,11 +235,6 @@ func (p *Provider) fetchCurated(ctx context.Context, entry *CollectionEntry, pag
 	ids := make([]int, len(entry.IDs))
 	copy(ids, entry.IDs)
 
-	if p.cfg.GetImgShuffle() {
-		r := rand.New(rand.NewSource(time.Now().UnixNano())) //nolint:gosec // Not security-sensitive
-		r.Shuffle(len(ids), func(i, j int) { ids[i], ids[j] = ids[j], ids[i] })
-	}
-
 	const pageSize = 20
 	start := (page - 1) * pageSize
 	if start >= len(ids) {
@@ -326,10 +321,6 @@ func (p *Provider) fetchSearch(ctx context.Context, entry *CollectionEntry, page
 		}
 
 		sort.Ints(allIDs)
-		if p.cfg.GetImgShuffle() {
-			r := rand.New(rand.NewSource(time.Now().UnixNano())) //nolint:gosec // Not security-sensitive
-			r.Shuffle(len(allIDs), func(i, j int) { allIDs[i], allIDs[j] = allIDs[j], allIDs[i] })
-		}
 
 		p.idCacheMu.Lock()
 		p.idCache[entry.Key] = allIDs
