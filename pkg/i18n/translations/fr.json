@@ -147,7 +147,6 @@
   "Never (Paused)": "Jamais (En pause)",
   "New York City, USA": "New York City, États-Unis",
   "Next Wallpaper": "Fond d'écran suivant",
-  "None": "Aucun",
   "Note (Windows): Due to OS limitations, to select a folder you must click on any image file inside the desired folder and then click 'Open'. The entire folder containing that image will be added.": "Remarque (Windows) : En raison des limitations du système d'exploitation, pour sélectionner un dossier, vous devez cliquer sur n'importe quel fichier image dans le dossier de votre choix, puis cliquer sur « Ouvrir ». Le dossier entier contenant cette image sera ajouté.",
   "One of America's most distinguished comprehensive art museums. Its Open Access collection spans 6,000 years of achievement in art, all freely available for any use.": "L'un des musées d'art les plus distingués d'Amérique. Sa collection en accès libre couvre 6 000 ans de réalisations artistiques, entièrement disponible pour tout usage.",
   "One of the world's great art museums, housing icons like Nighthawks and American Gothic.": "L'un des plus grands musées d'art au monde, abritant des icônes comme Nighthawks et American Gothic.",
@@ -206,7 +205,9 @@
   "Synchronize Spice with currently connected monitors. Use this if you plugged or unplugged a monitor while Spice was running.": "Synchroniser Spice avec les moniteurs actuellement connectés. Utilisez ceci si vous avez branché ou débranché un moniteur pendant que Spice fonctionnait.",
   "System": "Système",
   "System Default": "Par défaut du système",
+  "Taipei, Taiwan": "Taipei, Taïwan",
   "The Metropolitan Museum of Art": "Le Metropolitan Museum of Art",
+  "The National Palace Museum houses one of the largest collections of Chinese imperial artifacts and artworks in the world.": "Le Musée national du Palais abrite l'une des plus grandes collections d'artefacts et d'œuvres d'art impériaux chinois au monde.",
   "The crown jewel of New York City. From ancient Egyptian temples to modern masterpieces, The Met houses 5,000 years of humanity's greatest creative achievements.": "Le joyau de la couronne de New York. Des anciens temples égyptiens aux chefs-d'œuvre modernes, le Met abrite 5 000 ans des plus grandes réalisations créatives de l'humanité.",
   "The national museum of the Netherlands, home to Rembrandt's Night Watch, Vermeer's Milkmaid, and the finest collection of Dutch Golden Age masterpieces in the world.": "Le musée national des Pays-Bas, abritant La Ronde de nuit de Rembrandt, La Laitière de Vermeer et la plus belle collection de chefs-d'œuvre de l'Âge d'or hollandais au monde.",
   "Theme:": "Thème :",
@@ -246,5 +247,7 @@
   "wallhaven Username:": "Nom d'utilisateur wallhaven :",
   "wallhaven is a repository for high-quality, high-resolution wallpapers.": "wallhaven est un répertoire de fonds d'écran de haute qualité et haute résolution.",
   "{{.Title}} (1 active)": "{{.Title}} (1 actif)",
-  "{{.Title}} ({{.Count}} active)": "{{.Title}} ({{.Count}} actifs)"
+  "{{.Title}} ({{.Count}} active)": "{{.Title}} ({{.Count}} actifs)",
+  "國立故宮博物院 - National Palace Museum": "國立故宮博物院 - National Palace Museum",
+  "故宮 (NPM)": "故宮 (NPM)"
 }

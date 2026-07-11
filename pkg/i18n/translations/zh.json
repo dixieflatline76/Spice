@@ -147,7 +147,6 @@
   "Never (Paused)": "从不（已暂停）",
   "New York City, USA": "美国纽约市",
   "Next Wallpaper": "下一张壁纸",
-  "None": "无",
   "Note (Windows): Due to OS limitations, to select a folder you must click on any image file inside the desired folder and then click 'Open'. The entire folder containing that image will be added.": "注意 (Windows) ：由于操作系统的限制，要选择文件夹，您必须点击所需文件夹内的任何图像文件，然后点击“打开”。将添加包含该图像的整个文件夹。",
   "One of America's most distinguished comprehensive art museums. Its Open Access collection spans 6,000 years of achievement in art, all freely available for any use.": "美国最杰出的综合性艺术博物馆之一。其开放获取的藏品横跨6000年的艺术成就，全部免费供任何人使用。",
   "One of the world's great art museums, housing icons like Nighthawks and American Gothic.": "世界顶尖的艺术博物馆之一，馆藏包括《夜游者》和《美国哥特式》等图标性作品。",
@@ -206,7 +205,9 @@
   "Synchronize Spice with currently connected monitors. Use this if you plugged or unplugged a monitor while Spice was running.": "将 Spice 与当前连接的显示器同步。如果您在 Spice 运行时插拔了显示器，请使用此项。",
   "System": "系统",
   "System Default": "系统默认",
+  "Taipei, Taiwan": "台湾台北",
   "The Metropolitan Museum of Art": "大都会艺术博物馆",
+  "The National Palace Museum houses one of the largest collections of Chinese imperial artifacts and artworks in the world.": "国立故宫博物院收藏了世界上最庞大、最具代表性的中国古代历朝皇室文物与艺术品。",
   "The crown jewel of New York City. From ancient Egyptian temples to modern masterpieces, The Met houses 5,000 years of humanity's greatest creative achievements.": "纽约市的璀璨明珠。从古埃及神庙到现代杰作，大都会艺术博物馆收藏了人类 5,000 年来最伟大的创造力成就。",
   "The national museum of the Netherlands, home to Rembrandt's Night Watch, Vermeer's Milkmaid, and the finest collection of Dutch Golden Age masterpieces in the world.": "荷兰国家博物馆，收藏有伦勃朗的《夜巡》、维米尔的《倒牛奶的女仆》以及世界上最精美的荷兰黄金时代杰作。",
   "Theme:": "主题：",
@@ -246,5 +247,7 @@
   "wallhaven Username:": "wallhaven 用户名:",
   "wallhaven is a repository for high-quality, high-resolution wallpapers.": "wallhaven 是一个高质量、高分辨率壁纸的库。",
   "{{.Title}} (1 active)": "{{.Title}} (1 个已激活)",
-  "{{.Title}} ({{.Count}} active)": "{{.Title}} ({{.Count}} 个已激活)"
+  "{{.Title}} ({{.Count}} active)": "{{.Title}} ({{.Count}} 个已激活)",
+  "國立故宮博物院 - National Palace Museum": "國立故宮博物院 - National Palace Museum",
+  "故宮 (NPM)": "故宮 (NPM)"
 }

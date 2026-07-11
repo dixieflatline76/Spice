@@ -147,7 +147,6 @@
   "Never (Paused)": "[!! Neeveer (Paauuseed) !!]",
   "New York City, USA": "[!! Neew Yoork Ciity, UUSAA !!]",
   "Next Wallpaper": "[!! Neext Waallpaapeer !!]",
-  "None": "[!! Noonee !!]",
   "Note (Windows): Due to OS limitations, to select a folder you must click on any image file inside the desired folder and then click 'Open'. The entire folder containing that image will be added.": "[!! Nootee (Wiindoows): Duuee too OOS liimiitaatiioons, too seeleect aa fooldeer yoouu muust cliick oon aany iimaagee fiilee iinsiidee thee deesiireed fooldeer aand theen cliick 'OOpeen'. Thee eentiiree fooldeer coontaaiiniing thaat iimaagee wiill bee aaddeed. !!]",
   "One of America's most distinguished comprehensive art museums. Its Open Access collection spans 6,000 years of achievement in art, all freely available for any use.": "[!! OOnee oof AAmeeriicaa's moost diistiinguuiisheed coompreeheensiivee aart muuseeuums. IIts OOpeen AAcceess coolleectiioon spaans 6,000 yeeaars oof aachiieeveemeent iin aart, aall freeeely aavaaiilaablee foor aany uusee. !!]",
   "One of the world's great art museums, housing icons like Nighthawks and American Gothic.": "[!! OOnee oof thee woorld's greeaat aart muuseeuums, hoouusiing iicoons liikee Niighthaawks aand AAmeeriicaan Goothiic. !!]",
@@ -206,7 +205,9 @@
   "Synchronize Spice with currently connected monitors. Use this if you plugged or unplugged a monitor while Spice was running.": "[!! Synchrooniizee Spiicee wiith cuurreently coonneecteed mooniitoors. UUsee thiis iif yoouu pluuggeed oor uunpluuggeed aa mooniitoor whiilee Spiicee waas ruunniing. !!]",
   "System": "[!! Systeem !!]",
   "System Default": "[!! Systeem Deefaauult !!]",
+  "Taipei, Taiwan": "[!! Taaiipeeii, Taaiiwaan !!]",
   "The Metropolitan Museum of Art": "[!! Thee Meetroopooliitaan Muuseeuum oof AArt !!]",
+  "The National Palace Museum houses one of the largest collections of Chinese imperial artifacts and artworks in the world.": "[!! Thee Naatiioonaal Paalaacee Muuseeuum hoouusees oonee oof thee laargeest coolleectiioons oof Chiineesee iimpeeriiaal aartiifaacts aand aartwoorks iin thee woorld. !!]",
   "The crown jewel of New York City. From ancient Egyptian temples to modern masterpieces, The Met houses 5,000 years of humanity's greatest creative achievements.": "[!! Thee croown jeeweel oof Neew Yoork Ciity. Froom aanciieent EEgyptiiaan teemplees too moodeern maasteerpiieecees, Thee Meet hoouusees 5,000 yeeaars oof huumaaniity's greeaateest creeaatiivee aachiieeveemeents. !!]",
   "The national museum of the Netherlands, home to Rembrandt's Night Watch, Vermeer's Milkmaid, and the finest collection of Dutch Golden Age masterpieces in the world.": "[!! Thee naatiioonaal muuseeuum oof thee Neetheerlaands, hoomee too Reembraandt's Niight Waatch, Veermeeeer's Miilkmaaiid, aand thee fiineest coolleectiioon oof Duutch Gooldeen AAgee maasteerpiieecees iin thee woorld. !!]",
   "Theme:": "[!! Theemee: !!]",
@@ -246,5 +247,7 @@
   "wallhaven Username:": "[!! waallhaaveen UUseernaamee: !!]",
   "wallhaven is a repository for high-quality, high-resolution wallpapers.": "[!! waallhaaveen iis aa reepoosiitoory foor hiigh-quuaaliity, hiigh-reesooluutiioon waallpaapeers. !!]",
   "{{.Title}} (1 active)": "[!! {{.Title}} (1 aactiivee) !!]",
-  "{{.Title}} ({{.Count}} active)": "[!! {{.Title}} ({{.Count}} aactiivee) !!]"
+  "{{.Title}} ({{.Count}} active)": "[!! {{.Title}} ({{.Count}} aactiivee) !!]",
+  "國立故宮博物院 - National Palace Museum": "[!! 國立故宮博物院 - Naatiioonaal Paalaacee Muuseeuum !!]",
+  "故宮 (NPM)": "[!! 故宮 (NPM) !!]"
 }

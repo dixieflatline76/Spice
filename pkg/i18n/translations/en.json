@@ -147,7 +147,6 @@
   "Never (Paused)": "Never (Paused)",
   "New York City, USA": "New York City, USA",
   "Next Wallpaper": "Next Wallpaper",
-  "None": "None",
   "Note (Windows): Due to OS limitations, to select a folder you must click on any image file inside the desired folder and then click 'Open'. The entire folder containing that image will be added.": "Note (Windows): Due to OS limitations, to select a folder you must click on any image file inside the desired folder and then click 'Open'. The entire folder containing that image will be added.",
   "One of America's most distinguished comprehensive art museums. Its Open Access collection spans 6,000 years of achievement in art, all freely available for any use.": "One of America's most distinguished comprehensive art museums. Its Open Access collection spans 6,000 years of achievement in art, all freely available for any use.",
   "One of the world's great art museums, housing icons like Nighthawks and American Gothic.": "One of the world's great art museums, housing icons like Nighthawks and American Gothic.",
@@ -206,7 +205,9 @@
   "Synchronize Spice with currently connected monitors. Use this if you plugged or unplugged a monitor while Spice was running.": "Synchronize Spice with currently connected monitors. Use this if you plugged or unplugged a monitor while Spice was running.",
   "System": "System",
   "System Default": "System Default",
+  "Taipei, Taiwan": "Taipei, Taiwan",
   "The Metropolitan Museum of Art": "The Metropolitan Museum of Art",
+  "The National Palace Museum houses one of the largest collections of Chinese imperial artifacts and artworks in the world.": "The National Palace Museum houses one of the largest collections of Chinese imperial artifacts and artworks in the world.",
   "The crown jewel of New York City. From ancient Egyptian temples to modern masterpieces, The Met houses 5,000 years of humanity's greatest creative achievements.": "The crown jewel of New York City. From ancient Egyptian temples to modern masterpieces, The Met houses 5,000 years of humanity's greatest creative achievements.",
   "The national museum of the Netherlands, home to Rembrandt's Night Watch, Vermeer's Milkmaid, and the finest collection of Dutch Golden Age masterpieces in the world.": "The national museum of the Netherlands, home to Rembrandt's Night Watch, Vermeer's Milkmaid, and the finest collection of Dutch Golden Age masterpieces in the world.",
   "Theme:": "Theme:",
@@ -246,5 +247,7 @@
   "wallhaven Username:": "wallhaven Username:",
   "wallhaven is a repository for high-quality, high-resolution wallpapers.": "wallhaven is a repository for high-quality, high-resolution wallpapers.",
   "{{.Title}} (1 active)": "{{.Title}} (1 active)",
-  "{{.Title}} ({{.Count}} active)": "{{.Title}} ({{.Count}} active)"
+  "{{.Title}} ({{.Count}} active)": "{{.Title}} ({{.Count}} active)",
+  "國立故宮博物院 - National Palace Museum": "國立故宮博物院 - National Palace Museum",
+  "故宮 (NPM)": "故宮 (NPM)"
 }

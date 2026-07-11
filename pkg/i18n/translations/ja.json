@@ -147,7 +147,6 @@
   "Never (Paused)": "なし (一時停止中)",
   "New York City, USA": "アメリカ合衆国ニューヨーク市",
   "Next Wallpaper": "次の壁紙",
-  "None": "なし",
   "Note (Windows): Due to OS limitations, to select a folder you must click on any image file inside the desired folder and then click 'Open'. The entire folder containing that image will be added.": "注意 (Windows) : OSの制限により、フォルダを選択するには、目的のフォルダ内にある任意の画像ファイルをクリックしてから[開く]をクリックする必要があります。その画像が含まれるフォルダ全体が追加されます。",
   "One of America's most distinguished comprehensive art museums. Its Open Access collection spans 6,000 years of achievement in art, all freely available for any use.": "アメリカで最も著名な総合美術館の一つ。そのオープンアクセスコレクションは6,000年にわたる芸術の成果を網羅し、すべて自由に利用可能です。",
   "One of the world's great art museums, housing icons like Nighthawks and American Gothic.": "ナイトホークスやアメリカン・ゴシックなどの象徴的な作品を収蔵する、世界有数の美術館です。",
@@ -206,7 +205,9 @@
   "Synchronize Spice with currently connected monitors. Use this if you plugged or unplugged a monitor while Spice was running.": "Spice を現在接続されているモニターと同期させます。Spice の実行中にモニターを抜き差しした場合に使用します。",
   "System": "システム",
   "System Default": "システムデフォルト",
+  "Taipei, Taiwan": "台湾、台北",
   "The Metropolitan Museum of Art": "メトロポリタン美術館",
+  "The National Palace Museum houses one of the largest collections of Chinese imperial artifacts and artworks in the world.": "国立故宮博物院は、中国の歴代皇帝の至宝や美術品の世界最大級のコレクションを収蔵しています。",
   "The crown jewel of New York City. From ancient Egyptian temples to modern masterpieces, The Met houses 5,000 years of humanity's greatest creative achievements.": "ニューヨークの至宝。古代エジプトの神殿から現代の傑作まで、メトロポリタン美術館には人類の 5,000 年にわたる偉大な創造的功績が収蔵されています。",
   "The national museum of the Netherlands, home to Rembrandt's Night Watch, Vermeer's Milkmaid, and the finest collection of Dutch Golden Age masterpieces in the world.": "オランダの国立美術館。レンブラントの「夜警」、フェルメールの「牛乳を注ぐ女」、そして世界最高峰のオランダ黄金時代の傑作コレクションを所蔵しています。",
   "Theme:": "テーマ:",
@@ -246,5 +247,7 @@
   "wallhaven Username:": "wallhavenのユーザー名:",
   "wallhaven is a repository for high-quality, high-resolution wallpapers.": "wallhavenは、高品質で高解像度の壁紙のリポジトリです。",
   "{{.Title}} (1 active)": "{{.Title}} (1つアクティブ)",
-  "{{.Title}} ({{.Count}} active)": "{{.Title}} ({{.Count}}個アクティブ)"
+  "{{.Title}} ({{.Count}} active)": "{{.Title}} ({{.Count}}個アクティブ)",
+  "國立故宮博物院 - National Palace Museum": "國立故宮博物院 - National Palace Museum",
+  "故宮 (NPM)": "故宮 (NPM)"
 }

@@ -523,7 +523,11 @@ func (c *Config) GetAvoidSet() map[string]bool {
 func (c *Config) GetCacheSize() CacheSize {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return CacheSize(c.IntWithFallback(CacheSizePrefKey, int(Cache200Images))) // Default to 200 images
+	val := c.IntWithFallback(CacheSizePrefKey, int(Cache300Images)) // Default to 300 images
+	if val == 0 || val == 2 {
+		val = int(Cache300Images) // Migrate None (0) and 200 (2) to 300
+	}
+	return CacheSize(val)
 }
 
 // SetCacheSize sets the cache size enumeration and saves it
@@ -1349,4 +1353,9 @@ func (c *Config) GetMaxConcurrentProcessors() int {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.IntWithFallback(MaxConcurrentProcessorsPrefKey, 0)
+}
+
+// AddNationalPalaceMuseumQuery adds a new National Palace Museum query.
+func (c *Config) AddNationalPalaceMuseumQuery(description, url string, active bool) (string, error) {
+	return c.AddProviderQuery(description, url, "NationalPalaceMuseum", active, false)
 }

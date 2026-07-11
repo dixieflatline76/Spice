@@ -198,35 +198,31 @@ type CacheSize int
 
 // CacheSize constants
 const (
-	CacheNone CacheSize = iota
-	Cache100Images
-	Cache200Images
-	Cache300Images
-	Cache500Images
-	Cache1000Images
-	Cache5000Images
+	_                CacheSize = iota // 0 (formerly CacheNone)
+	Cache100Images                    // 1
+	_                                 // 2 (formerly Cache200Images)
+	Cache300Images                    // 3
+	Cache500Images                    // 4
+	Cache1000Images                   // 5
+	Cache5000Images                   // 6
+	Cache10000Images                  // 7
 )
 
 // CacheSizeValues maps CacheSize to its integer representation.
 var CacheSizeValues = map[CacheSize]int{
-	CacheNone:       0,
-	Cache100Images:  100,
-	Cache200Images:  200,
-	Cache300Images:  300,
-	Cache500Images:  500,
-	Cache1000Images: 1000,
-	Cache5000Images: 5000,
+	Cache100Images:   100,
+	Cache300Images:   300,
+	Cache500Images:   500,
+	Cache1000Images:  1000,
+	Cache5000Images:  5000,
+	Cache10000Images: 10000,
 }
 
 // String returns the string representation of a CacheSize.
 func (cs CacheSize) String() string {
 	switch cs {
-	case CacheNone:
-		return i18n.T("None")
 	case Cache100Images:
 		return "100"
-	case Cache200Images:
-		return "200"
 	case Cache300Images:
 		return "300"
 	case Cache500Images:
@@ -235,6 +231,8 @@ func (cs CacheSize) String() string {
 		return "1000"
 	case Cache5000Images:
 		return "5000"
+	case Cache10000Images:
+		return "10000"
 	default:
 		return "Unknown"
 	}
@@ -248,13 +246,12 @@ func (cs CacheSize) Size() int {
 // GetCacheSizes returns a list of all available cache sizes AS fmt.Stringer.
 func GetCacheSizes() []fmt.Stringer {
 	cacheSizes := []CacheSize{
-		CacheNone,
 		Cache100Images,
-		Cache200Images,
 		Cache300Images,
 		Cache500Images,
 		Cache1000Images,
 		Cache5000Images,
+		Cache10000Images,
 	}
 	stringers := make([]fmt.Stringer, len(cacheSizes))
 	for i, cs := range cacheSizes {

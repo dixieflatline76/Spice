@@ -147,7 +147,6 @@
   "Never (Paused)": "Никогда (Пауза)",
   "New York City, USA": "Нью-Йорк, США",
   "Next Wallpaper": "Следующие обои",
-  "None": "Нет",
   "Note (Windows): Due to OS limitations, to select a folder you must click on any image file inside the desired folder and then click 'Open'. The entire folder containing that image will be added.": "Примечание (Windows): Из-за ограничений ОС для выбора папки вы должны щелкнуть любой файл изображения внутри нужной папки, а затем нажать «Открыть». Будет добавлена вся папка, содержащая это изображение.",
   "One of America's most distinguished comprehensive art museums. Its Open Access collection spans 6,000 years of achievement in art, all freely available for any use.": "Один из самых выдающихся универсальных художественных музеев Америки. Его коллекция открытого доступа охватывает 6 000 лет достижений в искусстве, полностью доступная для любого использования.",
   "One of the world's great art museums, housing icons like Nighthawks and American Gothic.": "Один из величайших художественных музеев мира, где хранятся такие иконы, как «Полуночники» и «Американская готика».",
@@ -206,7 +205,9 @@
   "Synchronize Spice with currently connected monitors. Use this if you plugged or unplugged a monitor while Spice was running.": "Синхронизируйте Spice с подключенными мониторами. Используйте это, если вы подключали или отключали монитор во время работы Spice.",
   "System": "Системная",
   "System Default": "Системный по умолчанию",
+  "Taipei, Taiwan": "Тайбэй, Тайвань",
   "The Metropolitan Museum of Art": "Метрополитен-музей",
+  "The National Palace Museum houses one of the largest collections of Chinese imperial artifacts and artworks in the world.": "Национальный музей императорского дворца хранит одну из крупнейших в мире коллекций китайских императорских артефактов и произведений искусства.",
   "The crown jewel of New York City. From ancient Egyptian temples to modern masterpieces, The Met houses 5,000 years of humanity's greatest creative achievements.": "Жемчужина Нью-Йорка. От древнеегипетских храмов до современных шедевров, Метрополитен-музей хранит в себе 5000 лет величайших творческих достижений человечества.",
   "The national museum of the Netherlands, home to Rembrandt's Night Watch, Vermeer's Milkmaid, and the finest collection of Dutch Golden Age masterpieces in the world.": "Национальный музей Нидерландов, хранящий «Ночной дозор» Рембрандта, «Молочницу» Вермеера и лучшую в мире коллекцию шедевров голландского Золотого века.",
   "Theme:": "Тема:",
@@ -246,5 +247,7 @@
   "wallhaven Username:": "Имя пользователя wallhaven:",
   "wallhaven is a repository for high-quality, high-resolution wallpapers.": "wallhaven — это репозиторий для высококачественных обоев высокого разрешения.",
   "{{.Title}} (1 active)": "{{.Title}} (1 активно)",
-  "{{.Title}} ({{.Count}} active)": "{{.Title}} ({{.Count}} активно)"
+  "{{.Title}} ({{.Count}} active)": "{{.Title}} ({{.Count}} активно)",
+  "國立故宮博物院 - National Palace Museum": "國立故宮博物院 - National Palace Museum",
+  "故宮 (NPM)": "故宮 (NPM)"
 }

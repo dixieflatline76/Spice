@@ -24,10 +24,13 @@ type Language struct {
 // "untranslated" check.
 var allowIdenticalToEnglish = map[string]bool{
 	// Proper nouns — museum names used internationally in English
-	"Art Institute of Chicago":       true,
-	"The Metropolitan Museum of Art": true,
-	"Rijksmuseum":                    true,
-	"Cleveland Museum of Art":        true,
+	"Art Institute of Chicago":         true,
+	"The Metropolitan Museum of Art":   true,
+	"Rijksmuseum":                      true,
+	"Cleveland Museum of Art":          true,
+	"Taipei, Taiwan":                   true,
+	"故宮 (NPM)":                         true,
+	"國立故宮博物院 - National Palace Museum": true,
 
 	// International loanwords / identical across many languages
 	"App":       true,
