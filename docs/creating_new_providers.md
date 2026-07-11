@@ -11,7 +11,10 @@ Before starting, familiarize yourself with these documents in order:
 3.  **`internal_developer_context.md` §1–4** — Concurrency model, existing provider deep-dives, and the extension guide.
 4.  **`creating_new_museum_providers.md`** — Only if building a cultural institution provider.
 
-## 1. Provider Architecture
+## 1. Provider Architecture & Purpose
+
+**The "Why"**: Spice is designed so that the core engine (`store.go`, `pipeline.go`, `monitor_controller.go`) never has to know about the specifics of an image API. The general purpose of a *Provider* is to act as a **dumb, stateless bridge** between a remote API (or local filesystem) and Spice's ingestion pipeline. 
+A provider's only job is to translate user settings into a deterministic list of image metadata. It does not shuffle, it does not manage its own disk cache, and it does not draw its own UI. This strict separation of concerns is what allows Spice to run 15 different image sources simultaneously without turning the core logic into spaghetti.
 
 Spice uses a **Registry Pattern** to decouple providers. Providers are standalone packages in `pkg/wallpaper/providers/<name>`.
 
@@ -90,6 +93,9 @@ Spice uses a **Hexagonal Architecture** for settings UI. Providers never import 
   * **Implementation**: Use `fyne.NewStaticResource("Name", []byte{...})`. This is the **only** method that returns a Fyne type (via `interface{}`), since icons are inherently platform-specific resources.
 
 ## 3. Configuration & Settings Logic (Declarative Schema)
+
+**The "Why" (Hexagonal Architecture)**: Spice's UI is built on Fyne, but Fyne is heavily tied to the host OS graphics layer. If providers imported Fyne directly to draw their settings tabs, the entire provider layer would become untestable without a running X11/Wayland/Windows graphics context. 
+To solve this, Spice uses a **Hexagonal Architecture**. Providers are 100% UI-framework agnostic. They define what their settings should look like using pure Go structs (`schema.PanelSchema`), and a central rendering engine (`ui/settings_manager.go`) translates that schema into actual Fyne widgets. This makes provider code entirely unit-testable and decouples our core logic from our chosen GUI toolkit.
 
 Do **NOT** modify the global `Config` struct. Use `fyne.Preferences` for storage and `schema.*` types for UI declaration.
 
@@ -232,60 +238,23 @@ schema.BoolItem{
 3.  **Timeouts**: `OnVerify` should use `context.WithTimeout` (10s) internally.
 4.  **No Manual Wiring**: Unlike the old pattern, you don't need to call `sm.SeedBaseline()`, `sm.CommitSetting()`, or `sm.RefreshUI()` — the engine does it.
 
-## 5. Pagination & Randomization Stability
+## 5. Pagination & The FIFO Cache Rule (ZERO SHUFFLING)
 
-APIs often return results in inconsistent orders (e.g., "Page 2" might contain items from "Page 1").
-If your provider supports **Pagination** AND **Shuffling**, you must implement the **"Cache-First Stable Shuffle"** pattern.
+<AI_AGENT_INSTRUCTION>
+**CRITICAL**: You MUST NEVER shuffle the array of IDs returned by an API inside the provider. The provider's ONLY job is to return a stable, deterministic, paginated list. Shuffling is strictly handled downstream by the `MonitorController` display actor.
+</AI_AGENT_INSTRUCTION>
 
-### 5.1 The Pattern (resolveQueryToIDs)
+### 5.1 The `store.go` FIFO Queue
+Spice manages its downloaded images using a global, user-configured cache limit (e.g., 50 images) implemented in `pkg/wallpaper/store.go`. 
+The `Sync()` method acts as a strict **FIFO (First-In, First-Out)** queue:
+1. As the provider returns pages, new images are downloaded and appended to the store's list.
+2. During the nightly or periodic sync, if the total number of images exceeds the cache limit (e.g., `len(images) > 50`), `store.go` slices off the *oldest* excess images from the front of the array and permanently deletes them from disk.
 
-1.  **Cache First**: Check an internal `map[string][]int` for already resolved IDs.
-    *   *Why*: Ensures Page 2 sees the exact same list as Page 1.
-2.  **Fetch & Sort**: Download all IDs, then `sort.Ints(ids)`.
-    *   *Why*: Creates a deterministic baseline, fixing API jitter.
-3.  **Shuffle (If Enabled)**: If `cfg.GetImgShuffle()` is true, shuffle the sorted list using a session-stable seed.
-    *   *Why*: Supports the user's "Shuffle" feature without breaking pagination.
-4.  **Store**: Save the final list to the cache.
+### 5.2 Why Providers Must Never Shuffle
+Because `store.go` relies on a deterministic FIFO queue, **if a provider shuffles its return array**, it breaks the queue. `store.go` will see a different list of active IDs every time it syncs, causing it to thrash—randomly pruning and deleting images from the user's hard drive because it thinks the "active" items have changed.
 
-### 5.2 Example Implementation
-
-```go
-type Provider struct {
-    // ...
-    idCache   map[string][]int
-    idCacheMu sync.RWMutex
-}
-
-func (p *Provider) resolveIDs(query string) ([]int, error) {
-    p.idCacheMu.RLock()
-    if cached, ok := p.idCache[query]; ok {
-        p.idCacheMu.RUnlock()
-        return cached, nil
-    }
-    p.idCacheMu.RUnlock()
-
-    // 1. Fetch
-    ids, _ := fetchFromAPI(query)
-
-    // 2. Sort (Deterministic Baseline)
-    sort.Ints(ids)
-
-    // 3. Shuffle (If User Wants It)
-    if p.cfg.GetImgShuffle() {
-        r := rand.New(rand.NewSource(time.Now().UnixNano()))
-        r.Shuffle(len(ids), func(i, j int) {
-            ids[i], ids[j] = ids[j], ids[i]
-        })
-    }
-
-    // 4. Cache
-    p.idCacheMu.Lock()
-    p.idCache[query] = ids
-    p.idCacheMu.Unlock()
-
-    return ids, nil
-}
-```
+### 5.3 Memory Leak Warning (No Memory-Based Pagination)
+Do not fetch the entire collection upfront, cram it into an unbounded `map[string][]int` cache in the provider, and then drip-feed it locally. This causes permanent memory leaks. You must use the remote API's native pagination parameters (e.g., `limit` and `offset` or `page`) directly inside `FetchImages()`.
 
 ## 6. ID Namespacing (Automatic)
 

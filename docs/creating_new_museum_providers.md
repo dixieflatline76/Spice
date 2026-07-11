@@ -4,12 +4,13 @@ This guide details how to implement a new "Museum Template" provider in Spice, m
 
 ## 1. The Core Philosophy
 
-Unlike generic image providers where users type arbitrary search queries, **Museum Providers are curated experiences.**
+**The "Why"**: The general purpose of a Museum Provider is to surface high-quality, public domain fine art. However, museums are not generic image aggregators. If we simply presented a search bar for the Metropolitan Museum of Art, users might search for "dogs" and get pictures of ancient, broken clay dog figurines instead of beautiful wallpapers. 
+To guarantee a premium aesthetic experience, Museum Providers are strictly **curated experiences**. We act as the museum curators for the user, doing the heavy lifting of finding the 50 best landscapes or portraits and bundling them into one-click toggles.
 
-*   **No User Search Bars:** Users do not type search terms.
+*   **No User Search Bars:** Users do not type search terms because raw museum API results are wildly unpredictable in quality.
 *   **Curated Tours:** Collections are presented as fixed "Tours" or "Highlights" (e.g., "Director's Cut", "Impressionist Vistas", "American Wing").
-*   **Evangelist UI:** The UI is designed to promote the institution, with a large header, romance copy, and links to "Plan a Visit" and donate.
-*   **Remote Curation (CDN):** The list of IDs that define a "Tour" is often driven by a remote JSON file on GitHub, allowing the developer to update the curated collections without shipping a new binary of Spice.
+*   **Evangelist UI:** The UI is designed to promote the institution, with a large header, romance copy, and links to "Plan a Visit" and donate. We use their open APIs for free, so we give them premium placement in our settings UI.
+*   **Remote Curation (CDN):** The list of IDs that define a "Tour" is driven by a remote JSON file on GitHub. This allows developers/curators to update the curated collections (e.g., adding newly digitized masterpieces) without shipping a new binary of Spice.
 
 ## 2. Directory Structure
 
@@ -112,21 +113,15 @@ The curated lists map a logical string key to a slice of integer/string object I
 }
 ```
 
-## 5. Overriding `resolveQueryToIDs`
+## 5. Overriding `resolveQueryToIDs` (DEPRECATED)
 
-In `FetchImages`, queries are not search strings, but the map keys (like `highlights`). 
+<AI_AGENT_INSTRUCTION>
+**CRITICAL**: You MUST NEVER shuffle IDs returned by an API inside the provider, and you MUST NEVER cache IDs in unbounded memory maps (`idCache` or `poolCache`). The provider's ONLY job is to return a stable, deterministic, paginated list using native API pagination parameters (like `offset` or `limit`).
+</AI_AGENT_INSTRUCTION>
 
-```go
-func (p *Provider) resolveQueryToIDs(ctx context.Context, query string) ([]int, error) {
-    // 1. Check ID Cache
-    // 2. Look up `query` in p.curatedList.Tours[query].IDs
-    // 3. Fallback to API search if query is an unexpected Custom Search or Object ID
-    // 4. Stable Sort IDs
-    // 5. Shuffle if p.cfg.GetImgShuffle() is true
-    // 6. Store in Cache and return
-}
-```
-*Note: Stable ID sorting is critical to ensure API pagination aligns safely with shuffle mechanics.*
+In the past, `resolveQueryToIDs` was used to fetch the entire collection upfront, cram it into an unbounded memory map, and shuffle it locally. **This is strictly banned.** It causes infinite memory leaks and breaks `store.go`'s FIFO cache queue limit.
+
+If you are implementing a new museum provider, you must stream the results directly from the museum's REST API natively in `FetchImages` using their pagination parameters. For curated lists (like `npm.json`), simply read the `IDs` array and slice it dynamically using `pageSize`.
 
 ## 6. Resolution & Shape Filtering
 

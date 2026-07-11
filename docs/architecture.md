@@ -126,6 +126,8 @@ The thread-safe data repository.
 - **Resolution Buckets**: `map[string][]string` mapping `"WxH"` → list of compatible image IDs. Enables instant per-monitor image selection
 - **Persistence**: Debounced (2s) JSON writes using snapshot-under-RLock
 - **Writers**: Pipeline (hot path: `Add`, `MarkSeen`) and Plugin (admin: `Remove`, `Wipe`, `Sync`, `RemoveByQueryID`)
+- **FIFO Cache Management (`Sync`)**: The store enforces a global, user-configured cache size limit (e.g., 50 images). The `Sync` method acts as a strict **FIFO (First-In, First-Out)** queue. As the Pipeline downloads new images, they are appended to the `s.images` slice. During the nightly or periodic sync, if `len(s.images) > limit`, the Store slices off the *oldest* excess images from the front of the array and permanently deletes their physical `.jpg` files from disk via an asynchronous background job.
+	- **Architectural Rule**: Because the Store manages its own cache via FIFO truncation, **Providers must never randomly shuffle their returned API arrays.** Providers must return deterministic pages so the Store can predictability ingest the newest API items while deleting the oldest. The `MonitorController` manages all actual wallpaper shuffling for display.
 
 ### 4.3 Pipeline (`pipeline.go`)
 
