@@ -1,0 +1,76 @@
+{
+    "version": "v1.0.0",
+    "description": "National Palace Museum (Taiwan): Curated Antiquities",
+    "collections": [
+        {
+            "key": "npm_masterpieces",
+            "name": "⭐ Best of NPM",
+            "type": "curated",
+            "ids": [
+                299,
+                72,
+                19235,
+                223,
+                27930,
+                28456,
+                42247,
+                27948,
+                26378,
+                3,
+                1831,
+                27328,
+                26229,
+                2502,
+                71740,
+                1092,
+                1500,
+                374,
+                1702,
+                211,
+                1499,
+                1846,
+                1501,
+                62864,
+                1145,
+                53674,
+                1166
+            ]
+        },
+        {
+            "key": "npm_ceramics",
+            "name": "Ceramics (陶瓷器)",
+            "type": "search",
+            "search_params": "rblType=陶瓷器"
+        },
+        {
+            "key": "npm_jades",
+            "name": "Jades (玉器)",
+            "type": "search",
+            "search_params": "rblType=玉器"
+        },
+        {
+            "key": "npm_bronzes",
+            "name": "Bronzes (銅器)",
+            "type": "search",
+            "search_params": "rblType=銅器"
+        },
+        {
+            "key": "npm_song",
+            "name": "Song Dynasty (960–1279)",
+            "type": "search",
+            "search_params": "rblYear=960~1279~Song Dynasty\u0026rblType=陶瓷器"
+        },
+        {
+            "key": "npm_ming",
+            "name": "Ming Dynasty (1368–1644)",
+            "type": "search",
+            "search_params": "rblYear=1368~1644~Ming dynasty"
+        },
+        {
+            "key": "npm_qing",
+            "name": "Qing Dynasty (1644–1911)",
+            "type": "search",
+            "search_params": "rblYear=1644~1911~Qing dynasty"
+        }
+    ]
+}
