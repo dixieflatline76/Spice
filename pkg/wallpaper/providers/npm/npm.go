@@ -249,7 +249,7 @@ func (p *Provider) fetchImageByCID(ctx context.Context, cid int) (*provider.Imag
 	img := &provider.Image{
 		ID:          strconv.Itoa(cid),
 		Path:        imageURL,
-		Attribution: fmt.Sprintf("故宮 (NPM) - %s", title),
+		Attribution: title,
 		ViewURL:     viewURL,
 		Provider:    ProviderName,
 	}

@@ -32,6 +32,11 @@ var allowIdenticalToEnglish = map[string]bool{
 	"故宮 (NPM)":                         true,
 	"國立故宮博物院 - National Palace Museum": true,
 
+	// Getty Proper Nouns
+	"The Getty":                true,
+	"The J. Paul Getty Museum": true,
+	"Los Angeles, CA, USA":     true,
+
 	// International loanwords / identical across many languages
 	"App":       true,
 	"Community": true,

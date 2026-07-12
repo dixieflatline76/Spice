@@ -106,12 +106,31 @@ The curated lists map a logical string key to a slice of integer/string object I
   "description": "CMA Highlights",
   "tours": {
     "highlights": {
+      "type": "curated",
       "name": "Director's Cut",
       "ids": [ 1234, 5678, 91011 ]
+    },
+    "european_paintings": {
+      "type": "search",
+      "name": "European Paintings",
+      "query": "departmentId=11&q=painting"
     }
   }
 }
 ```
+
+### 4.3 Curated vs Dynamic Queries
+Museum Providers typically support two types of collections, differentiated by the `"type"` field in the JSON:
+1. **Curated (`"type": "curated"`)**: The most common type. A hardcoded array of `ids` that point directly to hand-picked masterpieces.
+2. **Dynamic Search (`"type": "search"`)**: Used when a museum has an excellent API and you want to pull live results (e.g., all items in a specific department). Instead of `ids`, it provides a `query` string (like URL parameters). The provider code reads this `query` string and dynamically fetches a list of IDs from the museum's REST API search endpoint before paginating through them.
+
+### 4.4 Providers Without Search/Listing APIs
+Some modern museum APIs (especially strictly academic Linked Open Data APIs like the J. Paul Getty Museum) do not expose public, easily paginated REST `search` endpoints. Instead, they may only support complex academic query languages (like SPARQL) or require you to already know the exact Object UUID.
+
+If you encounter a museum without a functional search/listing API:
+* **Strictly Curated Only**: Do not attempt to reverse-engineer their frontend GraphQL or write brittle web scrapers to dynamically "search" the museum. The provider must be implemented as strictly `curated` only.
+* **Hand-Curate the JSON**: You must manually gather the Object IDs (or write an offline script to scrape the Object IDs once) and embed them directly into the `"ids": []` array of your remote curation JSON.
+* **Filter in Code**: In your provider's `FetchImages` method, if the requested collection type is not `"curated"`, simply return `nil, nil` to gracefully ignore unsupported dynamic queries.
 
 ## 5. Overriding `resolveQueryToIDs` (DEPRECATED)
 
@@ -156,3 +175,39 @@ Museum APIs are often fragile or strictly rate-limited.
 *   **AIC approach:** Uses a highly strict `http.RoundTripper` middleware containing a `sync.Mutex` and a mandatory 1.5s delay between every single HTTP request.
 
 Determine your provider's limits and implement responsible scraping. If using IIIF for high-res images, construct standard IIIF URLs to offload processing to standard museum image servers.
+
+
+## 7. Localization (i18n) for Museums
+
+When implementing your UI panels, all user-facing strings must be wrapped in `i18n.T("...")`. 
+
+However, Museum Providers frequently include **Proper Nouns** (like the museum's name, e.g., "The J. Paul Getty Museum") and geographic locations (e.g., "Los Angeles, CA, USA") that do not translate and are perfectly valid to remain as their English equivalents in other languages.
+
+Because our CI pipelines enforce strict translation checks (`make check-i18n`) and fail if a translated string is identical to the English original, you must whitelist these specific proper nouns.
+
+**To whitelist proper nouns:**
+1. Open `cmd/util/gen_i18n/main.go`.
+2. Locate the `allowIdenticalToEnglish` map.
+3. Add your museum's proper nouns to this list:
+   ```go
+   "The J. Paul Getty Museum": true,
+   "Los Angeles, CA, USA":     true,
+   ```
+
+For a full guide on extracting strings and handling dynamic keys, see `docs/creating_new_providers.md` **Section 8: Internationalization (i18n) Best Practices**.
+
+## 8. Attribution Strings
+
+When setting the `Attribution` field on the `provider.Image` struct, **DO NOT prepend the museum's name** (e.g., `"The Getty - [Title]"` or `"NPM - [Title]"`). 
+
+Because museum providers typically return `provider.AttributionBy` from their `GetAttributionType()` method, the frontend UI automatically handles prepending the provider's Title to the image metadata (e.g., rendering as "Photo by The J. Paul Getty Museum").
+
+**Correct Pattern:**
+Use only the artwork title and the author (or artist).
+```go
+img := &provider.Image{
+    Attribution: fmt.Sprintf("%s - %s", author, title),
+}
+```
+
+If you hardcode the museum name into the attribution string, it will result in redundant UI text for the user (e.g., "By The Getty - The Getty - [Title]").

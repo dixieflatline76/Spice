@@ -5,6 +5,7 @@ go 1.25.0
 require fyne.io/fyne/v2 v2.7.4
 
 require (
+	github.com/cayleygraph/quad v1.3.0 // indirect
 	github.com/clipperhouse/uax29/v2 v2.2.0 // indirect
 	github.com/danieljoos/wincred v1.2.3 // indirect
 	github.com/fyne-io/oksvg v0.2.0 // indirect
@@ -15,6 +16,7 @@ require (
 	github.com/kr/text v0.2.0 // indirect
 	github.com/mattn/go-runewidth v0.0.24 // indirect
 	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646 // indirect
+	github.com/pquerna/cachecontrol v0.2.0 // indirect
 	github.com/stretchr/objx v0.5.3 // indirect
 )
 
@@ -55,6 +57,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/harry1453/go-common-file-dialog v1.2.1-0.20250428222125-566edcc205d7
+	github.com/piprate/json-gold v0.8.0
 	github.com/zalando/go-keyring v0.2.8
 	golang.design/x/hotkey v0.4.1
 	golang.org/x/image v0.36.0

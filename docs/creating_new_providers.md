@@ -289,7 +289,7 @@ For full details, see `architecture.md` §3.12.
  You do **not** need to manually edit `cmd/spice/main.go` anymore. The `//go:generate` directive at the top of `main.go` handles this.
 
 
-## 8. Internationalization (i18n)
+## 8. Internationalization (i18n) Best Practices
 
 All user-facing strings in your provider **must** use the `i18n` package. This includes settings labels, validation errors, descriptions, button text, and tray menu items.
 
@@ -307,15 +307,28 @@ status := i18n.Tf("Downloading {{.Count}} images", map[string]any{"Count": len(i
 
 ### 8.2 After Adding New Strings
 
+Whenever you add new `i18n.T("...")` calls to your provider, you must run the extraction tool:
+
 ```bash
-make gen-i18n    # Auto-adds new keys to en.json, propagates to all languages
+make gen-i18n
 ```
 
-Then translate the new keys in each `pkg/i18n/translations/*.json` file. Release builds gate on `make check-i18n`, which will **block the PR** if any strings are untranslated or stale.
+This command parses the Go AST, automatically extracts the new english strings, inserts them into `en.json`, and propagates them as placeholder keys across all other language files (`pkg/i18n/translations/*.json`). You (or the localization team) then must translate the new values in each respective JSON file.
 
-### 8.3 Dynamic Keys
+### 8.3 Legitimately Identical Strings (Proper Nouns)
 
-If your provider selects translation keys at runtime via a variable (not a string literal), add the key to `dynamicI18nKeys` in `cmd/util/gen_i18n/main.go`. Otherwise the CI checker will flag it as stale.
+Release builds gate on `make check-i18n`, which will **block the CI/PR** if any strings in foreign language files are exactly identical to their English counterparts (as this usually implies an untranslated placeholder). 
+
+However, many strings—especially Proper Nouns, museum names, and geographic locations—are legitimately identical across languages (e.g., "The Getty", "Los Angeles, CA, USA").
+
+If you encounter CI failures for these strings:
+1. Open `cmd/util/gen_i18n/main.go`.
+2. Add your string to the `allowIdenticalToEnglish` map.
+3. This bypasses the strict translation check for that specific key.
+
+### 8.4 Dynamic Keys
+
+If your provider selects translation keys at runtime via a variable (e.g. iterating over a JSON object), the AST parser will not see them. Add these keys to the `dynamicI18nKeys` list in `cmd/util/gen_i18n/main.go` to prevent the CI checker from flagging them as "stale" keys.
 
 For full details, see `internal_developer_context.md` §9.
 
