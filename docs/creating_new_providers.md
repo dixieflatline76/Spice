@@ -113,9 +113,25 @@ Build a `*schema.PanelSchema` composed of `SectionSchema` groups and `ItemSchema
 | `schema.SelectItem` | Dropdowns |
 | `schema.ButtonItem` | Action buttons |
 | `schema.AsyncButtonItem` | Background task buttons with loading state |
+| `schema.OAuthPickerItem` | OAuth Connect buttons with status |
+| `schema.FolderPickerItem` | Directory selectors |
+
+### 3.2 UI Refresh & Cache Invalidation
+
+When building your schemas, pay attention to the `NeedsRefresh` boolean on `ItemSchema`:
+
+* **What it does:** Setting `NeedsRefresh: true` tells the central UI manager that modifying this setting significantly alters the current wallpaper state.
+* **The `ApplyFunc` Lifecycle:** When a user changes a setting, your `ApplyFunc` is called to save the new value. If `NeedsRefresh` is true, Spice subsequently fires a global `RefreshImagesAndPulse()` event.
+* **Cache Invalidation:** During this refresh event, the `ImageStore` reconciles its derivative cache against a global **Processing Hash** (a map of boolean flags representing the current SmartFit, Cropping, and Framing settings). 
+* **The Result:** Any cached derivative images (e.g., `1920x1080.jpg`) whose original processing hash no longer matches the active application settings will be **instantly invalidated and deleted**. The pipeline will then seamlessly rebuild fresh derivatives from the preserved master files using the new settings, and immediately redraw the monitor wallpapers.
+* **Rule of Thumb:** If your setting changes how an image is *fetched* (e.g., changing search sort order) or how an image is *processed* (e.g., enabling Face Crop), you MUST set `NeedsRefresh: true`.
 | `schema.ConfirmButtonItem` | Buttons requiring user confirmation |
 | `schema.HyperlinkItem` | Clickable URLs |
 | `schema.LabelItem` | Static text or descriptions |
+
+> [!TIP]
+> **Dynamic UI Dependencies**
+> All schema items support `VisibleIf func() bool` and `EnabledIf func() bool` closures. Use these to dynamically hide or disable dependent settings based on the state of other config values (e.g., hiding a "Sub-setting" if the "Master Toggle" is disabled).
 
 **Example** (Pexels API Key):
 ```go

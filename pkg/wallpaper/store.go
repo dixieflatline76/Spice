@@ -101,7 +101,7 @@ func (s *ImageStore) SetFileManager(fm *FileManager, cacheFile string) {
 
 // replace performs a full struct replacement for an existing image.
 // This is unexported because full replacement is dangerous — callers who only
-// need to change one field should use SetFavorited, SetCropAnchor, or ClearDerivatives.
+// need to change one field should use SetFavorited, SetTuningOptions, or ClearDerivatives.
 // The only legitimate caller is stateManagerLoop (pipeline), which always has
 // a fully-populated Image from ProcessImageJob.
 func (s *ImageStore) replace(img provider.Image) bool {
@@ -116,18 +116,18 @@ func (s *ImageStore) replace(img provider.Image) bool {
 			if len(img.DerivativePaths) == 0 && len(existing.DerivativePaths) > 0 {
 				log.Debugf("[Store] WARNING: replace() clearing DerivativePaths for %s (had %d paths)", img.ID, len(existing.DerivativePaths))
 			}
-			// Preserve user-set CropAnchors — the store is authoritative for user metadata.
-			// The pipeline never writes CropAnchors, so existing store values always win.
-			// The else branch ensures that if the user removed all anchors (via AnchorAuto)
-			// while the pipeline was in-flight, stale anchors from MergeExistingMetadata
+			// Preserve user-set Tuning - the store is authoritative for user metadata.
+			// The pipeline never writes Tuning, so existing store values always win.
+			// The else branch ensures that if the user removed all tuning
+			// while the pipeline was in-flight, stale tuning from MergeExistingMetadata
 			// are not resurrected.
-			if len(existing.CropAnchors) > 0 {
-				img.CropAnchors = make(map[string]provider.CropAnchor, len(existing.CropAnchors))
-				for k, v := range existing.CropAnchors {
-					img.CropAnchors[k] = v
+			if len(existing.Tuning) > 0 {
+				img.Tuning = make(map[string]provider.TuningOptions, len(existing.Tuning))
+				for k, v := range existing.Tuning {
+					img.Tuning[k] = v
 				}
 			} else {
-				img.CropAnchors = nil
+				img.Tuning = nil
 			}
 			// Incremental bucket update: remove old entries, add new ones
 			s.removeFromBucketsLocked(existing.ID, existing.DerivativePaths)
@@ -154,20 +154,22 @@ func (s *ImageStore) SetFavorited(id string, favorited bool) bool {
 	return false
 }
 
-// SetCropAnchor updates the crop anchor for a specific resolution on an image.
-// Pass AnchorAuto to remove the override.
-func (s *ImageStore) SetCropAnchor(id string, resKey string, anchor provider.CropAnchor) bool {
+// SetTuningOptions updates the tuning options for a specific resolution on an image.
+// Pass an empty TuningOptions struct to clear the overrides.
+func (s *ImageStore) SetTuningOptions(id string, resKey string, opts provider.TuningOptions) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for i := range s.images {
 		if s.images[i].ID == id {
-			if s.images[i].CropAnchors == nil {
-				s.images[i].CropAnchors = make(map[string]provider.CropAnchor)
+			if s.images[i].Tuning == nil {
+				s.images[i].Tuning = make(map[string]provider.TuningOptions)
 			}
-			if anchor == provider.AnchorAuto {
-				delete(s.images[i].CropAnchors, resKey)
+			// If it's the default/empty state, remove it from the map to clean up JSON
+			defaultOpts := provider.TuningOptions{Anchor: provider.AnchorAuto}
+			if opts == defaultOpts {
+				delete(s.images[i].Tuning, resKey)
 			} else {
-				s.images[i].CropAnchors[resKey] = anchor
+				s.images[i].Tuning[resKey] = opts
 			}
 			s.scheduleSaveLocked()
 			return true
@@ -263,7 +265,7 @@ func (s *ImageStore) Add(img provider.Image) bool {
 	if _, exists := s.idSet[img.ID]; exists {
 		// Favorites Upsert: selectively update only the fields the Favorites
 		// provider can authoritatively set, preserving all store-managed metadata
-		// (DerivativePaths, ProcessingFlags, CropAnchors, Width, Height, etc.).
+		// (DerivativePaths, ProcessingFlags, Tuning, Width, Height, etc.).
 		//
 		// Uses non-empty-wins for Attribution/ViewURL because AddFavorite is
 		// async (queues a job), but RequestFetch fires immediately after — the
@@ -643,12 +645,12 @@ func (s *ImageStore) SaveCache() {
 			}
 			snapshot[i].DerivativePaths = paths
 		}
-		if img.CropAnchors != nil {
-			anchors := make(map[string]provider.CropAnchor)
-			for k, v := range img.CropAnchors {
-				anchors[k] = v
+		if img.Tuning != nil {
+			tuning := make(map[string]provider.TuningOptions)
+			for k, v := range img.Tuning {
+				tuning[k] = v
 			}
-			snapshot[i].CropAnchors = anchors
+			snapshot[i].Tuning = tuning
 		}
 	}
 	s.mu.RUnlock()
@@ -830,11 +832,11 @@ func (s *ImageStore) determineSyncAction(img provider.Image, activeQueryIDs map[
 	// permanently invisible to monitors. Delete it so the fetcher can
 	// re-download and reprocess it on the next cycle.
 	if len(img.DerivativePaths) == 0 {
-		// Preserve images with user-set CropAnchors: they are legitimately invalidated
+		// Preserve images with user-set Tuning: they are legitimately invalidated
 		// (not true zombies) and will be reprocessed via backlog healing on the next
-		// fetch cycle, where MergeExistingMetadata will copy the anchors forward.
-		if len(img.CropAnchors) > 0 {
-			log.Debugf("[Sync] Keeping invalidated image %s (has %d crop anchors)", img.ID, len(img.CropAnchors))
+		// fetch cycle, where MergeExistingMetadata will copy the tuning forward.
+		if len(img.Tuning) > 0 {
+			log.Debugf("[Sync] Keeping invalidated image %s (has %d tuning overrides)", img.ID, len(img.Tuning))
 			return ImageActionKeep
 		}
 		log.Debugf("[Sync] Recovery: deleting zombie image %s (master exists, flags match, but no derivatives)", img.ID)

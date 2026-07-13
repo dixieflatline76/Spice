@@ -559,14 +559,16 @@ func (p *Provider) EnrichImage(_ context.Context, img provider.Image) (provider.
 // CreateSettingsPanel returns the museum info panel.
 func (p *Provider) CreateSettingsPanel(sm setting.SettingsManager) *schema.PanelSchema {
 	return schema.CreateMuseumSettingsPanel(schema.MuseumSettingsConfig{
-		ID:          "Rijks",
-		Title:       i18n.T("Rijksmuseum"),
-		Location:    i18n.T("Amsterdam, Netherlands"),
-		LicenseURL:  "https://www.rijksmuseum.nl/en/research/conduct-research/data/policy",
-		Description: i18n.T("The national museum of the Netherlands, home to Rembrandt's Night Watch, Vermeer's Milkmaid, and the finest collection of Dutch Golden Age masterpieces in the world."),
-		MapQuery:    "Rijksmuseum Amsterdam",
-		WebsiteURL:  WebBaseURL,
-		DonateURL:   "https://www.rijksmuseum.nl/en/support",
+		MuseumFramingGetFunc: func() bool { return p.cfg.GetMuseumFraming("Rijks") },
+		MuseumFramingSetFunc: func(val bool) { p.cfg.SetMuseumFraming("Rijks", val) },
+		ID:                   "Rijks",
+		Title:                i18n.T("Rijksmuseum"),
+		Location:             i18n.T("Amsterdam, Netherlands"),
+		LicenseURL:           "https://www.rijksmuseum.nl/en/research/conduct-research/data/policy",
+		Description:          i18n.T("The national museum of the Netherlands, home to Rembrandt's Night Watch, Vermeer's Milkmaid, and the finest collection of Dutch Golden Age masterpieces in the world."),
+		MapQuery:             "Rijksmuseum Amsterdam",
+		WebsiteURL:           WebBaseURL,
+		DonateURL:            "https://www.rijksmuseum.nl/en/support",
 	}, sm.OpenURL)
 }
 

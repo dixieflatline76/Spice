@@ -67,38 +67,38 @@ func TestMergeExistingMetadata_CropAnchors(t *testing.T) {
 	img := Image{ID: "test1"}
 	existing := Image{
 		ID: "test1",
-		CropAnchors: map[string]CropAnchor{
-			"3440x1440": AnchorTopCenter,
-			"1920x1080": AnchorMiddleCenter,
+		Tuning: map[string]TuningOptions{
+			"3440x1440": TuningOptions{Anchor: AnchorTopCenter},
+			"1920x1080": TuningOptions{Anchor: AnchorMiddleCenter},
 		},
 	}
 
 	img.MergeExistingMetadata(existing)
 
-	assert.Equal(t, AnchorTopCenter, img.CropAnchors["3440x1440"])
-	assert.Equal(t, AnchorMiddleCenter, img.CropAnchors["1920x1080"])
+	assert.Equal(t, TuningOptions{Anchor: AnchorTopCenter}, img.Tuning["3440x1440"])
+	assert.Equal(t, TuningOptions{Anchor: AnchorMiddleCenter}, img.Tuning["1920x1080"])
 }
 
 func TestMergeExistingMetadata_CropAnchorsNoOverwrite(t *testing.T) {
 	// New image already has a user-set anchor — should NOT be overwritten
 	img := Image{
 		ID: "test1",
-		CropAnchors: map[string]CropAnchor{
-			"3440x1440": AnchorBottomCenter, // user-set
+		Tuning: map[string]TuningOptions{
+			"3440x1440": TuningOptions{Anchor: AnchorBottomCenter}, // user-set
 		},
 	}
 	existing := Image{
 		ID: "test1",
-		CropAnchors: map[string]CropAnchor{
-			"3440x1440": AnchorTopCenter,    // old value — should NOT overwrite
-			"1920x1080": AnchorMiddleCenter, // new key — should be added
+		Tuning: map[string]TuningOptions{
+			"3440x1440": TuningOptions{Anchor: AnchorTopCenter},    // old value — should NOT overwrite
+			"1920x1080": TuningOptions{Anchor: AnchorMiddleCenter}, // new key — should be added
 		},
 	}
 
 	img.MergeExistingMetadata(existing)
 
-	assert.Equal(t, AnchorBottomCenter, img.CropAnchors["3440x1440"], "User-set anchor should not be overwritten")
-	assert.Equal(t, AnchorMiddleCenter, img.CropAnchors["1920x1080"], "New anchor should be added")
+	assert.Equal(t, TuningOptions{Anchor: AnchorBottomCenter}, img.Tuning["3440x1440"], "User-set anchor should not be overwritten")
+	assert.Equal(t, TuningOptions{Anchor: AnchorMiddleCenter}, img.Tuning["1920x1080"], "New anchor should be added")
 }
 
 func TestMergeExistingMetadata_NoDerivativePathsLeak(t *testing.T) {
@@ -130,5 +130,5 @@ func TestMergeExistingMetadata_EmptyExisting(t *testing.T) {
 	// Zero-value dimensions from existing should not overwrite
 	assert.Equal(t, 100, img.Width, "Width should not be cleared by zero-value existing")
 	assert.Equal(t, 200, img.Height, "Height should not be cleared by zero-value existing")
-	assert.Nil(t, img.CropAnchors, "CropAnchors should remain nil")
+	assert.Nil(t, img.Tuning, "CropAnchors should remain nil")
 }

@@ -46,6 +46,8 @@ var allowIdenticalToEnglish = map[string]bool{
 	"Personal":  true,
 	"System":    true,
 	"Actions":   true,
+	"Automatically generate a museum frame for art that doesn't fit your screen.": true,
+	"Virtual Frame Aspect Mismatches:":                                            true,
 
 	// Brand names / tech terms kept in English
 	"Pexels":                  true,
@@ -65,6 +67,7 @@ var allowIdenticalToEnglish = map[string]bool{
 
 	// Short functional strings identical in many languages
 	"Error: ": true,
+	"Minutes": true,
 
 	// Attribution keys where some languages use the same prefix as English
 	"attribution_in": true,

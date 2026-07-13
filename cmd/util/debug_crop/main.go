@@ -6,6 +6,7 @@ import (
 	"image"
 	"os"
 
+	"github.com/dixieflatline76/Spice/v2/pkg/provider"
 	"github.com/dixieflatline76/Spice/v2/pkg/wallpaper"
 	"github.com/stretchr/testify/mock"
 )
@@ -146,7 +147,7 @@ func main() {
 	fmt.Printf("Input: %dx%d\n", img.Bounds().Dx(), img.Bounds().Dy())
 
 	// Run
-	res, err := proc.FitImage(context.Background(), img, 1920, 1080, 0)
+	res, err := proc.FitImage(context.Background(), img, 1920, 1080, provider.TuningOptions{})
 	if err != nil {
 		fmt.Printf("FIT ERROR: %v\n", err)
 	} else {

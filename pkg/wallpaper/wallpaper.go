@@ -44,7 +44,7 @@ type OS interface {
 type ImageProcessor interface {
 	DecodeImage(ctx context.Context, imgBytes []byte, contentType string) (image.Image, string, error)
 	EncodeImage(ctx context.Context, img image.Image, contentType string) ([]byte, error)
-	FitImage(ctx context.Context, img image.Image, targetWidth, targetHeight int, anchor provider.CropAnchor) (image.Image, error)
+	FitImage(ctx context.Context, img image.Image, targetWidth, targetHeight int, opts provider.TuningOptions) (image.Image, error)
 	CheckCompatibility(imgWidth, imgHeight, targetWidth, targetHeight int) error
 }
 
@@ -169,10 +169,13 @@ func getPlugin() *Plugin {
 
 		wpInstance = &Plugin{
 			os: currentOS,
-			imgProcessor: NewSmartImageProcessor(
-				currentOS,
+			imgProcessor: NewVirtualFramer(
+				NewSmartImageProcessor(
+					currentOS,
+					nil,
+					pigoInstance,
+				),
 				nil,
-				pigoInstance,
 			),
 			cfg:        nil,
 			httpClient: robustClient,
@@ -281,7 +284,12 @@ func (wp *Plugin) Init(manager ui.PluginManager) {
 	wp.resetTimerCh = make(chan struct{}, 1)
 
 	// Update processor config now that we have it
-	if sip, ok := wp.imgProcessor.(*SmartImageProcessor); ok {
+	if vf, ok := wp.imgProcessor.(*VirtualFramer); ok {
+		vf.cfg = wp.cfg
+		if sip, ok := vf.next.(*SmartImageProcessor); ok {
+			sip.config = wp.cfg
+		}
+	} else if sip, ok := wp.imgProcessor.(*SmartImageProcessor); ok {
 		sip.config = wp.cfg
 	}
 
@@ -754,7 +762,7 @@ func (wp *Plugin) ChangeWallpaperFrequency(newFreq Frequency, silent bool) {
 	}
 
 	if !silent {
-		msg := newFreq.String()
+		msg := fmt.Sprintf("%d %s", int(newFreq), i18n.T("Minutes"))
 		if newFreq == FrequencyNever {
 			msg = i18n.T("Never (Paused)")
 		}
@@ -783,10 +791,15 @@ func (wp *Plugin) TriggerShuffle(monitorID int) {
 	wp.dispatch(monitorID, CmdUpdateShuffle)
 }
 
-// SetCropAnchor dispatches an anchor command to the target monitor controller.
-func (wp *Plugin) SetCropAnchor(monitorID int, anchor provider.CropAnchor) {
-	log.Debugf("SetCropAnchor called for monitor %d, anchor %v", monitorID, anchor)
-	wp.dispatch(monitorID, Command(anchor))
+// SetTuningOptions dispatches tuning options to the target monitor controller.
+func (wp *Plugin) SetTuningOptions(monitorID int, opts provider.TuningOptions) {
+	log.Debugf("SetTuningOptions called for monitor %d, tuning %v", monitorID, opts)
+	wp.monMu.RLock()
+	mc, ok := wp.Monitors[monitorID]
+	wp.monMu.RUnlock()
+	if ok {
+		mc.TuningChan <- opts
+	}
 }
 
 func (wp *Plugin) TriggerOpenSettings() {
@@ -1261,6 +1274,10 @@ func (wp *Plugin) syncStoreWithConfig() {
 		"FitQuality":     mode == SmartFitNormal,
 		"FaceCrop":       wp.cfg.GetFaceCropEnabled(),
 		"FaceBoost":      wp.cfg.GetFaceBoostEnabled(),
+		"FrameFallback":  wp.cfg.VirtualFramingFallback,
+		"WallNeutral":    wp.cfg.VirtualWallColor == WallNeutral,
+		"Matting":        wp.cfg.VirtualPaperMatting,
+		fmt.Sprintf("FrameSize_%.2f", wp.cfg.VirtualFrameSize): true,
 	}
 
 	wp.store.Sync(int(wp.cfg.GetCacheSize().Size()), targetFlags, wp.cfg.GetActiveQueryIDs())

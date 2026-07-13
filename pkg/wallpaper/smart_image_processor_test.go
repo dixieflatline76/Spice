@@ -49,7 +49,7 @@ func TestSmartImageProcessor_FitImage(t *testing.T) {
 		// Input: 3840x2160 (16:9, same aspect ratio)
 		inputImg := createTestImage(3840, 2160)
 
-		outputImg, err := processor.FitImage(context.Background(), inputImg, 1920, 1080, 0)
+		outputImg, err := processor.FitImage(context.Background(), inputImg, 1920, 1080, provider.TuningOptions{})
 		assert.NoError(t, err)
 		assert.NotNil(t, outputImg)
 
@@ -72,7 +72,7 @@ func TestSmartImageProcessor_FitImage(t *testing.T) {
 		// Input: 2000x2000 (1:1)
 		inputImg := createTestImage(2000, 2000)
 
-		outputImg, err := processor.FitImage(context.Background(), inputImg, 1920, 1080, 0)
+		outputImg, err := processor.FitImage(context.Background(), inputImg, 1920, 1080, provider.TuningOptions{})
 		assert.NoError(t, err)
 		assert.NotNil(t, outputImg)
 
@@ -98,7 +98,7 @@ func TestSmartImageProcessor_FitImage(t *testing.T) {
 		inputImg := createTestImage(100, 100)
 
 		// Should return original image without calling getDesktopDimension
-		outputImg, err := processor.FitImage(context.Background(), inputImg, 1920, 1080, 0)
+		outputImg, err := processor.FitImage(context.Background(), inputImg, 1920, 1080, provider.TuningOptions{})
 		assert.NoError(t, err)
 		assert.Equal(t, inputImg, outputImg)
 
@@ -196,7 +196,7 @@ func TestSmartImageProcessor_FitImage_Flexibility_DualSafety(t *testing.T) {
 		img := image.NewRGBA(image.Rect(0, 0, 1000, 1000))
 		draw.Draw(img, img.Bounds(), &image.Uniform{color.RGBA{128, 128, 128, 255}}, image.Point{}, draw.Src)
 
-		outputImg, err := processor.FitImage(context.Background(), img, 160, 90, 0)
+		outputImg, err := processor.FitImage(context.Background(), img, 160, 90, provider.TuningOptions{})
 		assert.NoError(t, err)
 		require.NotNil(t, outputImg)
 		assert.Equal(t, 160, outputImg.Bounds().Dx())
@@ -215,7 +215,7 @@ func TestSmartImageProcessor_FitImage_Flexibility_DualSafety(t *testing.T) {
 			}
 		}
 
-		outputImg, err := processor.FitImage(context.Background(), img, 160, 90, 0)
+		outputImg, err := processor.FitImage(context.Background(), img, 160, 90, provider.TuningOptions{})
 		assert.NoError(t, err)
 		require.NotNil(t, outputImg)
 		// Because it's tagged as a "Feet Crop" (Bottom half), it should fallback to Center.
@@ -234,7 +234,7 @@ func TestSmartImageProcessor_FitImage_Flexibility_DualSafety(t *testing.T) {
 			}
 		}
 
-		outputImg, err := processor.FitImage(context.Background(), img, 160, 90, 0)
+		outputImg, err := processor.FitImage(context.Background(), img, 160, 90, provider.TuningOptions{})
 		assert.NoError(t, err)
 		require.NotNil(t, outputImg)
 		assert.Equal(t, 160, outputImg.Bounds().Dx())
@@ -259,7 +259,7 @@ func TestSmartImageProcessor_FitImage_Flexibility_DualSafety(t *testing.T) {
 
 		// SmartCrop will pick the bottom (Min.Y = 238).
 		// Since 238 > 190, it should trigger Slack Guard and fallback to Center (Min.Y = 119).
-		outputImg, err := processor.FitImage(context.Background(), img, 160, 90, 0)
+		outputImg, err := processor.FitImage(context.Background(), img, 160, 90, provider.TuningOptions{})
 		assert.NoError(t, err)
 		require.NotNil(t, outputImg)
 
@@ -298,7 +298,7 @@ func TestSmartImageProcessor_FitImage_Quality_Rejection(t *testing.T) {
 	// Expect REJECTION.
 	inputImg := createTestImage(160, 200)
 
-	_, err := processor.FitImage(context.Background(), inputImg, 160, 90, 0)
+	_, err := processor.FitImage(context.Background(), inputImg, 160, 90, provider.TuningOptions{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "Quality mode")
 }
@@ -361,7 +361,7 @@ func TestSmartImageProcessor_FitImage_Quality_Rescue(t *testing.T) {
 	mockOS2.On("GetDesktopDimension").Return(210, 90, nil) // 21:9
 	processor.os = mockOS2
 
-	outputImg, err := processor.FitImage(context.Background(), faceImg, 210, 90, 0)
+	outputImg, err := processor.FitImage(context.Background(), faceImg, 210, 90, provider.TuningOptions{})
 
 	// If rescue works, no error.
 	require.NoError(t, err)
@@ -391,14 +391,14 @@ func TestSmartImageProcessor_FitImage_RespectsTargetRatio(t *testing.T) {
 
 	// Case 1: Landscape Target (1920x1080)
 	// We pass targetW=1920, targetH=1080
-	out1, err := processor.FitImage(context.Background(), img, 1920, 1080, 0)
+	out1, err := processor.FitImage(context.Background(), img, 1920, 1080, provider.TuningOptions{})
 	require.NoError(t, err)
 	assert.Equal(t, 1920, out1.Bounds().Dx())
 	assert.Equal(t, 1080, out1.Bounds().Dy())
 
 	// Case 2: Portrait Target (1080x1920)
 	// We pass targetW=1080, targetH=1920
-	out2, err := processor.FitImage(context.Background(), img, 1080, 1920, provider.AnchorAuto)
+	out2, err := processor.FitImage(context.Background(), img, 1080, 1920, provider.TuningOptions{Anchor: provider.AnchorAuto})
 	require.NoError(t, err)
 	assert.Equal(t, 1080, out2.Bounds().Dx())
 	assert.Equal(t, 1920, out2.Bounds().Dy())
@@ -449,7 +449,7 @@ func TestFitImage_CropAnchor_NoFace_ShiftsOutput(t *testing.T) {
 	srcImg := createGradientImage(2000, 1200)
 
 	// 1. Top anchor — crop should land in the upper region (low green)
-	outTop, err := processor.FitImage(context.Background(), srcImg, 2000, 800, provider.AnchorTopCenter)
+	outTop, err := processor.FitImage(context.Background(), srcImg, 2000, 800, provider.TuningOptions{Anchor: provider.AnchorTopCenter})
 	require.NoError(t, err)
 	require.NotNil(t, outTop)
 	assert.Equal(t, 2000, outTop.Bounds().Dx())
@@ -457,13 +457,13 @@ func TestFitImage_CropAnchor_NoFace_ShiftsOutput(t *testing.T) {
 	greenTop := sampleCenterGreen(outTop)
 
 	// 2. Bottom anchor — crop should land in the lower region (high green)
-	outBottom, err := processor.FitImage(context.Background(), srcImg, 2000, 800, provider.AnchorBottomCenter)
+	outBottom, err := processor.FitImage(context.Background(), srcImg, 2000, 800, provider.TuningOptions{Anchor: provider.AnchorBottomCenter})
 	require.NoError(t, err)
 	require.NotNil(t, outBottom)
 	greenBottom := sampleCenterGreen(outBottom)
 
 	// 3. MiddleCenter anchor — should land in between
-	outMiddle, err := processor.FitImage(context.Background(), srcImg, 2000, 800, provider.AnchorMiddleCenter)
+	outMiddle, err := processor.FitImage(context.Background(), srcImg, 2000, 800, provider.TuningOptions{Anchor: provider.AnchorMiddleCenter})
 	require.NoError(t, err)
 	greenMiddle := sampleCenterGreen(outMiddle)
 
@@ -508,7 +508,7 @@ func TestFitImage_CropAnchor_NoFace_BlendWeight(t *testing.T) {
 
 	srcImg := createGradientImage(2000, 1200)
 
-	out, err := processor.FitImage(context.Background(), srcImg, 2000, 800, provider.AnchorTopCenter)
+	out, err := processor.FitImage(context.Background(), srcImg, 2000, 800, provider.TuningOptions{Anchor: provider.AnchorTopCenter})
 	require.NoError(t, err)
 	require.NotNil(t, out)
 
@@ -587,13 +587,13 @@ func TestFitImage_CropAnchor_WithFace_ReducedShift(t *testing.T) {
 	}
 
 	// 1. No anchor — should center on face
-	outNoAnchor, err := processor.FitImage(context.Background(), faceImg, targetW, targetH, 0)
+	outNoAnchor, err := processor.FitImage(context.Background(), faceImg, targetW, targetH, provider.TuningOptions{})
 	if err != nil {
 		t.Skipf("FitImage rejected this aspect ratio: %v", err)
 	}
 
 	// 2. With anchor at bottom — should shift, but LESS than no-face because weight=0.6
-	outWithAnchor, err := processor.FitImage(context.Background(), faceImg, targetW, targetH, provider.AnchorBottomCenter)
+	outWithAnchor, err := processor.FitImage(context.Background(), faceImg, targetW, targetH, provider.TuningOptions{Anchor: provider.AnchorBottomCenter})
 	require.NoError(t, err)
 
 	require.NotNil(t, outNoAnchor)
@@ -723,7 +723,7 @@ func TestFitImage_CropAnchor_VisualVerification(t *testing.T) {
 			baseName, srcImg.Bounds().Dx(), srcImg.Bounds().Dy())
 
 		for _, a := range anchors {
-			outImg, err := processor.FitImage(context.Background(), srcImg, targetW, targetH, a.Anchor)
+			outImg, err := processor.FitImage(context.Background(), srcImg, targetW, targetH, provider.TuningOptions{Anchor: a.Anchor})
 			if err != nil {
 				t.Logf("  %s/%s: ERROR %v", baseName, a.Name, err)
 				html += fmt.Sprintf(`<div class="cell"><div class="label">%s<br>ERROR: %v</div></div>`, a.Name, err)

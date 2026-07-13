@@ -192,7 +192,9 @@ func (p *Provider) fetchObjectByUUID(ctx context.Context, uuid string) (*provide
 	}
 
 	img.ID = uuid
-	img.ViewURL = fmt.Sprintf("https://www.getty.edu/art/collection/object/%s", uuid)
+	if img.ViewURL == "" {
+		img.ViewURL = fmt.Sprintf("https://www.getty.edu/art/collection/object/%s", uuid)
+	}
 	img.Provider = ProviderName
 
 	return img, nil
@@ -251,9 +253,24 @@ func (p *Provider) parseGettyJSONLD(doc map[string]interface{}) (*provider.Image
 		return nil, errors.New("no image representation found")
 	}
 
+	viewURL := ""
+	if subjectOf, ok := obj["subject_of"].([]interface{}); ok {
+		for _, so := range subjectOf {
+			if soMap, ok := so.(map[string]interface{}); ok {
+				if format, ok := soMap["format"].(string); ok && format == "text/html" {
+					if id, ok := soMap["id"].(string); ok {
+						viewURL = id
+						break
+					}
+				}
+			}
+		}
+	}
+
 	img := &provider.Image{
 		Path:        imageURL,
 		Attribution: fmt.Sprintf("%s - %s", author, title),
+		ViewURL:     viewURL,
 	}
 
 	return img, nil
@@ -268,14 +285,16 @@ func (p *Provider) EnrichImage(_ context.Context, img provider.Image) (provider.
 
 func (p *Provider) CreateSettingsPanel(sm setting.SettingsManager) *schema.PanelSchema {
 	return schema.CreateMuseumSettingsPanel(schema.MuseumSettingsConfig{
-		ID:          "Getty",
-		Title:       i18n.T("The J. Paul Getty Museum"),
-		Location:    i18n.T("Los Angeles, CA, USA"),
-		LicenseURL:  "https://www.getty.edu/about/open-content-program/",
-		Description: i18n.T("The J. Paul Getty Museum features European paintings, drawings, sculpture, illuminated manuscripts, decorative arts, and photography from its beginnings to the present, gathered internationally."),
-		MapQuery:    "J. Paul Getty Museum Los Angeles",
-		WebsiteURL:  "https://www.getty.edu/visit/",
-		DonateURL:   "https://www.getty.edu/about/join-and-give/",
+		MuseumFramingGetFunc: func() bool { return p.cfg.GetMuseumFraming("Getty") },
+		MuseumFramingSetFunc: func(val bool) { p.cfg.SetMuseumFraming("Getty", val) },
+		ID:                   "Getty",
+		Title:                i18n.T("The J. Paul Getty Museum"),
+		Location:             i18n.T("Los Angeles, CA, USA"),
+		LicenseURL:           "https://www.getty.edu/about/open-content-program/",
+		Description:          i18n.T("The J. Paul Getty Museum features European paintings, drawings, sculpture, illuminated manuscripts, decorative arts, and photography from its beginnings to the present, gathered internationally."),
+		MapQuery:             "J. Paul Getty Museum Los Angeles",
+		WebsiteURL:           "https://www.getty.edu/visit/",
+		DonateURL:            "https://www.getty.edu/about/join-and-give/",
 	}, sm.OpenURL)
 }
 

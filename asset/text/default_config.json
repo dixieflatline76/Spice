@@ -4,6 +4,10 @@
   "smart_crop_enabled": false,
   "smart_crop_threshold": 0.1,
   "face_boost_enabled": false,
+  "virtual_gallery_framing": 1,
+  "virtual_wall_color": 0,
+  "virtual_paper_matting": true,
+  "virtual_frame_size": 0.80,
   "queries": [
     {
       "desc": "Wikimedia Featured",

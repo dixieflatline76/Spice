@@ -468,7 +468,21 @@ func (wp *Plugin) generateMissingDerivatives(ctx context.Context, img provider.I
 		}
 
 		// Generate
-		processedImg, err := wp.imgProcessor.FitImage(ctx, srcImg, res.Width, res.Height, img.GetAnchor(resDir))
+		var framed bool
+		fitCtx := context.WithValue(ctx, provider.VirtualFramedKey, &framed)
+		fitCtx = context.WithValue(fitCtx, provider.ProviderIDKey, img.Provider)
+		processedImg, err := wp.imgProcessor.FitImage(fitCtx, srcImg, res.Width, res.Height, img.GetTuning(resDir))
+
+		if err == nil {
+			if framed {
+				if img.ProcessingFlags == nil {
+					img.ProcessingFlags = make(map[string]bool)
+				}
+				img.ProcessingFlags["VirtualFramed:"+resDir] = true
+			} else if img.ProcessingFlags != nil {
+				delete(img.ProcessingFlags, "VirtualFramed:"+resDir)
+			}
+		}
 		if err != nil {
 			log.Printf("Error fitting image for %s: %v", resDir, err)
 			continue

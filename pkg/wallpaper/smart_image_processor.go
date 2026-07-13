@@ -197,7 +197,7 @@ func (c *SmartImageProcessor) checkFlexibilityModeCompatibility(imgWidth, imgHei
 }
 
 // FitImage fits an image with context awareness.
-func (c *SmartImageProcessor) FitImage(ctx context.Context, img image.Image, targetWidth, targetHeight int, anchor provider.CropAnchor) (image.Image, error) {
+func (c *SmartImageProcessor) FitImage(ctx context.Context, img image.Image, targetWidth, targetHeight int, opts provider.TuningOptions) (image.Image, error) {
 	if c.config.GetSmartFitMode() == SmartFitOff {
 		c.lastStats = FaceDetectionStats{}
 		return img, nil
@@ -258,7 +258,7 @@ func (c *SmartImageProcessor) FitImage(ctx context.Context, img image.Image, tar
 	}
 
 	// 3. Strategy Selection
-	strategy := c.selectStrategy(img, faceFound, faceBox, energy, energyErr, anchor)
+	strategy := c.selectStrategy(img, faceFound, faceBox, energy, energyErr, opts.Anchor)
 
 	// 4. Execution
 	return strategy.Apply(ctx, img, systemWidth, systemHeight, c)
@@ -448,20 +448,16 @@ func checkContext(ctx context.Context) error {
 	}
 }
 
-// findBestFace runs pigo and returns the largest, most confident face.
 func (c *SmartImageProcessor) findBestFace(img image.Image) (image.Rectangle, error) {
+	bounds := img.Bounds()
+	width := bounds.Dx()
+	height := bounds.Dy()
+
 	// pigo needs grayscale image data.
 	// We convert to NRGBA first to ensure consistent pixel access across different image formats (YCbCr, etc.)
 	nrgba := imaging.Clone(img)
 	pixels := pigo.RgbToGrayscale(nrgba)
 
-	// We also need the image dimensions.
-	// We also need the image dimensions.
-	bounds := img.Bounds()
-	width := bounds.Dx()
-	height := bounds.Dy()
-
-	// Run the detection
 	// Determine dynamic MaxSize based on image dimensions
 	minDimension := width
 	if height < width {

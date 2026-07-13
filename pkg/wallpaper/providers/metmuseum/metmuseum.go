@@ -526,14 +526,16 @@ func (p *Provider) EnrichImage(ctx context.Context, img provider.Image) (provide
 // CreateSettingsPanel returns the declarative UI for MetMuseum settings.
 func (p *Provider) CreateSettingsPanel(sm setting.SettingsManager) *schema.PanelSchema {
 	return schema.CreateMuseumSettingsPanel(schema.MuseumSettingsConfig{
-		ID:          "Met",
-		Title:       i18n.T("The Metropolitan Museum of Art"),
-		Location:    i18n.T("New York City, USA"),
-		LicenseURL:  "https://www.metmuseum.org/about-the-met/policies-and-documents/open-access",
-		Description: i18n.T("The crown jewel of New York City. From ancient Egyptian temples to modern masterpieces, The Met houses 5,000 years of humanity's greatest creative achievements."),
-		MapQuery:    "The Metropolitan Museum of Art",
-		WebsiteURL:  "https://www.metmuseum.org",
-		DonateURL:   "https://www.metmuseum.org/donate",
+		MuseumFramingGetFunc: func() bool { return p.cfg.GetMuseumFraming("Met") },
+		MuseumFramingSetFunc: func(val bool) { p.cfg.SetMuseumFraming("Met", val) },
+		ID:                   "Met",
+		Title:                i18n.T("The Metropolitan Museum of Art"),
+		Location:             i18n.T("New York City, USA"),
+		LicenseURL:           "https://www.metmuseum.org/about-the-met/policies-and-documents/open-access",
+		Description:          i18n.T("The crown jewel of New York City. From ancient Egyptian temples to modern masterpieces, The Met houses 5,000 years of humanity's greatest creative achievements."),
+		MapQuery:             "The Metropolitan Museum of Art",
+		WebsiteURL:           "https://www.metmuseum.org",
+		DonateURL:            "https://www.metmuseum.org/donate",
 	}, sm.OpenURL)
 }
 

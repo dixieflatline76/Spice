@@ -487,14 +487,16 @@ func (p *Provider) EnrichImage(_ context.Context, img provider.Image) (provider.
 // CreateSettingsPanel returns the museum info panel.
 func (p *Provider) CreateSettingsPanel(sm setting.SettingsManager) *schema.PanelSchema {
 	return schema.CreateMuseumSettingsPanel(schema.MuseumSettingsConfig{
-		ID:          "CMA",
-		Title:       i18n.T("Cleveland Museum of Art"),
-		Location:    i18n.T("Cleveland, OH, USA"),
-		LicenseURL:  "https://www.clevelandart.org/open-access",
-		Description: i18n.T("One of America's most distinguished comprehensive art museums. Its Open Access collection spans 6,000 years of achievement in art, all freely available for any use."),
-		MapQuery:    "Cleveland Museum of Art",
-		WebsiteURL:  WebBaseURL,
-		DonateURL:   "https://www.clevelandart.org/give",
+		MuseumFramingGetFunc: func() bool { return p.cfg.GetMuseumFraming("CMA") },
+		MuseumFramingSetFunc: func(val bool) { p.cfg.SetMuseumFraming("CMA", val) },
+		ID:                   "CMA",
+		Title:                i18n.T("Cleveland Museum of Art"),
+		Location:             i18n.T("Cleveland, OH, USA"),
+		LicenseURL:           "https://www.clevelandart.org/open-access",
+		Description:          i18n.T("One of America's most distinguished comprehensive art museums. Its Open Access collection spans 6,000 years of achievement in art, all freely available for any use."),
+		MapQuery:             "Cleveland Museum of Art",
+		WebsiteURL:           WebBaseURL,
+		DonateURL:            "https://www.clevelandart.org/give",
 	}, sm.OpenURL)
 }
 

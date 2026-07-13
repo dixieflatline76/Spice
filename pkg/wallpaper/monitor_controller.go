@@ -29,7 +29,7 @@ const (
 	CmdPause
 	CmdNextAuto
 
-	// Anchor commands — matches provider.CropAnchor values exactly
+	// Legacy Anchor commands
 	CmdAnchorAuto Command = 200
 	CmdAnchorTL   Command = 201
 	CmdAnchorTC   Command = 202
@@ -50,7 +50,7 @@ type StoreInterface interface {
 	Exists(id string) bool
 	Remove(id string) (provider.Image, bool)
 	SetFavorited(id string, favorited bool) bool
-	SetCropAnchor(id string, resKey string, anchor provider.CropAnchor) bool
+	SetTuningOptions(id string, resKey string, opts provider.TuningOptions) bool
 	ClearDerivatives(id string) bool
 	Add(img provider.Image) bool
 	Clear()
@@ -105,6 +105,7 @@ type MonitorController struct {
 	ID                 int
 	Monitor            Monitor
 	Commands           chan Command
+	TuningChan         chan provider.TuningOptions
 	State              *MonitorState
 	Store              StoreInterface
 	fm                 *FileManager
@@ -127,14 +128,15 @@ func NewMonitorController(id int, m Monitor, store StoreInterface, fm *FileManag
 	}
 
 	return &MonitorController{
-		ID:        id,
-		Monitor:   m,
-		Commands:  make(chan Command, 20), // Buffer slightly more to prevent blocking during bursts
-		Store:     store,
-		fm:        fm,
-		os:        os,
-		cfg:       cfg,
-		processor: processor,
+		ID:         id,
+		Monitor:    m,
+		Commands:   make(chan Command, 50),
+		TuningChan: make(chan provider.TuningOptions, 50), // Buffer slightly more to prevent blocking during bursts
+		Store:      store,
+		fm:         fm,
+		os:         os,
+		cfg:        cfg,
+		processor:  processor,
 		State: &MonitorState{
 			CurrentID:  "",
 			History:    make([]string, 0),
@@ -189,6 +191,10 @@ func (mc *MonitorController) Run(ctx context.Context) {
 			mc.mu.Lock()
 			mc.handleCommand(cmd)
 			mc.mu.Unlock()
+		case tuning := <-mc.TuningChan:
+			mc.mu.Lock()
+			mc.reprocessWithTuning(tuning)
+			mc.mu.Unlock()
 		}
 	}
 }
@@ -196,9 +202,16 @@ func (mc *MonitorController) Run(ctx context.Context) {
 func (mc *MonitorController) handleCommand(cmd Command) {
 	log.Debugf("[Monitor %d] Actor received command %v (Pending: %d)", mc.ID, cmd, len(mc.Commands))
 
-	// Anchor commands (200-209) — route to reprocess
+	// Legacy Anchor commands (200-209)
 	if cmd >= CmdAnchorAuto && cmd <= CmdAnchorBR {
-		mc.reprocessWithAnchor(provider.CropAnchor(cmd))
+		img := mc.State.CurrentImage
+		if img.ID == "" {
+			return
+		}
+		resKey := fmt.Sprintf("%dx%d", mc.Monitor.Rect.Dx(), mc.Monitor.Rect.Dy())
+		opts := img.GetTuning(resKey)
+		opts.Anchor = provider.CropAnchor(cmd)
+		mc.reprocessWithTuning(opts)
 		return
 	}
 
@@ -521,33 +534,35 @@ func (mc *MonitorController) applyImage(img provider.Image) {
 	}
 }
 
-// reprocessWithAnchor updates the crop anchor on the current image, re-runs FitImage,
+// reprocessWithTuning updates the tuning options on the current image, re-runs FitImage,
 // and sets the resulting derivative as the wallpaper.
-func (mc *MonitorController) reprocessWithAnchor(anchor provider.CropAnchor) {
+func (mc *MonitorController) reprocessWithTuning(opts provider.TuningOptions) {
 	img := mc.State.CurrentImage
 	if img.ID == "" {
-		log.Printf("[Monitor %d] Cannot reprocess anchor: no current image", mc.ID)
+		log.Printf("[Monitor %d] Cannot reprocess tuning: no current image", mc.ID)
 		return
 	}
 
-	log.Printf("[Monitor %d] Reprocessing with anchor %v for image %s", mc.ID, anchor, img.ID)
+	log.Printf("[Monitor %d] Reprocessing with tuning %v for image %s", mc.ID, opts, img.ID)
 
-	// 1. Update anchor in image metadata for this monitor's resolution and persist
+	// 1. Update tuning in image metadata for this monitor's resolution and persist
 	resKey := fmt.Sprintf("%dx%d", mc.Monitor.Rect.Dx(), mc.Monitor.Rect.Dy())
-	mc.Store.SetCropAnchor(img.ID, resKey, anchor)
+	mc.Store.SetTuningOptions(img.ID, resKey, opts)
 
-	// Mirror the anchor change into the local image copy so that
+	// Mirror the tuning change into the local image copy so that
 	// mc.State.CurrentImage stays in sync with the store. Without this,
-	// the anchor popup would show the stale (pre-change) anchor until
+	// the tuning popup would show the stale (pre-change) tuning until
 	// the user navigates away and back.
-	if img.CropAnchors == nil {
-		img.CropAnchors = make(map[string]provider.CropAnchor)
+	if img.Tuning == nil {
+		img.Tuning = make(map[string]provider.TuningOptions)
 	}
-	if anchor == provider.AnchorAuto {
-		delete(img.CropAnchors, resKey)
+	defaultOpts := provider.TuningOptions{Anchor: provider.AnchorAuto}
+	if opts == defaultOpts {
+		delete(img.Tuning, resKey)
 	} else {
-		img.CropAnchors[resKey] = anchor
+		img.Tuning[resKey] = opts
 	}
+	mc.State.CurrentImage = img
 
 	// 2. Find master path
 	ext := filepath.Ext(img.FilePath)
@@ -571,12 +586,12 @@ func (mc *MonitorController) reprocessWithAnchor(anchor provider.CropAnchor) {
 		return
 	}
 
-	// 4. Re-run FitImage with anchor
+	// 4. Re-run FitImage with new tuning
 	width, height := mc.Monitor.Rect.Dx(), mc.Monitor.Rect.Dy()
 	ctx := context.Background()
-	processedImg, err := mc.processor.FitImage(ctx, srcImg, width, height, anchor)
+	processedImg, err := mc.processor.FitImage(ctx, srcImg, width, height, opts)
 	if err != nil {
-		log.Printf("[ERROR] [Monitor %d] FitImage failed with anchor %v: %v", mc.ID, anchor, err)
+		log.Printf("[ERROR] [Monitor %d] FitImage failed with tuning %v: %v", mc.ID, opts, err)
 		return
 	}
 

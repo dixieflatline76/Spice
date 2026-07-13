@@ -1,0 +1,82 @@
+{
+  "ClevelandMuseum_135428.jpg": {
+    "hash": "136825cda78359342f9cb48786f072b63cb857379ee2c4feea6bd7652581861f",
+    "face_found": true,
+    "face_rect": "(3181,1369)-(3237,1425)"
+  },
+  "NationalPalaceMuseum_223.jpg": {
+    "hash": "b112d013b378a4d363d821265577b38d0eee0695edaf3df9ac74bae85cdb6dd4",
+    "face_found": false,
+    "face_rect": "(0,0)-(0,0)"
+  },
+  "Wallhaven_1k8jxv.jpg": {
+    "hash": "ca1aea7b9be062841814608584fdbe496d83b7145581abb616aae27e76407fdd",
+    "face_found": false,
+    "face_rect": "(0,0)-(0,0)"
+  },
+  "Wallhaven_4xx1rl.jpg": {
+    "hash": "74b5e08aae0f83ee66f9d9ac503e379819eb8efc765755850dad22fcc857e0d9",
+    "face_found": false,
+    "face_rect": "(0,0)-(0,0)"
+  },
+  "Wallhaven_5ykoe7.jpg": {
+    "hash": "cadea0eec7e386114bd35c97e78714008388c2e9cd5f5db53eb49c9d25f08e4c",
+    "face_found": false,
+    "face_rect": "(0,0)-(0,0)"
+  },
+  "Wallhaven_8gdq3y.jpg": {
+    "hash": "2a58c555d12d79e620b2c36696672f1fb9dfcb928c285723ad8bc5823fe487a0",
+    "face_found": false,
+    "face_rect": "(0,0)-(0,0)"
+  },
+  "Wallhaven_ey27or.jpg": {
+    "hash": "c10365ada8cc4f3a27bea0f658c816c7fda5217bceb68e8b7eec31b50fffee8a",
+    "face_found": false,
+    "face_rect": "(0,0)-(0,0)"
+  },
+  "Wallhaven_jev335.jpg": {
+    "hash": "5c80c7974620fbbe1a1498c42abb4a42b23b26aea4595779e79926a3cf467762",
+    "face_found": false,
+    "face_rect": "(0,0)-(0,0)"
+  },
+  "Wallhaven_jev33w.jpg": {
+    "hash": "62ca66cef9319903faa4b4a641d53b615e12881e9cd4e1a3d7737d2a9adf7e3c",
+    "face_found": false,
+    "face_rect": "(0,0)-(0,0)"
+  },
+  "Wallhaven_mlgg39.jpg": {
+    "hash": "99a327ce8629a6a0954dea430d7687512d4d9abe22b1b57e0832e7efdaa212cc",
+    "face_found": false,
+    "face_rect": "(0,0)-(0,0)"
+  },
+  "Wallhaven_zpdppj.jpg": {
+    "hash": "48b55de694a8e18a4e68912c72e8b491c7cc6324a3852d177d5fc92fdfdc43ff",
+    "face_found": false,
+    "face_rect": "(0,0)-(0,0)"
+  },
+  "wallhaven-5ym5x8.jpg": {
+    "hash": "b5e296d1d51df408e4bd2a53beef48dc2de6c73a72ed95052cefef2e6adaf0ee",
+    "face_found": false,
+    "face_rect": "(0,0)-(0,0)"
+  },
+  "wallhaven-e86w3w.jpg": {
+    "hash": "7b1adab7de6eaaf5e3916afaae114a52eb8b94b069f118e829510cc509eebea7",
+    "face_found": false,
+    "face_rect": "(0,0)-(0,0)"
+  },
+  "wallhaven-k8l1w6.jpg": {
+    "hash": "beea49a544cb4c433a61487cc8f7b49f597a9f395b3164a879c73eb2d57a8075",
+    "face_found": true,
+    "face_rect": "(496,118)-(976,598)"
+  },
+  "wallhaven-q2wrjl.jpg": {
+    "hash": "0476462011cbf2aa8a5cc66d8209cca7e8d0ce04c0be421a96d309d8da7e6b91",
+    "face_found": false,
+    "face_rect": "(0,0)-(0,0)"
+  },
+  "wallhaven-z8wxyy.jpg": {
+    "hash": "7afa16de47b105b902ac6b7ac0644320e572b2f80a83a200d36a838b6d1a8c9c",
+    "face_found": true,
+    "face_rect": "(3636,1185)-(4228,1777)"
+  }
+}

@@ -270,14 +270,16 @@ func (p *Provider) EnrichImage(_ context.Context, img provider.Image) (provider.
 
 func (p *Provider) CreateSettingsPanel(sm setting.SettingsManager) *schema.PanelSchema {
 	return schema.CreateMuseumSettingsPanel(schema.MuseumSettingsConfig{
-		ID:          "NPM",
-		Title:       i18n.T("國立故宮博物院 - National Palace Museum"),
-		Location:    i18n.T("Taipei, Taiwan"),
-		LicenseURL:  "https://theme.npm.edu.tw/opendata/Article.aspx?sNo=03009210",
-		Description: i18n.T("The National Palace Museum houses one of the largest collections of Chinese imperial artifacts and artworks in the world."),
-		MapQuery:    "National Palace Museum Taipei",
-		WebsiteURL:  "https://www.npm.gov.tw/index.aspx?l=2",
-		DonateURL:   "https://www.npm.gov.tw/Articles.aspx?sno=03009802&l=2",
+		MuseumFramingGetFunc: func() bool { return p.cfg.GetMuseumFraming("NPM") },
+		MuseumFramingSetFunc: func(val bool) { p.cfg.SetMuseumFraming("NPM", val) },
+		ID:                   "NPM",
+		Title:                i18n.T("國立故宮博物院 - National Palace Museum"),
+		Location:             i18n.T("Taipei, Taiwan"),
+		LicenseURL:           "https://theme.npm.edu.tw/opendata/Article.aspx?sNo=03009210",
+		Description:          i18n.T("The National Palace Museum houses one of the largest collections of Chinese imperial artifacts and artworks in the world."),
+		MapQuery:             "National Palace Museum Taipei",
+		WebsiteURL:           "https://www.npm.gov.tw/index.aspx?l=2",
+		DonateURL:            "https://www.npm.gov.tw/Articles.aspx?sno=03009802&l=2",
 	}, sm.OpenURL)
 }
 

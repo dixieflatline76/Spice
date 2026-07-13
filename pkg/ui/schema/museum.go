@@ -25,6 +25,9 @@ type MuseumSettingsConfig struct {
 	RegistrationURL string        // URL where users can register for a key
 	APIKeyGetFunc   func() string // Read current key value
 	APIKeySetFunc   func(string)  // Save new key value
+
+	MuseumFramingGetFunc func() bool // Read current museum framing value
+	MuseumFramingSetFunc func(bool)  // Save new museum framing value
 }
 
 // CreateMuseumSettingsPanel generates a standard PanelSchema for museum providers.
@@ -32,7 +35,9 @@ func CreateMuseumSettingsPanel(cfg MuseumSettingsConfig, openURL func(string)) *
 	prefix := strings.ToLower(cfg.ID)
 
 	// Build the info items (always present)
-	infoItems := []ItemSchema{
+	infoItems := []ItemSchema{}
+
+	infoItems = append(infoItems,
 		LabelItem{
 			Text:       cfg.Description,
 			Importance: ImportanceLow,
@@ -71,6 +76,17 @@ func CreateMuseumSettingsPanel(cfg MuseumSettingsConfig, openURL func(string)) *
 				},
 			},
 		},
+	)
+
+	if cfg.MuseumFramingGetFunc != nil && cfg.MuseumFramingSetFunc != nil {
+		infoItems = append(infoItems, BoolItem{
+			Name:         prefix + "_museum_framing",
+			Label:        i18n.T("Display as Framed Gallery"),
+			Help:         i18n.T("Present all artwork from this collection inside a virtual museum frame with a dynamic background, regardless of its original dimensions."),
+			InitialValue: cfg.MuseumFramingGetFunc(),
+			ApplyFunc:    cfg.MuseumFramingSetFunc,
+			NeedsRefresh: false,
+		})
 	}
 
 	sections := []SectionSchema{

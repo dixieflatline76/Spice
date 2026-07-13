@@ -12,6 +12,7 @@ import (
 
 	"github.com/disintegration/imaging"
 	"github.com/dixieflatline76/Spice/v2/asset"
+	"github.com/dixieflatline76/Spice/v2/pkg/provider"
 	"github.com/dixieflatline76/Spice/v2/pkg/wallpaper"
 	"github.com/dixieflatline76/Spice/v2/util/log"
 	pigo "github.com/esimov/pigo/core"
@@ -251,7 +252,7 @@ func main() {
 			cfg.Tuning.FaceDetectShift = m.Shift
 
 			// Process
-			resImg, err := processor.FitImage(ctx, srcImg, 3440, 1440, 0)
+			resImg, err := processor.FitImage(ctx, srcImg, 3440, 1440, provider.TuningOptions{})
 			stats := processor.GetLastStats()
 
 			filename := fmt.Sprintf("%s_%s.jpg", ti.Name, sanitize(m.Name))

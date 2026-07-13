@@ -186,8 +186,8 @@ func (wp *Plugin) CreateTrayMenuItems() []*fyne.MenuItem {
 			res = append(res, mItems.FavoriteMenuItem)
 		}
 		if wp.cfg.GetSmartFitMode() != SmartFitOff {
-			anchorItem := wp.manager.CreateMenuItem(i18n.T("Crop Anchor"), func() {
-				wp.showAnchorPopup(mID)
+			anchorItem := wp.manager.CreateMenuItem(i18n.T("Tune Image"), func() {
+				wp.showTuneImagePopup(mID)
 			}, "anchor.png")
 			res = append(res, anchorItem)
 		}

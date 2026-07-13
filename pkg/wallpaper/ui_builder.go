@@ -1,7 +1,10 @@
 package wallpaper
 
 import (
+	"errors"
+	"fmt"
 	"sort"
+	"strconv"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -19,6 +22,9 @@ type PrefsPanelBuilder struct {
 }
 
 func NewPrefsPanelBuilder(p *Plugin, sm setting.SettingsManager) *PrefsPanelBuilder {
+	sm.RegisterOnSettingsSaved(func() {
+		p.cfg.save()
+	})
 	return &PrefsPanelBuilder{
 		plugin: p,
 		sm:     sm,
@@ -33,15 +39,70 @@ func (b *PrefsPanelBuilder) BuildGeneralTabSchema() *schema.PanelSchema {
 				Title:       i18n.T("Wallpaper Cycle & Cache"),
 				Description: i18n.T("Configure how often wallpapers change and how many images are kept locally."),
 				Items: []schema.ItemSchema{
-					schema.SelectItem{
+					schema.TextItem{
 						Name:         "changeFrequency",
-						Label:        i18n.T("Wallpaper Change Frequency:"),
-						Help:         i18n.T("Set how often the wallpaper changes. Set to \"Never\" to disable wallpaper changes."),
-						Options:      setting.StringOptions(GetFrequencies()),
-						InitialValue: int(b.plugin.cfg.GetWallpaperChangeFrequency()),
-						ApplyFunc: func(val interface{}) {
-							freq := Frequency(val.(int))
-							b.plugin.ChangeWallpaperFrequency(freq, true)
+						Label:        i18n.T("Wallpaper Change Frequency (Minutes):"),
+						Help:         i18n.T("Set how often the wallpaper changes in minutes. Set to 0 for Never."),
+						InitialValue: fmt.Sprintf("%d", b.plugin.cfg.GetWallpaperChangeFrequency()),
+						IsNumeric:    true,
+						Validator: func(s string) error {
+							val, err := strconv.Atoi(s)
+							if err != nil || val < 0 {
+								return errors.New(i18n.T("Must be a positive integer or 0"))
+							}
+							return nil
+						},
+						ApplyFunc: func(val string) {
+							freq, _ := strconv.Atoi(val)
+							b.plugin.ChangeWallpaperFrequency(Frequency(freq), true)
+						},
+						NeedsRefresh: true,
+					},
+					schema.HorizontalRowItem{
+						ID: "freq_shortcuts",
+						Items: []schema.ItemSchema{
+							schema.ButtonItem{
+								Name:       "freqNever",
+								ButtonText: i18n.T("Never"),
+								OnPressed: func() {
+									b.sm.SetValue("changeFrequency", "0")
+								},
+							},
+							schema.ButtonItem{
+								Name:       "freq1h",
+								ButtonText: i18n.T("1 Hour"),
+								OnPressed: func() {
+									b.sm.SetValue("changeFrequency", "60")
+								},
+							},
+							schema.ButtonItem{
+								Name:       "freq3h",
+								ButtonText: i18n.T("3 Hours"),
+								OnPressed: func() {
+									b.sm.SetValue("changeFrequency", "180")
+								},
+							},
+							schema.ButtonItem{
+								Name:       "freq6h",
+								ButtonText: i18n.T("6 Hours"),
+								OnPressed: func() {
+									b.sm.SetValue("changeFrequency", "360")
+								},
+							},
+							schema.ButtonItem{
+								Name:       "freq12h",
+								ButtonText: i18n.T("12 Hours"),
+								OnPressed: func() {
+									b.sm.SetValue("changeFrequency", "720")
+								},
+							},
+							schema.ButtonItem{
+								Name:       "freqDaily",
+								ButtonText: i18n.T("Daily"),
+								OnPressed: func() {
+									b.sm.SetValue("changeFrequency", "1440")
+								},
+							},
 						},
 					},
 					schema.SelectItem{
@@ -121,6 +182,55 @@ func (b *PrefsPanelBuilder) BuildGeneralTabSchema() *schema.PanelSchema {
 							if val {
 								b.plugin.cfg.SetFaceCropEnabled(false)
 							}
+						},
+					},
+				},
+			},
+			{
+				Title:       i18n.T("Virtual Museum Framing"),
+				Description: i18n.T("Dynamically generate a museum-style frame and matting for artwork."),
+				Items: []schema.ItemSchema{
+					schema.BoolItem{
+						Name:         "virtualFramingFallback",
+						Label:        i18n.T("Download & Frame Mismatched Images"),
+						Help:         i18n.T("Expand your wallpaper rotation by accepting images that do not naturally fit your screen and presenting them in a gallery frame instead of skipping them."),
+						InitialValue: b.plugin.cfg.VirtualFramingFallback,
+						ApplyFunc: func(val bool) {
+							b.plugin.cfg.VirtualFramingFallback = val
+						},
+						NeedsRefresh: false,
+					},
+					schema.SelectItem{
+						Name:         "virtualWallColor",
+						Label:        i18n.T("Virtual Wall Color:"),
+						Help:         i18n.T("Control the background wall behind the frame."),
+						Options:      []string{"Dynamic Algorithmic", "Neutral Gallery"},
+						InitialValue: int(b.plugin.cfg.VirtualWallColor),
+						ApplyFunc: func(val interface{}) {
+							b.plugin.cfg.VirtualWallColor = VirtualWallMode(val.(int))
+						},
+						NeedsRefresh: true,
+					},
+					schema.BoolItem{
+						Name:         "virtualPaperMatting",
+						Label:        i18n.T("Virtual Paper Matting:"),
+						Help:         i18n.T("Add a white paper mat between the frame and the artwork."),
+						InitialValue: b.plugin.cfg.VirtualPaperMatting,
+						ApplyFunc: func(val bool) {
+							b.plugin.cfg.VirtualPaperMatting = val
+						},
+					},
+					schema.SliderItem{
+						Name:         "virtualFrameSize",
+						Label:        i18n.T("Frame Size (%):"),
+						Help:         i18n.T("The size of the framed artwork relative to the total screen height."),
+						Min:          50,
+						Max:          100,
+						Step:         1,
+						Format:       "%.0f%%",
+						InitialValue: b.plugin.cfg.VirtualFrameSize * 100.0,
+						ApplyFunc: func(val float64) {
+							b.plugin.cfg.VirtualFrameSize = val / 100.0
 						},
 					},
 				},

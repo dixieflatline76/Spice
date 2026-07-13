@@ -66,11 +66,11 @@ func TestReprocessWithAnchor_StateSync(t *testing.T) {
 	mc.State.CurrentID = imgID
 
 	// --- Mock expectations ---
-	mockStore.On("SetCropAnchor", imgID, "1920x1080", provider.AnchorTopCenter).Return(true)
+	mockStore.On("SetTuningOptions", imgID, "1920x1080", provider.TuningOptions{Anchor: provider.AnchorTopCenter}).Return(true)
 
 	// FitImage should return a valid image (1x1 is fine for test)
 	dummyResult := image.NewRGBA(image.Rect(0, 0, 1920, 1080))
-	mockIP.On("FitImage", mock.Anything, mock.Anything, 1920, 1080, provider.AnchorTopCenter).Return(dummyResult, nil)
+	mockIP.On("FitImage", mock.Anything, mock.Anything, 1920, 1080, provider.TuningOptions{Anchor: provider.AnchorTopCenter}).Return(dummyResult, nil)
 
 	// SetWallpaper should succeed
 	mockOS.On("SetWallpaper", mock.AnythingOfType("string"), 0).Return(nil)
@@ -90,14 +90,14 @@ func TestReprocessWithAnchor_StateSync(t *testing.T) {
 	mc.mu.RUnlock()
 
 	assert.Equal(t, provider.AnchorTopCenter, resultAnchor,
-		"CurrentImage.CropAnchors should reflect the new anchor after reprocessing")
+		"CurrentImage.Tuning should reflect the new anchor after reprocessing")
 
 	mockStore.AssertExpectations(t)
 	mockIP.AssertExpectations(t)
 }
 
 // TestReprocessWithAnchor_AnchorAuto_ClearsMap verifies that setting
-// AnchorAuto removes the resolution entry from the CropAnchors map.
+// AnchorAuto removes the resolution entry from the Tuning map.
 func TestReprocessWithAnchor_AnchorAuto_ClearsMap(t *testing.T) {
 	tmpDir := t.TempDir()
 	rootDir := filepath.Join(tmpDir, "wallpaper_downloads")
@@ -123,8 +123,8 @@ func TestReprocessWithAnchor_AnchorAuto_ClearsMap(t *testing.T) {
 	mc.State.CurrentImage = provider.Image{
 		ID:       "test_img",
 		FilePath: masterPath,
-		CropAnchors: map[string]provider.CropAnchor{
-			"1920x1080": provider.AnchorTopCenter,
+		Tuning: map[string]provider.TuningOptions{
+			"1920x1080": provider.TuningOptions{Anchor: provider.AnchorTopCenter},
 		},
 		DerivativePaths: map[string]string{
 			"1920x1080": derivPath,
@@ -132,9 +132,9 @@ func TestReprocessWithAnchor_AnchorAuto_ClearsMap(t *testing.T) {
 	}
 	mc.State.CurrentID = "test_img"
 
-	mockStore.On("SetCropAnchor", "test_img", "1920x1080", provider.AnchorAuto).Return(true)
+	mockStore.On("SetTuningOptions", "test_img", "1920x1080", provider.TuningOptions{Anchor: provider.AnchorAuto}).Return(true)
 	dummyResult := image.NewRGBA(image.Rect(0, 0, 1920, 1080))
-	mockIP.On("FitImage", mock.Anything, mock.Anything, 1920, 1080, provider.AnchorAuto).Return(dummyResult, nil)
+	mockIP.On("FitImage", mock.Anything, mock.Anything, 1920, 1080, provider.TuningOptions{Anchor: provider.AnchorAuto}).Return(dummyResult, nil)
 	mockOS.On("SetWallpaper", mock.AnythingOfType("string"), 0).Return(nil)
 	mockStore.On("GetUpdateChannel").Return((<-chan struct{})(nil))
 
@@ -146,10 +146,10 @@ func TestReprocessWithAnchor_AnchorAuto_ClearsMap(t *testing.T) {
 	time.Sleep(300 * time.Millisecond)
 
 	mc.mu.RLock()
-	_, exists := mc.State.CurrentImage.CropAnchors["1920x1080"]
+	_, exists := mc.State.CurrentImage.Tuning["1920x1080"]
 	mc.mu.RUnlock()
 
-	assert.False(t, exists, "AnchorAuto should clear the resolution entry from CropAnchors")
+	assert.False(t, exists, "AnchorAuto should clear the resolution entry from Tuning")
 	mockStore.AssertExpectations(t)
 }
 

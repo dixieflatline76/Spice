@@ -22,6 +22,24 @@ type Plugin interface {
 
 Plugins should follow the **Hexagonal Architecture** used throughout Spice. While `CreatePrefsPanel` returns a `*fyne.Container` (for maximum flexibility), the recommended approach is to build your settings using the schema-driven pattern:
 
+**Available Schema Types**:
+
+| Schema Type | Use For |
+|:---|:---|
+| `schema.SecretItem` | API Keys, Credentials (Transactional verify/clear pattern) |
+| `schema.TextItem` | Text entries with validation and debounce |
+| `schema.BoolItem` | Checkboxes / toggles |
+| `schema.SelectItem` | Dropdowns |
+| `schema.ButtonItem` | Action buttons |
+| `schema.AsyncButtonItem` | Background task buttons with loading state |
+| `schema.ConfirmButtonItem` | Buttons requiring user confirmation |
+| `schema.HyperlinkItem` | Clickable URLs |
+| `schema.LabelItem` | Static text or descriptions |
+
+> [!TIP]
+> **Dynamic UI Dependencies**
+> All schema items support `VisibleIf func() bool` and `EnabledIf func() bool` closures. Use these to dynamically hide or disable dependent settings based on the state of other config values (e.g., hiding a "Sub-setting" if the "Master Toggle" is disabled).
+
 1. **Define your settings** as `*schema.PanelSchema` structs (pure Go, no Fyne imports).
 2. **Render them** via `sm.RenderSchema()` inside `CreatePrefsPanel`.
 

@@ -35,6 +35,8 @@ type Config interface {
 	EnableImageQuery(id string) error
 	DisableImageQuery(id string) error
 	RemoveImageQuery(id string) error
+	GetMuseumFraming(providerID string) bool
+	SetMuseumFraming(providerID string, enabled bool)
 }
 
 // Provider implements the Art Institute of Chicago image provider.
@@ -460,14 +462,16 @@ func getIIIFURL(imageID string, width, height int) string {
 // CreateSettingsPanel returns the declarative UI for ArtIC settings.
 func (p *Provider) CreateSettingsPanel(sm setting.SettingsManager) *schema.PanelSchema {
 	return schema.CreateMuseumSettingsPanel(schema.MuseumSettingsConfig{
-		ID:          "AIC",
-		Title:       i18n.T("Art Institute of Chicago"),
-		Location:    i18n.T("Chicago, IL, USA"),
-		LicenseURL:  "https://www.artic.edu/open-access/open-access-images",
-		Description: i18n.T("One of the world's great art museums, housing icons like Nighthawks and American Gothic."),
-		MapQuery:    "Art Institute of Chicago",
-		WebsiteURL:  "https://www.artic.edu",
-		DonateURL:   "https://www.artic.edu/support-us",
+		MuseumFramingGetFunc: func() bool { return p.cfg.GetMuseumFraming("AIC") },
+		MuseumFramingSetFunc: func(val bool) { p.cfg.SetMuseumFraming("AIC", val) },
+		ID:                   "AIC",
+		Title:                i18n.T("Art Institute of Chicago"),
+		Location:             i18n.T("Chicago, IL, USA"),
+		LicenseURL:           "https://www.artic.edu/open-access/open-access-images",
+		Description:          i18n.T("One of the world's great art museums, housing icons like Nighthawks and American Gothic."),
+		MapQuery:             "Art Institute of Chicago",
+		WebsiteURL:           "https://www.artic.edu",
+		DonateURL:            "https://www.artic.edu/support-us",
 	}, sm.OpenURL)
 }
 

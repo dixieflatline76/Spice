@@ -83,8 +83,11 @@ func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, _ string) *schem
     }
 }
 ```
-
 The rendering engine handles all dirty tracking, Apply button state, and widget creation automatically.
+
+> [!NOTE]
+> **Cache Invalidation**
+> Notice `NeedsRefresh: true` in the snippet above. If a user toggles a museum tour, this triggers the `RefreshImagesAndPulse()` event. The central Image Store will reconcile its derivative cache against the new configuration, automatically invalidating stale files and refreshing the monitor wallpapers. Always set this flag if your setting alters image processing or fetching logic.
 
 ## 4. Remote Curation (`remote.go`)
 

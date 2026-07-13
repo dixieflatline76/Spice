@@ -37,9 +37,14 @@ type Config struct {
 	userid            string
 	mu                sync.RWMutex // Mutex for thread-safe access
 	// Advanced
-	LogLevel                string       `json:"-"`
-	MaxConcurrentProcessors int          `json:"-"`
-	Tuning                  TuningConfig `json:"tuning"`
+	LogLevel                string          `json:"-"`
+	MaxConcurrentProcessors int             `json:"-"`
+	VirtualFramingFallback  bool            `json:"virtual_framing_fallback"`
+	MuseumFraming           map[string]bool `json:"museum_framing"`
+	VirtualWallColor        VirtualWallMode `json:"virtual_wall_color"`
+	VirtualPaperMatting     bool            `json:"virtual_paper_matting"`
+	VirtualFrameSize        float64         `json:"virtual_frame_size"`
+	Tuning                  TuningConfig    `json:"tuning"`
 
 	// Callbacks
 	QueryRemovedCallback      func(queryID string) `json:"-"`
@@ -51,6 +56,21 @@ type Config struct {
 	WallhavenSyncEnabled      bool                 `json:"-"`
 	MonitorPauseStates        map[string]bool      `json:"monitor_pause_states"`
 }
+
+type VirtualFramingMode int
+
+const (
+	FramingOff VirtualFramingMode = iota
+	FramingExtreme
+	FramingSignificant
+)
+
+type VirtualWallMode int
+
+const (
+	WallAlgorithmic VirtualWallMode = iota
+	WallNeutral
+)
 
 // ImageQuery struct to hold the URL of an image and whether it is active
 type ImageQuery struct {
@@ -177,6 +197,10 @@ func (c *Config) loadFromPrefs() error {
 
 	if err := json.Unmarshal([]byte(cfgText), c); err != nil {
 		return err
+	}
+
+	if c.VirtualFrameSize == 0 {
+		c.VirtualFrameSize = 0.8
 	}
 
 	// Execute Migration Chain
@@ -554,15 +578,52 @@ func (c *Config) SetSmartFit(enabled bool) {
 // GetWallpaperChangeFrequency returns the wallpaper change frequency enumeration from the config, or the default value if not set or invalid
 func (c *Config) GetWallpaperChangeFrequency() Frequency {
 	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return Frequency(c.IntWithFallback(WallpaperChgFreqPrefKey, int(FrequencyHourly))) // Default to hourly
+	// Check if the new key exists
+	val := c.IntWithFallback(WallpaperChgFreqMinsPrefKey, -1)
+	if val != -1 {
+		c.mu.RUnlock()
+		return Frequency(val)
+	}
+
+	// Legacy migration logic
+	legacyVal := c.IntWithFallback(WallpaperChgFreqPrefKey, 5) // 5 was Hourly
+	c.mu.RUnlock()
+
+	// Map old enum to new minutes
+	var newMins int
+	switch legacyVal {
+	case 0:
+		newMins = 0
+	case 1:
+		newMins = 1
+	case 2:
+		newMins = 5
+	case 3:
+		newMins = 15
+	case 4:
+		newMins = 30
+	case 5:
+		newMins = 60
+	case 6:
+		newMins = 180
+	case 7:
+		newMins = 360
+	case 8:
+		newMins = 1440
+	default:
+		newMins = 60
+	}
+
+	// Save migrated value
+	c.SetWallpaperChangeFrequency(Frequency(newMins))
+	return Frequency(newMins)
 }
 
 // SetWallpaperChangeFrequency sets the frequency enumeration for wallpaper changes and saves it
 func (c *Config) SetWallpaperChangeFrequency(frequency Frequency) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.SetInt(WallpaperChgFreqPrefKey, int(frequency))
+	c.SetInt(WallpaperChgFreqMinsPrefKey, int(frequency))
 }
 
 // GetImgShuffle returns the image shuffle preference from the config.
@@ -1042,9 +1103,13 @@ func (c *Config) save() {
 	// of a massive JSON marshal. So we build a serialization object while under the current lock,
 	// and then marshal that object.
 
-	// Build a clean clone for serialization to avoid copying sync primitives (copylocks)
 	clone := &Config{
-		Tuning: c.Tuning,
+		Tuning:                 c.Tuning,
+		VirtualFramingFallback: c.VirtualFramingFallback,
+		MuseumFraming:          c.cloneMuseumFraming(),
+		VirtualWallColor:       c.VirtualWallColor,
+		VirtualPaperMatting:    c.VirtualPaperMatting,
+		VirtualFrameSize:       c.VirtualFrameSize,
 	}
 
 	// Sync avoidMap to AvoidSet for JSON marshaling
@@ -1358,4 +1423,34 @@ func (c *Config) GetMaxConcurrentProcessors() int {
 // AddNationalPalaceMuseumQuery adds a new National Palace Museum query.
 func (c *Config) AddNationalPalaceMuseumQuery(description, url string, active bool) (string, error) {
 	return c.AddProviderQuery(description, url, "NationalPalaceMuseum", active, false)
+}
+
+func (c *Config) GetMuseumFraming(providerID string) bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.MuseumFraming == nil {
+		return false
+	}
+	return c.MuseumFraming[providerID]
+}
+
+func (c *Config) SetMuseumFraming(providerID string, enabled bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.MuseumFraming == nil {
+		c.MuseumFraming = make(map[string]bool)
+	}
+	c.MuseumFraming[providerID] = enabled
+	c.save()
+}
+
+func (c *Config) cloneMuseumFraming() map[string]bool {
+	if c.MuseumFraming == nil {
+		return nil
+	}
+	m := make(map[string]bool)
+	for k, v := range c.MuseumFraming {
+		m[k] = v
+	}
+	return m
 }

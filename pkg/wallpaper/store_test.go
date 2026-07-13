@@ -1736,39 +1736,6 @@ func TestSetFavorited_NotFound(t *testing.T) {
 	assert.False(t, ok)
 }
 
-func TestSetCropAnchor_SetAndClear(t *testing.T) {
-	store := NewImageStore()
-	store.SetAsyncSave(false)
-
-	img := provider.Image{
-		ID:              "test1",
-		DerivativePaths: map[string]string{"3440x1440": "/path/to/deriv.jpg"},
-	}
-	store.Add(img)
-
-	// Set an anchor
-	ok := store.SetCropAnchor("test1", "3440x1440", provider.AnchorTopCenter)
-	assert.True(t, ok)
-
-	got, _ := store.GetByID("test1")
-	assert.Equal(t, provider.AnchorTopCenter, got.CropAnchors["3440x1440"])
-
-	// DerivativePaths must be untouched
-	assert.Equal(t, "/path/to/deriv.jpg", got.DerivativePaths["3440x1440"], "DerivativePaths should be untouched")
-
-	// Clear anchor with AnchorAuto
-	store.SetCropAnchor("test1", "3440x1440", provider.AnchorAuto)
-	got, _ = store.GetByID("test1")
-	_, exists := got.CropAnchors["3440x1440"]
-	assert.False(t, exists, "Anchor should be removed with AnchorAuto")
-}
-
-func TestSetCropAnchor_NotFound(t *testing.T) {
-	store := NewImageStore()
-	ok := store.SetCropAnchor("nonexistent", "3440x1440", provider.AnchorTopCenter)
-	assert.False(t, ok)
-}
-
 func TestClearDerivatives_RemovesFromBuckets(t *testing.T) {
 	store := NewImageStore()
 	store.SetAsyncSave(false)
@@ -1860,7 +1827,7 @@ func TestFavoritesUpsert_PreservesStoreMetadata(t *testing.T) {
 		FilePath:        "/downloads/Wallhaven_4yd58l.jpg",
 		DerivativePaths: map[string]string{"3440x1440": "/fitted/wh.jpg"},
 		ProcessingFlags: map[string]bool{"SmartFit": true, "FaceCrop": true},
-		CropAnchors:     map[string]provider.CropAnchor{"3440x1440": provider.AnchorTopCenter},
+		Tuning:          map[string]provider.TuningOptions{"3440x1440": {Anchor: provider.AnchorTopCenter}},
 		Width:           3840,
 		Height:          2160,
 		Seen:            true,
@@ -1893,7 +1860,7 @@ func TestFavoritesUpsert_PreservesStoreMetadata(t *testing.T) {
 	// Store-managed fields should be PRESERVED
 	assert.Equal(t, map[string]string{"3440x1440": "/fitted/wh.jpg"}, got.DerivativePaths, "DerivativePaths must be preserved")
 	assert.Equal(t, map[string]bool{"SmartFit": true, "FaceCrop": true}, got.ProcessingFlags, "ProcessingFlags must be preserved")
-	assert.Equal(t, provider.AnchorTopCenter, got.CropAnchors["3440x1440"], "CropAnchors must be preserved")
+	assert.Equal(t, provider.AnchorTopCenter, got.Tuning["3440x1440"].Anchor, "Tuning must be preserved")
 	assert.Equal(t, 3840, got.Width, "Width must be preserved")
 	assert.Equal(t, 2160, got.Height, "Height must be preserved")
 	assert.Equal(t, "/downloads/Wallhaven_4yd58l.jpg", got.FilePath, "FilePath must be preserved when incoming is empty")
@@ -2415,4 +2382,117 @@ func TestBuckets_ConcurrentMutations(t *testing.T) {
 			"After concurrent mutations, resolution %s should match: rebuild=%v, incremental=%v",
 			res, rebuildIDs, incrementalIDs)
 	}
+}
+
+func TestStore_MigrateLegacyCropAnchorsToTuning(t *testing.T) {
+	// Simulate legacy JSON where "CropAnchors" is defined but "Tuning" is not.
+	legacyJSON := `[{
+		"ID": "legacy1",
+		"CropAnchors": {
+			"1920x1080": 2,
+			"3440x1440": 8
+		}
+	}]`
+
+	// Create a temp file and write legacy json
+	tmpFile, err := os.CreateTemp("", "spice_legacy_test_*.json")
+	assert.NoError(t, err)
+	defer os.Remove(tmpFile.Name())
+	_, err = tmpFile.Write([]byte(legacyJSON))
+	assert.NoError(t, err)
+	tmpFile.Close()
+
+	tmpDir := t.TempDir()
+	store := NewImageStore()
+	store.SetFileManager(NewFileManager(tmpDir), tmpFile.Name())
+	err = store.LoadCache()
+	assert.NoError(t, err)
+
+	// Ensure it loaded correctly into the new struct format
+	img, ok := store.GetByID("legacy1")
+	assert.True(t, ok)
+	assert.Equal(t, "legacy1", img.ID)
+
+	// Verify it auto-migrated via unmarshalling (Go json package natively supports this if we do it in UnmarshalJSON,
+	// OR we can do it explicitly in store load. Wait, standard unmarshaling doesn't auto-migrate if we removed the field!
+	// Oh! We removed CropAnchors from the struct! So standard json.Unmarshal will just silently drop it if we don't have custom logic!)
+
+	// We MUST assert the Tuning is populated, otherwise we fail.
+	assert.NotNil(t, img.Tuning)
+	assert.Equal(t, provider.AnchorTopRight, img.GetTuning("1920x1080").Anchor)              // 2 is AnchorTopRight
+	assert.Equal(t, provider.AnchorBottomRight, img.GetTuning("3440x1440").Anchor)           // 8 is AnchorBottomRight
+	assert.Equal(t, provider.FrameOverrideInherit, img.GetTuning("1920x1080").FrameOverride) // Inherit is zero-value
+}
+
+func TestStore_SetTuningOptions(t *testing.T) {
+	store := NewImageStore()
+	store.SetAsyncSave(false)
+	store.Add(provider.Image{ID: "test1"})
+
+	// Set tuning for 1920x1080
+	opts := provider.TuningOptions{
+		Anchor:        provider.AnchorTopCenter,
+		FrameOverride: provider.FrameOverrideForceOn,
+		WallColor:     provider.WallColorOverrideAlgorithmic,
+		Matting:       provider.MattingOverrideOff,
+		FrameSize:     0.9,
+	}
+	ok := store.SetTuningOptions("test1", "1920x1080", opts)
+	assert.True(t, ok)
+
+	img, ok := store.GetByID("test1")
+	assert.True(t, ok)
+	assert.Equal(t, provider.AnchorTopCenter, img.GetTuning("1920x1080").Anchor)
+	assert.Equal(t, provider.FrameOverrideForceOn, img.GetTuning("1920x1080").FrameOverride)
+	assert.Equal(t, provider.WallColorOverrideAlgorithmic, img.GetTuning("1920x1080").WallColor)
+	assert.Equal(t, provider.MattingOverrideOff, img.GetTuning("1920x1080").Matting)
+	assert.Equal(t, 0.9, img.GetTuning("1920x1080").FrameSize)
+
+	// Test clearing
+	ok = store.SetTuningOptions("test1", "1920x1080", provider.TuningOptions{})
+	assert.True(t, ok)
+	img, ok = store.GetByID("test1")
+	assert.True(t, ok)
+	assert.Equal(t, provider.AnchorAuto, img.GetTuning("1920x1080").Anchor)
+	assert.Equal(t, provider.FrameOverrideInherit, img.GetTuning("1920x1080").FrameOverride)
+}
+
+func TestStore_PersistenceAcrossRestarts(t *testing.T) {
+	tmpFile, err := os.CreateTemp("", "spice_persist_test_*.json")
+	assert.NoError(t, err)
+	tmpPath := tmpFile.Name()
+	tmpFile.Close()
+	defer os.Remove(tmpPath)
+
+	// Step 1: Create store, save complex struct
+	store1 := NewImageStore()
+	store1.SetAsyncSave(false)
+	store1.SetFileManager(NewFileManager(t.TempDir()), tmpPath)
+	store1.Add(provider.Image{ID: "persist_test"})
+
+	opts := provider.TuningOptions{
+		Anchor:        provider.AnchorMiddleRight,
+		FrameOverride: provider.FrameOverrideForceOff,
+		WallColor:     provider.WallColorOverrideNeutral,
+		Matting:       provider.MattingOverrideOn,
+		FrameSize:     0.75,
+	}
+	store1.SetTuningOptions("persist_test", "3440x1440", opts)
+
+	// Step 2: "Restart" - read from disk into a fresh store
+	store2 := NewImageStore()
+	store2.SetFileManager(NewFileManager(t.TempDir()), tmpPath)
+	err = store2.LoadCache()
+	assert.NoError(t, err)
+
+	img, ok := store2.GetByID("persist_test")
+	assert.True(t, ok)
+	assert.Equal(t, "persist_test", img.ID)
+
+	loadedOpts := img.GetTuning("3440x1440")
+	assert.Equal(t, provider.AnchorMiddleRight, loadedOpts.Anchor, "Anchor should persist")
+	assert.Equal(t, provider.FrameOverrideForceOff, loadedOpts.FrameOverride, "FrameOverride should persist")
+	assert.Equal(t, provider.WallColorOverrideNeutral, loadedOpts.WallColor, "WallColor should persist")
+	assert.Equal(t, provider.MattingOverrideOn, loadedOpts.Matting, "Matting should persist")
+	assert.Equal(t, 0.75, loadedOpts.FrameSize, "FrameSize should persist")
 }

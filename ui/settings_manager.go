@@ -61,6 +61,7 @@ type selectConfig struct {
 type boolConfig struct {
 	Name         string
 	InitialValue bool
+	LabelText    string
 	Label        fyne.CanvasObject
 	HelpContent  fyne.CanvasObject
 	OnChanged    func(bool)
@@ -84,6 +85,7 @@ type textEntrySettingConfig struct {
 	SkipApply          bool
 	DisplayStatus      bool
 	IsPassword         bool
+	IsNumeric          bool
 	EnabledIf          func() bool
 	VisibleIf          func() bool
 	ValidationDebounce time.Duration
@@ -309,6 +311,78 @@ func (sm *SettingsManager) GetApplySettingsButton() *widget.Button {
 }
 
 // renderSelectSetting creates a reusable select widget.
+func (sm *SettingsManager) renderSliderSetting(cfg *schema.SliderItem, header *fyne.Container) {
+	slider := widget.NewSlider(cfg.Min, cfg.Max)
+	slider.Step = cfg.Step
+	slider.SetValue(cfg.InitialValue)
+
+	valLabel := widget.NewLabel(fmt.Sprintf(cfg.Format, cfg.InitialValue))
+
+	slider.OnChanged = func(f float64) {
+		valLabel.SetText(fmt.Sprintf(cfg.Format, f))
+	}
+
+	sm.registry[cfg.Name] = cfg.InitialValue
+
+	if cfg.ApplyFunc != nil {
+		sm.applyFuncs[cfg.Name] = func(val interface{}) {
+			cfg.ApplyFunc(val.(float64))
+		}
+	}
+
+	slider.OnChangeEnded = func(f float64) {
+		if f != sm.registry[cfg.Name].(float64) {
+			applyFunc := cfg.ApplyFunc
+			needsRefresh := cfg.NeedsRefresh
+			settingName := cfg.Name
+			sm.chgPrefsCallbacks[settingName] = func() {
+				if applyFunc != nil {
+					applyFunc(f)
+				}
+				if needsRefresh {
+					sm.refreshFlags[settingName] = true
+				}
+			}
+		} else {
+			delete(sm.chgPrefsCallbacks, cfg.Name)
+		}
+		if cfg.OnChanged != nil {
+			cfg.OnChanged(f)
+		}
+		sm.checkAndEnableApply()
+	}
+
+	sm.valueGetters[cfg.Name] = func() interface{} {
+		return slider.Value
+	}
+
+	container := container.NewBorder(nil, nil, nil, valLabel, slider)
+
+	if cfg.EnabledIf != nil || cfg.VisibleIf != nil {
+		sm.managedWidgets = append(sm.managedWidgets, managedWidget{
+			widget:    slider,
+			enabledIf: cfg.EnabledIf,
+			visibleIf: cfg.VisibleIf,
+		})
+		sm.managedWidgets = append(sm.managedWidgets, managedWidget{
+			widget:    valLabel,
+			enabledIf: cfg.EnabledIf,
+			visibleIf: cfg.VisibleIf,
+		})
+	}
+	sm.allWidgets[cfg.Name] = slider
+
+	if cfg.Label != "" {
+		header.Add(NewSplitRow(widget.NewLabel(cfg.Label), container, SplitProportion.OneThird))
+	} else {
+		header.Add(container)
+	}
+
+	if cfg.Help != "" {
+		header.Add(widget.NewLabel(cfg.Help))
+	}
+}
+
 func (sm *SettingsManager) renderSelectSetting(cfg *selectConfig, header *fyne.Container) {
 	selectWidget := widget.NewSelect(cfg.Options, func(selected string) {})
 	selectWidget.SetSelectedIndex(cfg.InitialValue.(int))
@@ -406,13 +480,6 @@ func (sm *SettingsManager) renderSelectSetting(cfg *selectConfig, header *fyne.C
 
 // renderBoolSetting creates a reusable boolean check setting.
 func (sm *SettingsManager) renderBoolSetting(cfg *boolConfig, header *fyne.Container) *widget.Check {
-	check := widget.NewCheck("", nil) // Use empty string, label is CanvasObject
-	check.SetChecked(cfg.InitialValue)
-	sm.registry[cfg.Name] = cfg.InitialValue
-	sm.applyFuncs[cfg.Name] = func(val interface{}) {
-		cfg.ApplyFunc(val.(bool))
-	}
-
 	label := cfg.Label
 	labelIsEmpty := true
 	if label != nil {
@@ -423,6 +490,18 @@ func (sm *SettingsManager) renderBoolSetting(cfg *boolConfig, header *fyne.Conta
 		} else {
 			labelIsEmpty = false
 		}
+	}
+
+	checkText := ""
+	if labelIsEmpty {
+		checkText = cfg.LabelText
+	}
+
+	check := widget.NewCheck(checkText, nil)
+	check.SetChecked(cfg.InitialValue)
+	sm.registry[cfg.Name] = cfg.InitialValue
+	sm.applyFuncs[cfg.Name] = func(val interface{}) {
+		cfg.ApplyFunc(val.(bool))
 	}
 
 	// Keep a reference to the label row so we can manage its visibility
@@ -544,6 +623,23 @@ func (sm *SettingsManager) renderTextEntrySetting(cfg *textEntrySettingConfig, h
 
 	var debounceTimer *time.Timer
 	entry.OnChanged = func(s string) {
+		if cfg.IsNumeric {
+			var clean []rune
+			for _, r := range s {
+				if r >= '0' && r <= '9' {
+					clean = append(clean, r)
+				}
+			}
+			for len(clean) > 1 && clean[0] == '0' {
+				clean = clean[1:]
+			}
+			cleanStr := string(clean)
+			if s != cleanStr {
+				entry.SetText(cleanStr)
+				return
+			}
+		}
+
 		sm.handleTextEntryChanged(s, cfg, entry, statusLabel, &debounceTimer)
 	}
 
@@ -1081,6 +1177,7 @@ func (sm *SettingsManager) RenderSchema(p schema.PanelSchema) fyne.CanvasObject 
 					sm.renderBoolSetting(&boolConfig{
 						Name:         v.Name,
 						InitialValue: v.InitialValue,
+						LabelText:    v.Label,
 						Label:        createLabel(v.Label),
 						HelpContent:  createHelp(v.Help),
 						OnChanged:    v.OnChanged,
@@ -1112,6 +1209,7 @@ func (sm *SettingsManager) RenderSchema(p schema.PanelSchema) fyne.CanvasObject 
 					SkipApply:          v.SkipApply,
 					DisplayStatus:      v.DisplayStatus,
 					IsPassword:         v.IsPassword,
+					IsNumeric:          v.IsNumeric,
 					EnabledIf:          v.EnabledIf,
 					VisibleIf:          v.VisibleIf,
 					ValidationDebounce: v.ValidationDebounce,
@@ -1131,6 +1229,10 @@ func (sm *SettingsManager) RenderSchema(p schema.PanelSchema) fyne.CanvasObject 
 					EnabledIf:    v.EnabledIf,
 					VisibleIf:    v.VisibleIf,
 				}, sectionContainer)
+				sectionHasItems = true
+
+			case schema.SliderItem:
+				sm.renderSliderSetting(&v, sectionContainer)
 				sectionHasItems = true
 
 			case schema.AsyncButtonItem:
