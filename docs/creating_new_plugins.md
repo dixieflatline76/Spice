@@ -27,7 +27,7 @@ Plugins should follow the **Hexagonal Architecture** used throughout Spice. Whil
 | Schema Type | Use For |
 |:---|:---|
 | `schema.SecretItem` | API Keys, Credentials (Transactional verify/clear pattern) |
-| `schema.TextItem` | Text entries with validation and debounce |
+| `schema.TextItem` | Text entries with validation, debounce, and numeric-only input (`IsNumeric: true`) |
 | `schema.BoolItem` | Checkboxes / toggles |
 | `schema.SelectItem` | Dropdowns |
 | `schema.ButtonItem` | Action buttons |
@@ -43,7 +43,10 @@ Plugins should follow the **Hexagonal Architecture** used throughout Spice. Whil
 1. **Define your settings** as `*schema.PanelSchema` structs (pure Go, no Fyne imports).
 2. **Render them** via `sm.RenderSchema()` inside `CreatePrefsPanel`.
 
-This ensures consistent styling, automatic dirty tracking, and Apply button integration.
+**Automatic Config Saves & State Management:**
+Spice's `SettingsManager` eliminates the need for manual "Save" buttons or dirty state tracking. 
+- When a user modifies a schema UI component (e.g. toggles a `BoolItem` or finishes typing in a `TextItem`), the system automatically invokes the item's `ApplyFunc` closure.
+- The `SettingsManager` automatically tracks these changes and fires its `OnSettingsSaved` callback to persist the configuration to disk. Plugins can hook into this via `sm.RegisterOnSettingsSaved()`.
 
 ```go
 func (p *MyPlugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {

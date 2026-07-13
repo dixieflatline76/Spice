@@ -145,8 +145,20 @@ Image fetching is triggered by monitors and throttled by the plugin:
 
 1. **MonitorController** detects starvation (bucket < 5 images) or cycle exhaustion (> 80% of shuffle list consumed)
 2. **`RequestFetch()`** (centralized gatekeeper) — anti-loop protection with cooldowns
-3. **`FetchNewImages()`** — iterates active queries, each tracking its own page counter persisted to `query_pages.json`
-4. **Safe Page Wrapping** — when a provider returns 0 results for page > 1, auto-resets to page 1
+3. **`FetchNewImages()`** — iterates active queries, each tracking its own global `page` counter persisted to `query_pages.json`.
+4. **Safe Page Wrapping** — when a provider returns 0 results for page > 1, auto-resets to page 1.
+
+#### The Museum Provider Overlapping Stride Architecture
+
+While standard providers (like Wallhaven) respond linearly to the global `page` variable passed by `FetchNewImages`, museum APIs often lack stable, sequential pagination. Furthermore, many museum artifacts are aggressively rejected by the SmartFit pipeline due to extreme aspect ratios. 
+
+To ensure a steady stream of usable images without skipping IDs, museum providers employ a "Workaround Architecture":
+- **`idCache`**: A localized list of pre-scraped artifact IDs.
+- **`poolCache`**: An on-disk cache representing a large bucket of potentially valid artwork.
+
+Instead of directly querying an API page-by-page, the museum provider reads the global `page` integer provided by `FetchNewImages()` and uses it as an *index multiplier* against its `idCache`. 
+
+**The Overlapping Stride Fix:** Because the SmartFit pipeline acts as a strict gatekeeper, fetching 100 images might only yield 20 accepted wallpapers. If the global `page` simply skipped ahead by the number of *scanned* items, the system would mathematically skip over massive chunks of unscanned IDs. To solve this, museum providers use an **Overlapping Stride**. The index stride strictly matches the `targetCount` (e.g., 20) instead of the scan size (e.g., 300). This guarantees that Page 2 starts exactly where Page 1 *should* have stopped if yield was 100%, re-scanning the gap. Since previously fetched items are stored in the local `poolCache`, re-scanning this overlap is instantaneous and network-free, ensuring zero valid IDs are skipped.
 
 ### 4.5 Scheduler & Nightly Maintenance (`scheduler.go`)
 

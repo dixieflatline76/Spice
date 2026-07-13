@@ -44,6 +44,7 @@ func (p *Provider) CreateSettingsPanel(sm setting.SettingsManager) *schema.Panel
         MapQuery:    "Cleveland Museum of Art",
         WebsiteURL:  "https://www.clevelandart.org",
         DonateURL:   "https://give.clevelandart.org",
+        SupportsFraming: true, // Enables the Virtual Museum Frame auto-salvage toggle
     }, sm.OpenURL)
 }
 ```

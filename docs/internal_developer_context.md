@@ -547,3 +547,14 @@ make check-i18n              # 3. CI verifies sync
 - **Mnemonic Safety**: Use `+` not `&` as separator
 - **Sanitization**: Dynamic strings must pass through `SanitizeMenuString`
 - **Rune-Aware Truncation**: Always `[]rune` before slicing
+
+## 13. UI Configuration & State Management
+
+### 13.1 Automatic Config Saves
+Spice implements an automatic state management pattern via `SettingsManager` (`pkg/ui/setting/manager.go`) to remove boilerplate dirty tracking and manual "Save" buttons.
+- Any change to a schema-driven UI component (e.g., `schema.TextItem`, `schema.BoolItem`) automatically triggers its configured `ApplyFunc` and marks the config state as dirty.
+- The `SettingsManager` automatically intercepts these changes and invokes the `OnSettingsSaved` callback to persist the configuration to disk (e.g., `cfg.save()`).
+
+### 13.2 Schema Modifiers
+When building settings panels, use schema decorators rather than raw Fyne widgets:
+- `IsNumeric: true` (on `schema.TextItem`): Enforces numeric-only input on the `fyne.Entry` widget, ensuring integer parsing doesn't panic in the `ApplyFunc`.
