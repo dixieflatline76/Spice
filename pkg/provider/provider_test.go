@@ -68,8 +68,8 @@ func TestMergeExistingMetadata_CropAnchors(t *testing.T) {
 	existing := Image{
 		ID: "test1",
 		Tuning: map[string]TuningOptions{
-			"3440x1440": TuningOptions{Anchor: AnchorTopCenter},
-			"1920x1080": TuningOptions{Anchor: AnchorMiddleCenter},
+			"3440x1440": {Anchor: AnchorTopCenter},
+			"1920x1080": {Anchor: AnchorMiddleCenter},
 		},
 	}
 
@@ -84,14 +84,14 @@ func TestMergeExistingMetadata_CropAnchorsNoOverwrite(t *testing.T) {
 	img := Image{
 		ID: "test1",
 		Tuning: map[string]TuningOptions{
-			"3440x1440": TuningOptions{Anchor: AnchorBottomCenter}, // user-set
+			"3440x1440": {Anchor: AnchorBottomCenter}, // user-set
 		},
 	}
 	existing := Image{
 		ID: "test1",
 		Tuning: map[string]TuningOptions{
-			"3440x1440": TuningOptions{Anchor: AnchorTopCenter},    // old value — should NOT overwrite
-			"1920x1080": TuningOptions{Anchor: AnchorMiddleCenter}, // new key — should be added
+			"3440x1440": {Anchor: AnchorTopCenter},    // old value — should NOT overwrite
+			"1920x1080": {Anchor: AnchorMiddleCenter}, // new key — should be added
 		},
 	}
 

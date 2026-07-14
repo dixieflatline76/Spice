@@ -83,11 +83,12 @@ func (v *VirtualFramer) FitImage(ctx context.Context, img image.Image, targetWid
 	shouldFrame := false
 
 	// 1. User Override (Tune Image Popup)
-	if opts.FrameOverride == provider.FrameOverrideForceOn {
+	switch opts.FrameOverride {
+	case provider.FrameOverrideForceOn:
 		shouldFrame = true
-	} else if opts.FrameOverride == provider.FrameOverrideForceOff {
+	case provider.FrameOverrideForceOff:
 		shouldFrame = false
-	} else {
+	default:
 		// 2. Museum Mode (Always Frame for specific providers)
 		if providerID, ok := ctx.Value(provider.ProviderIDKey).(string); ok && providerID != "" {
 			if v.cfg.GetMuseumFraming(providerID) {
@@ -117,26 +118,6 @@ func (v *VirtualFramer) FitImage(ctx context.Context, img image.Image, targetWid
 		*ptr = true
 	}
 	return v.renderGalleryWall(img, targetWidth, targetHeight, opts)
-}
-
-func (v *VirtualFramer) shouldFrameDims(srcWidth, srcHeight, targetWidth, targetHeight int, setting VirtualFramingMode) bool {
-	srcAspect := float64(srcWidth) / float64(srcHeight)
-	targetAspect := float64(targetWidth) / float64(targetHeight)
-
-	// Calculate mismatch ratio (how much larger one aspect is than the other)
-	mismatch := targetAspect / srcAspect
-	if mismatch < 1.0 {
-		mismatch = 1.0 / mismatch // Handle inverted mismatch (e.g. panorama on portrait)
-	}
-
-	if setting == FramingExtreme && mismatch > 2.5 {
-		return true
-	}
-	if setting == FramingSignificant && mismatch > 2.0 {
-		return true
-	}
-
-	return false
 }
 
 func (v *VirtualFramer) isStudioObject(img image.Image) bool {
@@ -215,9 +196,10 @@ func (v *VirtualFramer) determineFrameStyle(avgColor color.Color) FrameStyle {
 
 func (v *VirtualFramer) calculateWallColor(img image.Image, opts provider.TuningOptions) color.Color {
 	setting := v.cfg.VirtualWallColor
-	if opts.WallColor == provider.WallColorOverrideNeutral {
+	switch opts.WallColor {
+	case provider.WallColorOverrideNeutral:
 		setting = WallNeutral
-	} else if opts.WallColor == provider.WallColorOverrideAlgorithmic {
+	case provider.WallColorOverrideAlgorithmic:
 		setting = WallAlgorithmic
 	}
 
@@ -319,9 +301,10 @@ func (v *VirtualFramer) renderGalleryWall(img image.Image, targetW, targetH int,
 	}
 
 	useMatting := v.cfg.VirtualPaperMatting
-	if opts.Matting == provider.MattingOverrideOn {
+	switch opts.Matting {
+	case provider.MattingOverrideOn:
 		useMatting = true
-	} else if opts.Matting == provider.MattingOverrideOff {
+	case provider.MattingOverrideOff:
 		useMatting = false
 	}
 

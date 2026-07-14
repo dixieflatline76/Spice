@@ -124,7 +124,7 @@ func TestReprocessWithAnchor_AnchorAuto_ClearsMap(t *testing.T) {
 		ID:       "test_img",
 		FilePath: masterPath,
 		Tuning: map[string]provider.TuningOptions{
-			"1920x1080": provider.TuningOptions{Anchor: provider.AnchorTopCenter},
+			"1920x1080": {Anchor: provider.AnchorTopCenter},
 		},
 		DerivativePaths: map[string]string{
 			"1920x1080": derivPath,
