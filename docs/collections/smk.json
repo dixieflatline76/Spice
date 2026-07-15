@@ -173,8 +173,18 @@
             ]
         },
         {
-            "categoryName": "Artistic Nudes",
-            "categoryNameTranslations": {
+            "ids": [
+                "KMSr81",
+                "KMSr86",
+                "KMSr87",
+                "KMS8867",
+                "KMSr76",
+                "KMS4386"
+            ],
+            "name": "Artistic Nudes",
+            "key": "Artistic Nudes",
+            "type": "curated",
+            "name_translations": {
                 "fr": "Nus Artistiques",
                 "es": "Desnudos Artísticos",
                 "de": "Künstlerische Akte",
@@ -186,15 +196,7 @@
                 "ru": "Художественная Обнаженная Натура",
                 "da": "Kunstneriske Akter",
                 "nl": "Artistieke Naakten"
-            },
-            "ids": [
-                "KMSr81",
-                "KMSr86",
-                "KMSr87",
-                "KMS8867",
-                "KMSr76",
-                "KMS4386"
-            ]
+            }
         }
     ]
 }

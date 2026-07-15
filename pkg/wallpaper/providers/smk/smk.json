@@ -24,19 +24,19 @@
                 "DEP2",
                 "KMS3378",
                 "KMSr135",
-                "KMSr76",
                 "KMSr79",
-                "KMSr86",
-                "KMSr87",
-                "KMSr81",
-                "KMS8867",
                 "KMSr157",
                 "KMS3841",
                 "KMS3939",
                 "KMS9052",
                 "KMS3800",
                 "KMS4882",
-                "KMS4386"
+                "KMS3123",
+                "KMS7284",
+                "KMSsp301",
+                "KMSsp211",
+                "KMSr14",
+                "KMS6394"
             ]
         },
         {
@@ -67,11 +67,9 @@
                 "KMS403",
                 "KMS1700",
                 "KMS3388",
-                "KMS3123",
                 "KMS2051",
                 "KMS8255",
                 "KMS3766",
-                "KMS7284",
                 "KMS7661",
                 "KMS3336",
                 "KMS8892",
@@ -122,12 +120,10 @@
                 "DEP2",
                 "KMS3378",
                 "KMS5511",
-                "KMSsp301",
                 "KMS441",
                 "KMS911",
                 "KKSgb16521",
                 "KMS5493",
-                "KMSsp211",
                 "KKSgb4811"
             ]
         },
@@ -144,8 +140,7 @@
                 "KMSr81",
                 "KMS8867",
                 "KMSr157",
-                "KKS6417",
-                "KMSr14"
+                "KKS6417"
             ]
         },
         {
@@ -159,7 +154,6 @@
                 "KMS3800",
                 "KMS4882",
                 "KMS4386",
-                "KMS6394",
                 "KMS3816",
                 "KMS3872",
                 "KMS8760",
@@ -177,6 +171,32 @@
                 "KMS8241",
                 "KMS409"
             ]
+        },
+        {
+            "ids": [
+                "KMSr81",
+                "KMSr86",
+                "KMSr87",
+                "KMS8867",
+                "KMSr76",
+                "KMS4386"
+            ],
+            "name": "Artistic Nudes",
+            "key": "Artistic Nudes",
+            "type": "curated",
+            "name_translations": {
+                "fr": "Nus Artistiques",
+                "es": "Desnudos Artísticos",
+                "de": "Künstlerische Akte",
+                "it": "Nudi Artistici",
+                "zh-CN": "艺术裸体",
+                "zh-TW": "藝術裸體",
+                "ja": "芸術的なヌード",
+                "ko": "예술적 누드",
+                "ru": "Художественная Обнаженная Натура",
+                "da": "Kunstneriske Akter",
+                "nl": "Artistieke Naakten"
+            }
         }
     ]
 }

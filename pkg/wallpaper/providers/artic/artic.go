@@ -104,9 +104,10 @@ type CuratedList struct {
 }
 
 type CollectionEntry struct {
-	Key  string `json:"key"`
-	Name string `json:"name"`
-	IDs  []int  `json:"ids"`
+	Key              string            `json:"key"`
+	Name             string            `json:"name"`
+	NameTranslations map[string]string `json:"name_translations,omitempty"`
+	IDs              []int             `json:"ids"`
 }
 
 func init() {
@@ -481,7 +482,7 @@ func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, _ string) *schem
 		// We use BoolItem for each tour, mimicking the legacy NewCheck approach
 		tourItems = append(tourItems, schema.BoolItem{
 			Name:         ProviderName + "_" + entry.Key,
-			Label:        entry.Name,
+			Label:        i18n.TMap(entry.Name, entry.NameTranslations),
 			InitialValue: active,
 			NeedsRefresh: true,
 			ApplyFunc: func(b bool) {

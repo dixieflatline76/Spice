@@ -248,8 +248,21 @@
             "type": "search"
         },
         {
-            "categoryName": "Artistic Nudes",
-            "categoryNameTranslations": {
+            "items": [
+                {
+                    "object_number": "SK-A-3841"
+                },
+                {
+                    "object_number": "SK-C-1351"
+                },
+                {
+                    "object_number": "SK-A-26"
+                }
+            ],
+            "name": "Artistic Nudes",
+            "key": "Artistic Nudes",
+            "type": "curated",
+            "name_translations": {
                 "fr": "Nus Artistiques",
                 "es": "Desnudos Artísticos",
                 "de": "Künstlerische Akte",
@@ -261,18 +274,7 @@
                 "ru": "Художественная Обнаженная Натура",
                 "da": "Kunstneriske Akter",
                 "nl": "Artistieke Naakten"
-            },
-            "items": [
-                {
-                    "object_number": "SK-A-3841"
-                },
-                {
-                    "object_number": "SK-C-1351"
-                },
-                {
-                    "object_number": "SK-A-26"
-                }
-            ]
+            }
         }
     ],
     "description": "Rijksmuseum: Curated Collections",

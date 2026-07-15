@@ -32,11 +32,12 @@ type Collection struct {
 //   - "curated": Uses the embedded Items list directly (pre-resolved URLs)
 //   - "search":  Calls the Rijksmuseum Linked Art search API with SearchParams
 type CollectionEntry struct {
-	Name         string        `json:"name"`
-	Key          string        `json:"key"`
-	Type         string        `json:"type"`                    // "curated" or "search"
-	Items        []CuratedItem `json:"items,omitempty"`         // For "curated" type
-	SearchParams string        `json:"search_params,omitempty"` // For "search" type (URL query params)
+	Name             string            `json:"name"`
+	NameTranslations map[string]string `json:"name_translations,omitempty"`
+	Key              string            `json:"key"`
+	Type             string            `json:"type"`                    // "curated" or "search"
+	Items            []CuratedItem     `json:"items,omitempty"`         // For "curated" type
+	SearchParams     string            `json:"search_params,omitempty"` // For "search" type (URL query params)
 }
 
 // CuratedItem is a pre-resolved artwork with its IIIF image URL.

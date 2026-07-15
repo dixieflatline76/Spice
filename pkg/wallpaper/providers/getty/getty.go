@@ -301,7 +301,7 @@ func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, _ string) *schem
 	var curatedItems []schema.ItemSchema
 	if col != nil {
 		for _, entry := range col.Entries {
-			curatedItems = append(curatedItems, p.makeCollectionItem(entry.Name, entry.Key))
+			curatedItems = append(curatedItems, p.makeCollectionItem(entry.Name, entry.NameTranslations, entry.Key))
 		}
 	}
 
@@ -315,7 +315,8 @@ func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, _ string) *schem
 	}
 }
 
-func (p *Provider) makeCollectionItem(label, key string) schema.BoolItem {
+func (p *Provider) makeCollectionItem(label string, translations map[string]string, key string) schema.BoolItem {
+	// Helper to find existing query state
 	getQuery := func(key string) (bool, string) {
 		for _, q := range p.cfg.GetQueries() {
 			if q.Provider == p.ID() && q.URL == key {
@@ -329,7 +330,7 @@ func (p *Provider) makeCollectionItem(label, key string) schema.BoolItem {
 
 	return schema.BoolItem{
 		Name:         p.ID() + "_" + key,
-		Label:        label,
+		Label:        i18n.TMap(label, translations),
 		InitialValue: active,
 		NeedsRefresh: true,
 		ApplyFunc: func(b bool) {

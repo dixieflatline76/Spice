@@ -279,6 +279,28 @@
                 112113,
                 106307
             ]
+        },
+        {
+            "ids": [
+                27992,
+                79313
+            ],
+            "name": "Artistic Nudes",
+            "key": "Artistic Nudes",
+            "type": "curated",
+            "name_translations": {
+                "fr": "Nus Artistiques",
+                "es": "Desnudos Artísticos",
+                "de": "Künstlerische Akte",
+                "it": "Nudi Artistici",
+                "zh-CN": "艺术裸体",
+                "zh-TW": "藝術裸體",
+                "ja": "芸術的なヌード",
+                "ko": "예술적 누드",
+                "ru": "Художественная Обнаженная Натура",
+                "da": "Kunstneriske Akter",
+                "nl": "Artistieke Naakten"
+            }
         }
     ]
 }

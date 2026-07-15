@@ -285,8 +285,10 @@
                 27992,
                 79313
             ],
-            "categoryName": "Artistic Nudes",
-            "categoryNameTranslations": {
+            "name": "Artistic Nudes",
+            "key": "Artistic Nudes",
+            "type": "curated",
+            "name_translations": {
                 "fr": "Nus Artistiques",
                 "es": "Desnudos Artísticos",
                 "de": "Künstlerische Akte",

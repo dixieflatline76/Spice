@@ -26,10 +26,11 @@ type Collection struct {
 
 // CollectionEntry defines a single browsable collection.
 type CollectionEntry struct {
-	Name string   `json:"name"`
-	Key  string   `json:"key"`
-	Type string   `json:"type"` // "curated"
-	IDs  []string `json:"ids"`  // UUIDs for Getty objects
+	Name             string            `json:"name"`
+	NameTranslations map[string]string `json:"name_translations,omitempty"`
+	Key              string            `json:"key"`
+	Type             string            `json:"type"`          // "curated"
+	IDs              []string          `json:"ids,omitempty"` // Getty UUIDs
 }
 
 const (

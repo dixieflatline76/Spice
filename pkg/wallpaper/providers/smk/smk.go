@@ -51,9 +51,10 @@ type Provider struct {
 		Version     string `json:"version"`
 		Description string `json:"description"`
 		Entries     []struct {
-			Key  string   `json:"key"`
-			Name string   `json:"name"`
-			IDs  []string `json:"ids"`
+			Key              string            `json:"key"`
+			Name             string            `json:"name"`
+			NameTranslations map[string]string `json:"name_translations,omitempty"`
+			IDs              []string          `json:"ids"`
 		} `json:"collections"`
 	}
 }
@@ -327,7 +328,7 @@ func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, _ string) *schem
 
 		tourItems = append(tourItems, schema.BoolItem{
 			Name:         ProviderName + "_" + entry.Key,
-			Label:        entry.Name,
+			Label:        i18n.TMap(entry.Name, entry.NameTranslations),
 			InitialValue: active,
 			NeedsRefresh: true,
 			ApplyFunc: func(b bool) {

@@ -19,7 +19,6 @@
                 438012,
                 438817,
                 436026,
-                437658,
                 437654,
                 437430,
                 437553,
@@ -34,11 +33,6 @@
                 12130,
                 11313,
                 10517,
-                45434,
-                45433,
-                45431,
-                45432,
-                435809,
                 435851,
                 437853,
                 437851,
@@ -46,10 +40,7 @@
                 435702,
                 437326,
                 437329,
-                436105,
-                437891,
-                435877,
-                435872
+                437891
             ],
             "key": "spice_melange",
             "name": "⭐ Best of The Met",
@@ -78,6 +69,35 @@
             "key": "egyptian_art",
             "name": "Egyptian Art",
             "type": "department"
+        },
+        {
+            "ids": [
+                435809,
+                437658,
+                436105,
+                435877,
+                435872,
+                45431,
+                45432,
+                45433,
+                45434
+            ],
+            "name": "Artistic Nudes",
+            "key": "Artistic Nudes",
+            "type": "curated",
+            "name_translations": {
+                "fr": "Nus Artistiques",
+                "es": "Desnudos Artísticos",
+                "de": "Künstlerische Akte",
+                "it": "Nudi Artistici",
+                "zh-CN": "艺术裸体",
+                "zh-TW": "藝術裸體",
+                "ja": "芸術的なヌード",
+                "ko": "예술적 누드",
+                "ru": "Художественная Обнаженная Натура",
+                "da": "Kunstneriske Akter",
+                "nl": "Artistieke Naakten"
+            }
         }
     ],
     "description": "The Metropolitan Museum of Art: Curated Collections",
