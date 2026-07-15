@@ -34,115 +34,115 @@
             ],
             "key": "cma_masterpieces",
             "name": "⭐ Best of Cleveland",
-            "type": "curated",
             "name_translations": {
-                "fr": "⭐ Le Meilleur de Cleveland",
-                "es": "⭐ Lo Mejor de Cleveland",
+                "da": "⭐ Det Bedste fra Cleveland",
                 "de": "⭐ Das Beste aus Cleveland",
+                "es": "⭐ Lo Mejor de Cleveland",
+                "fr": "⭐ Le Meilleur de Cleveland",
                 "it": "⭐ Il Meglio di Cleveland",
-                "zh-CN": "⭐ 克利夫兰精选",
-                "zh-TW": "⭐ 克利夫蘭精選",
                 "ja": "⭐ クリーブランドの名作",
                 "ko": "⭐ 클리블랜드 베스트",
+                "nl": "⭐ Het Beste van Cleveland",
                 "ru": "⭐ Лучшее из Кливленда",
-                "da": "⭐ Det Bedste fra Cleveland",
-                "nl": "⭐ Het Beste van Cleveland"
-            }
+                "zh-CN": "⭐ 克利夫兰精选",
+                "zh-TW": "⭐ 克利夫蘭精選"
+            },
+            "type": "curated"
         },
         {
             "key": "cma_american",
             "name": "American Painting",
-            "search_params": "has_image=1&type=Painting&department=American+Painting+and+Sculpture",
-            "type": "search",
             "name_translations": {
-                "fr": "Peinture Américaine",
-                "es": "Pintura Americana",
+                "da": "Amerikansk Maleri",
                 "de": "Amerikanische Malerei",
+                "es": "Pintura Americana",
+                "fr": "Peinture Américaine",
                 "it": "Pittura Americana",
-                "zh-CN": "美国绘画",
-                "zh-TW": "美國繪畫",
                 "ja": "アメリカ絵画",
                 "ko": "미국 회화",
+                "nl": "Amerikaanse Schilderkunst",
                 "ru": "Американская Живопись",
-                "da": "Amerikansk Maleri",
-                "nl": "Amerikaanse Schilderkunst"
-            }
+                "zh-CN": "美国绘画",
+                "zh-TW": "美國繪畫"
+            },
+            "search_params": "has_image=1\u0026type=Painting\u0026department=American+Painting+and+Sculpture",
+            "type": "search"
         },
         {
             "key": "cma_european",
             "name": "European Painting",
-            "search_params": "has_image=1&type=Painting&department=European+Painting+and+Sculpture",
-            "type": "search",
             "name_translations": {
-                "fr": "Peinture Européenne",
-                "es": "Pintura Europea",
+                "da": "Europæisk Maleri",
                 "de": "Europäische Malerei",
+                "es": "Pintura Europea",
+                "fr": "Peinture Européenne",
                 "it": "Pittura Europea",
-                "zh-CN": "欧洲绘画",
-                "zh-TW": "歐洲繪畫",
                 "ja": "ヨーロッパ絵画",
                 "ko": "유럽 회화",
+                "nl": "Europese Schilderkunst",
                 "ru": "Европейская Живопись",
-                "da": "Europæisk Maleri",
-                "nl": "Europese Schilderkunst"
-            }
+                "zh-CN": "欧洲绘画",
+                "zh-TW": "歐洲繪畫"
+            },
+            "search_params": "has_image=1\u0026type=Painting\u0026department=European+Painting+and+Sculpture",
+            "type": "search"
         },
         {
             "key": "cma_impressionism",
             "name": "Impressionism",
-            "search_params": "has_image=1&type=Painting&q=impressionism",
-            "type": "search",
             "name_translations": {
-                "fr": "Impressionnisme",
-                "es": "Impresionismo",
+                "da": "Impressionisme",
                 "de": "Impressionismus",
+                "es": "Impresionismo",
+                "fr": "Impressionnisme",
                 "it": "Impressionismo",
-                "zh-CN": "印象派",
-                "zh-TW": "印象派",
                 "ja": "印象派",
                 "ko": "인상주의",
+                "nl": "Impressionisme",
                 "ru": "Импрессионизм",
-                "da": "Impressionisme",
-                "nl": "Impressionisme"
-            }
+                "zh-CN": "印象派",
+                "zh-TW": "印象派"
+            },
+            "search_params": "has_image=1\u0026type=Painting\u0026q=impressionism",
+            "type": "search"
         },
         {
             "key": "cma_asian",
             "name": "Asian Art",
-            "search_params": "has_image=1&type=Painting&department=Chinese+Art",
-            "type": "search",
             "name_translations": {
-                "fr": "Art Asiatique",
-                "es": "Arte Asiático",
+                "da": "Asiatisk Kunst",
                 "de": "Asiatische Kunst",
+                "es": "Arte Asiático",
+                "fr": "Art Asiatique",
                 "it": "Arte Asiatica",
-                "zh-CN": "亚洲艺术",
-                "zh-TW": "亞洲藝術",
                 "ja": "アジア美術",
                 "ko": "아시아 미술",
+                "nl": "Aziatische Kunst",
                 "ru": "Азиатское Искусство",
-                "da": "Asiatisk Kunst",
-                "nl": "Aziatische Kunst"
-            }
+                "zh-CN": "亚洲艺术",
+                "zh-TW": "亞洲藝術"
+            },
+            "search_params": "has_image=1\u0026type=Painting\u0026department=Chinese+Art",
+            "type": "search"
         },
         {
             "key": "cma_modern",
-            "name": "Modern & Contemporary",
-            "search_params": "has_image=1&type=Painting&department=Modern+European+Painting+and+Sculpture",
-            "type": "search",
+            "name": "Modern \u0026 Contemporary",
             "name_translations": {
-                "fr": "Moderne et Contemporain",
+                "da": "Moderne og Samtidskunst",
+                "de": "Moderne \u0026 Zeitgenössische Kunst",
                 "es": "Moderno y Contemporáneo",
-                "de": "Moderne & Zeitgenössische Kunst",
+                "fr": "Moderne et Contemporain",
                 "it": "Moderno e Contemporaneo",
-                "zh-CN": "现代与当代",
-                "zh-TW": "現代與當代",
                 "ja": "近現代",
                 "ko": "근현대",
+                "nl": "Modern en Hedendaags",
                 "ru": "Современное Искусство",
-                "da": "Moderne og Samtidskunst",
-                "nl": "Modern en Hedendaags"
-            }
+                "zh-CN": "现代与当代",
+                "zh-TW": "現代與當代"
+            },
+            "search_params": "has_image=1\u0026type=Painting\u0026department=Modern+European+Painting+and+Sculpture",
+            "type": "search"
         },
         {
             "ids": [
@@ -150,24 +150,24 @@
                 138464,
                 143547
             ],
-            "name": "Artistic Nudes",
             "key": "Artistic Nudes",
-            "type": "curated",
+            "name": "Artistic Nudes",
             "name_translations": {
-                "fr": "Nus Artistiques",
-                "es": "Desnudos Artísticos",
+                "da": "Kunstneriske Akter",
                 "de": "Künstlerische Akte",
+                "es": "Desnudos Artísticos",
+                "fr": "Nus Artistiques",
                 "it": "Nudi Artistici",
-                "zh-CN": "艺术裸体",
-                "zh-TW": "藝術裸體",
                 "ja": "芸術的なヌード",
                 "ko": "예술적 누드",
+                "nl": "Artistieke Naakten",
                 "ru": "Художественная Обнаженная Натура",
-                "da": "Kunstneriske Akter",
-                "nl": "Artistieke Naakten"
-            }
+                "zh-CN": "艺术裸体",
+                "zh-TW": "藝術裸體"
+            },
+            "type": "curated"
         }
     ],
     "description": "Cleveland Museum of Art: Curated Collections",
-    "version": "v2.5.10"
+    "version": "v2.6.0"
 }

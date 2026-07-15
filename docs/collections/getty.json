@@ -1,11 +1,6 @@
 {
-    "version": "v2.0.0",
-    "description": "Best of the J. Paul Getty Museum Open Content",
     "collections": [
         {
-            "key": "getty_masterpieces",
-            "name": "⭐ Best of Getty",
-            "type": "curated",
             "ids": [
                 "b5751c4b-2e9f-4a69-b0be-c345b5f13344",
                 "fd07ab3f-9e45-4fbc-b74d-be1bab608e69",
@@ -33,24 +28,24 @@
                 "71d9c889-377c-4a18-8980-689825f339bf",
                 "91a4e080-feda-4afa-aee8-826ef3feb46e"
             ],
+            "key": "getty_masterpieces",
+            "name": "⭐ Best of Getty",
             "name_translations": {
-                "fr": "⭐ Le Meilleur du Getty",
-                "es": "⭐ Lo Mejor de Getty",
+                "da": "⭐ Det Bedste fra Getty",
                 "de": "⭐ Das Beste aus dem Getty",
+                "es": "⭐ Lo Mejor de Getty",
+                "fr": "⭐ Le Meilleur du Getty",
                 "it": "⭐ Il Meglio del Getty",
-                "zh-CN": "⭐ 盖蒂精选",
-                "zh-TW": "⭐ 蓋蒂精選",
                 "ja": "⭐ ゲティの名作",
                 "ko": "⭐ 게티 베스트",
+                "nl": "⭐ Het Beste van Getty",
                 "ru": "⭐ Лучшее из Гетти",
-                "da": "⭐ Det Bedste fra Getty",
-                "nl": "⭐ Het Beste van Getty"
-            }
+                "zh-CN": "⭐ 盖蒂精选",
+                "zh-TW": "⭐ 蓋蒂精選"
+            },
+            "type": "curated"
         },
         {
-            "key": "getty_paintings",
-            "name": "🎨 European Paintings",
-            "type": "curated",
             "ids": [
                 "9c3b07db-021e-477a-b5f5-fc190aaa7ec1",
                 "b5751c4b-2e9f-4a69-b0be-c345b5f13344",
@@ -87,24 +82,24 @@
                 "fb9fd87a-74a0-4655-a553-49a50c98a6a9",
                 "d5265ca9-f3d4-48af-b3c1-ccd7993e2467"
             ],
+            "key": "getty_paintings",
+            "name": "🎨 European Paintings",
             "name_translations": {
-                "fr": "🎨 Peintures Européennes",
-                "es": "🎨 Pinturas Europeas",
+                "da": "🎨 Europæiske Malerier",
                 "de": "🎨 Europäische Gemälde",
+                "es": "🎨 Pinturas Europeas",
+                "fr": "🎨 Peintures Européennes",
                 "it": "🎨 Dipinti Europei",
-                "zh-CN": "🎨 欧洲绘画",
-                "zh-TW": "🎨 歐洲繪畫",
                 "ja": "🎨 ヨーロッパ絵画",
                 "ko": "🎨 유럽 회화",
+                "nl": "🎨 Europese Schilderijen",
                 "ru": "🎨 Европейские Картины",
-                "da": "🎨 Europæiske Malerier",
-                "nl": "🎨 Europese Schilderijen"
-            }
+                "zh-CN": "🎨 欧洲绘画",
+                "zh-TW": "🎨 歐洲繪畫"
+            },
+            "type": "curated"
         },
         {
-            "key": "getty_photography",
-            "name": "📷 Vintage Photography",
-            "type": "curated",
             "ids": [
                 "a21fa9d8-e881-4f04-8f6d-a7a2d4e84e2f",
                 "c01e6571-462e-4115-8e6d-ac95b5231d76",
@@ -114,24 +109,24 @@
                 "d42c73a9-3bd5-477a-aebd-b954cb5aa293",
                 "91a4e080-feda-4afa-aee8-826ef3feb46e"
             ],
+            "key": "getty_photography",
+            "name": "📷 Vintage Photography",
             "name_translations": {
-                "fr": "📷 Photographie Ancienne",
-                "es": "📷 Fotografía Vintage",
+                "da": "📷 Vintage Fotografi",
                 "de": "📷 Historische Fotografie",
+                "es": "📷 Fotografía Vintage",
+                "fr": "📷 Photographie Ancienne",
                 "it": "📷 Fotografia d'Epoca",
-                "zh-CN": "📷 老照片",
-                "zh-TW": "📷 老照片",
                 "ja": "📷 ヴィンテージ写真",
                 "ko": "📷 빈티지 사진",
+                "nl": "📷 Vintage Fotografie",
                 "ru": "📷 Винтажная Фотография",
-                "da": "📷 Vintage Fotografi",
-                "nl": "📷 Vintage Fotografie"
-            }
+                "zh-CN": "📷 老照片",
+                "zh-TW": "📷 老照片"
+            },
+            "type": "curated"
         },
         {
-            "key": "getty_antiquities",
-            "name": "🏛️ Antiquities & Artifacts",
-            "type": "curated",
             "ids": [
                 "796d9f41-1948-49af-924b-4b86dbc9ebe7",
                 "2ccbcdcc-3260-4b40-9cfa-72efa357df1b",
@@ -141,19 +136,24 @@
                 "89c78d89-8afc-4205-aae6-76e60295c22d",
                 "23fdde63-303a-42db-b64f-13a779a8add8"
             ],
+            "key": "getty_antiquities",
+            "name": "🏛️ Antiquities \u0026 Artifacts",
             "name_translations": {
-                "fr": "🏛️ Antiquités et Artéfacts",
+                "da": "🏛️ Antikviteter \u0026 Artefakter",
+                "de": "🏛️ Antiken \u0026 Artefakte",
                 "es": "🏛️ Antigüedades y Artefactos",
-                "de": "🏛️ Antiken & Artefakte",
+                "fr": "🏛️ Antiquités et Artéfacts",
                 "it": "🏛️ Antichità e Manufatti",
-                "zh-CN": "🏛️ 古物与文物",
-                "zh-TW": "🏛️ 古物與文物",
                 "ja": "🏛️ 古代遺物と工芸品",
                 "ko": "🏛️ 고대 유물 및 공예품",
+                "nl": "🏛️ Oudheden \u0026 Artefacten",
                 "ru": "🏛️ Древности и Артефакты",
-                "da": "🏛️ Antikviteter & Artefakter",
-                "nl": "🏛️ Oudheden & Artefacten"
-            }
+                "zh-CN": "🏛️ 古物与文物",
+                "zh-TW": "🏛️ 古物與文物"
+            },
+            "type": "curated"
         }
-    ]
+    ],
+    "description": "Best of the J. Paul Getty Museum Open Content",
+    "version": "v2.6.0"
 }
