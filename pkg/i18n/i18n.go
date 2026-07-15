@@ -109,6 +109,18 @@ func T(english string) string {
 	return strings.TrimSpace(lang.Localize(english))
 }
 
+// TMap returns the localized version from the provided translation map,
+// falling back to standard T() if not found.
+func TMap(english string, trans map[string]string) string {
+	code := GetLanguage()
+	if code != "" && trans != nil {
+		if val, ok := trans[code]; ok {
+			return strings.TrimSpace(val)
+		}
+	}
+	return T(english)
+}
+
 // Tf returns the localized version of the given English template string.
 func Tf(english string, data any) string {
 	mu.RLock()

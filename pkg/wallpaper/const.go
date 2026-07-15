@@ -7,8 +7,6 @@ import (
 	"math"
 	"path/filepath"
 	"time"
-
-	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 )
 
 // pluginName is the name of the wallpaper plugin
@@ -20,7 +18,8 @@ const (
 	SmartFitPrefKey                  = pluginPrefix + "smart_fit_key"                   // SmartFitPrefKey is used to set and retrieve the boolean flag for wallpaper smart fit
 	SmartFitModePrefKey              = pluginPrefix + "smart_fit_mode_key"              // SmartFitModePrefKey is used to set and retrieve the int smart fit mode
 	CacheSizePrefKey                 = pluginPrefix + "cache_size_key"                  // WallpaperCacheSizePrefKey is used to set and retrieve the int wallpaper cache size
-	WallpaperChgFreqPrefKey          = pluginPrefix + "wallpaper_chg_freq_key"          // WallpaperChgFreqPrefKey is used to set and retrieve the int change frequency for wallpapers
+	WallpaperChgFreqPrefKey          = pluginPrefix + "wallpaper_chg_freq_key"          // Legacy enum key
+	WallpaperChgFreqMinsPrefKey      = pluginPrefix + "wallpaper_chg_freq_mins_key"     // New key for raw minutes
 	ImgShufflePrefKey                = pluginPrefix + "img_shuffle_key"                 // ImgShufflePrefKey is used to set and retrieve the boolean flag for wallpaper image shuffle
 	ChgImgOnStartPrefKey             = pluginPrefix + "chg_img_on_start_key"            // ChgImgOnStartPrefKey is used to set and retrieve the boolean flag for changing wallpaper on startup
 	NightlyRefreshPrefKey            = pluginPrefix + "nightly_refresh_key"             // NightlyRefreshPrefKey is used to set and retrieve the boolean flag for nightly refresh
@@ -117,80 +116,24 @@ type Frequency int
 
 // Frequency constants
 const (
-	FrequencyNever Frequency = iota
-	Frequency1Minute
-	Frequency5Minutes
-	Frequency15Minutes
-	Frequency30Minutes
-	FrequencyHourly
-	Frequency3Hours
-	Frequency6Hours
-	FrequencyDaily
-	FrequencyInvalid
+	FrequencyNever     Frequency = 0
+	Frequency1Minute   Frequency = 1
+	Frequency5Minutes  Frequency = 5
+	Frequency15Minutes Frequency = 15
+	Frequency30Minutes Frequency = 30
+	FrequencyHourly    Frequency = 60
+	Frequency3Hours    Frequency = 180
+	Frequency6Hours    Frequency = 360
+	FrequencyDaily     Frequency = 1440
 )
 
-// FrequencyDurations maps a Frequency to its time.Duration
-var FrequencyDurations = map[Frequency]time.Duration{
-	FrequencyNever:     time.Duration(math.MaxInt64),
-	Frequency1Minute:   1 * time.Minute,
-	Frequency5Minutes:  5 * time.Minute,
-	Frequency15Minutes: 15 * time.Minute,
-	Frequency30Minutes: 30 * time.Minute,
-	FrequencyHourly:    time.Hour,
-	Frequency3Hours:    3 * time.Hour,
-	Frequency6Hours:    6 * time.Hour,
-	FrequencyDaily:     24 * time.Hour,
-}
-
-// String returns the string representation of a Frequency
-func (f Frequency) String() string {
-	switch f {
-	case FrequencyNever:
-		return i18n.T("Never")
-	case Frequency1Minute:
-		return i18n.T("Every Minute")
-	case Frequency5Minutes:
-		return i18n.T("Every 5 Minutes")
-	case Frequency15Minutes:
-		return i18n.T("Every 15 Minutes")
-	case Frequency30Minutes:
-		return i18n.T("Every 30 Minutes")
-	case FrequencyHourly:
-		return i18n.T("Hourly")
-	case Frequency3Hours:
-		return i18n.T("Every 3 Hours")
-	case Frequency6Hours:
-		return i18n.T("Every 6 Hours")
-	case FrequencyDaily:
-		return i18n.T("Daily")
-	default:
-		return "Unknown"
-	}
-}
-
-// Duration returns the time.Duration of a Frequency
+// Duration returns the time.Duration of a Frequency.
+// 0 (FrequencyNever) returns an infinitely long duration.
 func (f Frequency) Duration() time.Duration {
-	return FrequencyDurations[f]
-}
-
-// GetFrequencies returns a list of all available frequencies AS fmt.Stringer
-func GetFrequencies() []fmt.Stringer {
-	frequencies := []Frequency{
-		FrequencyNever,
-		Frequency1Minute,
-		Frequency5Minutes,
-		Frequency15Minutes,
-		Frequency30Minutes,
-		FrequencyHourly,
-		Frequency3Hours,
-		Frequency6Hours,
-		FrequencyDaily,
+	if f <= FrequencyNever {
+		return time.Duration(math.MaxInt64)
 	}
-	stringers := make([]fmt.Stringer, len(frequencies))
-	for i, f := range frequencies {
-		stringers[i] = f // This is the key: assign to the interface type
-	}
-	return stringers
+	return time.Duration(f) * time.Minute
 }
 
 // CacheSize represents the predefined cache sizes (in number of images).
@@ -198,35 +141,31 @@ type CacheSize int
 
 // CacheSize constants
 const (
-	CacheNone CacheSize = iota
-	Cache100Images
-	Cache200Images
-	Cache300Images
-	Cache500Images
-	Cache1000Images
-	Cache5000Images
+	_                CacheSize = iota // 0 (formerly CacheNone)
+	Cache100Images                    // 1
+	_                                 // 2 (formerly Cache200Images)
+	Cache300Images                    // 3
+	Cache500Images                    // 4
+	Cache1000Images                   // 5
+	Cache5000Images                   // 6
+	Cache10000Images                  // 7
 )
 
 // CacheSizeValues maps CacheSize to its integer representation.
 var CacheSizeValues = map[CacheSize]int{
-	CacheNone:       0,
-	Cache100Images:  100,
-	Cache200Images:  200,
-	Cache300Images:  300,
-	Cache500Images:  500,
-	Cache1000Images: 1000,
-	Cache5000Images: 5000,
+	Cache100Images:   100,
+	Cache300Images:   300,
+	Cache500Images:   500,
+	Cache1000Images:  1000,
+	Cache5000Images:  5000,
+	Cache10000Images: 10000,
 }
 
 // String returns the string representation of a CacheSize.
 func (cs CacheSize) String() string {
 	switch cs {
-	case CacheNone:
-		return i18n.T("None")
 	case Cache100Images:
 		return "100"
-	case Cache200Images:
-		return "200"
 	case Cache300Images:
 		return "300"
 	case Cache500Images:
@@ -235,6 +174,8 @@ func (cs CacheSize) String() string {
 		return "1000"
 	case Cache5000Images:
 		return "5000"
+	case Cache10000Images:
+		return "10000"
 	default:
 		return "Unknown"
 	}
@@ -248,13 +189,12 @@ func (cs CacheSize) Size() int {
 // GetCacheSizes returns a list of all available cache sizes AS fmt.Stringer.
 func GetCacheSizes() []fmt.Stringer {
 	cacheSizes := []CacheSize{
-		CacheNone,
 		Cache100Images,
-		Cache200Images,
 		Cache300Images,
 		Cache500Images,
 		Cache1000Images,
 		Cache5000Images,
+		Cache10000Images,
 	}
 	stringers := make([]fmt.Stringer, len(cacheSizes))
 	for i, cs := range cacheSizes {

@@ -115,29 +115,6 @@ func TestArtworkToImage_Landscape(t *testing.T) {
 	}
 }
 
-func TestArtworkToImage_Portrait(t *testing.T) {
-	p := &Provider{
-		poolCache: make(map[int]*provider.Image),
-	}
-
-	art := apiArtwork{
-		ID:    12345,
-		Title: "Portrait of Someone",
-		Images: &apiImages{
-			Print: &apiImageSize{
-				URL:    "https://example.com/print.jpg",
-				Width:  "2000",
-				Height: "3000",
-			},
-		},
-	}
-
-	img := p.artworkToImage(&art)
-	if img != nil {
-		t.Error("expected nil for portrait artwork")
-	}
-}
-
 func TestArtworkToImage_NoImages(t *testing.T) {
 	p := &Provider{
 		poolCache: make(map[int]*provider.Image),

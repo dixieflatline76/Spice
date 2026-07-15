@@ -438,47 +438,6 @@ All three strategies ultimately converge on this function. It takes a center poi
 5. Resizes to the exact target dimensions using Lanczos resampling
 
 This is why the crop anchor feature can integrate cleanly — it just needs to provide a center point to this existing function.
-
-### 8.6 Face Detection: `findBestFace()` (pigo)
-
-Uses the [pigo](https://github.com/esimov/pigo) face detection library (Pixel Intensity Comparison-based Object detection):
-
-1. Converts image to grayscale
-2. Runs cascade classifier with configurable min/max face size
-3. Clusters overlapping detections using IoU threshold
-4. Filters results:
-   - **Confidence floor**: Rejects low-Q detections (noise/shadows)
-   - **Edge safety**: Discards low-confidence detections in the bottom 30% of the frame (real faces rarely appear at the literal bottom edge of wallpapers)
-   - **Confidence-weighted selection**: Picks the face with highest `Q × Scale` score (prevents low-confidence large blobs from winning over high-confidence mid-sized faces)
-5. Expands the winning bounding box by 1.5× (pigo detects the "core" eyes/nose/mouth area — expansion covers forehead and chin)
-
-### 8.7 Energy Calculation
-
-`calculateImageEnergy()` computes the standard deviation of luminance across a downsampled thumbnail:
-
-- **Purpose**: Proxy for visual complexity ("entropy")
-- **Low energy** (< `MinEnergyThreshold`): Flat images (solid colors, gradients, clear skies). Entropy crop would pick noise, so the pipeline falls back to center crop
-- **High energy**: Complex textures, detailed scenes. Entropy crop can find meaningful focal points
-- **Also used by**: Feet Guard threshold relaxation — high-energy images are allowed more aggressive bottom-biased crops
-
-### 8.8 Compatibility Gates
-
-Before any cropping, `CheckCompatibility()` rejects images that are too far from the target aspect ratio:
-
-**Quality Mode** (`SmartFitNormal`):
-- Orientation mismatch with diff > 0.5 → reject
-- Aspect diff > 1.5 → reject
-- Exception: Strong face (Q > `FaceRescueQThreshold`) "rescues" the image despite aspect mismatch
-
-**Flexibility Mode** (`SmartFitAggressive`):
-- Dynamic threshold: `base × surplus × AggressiveMultiplier` (capped at 1.5)
-- Orientation mismatch: Threshold capped at 0.8 (allows 4:3→Portrait but blocks 16:9→Portrait)
-- Higher resolution images get more leeway (surplus factor)
-
-### 8.9 Externalized Tuning (`pkg/wallpaper/tuning.go`)
-
-All magic numbers live in `TuningConfig`: `AggressiveMultiplier`, `FaceRescueQThreshold`, `FeetGuardRatio`, `FeetGuardSlackThreshold`, `FaceDetectConfidence`, `FaceBottomEdgeThreshold`, `MinEnergyThreshold`, etc. Structured for future remote hot-swap via the museum-style config update pattern.
-
 ## 9. Extension Guide
 
 ### 9.1 Adding a New Provider
@@ -547,3 +506,36 @@ make check-i18n              # 3. CI verifies sync
 - **Mnemonic Safety**: Use `+` not `&` as separator
 - **Sanitization**: Dynamic strings must pass through `SanitizeMenuString`
 - **Rune-Aware Truncation**: Always `[]rune` before slicing
+
+## 13. UI Configuration & State Management
+
+### 13.1 Automatic Config Saves
+Spice implements an automatic state management pattern via `SettingsManager` (`pkg/ui/setting/manager.go`) to remove boilerplate dirty tracking and manual "Save" buttons.
+- Any change to a schema-driven UI component (e.g., `schema.TextItem`, `schema.BoolItem`) automatically triggers its configured `ApplyFunc` and marks the config state as dirty.
+- The `SettingsManager` automatically intercepts these changes and invokes the `OnSettingsSaved` callback to persist the configuration to disk (e.g., `cfg.save()`).
+
+### 13.2 Schema Modifiers
+When building settings panels, use schema decorators rather than raw Fyne widgets:
+- `IsNumeric: true` (on `schema.TextItem`): Enforces numeric-only input on the `fyne.Entry` widget, ensuring integer parsing doesn't panic in the `ApplyFunc`.
+
+## 14. Tune Image Actor Synchronization
+
+The "Tune Image" feature allows users to manually specify crop anchors and toggle the Virtual Museum Frame. Because Spice uses an Actor Model (where each monitor is an independent `MonitorController` goroutine), the UI cannot synchronously apply these changes.
+
+### 14.1 The `OnWallpaperChanged` Channel Hook
+To ensure the Tune Image dialog stays open with a "processing" overlay until the backend has finished regenerating the wallpaper, we use a temporary hook:
+1. The UI layer calls `PluginManager.ShowTuneImagePopup` with an `onSelect` callback.
+2. Inside `onSelect`, the plugin intercepts the `MonitorController`'s `OnWallpaperChanged` callback.
+3. It temporarily replaces the callback with a closure that sends a signal over a Go `chan struct{}`.
+4. The plugin issues the asynchronous command (`SetTuningOptions`).
+5. A `select` block waits for either the `done` channel signal (indicating the Actor has finished cropping and applying the new wallpaper) or a 10-second timeout (to prevent UI deadlock if the actor crashes).
+6. Once the signal is received, the original callback is restored, and the UI overlay is dismissed.
+
+This pattern safely bridges the synchronous UI world with the asynchronous Actor world without introducing mutex locks onto the hot path.
+
+### 14.2 The Mode Change Problem (Dynamic 3rd Gate)
+When a user opens the Tune Image dialog, they may change global settings (like switching from Quality Mode to Flexibility Mode) before clicking Apply. 
+
+If the image was originally downloaded under Quality Mode and mathematically rejected (e.g., tagged with `incompatible:3440x1440` in Gate 2), the system cannot blindly trust that stale tag. To solve this, the pipeline implements a **3rd Compatibility Gate** immediately before generating derivatives (`Step 3: Ensure Derivatives`).
+
+This 3rd gate dynamically re-evaluates the math using the *current* global settings. If the user switched to Flexibility Mode, the image may now pass the math check. The 3rd gate ignores the stale `incompatible` tag, allows the crop to proceed, and overwrites the metadata. This guarantees the UI lock state correctly syncs with the underlying pipeline logic.

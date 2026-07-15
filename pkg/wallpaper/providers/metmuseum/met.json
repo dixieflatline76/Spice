@@ -19,7 +19,6 @@
                 438012,
                 438817,
                 436026,
-                437658,
                 437654,
                 437430,
                 437553,
@@ -34,11 +33,6 @@
                 12130,
                 11313,
                 10517,
-                45434,
-                45433,
-                45431,
-                45432,
-                435809,
                 435851,
                 437853,
                 437851,
@@ -46,40 +40,131 @@
                 435702,
                 437326,
                 437329,
-                436105,
-                437891,
-                435877,
-                435872
+                437891
             ],
             "key": "spice_melange",
             "name": "⭐ Best of The Met",
-            "type": "curated"
+            "type": "curated",
+            "name_translations": {
+                "fr": "⭐ Le Meilleur du Met",
+                "es": "⭐ Lo Mejor del Met",
+                "de": "⭐ Das Beste aus dem Met",
+                "it": "⭐ Il Meglio del Met",
+                "zh-CN": "⭐ 大都会艺术博物馆精选",
+                "zh-TW": "⭐ 大都會藝術博物館精選",
+                "ja": "⭐ メトロポリタン美術館の名作",
+                "ko": "⭐ 메트로폴리탄 베스트",
+                "ru": "⭐ Лучшее из Метрополитен",
+                "da": "⭐ Det Bedste fra The Met",
+                "nl": "⭐ Het Beste van The Met"
+            }
         },
         {
             "key": "american_art",
             "name": "American Paintings",
             "query": "American Paintings",
-            "type": "search"
+            "type": "search",
+            "name_translations": {
+                "fr": "Peintures Américaines",
+                "es": "Pinturas Americanas",
+                "de": "Amerikanische Gemälde",
+                "it": "Dipinti Americani",
+                "zh-CN": "美国绘画",
+                "zh-TW": "美國繪畫",
+                "ja": "アメリカ絵画",
+                "ko": "미국 회화",
+                "ru": "Американские Картины",
+                "da": "Amerikanske Malerier",
+                "nl": "Amerikaanse Schilderijen"
+            }
         },
         {
             "dept_id": 11,
             "key": "european_masterpieces",
             "name": "European Paintings",
-            "type": "department"
+            "type": "department",
+            "name_translations": {
+                "fr": "Peintures Européennes",
+                "es": "Pinturas Europeas",
+                "de": "Europäische Gemälde",
+                "it": "Dipinti Europei",
+                "zh-CN": "欧洲绘画",
+                "zh-TW": "歐洲繪畫",
+                "ja": "ヨーロッパ絵画",
+                "ko": "유럽 회화",
+                "ru": "Европейские Картины",
+                "da": "Europæiske Malerier",
+                "nl": "Europese Schilderijen"
+            }
         },
         {
             "dept_id": 6,
             "key": "asian_art",
             "name": "Asian Art",
-            "type": "department"
+            "type": "department",
+            "name_translations": {
+                "fr": "Art Asiatique",
+                "es": "Arte Asiático",
+                "de": "Asiatische Kunst",
+                "it": "Arte Asiatica",
+                "zh-CN": "亚洲艺术",
+                "zh-TW": "亞洲藝術",
+                "ja": "アジア美術",
+                "ko": "아시아 미술",
+                "ru": "Азиатское Искусство",
+                "da": "Asiatisk Kunst",
+                "nl": "Aziatische Kunst"
+            }
         },
         {
             "dept_id": 10,
             "key": "egyptian_art",
             "name": "Egyptian Art",
-            "type": "department"
+            "type": "department",
+            "name_translations": {
+                "fr": "Art Égyptien",
+                "es": "Arte Egipcio",
+                "de": "Ägyptische Kunst",
+                "it": "Arte Egizia",
+                "zh-CN": "埃及艺术",
+                "zh-TW": "埃及藝術",
+                "ja": "エジプト美術",
+                "ko": "이집트 미술",
+                "ru": "Египетское Искусство",
+                "da": "Ægyptisk Kunst",
+                "nl": "Egyptische Kunst"
+            }
+        },
+        {
+            "ids": [
+                435809,
+                437658,
+                436105,
+                435877,
+                435872,
+                45431,
+                45432,
+                45433,
+                45434
+            ],
+            "name": "Artistic Nudes",
+            "key": "Artistic Nudes",
+            "type": "curated",
+            "name_translations": {
+                "fr": "Nus Artistiques",
+                "es": "Desnudos Artísticos",
+                "de": "Künstlerische Akte",
+                "it": "Nudi Artistici",
+                "zh-CN": "艺术裸体",
+                "zh-TW": "藝術裸體",
+                "ja": "芸術的なヌード",
+                "ko": "예술적 누드",
+                "ru": "Художественная Обнаженная Натура",
+                "da": "Kunstneriske Akter",
+                "nl": "Artistieke Naakten"
+            }
         }
     ],
     "description": "The Metropolitan Museum of Art: Curated Collections",
-    "version": "v2.5.9"
+    "version": "v2.5.10"
 }

@@ -11,7 +11,10 @@ Before starting, familiarize yourself with these documents in order:
 3.  **`internal_developer_context.md` §1–4** — Concurrency model, existing provider deep-dives, and the extension guide.
 4.  **`creating_new_museum_providers.md`** — Only if building a cultural institution provider.
 
-## 1. Provider Architecture
+## 1. Provider Architecture & Purpose
+
+**The "Why"**: Spice is designed so that the core engine (`store.go`, `pipeline.go`, `monitor_controller.go`) never has to know about the specifics of an image API. The general purpose of a *Provider* is to act as a **dumb, stateless bridge** between a remote API (or local filesystem) and Spice's ingestion pipeline. 
+A provider's only job is to translate user settings into a deterministic list of image metadata. It does not shuffle, it does not manage its own disk cache, and it does not draw its own UI. This strict separation of concerns is what allows Spice to run 15 different image sources simultaneously without turning the core logic into spaghetti.
 
 Spice uses a **Registry Pattern** to decouple providers. Providers are standalone packages in `pkg/wallpaper/providers/<name>`.
 
@@ -91,6 +94,9 @@ Spice uses a **Hexagonal Architecture** for settings UI. Providers never import 
 
 ## 3. Configuration & Settings Logic (Declarative Schema)
 
+**The "Why" (Hexagonal Architecture)**: Spice's UI is built on Fyne, but Fyne is heavily tied to the host OS graphics layer. If providers imported Fyne directly to draw their settings tabs, the entire provider layer would become untestable without a running X11/Wayland/Windows graphics context. 
+To solve this, Spice uses a **Hexagonal Architecture**. Providers are 100% UI-framework agnostic. They define what their settings should look like using pure Go structs (`schema.PanelSchema`), and a central rendering engine (`ui/settings_manager.go`) translates that schema into actual Fyne widgets. This makes provider code entirely unit-testable and decouples our core logic from our chosen GUI toolkit.
+
 Do **NOT** modify the global `Config` struct. Use `fyne.Preferences` for storage and `schema.*` types for UI declaration.
 
 ### 3.1 Settings Panel (`CreateSettingsPanel`)
@@ -107,9 +113,25 @@ Build a `*schema.PanelSchema` composed of `SectionSchema` groups and `ItemSchema
 | `schema.SelectItem` | Dropdowns |
 | `schema.ButtonItem` | Action buttons |
 | `schema.AsyncButtonItem` | Background task buttons with loading state |
+| `schema.OAuthPickerItem` | OAuth Connect buttons with status |
+| `schema.FolderPickerItem` | Directory selectors |
+
+### 3.2 UI Refresh & Cache Invalidation
+
+When building your schemas, pay attention to the `NeedsRefresh` boolean on `ItemSchema`:
+
+* **What it does:** Setting `NeedsRefresh: true` tells the central UI manager that modifying this setting significantly alters the current wallpaper state.
+* **The `ApplyFunc` Lifecycle:** When a user changes a setting, your `ApplyFunc` is called to save the new value. If `NeedsRefresh` is true, Spice subsequently fires a global `RefreshImagesAndPulse()` event.
+* **Cache Invalidation:** During this refresh event, the `ImageStore` reconciles its derivative cache against a global **Processing Hash** (a map of boolean flags representing the current SmartFit, Cropping, and Framing settings). 
+* **The Result:** Any cached derivative images (e.g., `1920x1080.jpg`) whose original processing hash no longer matches the active application settings will be **instantly invalidated and deleted**. The pipeline will then seamlessly rebuild fresh derivatives from the preserved master files using the new settings, and immediately redraw the monitor wallpapers.
+* **Rule of Thumb:** If your setting changes how an image is *fetched* (e.g., changing search sort order) or how an image is *processed* (e.g., enabling Face Crop), you MUST set `NeedsRefresh: true`.
 | `schema.ConfirmButtonItem` | Buttons requiring user confirmation |
 | `schema.HyperlinkItem` | Clickable URLs |
 | `schema.LabelItem` | Static text or descriptions |
+
+> [!TIP]
+> **Dynamic UI Dependencies**
+> All schema items support `VisibleIf func() bool` and `EnabledIf func() bool` closures. Use these to dynamically hide or disable dependent settings based on the state of other config values (e.g., hiding a "Sub-setting" if the "Master Toggle" is disabled).
 
 **Example** (Pexels API Key):
 ```go
@@ -232,60 +254,23 @@ schema.BoolItem{
 3.  **Timeouts**: `OnVerify` should use `context.WithTimeout` (10s) internally.
 4.  **No Manual Wiring**: Unlike the old pattern, you don't need to call `sm.SeedBaseline()`, `sm.CommitSetting()`, or `sm.RefreshUI()` — the engine does it.
 
-## 5. Pagination & Randomization Stability
+## 5. Pagination & The FIFO Cache Rule (ZERO SHUFFLING)
 
-APIs often return results in inconsistent orders (e.g., "Page 2" might contain items from "Page 1").
-If your provider supports **Pagination** AND **Shuffling**, you must implement the **"Cache-First Stable Shuffle"** pattern.
+<AI_AGENT_INSTRUCTION>
+**CRITICAL**: You MUST NEVER shuffle the array of IDs returned by an API inside the provider. The provider's ONLY job is to return a stable, deterministic, paginated list. Shuffling is strictly handled downstream by the `MonitorController` display actor.
+</AI_AGENT_INSTRUCTION>
 
-### 5.1 The Pattern (resolveQueryToIDs)
+### 5.1 The `store.go` FIFO Queue
+Spice manages its downloaded images using a global, user-configured cache limit (e.g., 50 images) implemented in `pkg/wallpaper/store.go`. 
+The `Sync()` method acts as a strict **FIFO (First-In, First-Out)** queue:
+1. As the provider returns pages, new images are downloaded and appended to the store's list.
+2. During the nightly or periodic sync, if the total number of images exceeds the cache limit (e.g., `len(images) > 50`), `store.go` slices off the *oldest* excess images from the front of the array and permanently deletes them from disk.
 
-1.  **Cache First**: Check an internal `map[string][]int` for already resolved IDs.
-    *   *Why*: Ensures Page 2 sees the exact same list as Page 1.
-2.  **Fetch & Sort**: Download all IDs, then `sort.Ints(ids)`.
-    *   *Why*: Creates a deterministic baseline, fixing API jitter.
-3.  **Shuffle (If Enabled)**: If `cfg.GetImgShuffle()` is true, shuffle the sorted list using a session-stable seed.
-    *   *Why*: Supports the user's "Shuffle" feature without breaking pagination.
-4.  **Store**: Save the final list to the cache.
+### 5.2 Why Providers Must Never Shuffle
+Because `store.go` relies on a deterministic FIFO queue, **if a provider shuffles its return array**, it breaks the queue. `store.go` will see a different list of active IDs every time it syncs, causing it to thrash—randomly pruning and deleting images from the user's hard drive because it thinks the "active" items have changed.
 
-### 5.2 Example Implementation
-
-```go
-type Provider struct {
-    // ...
-    idCache   map[string][]int
-    idCacheMu sync.RWMutex
-}
-
-func (p *Provider) resolveIDs(query string) ([]int, error) {
-    p.idCacheMu.RLock()
-    if cached, ok := p.idCache[query]; ok {
-        p.idCacheMu.RUnlock()
-        return cached, nil
-    }
-    p.idCacheMu.RUnlock()
-
-    // 1. Fetch
-    ids, _ := fetchFromAPI(query)
-
-    // 2. Sort (Deterministic Baseline)
-    sort.Ints(ids)
-
-    // 3. Shuffle (If User Wants It)
-    if p.cfg.GetImgShuffle() {
-        r := rand.New(rand.NewSource(time.Now().UnixNano()))
-        r.Shuffle(len(ids), func(i, j int) {
-            ids[i], ids[j] = ids[j], ids[i]
-        })
-    }
-
-    // 4. Cache
-    p.idCacheMu.Lock()
-    p.idCache[query] = ids
-    p.idCacheMu.Unlock()
-
-    return ids, nil
-}
-```
+### 5.3 Memory Leak Warning (No Memory-Based Pagination)
+Do not fetch the entire collection upfront, cram it into an unbounded `map[string][]int` cache in the provider, and then drip-feed it locally. This causes permanent memory leaks. You must use the remote API's native pagination parameters (e.g., `limit` and `offset` or `page`) directly inside `FetchImages()`.
 
 ## 6. ID Namespacing (Automatic)
 
@@ -320,7 +305,7 @@ For full details, see `architecture.md` §3.12.
  You do **not** need to manually edit `cmd/spice/main.go` anymore. The `//go:generate` directive at the top of `main.go` handles this.
 
 
-## 8. Internationalization (i18n)
+## 8. Internationalization (i18n) Best Practices
 
 All user-facing strings in your provider **must** use the `i18n` package. This includes settings labels, validation errors, descriptions, button text, and tray menu items.
 
@@ -338,15 +323,28 @@ status := i18n.Tf("Downloading {{.Count}} images", map[string]any{"Count": len(i
 
 ### 8.2 After Adding New Strings
 
+Whenever you add new `i18n.T("...")` calls to your provider, you must run the extraction tool:
+
 ```bash
-make gen-i18n    # Auto-adds new keys to en.json, propagates to all languages
+make gen-i18n
 ```
 
-Then translate the new keys in each `pkg/i18n/translations/*.json` file. Release builds gate on `make check-i18n`, which will **block the PR** if any strings are untranslated or stale.
+This command parses the Go AST, automatically extracts the new english strings, inserts them into `en.json`, and propagates them as placeholder keys across all other language files (`pkg/i18n/translations/*.json`). You (or the localization team) then must translate the new values in each respective JSON file.
 
-### 8.3 Dynamic Keys
+### 8.3 Legitimately Identical Strings (Proper Nouns)
 
-If your provider selects translation keys at runtime via a variable (not a string literal), add the key to `dynamicI18nKeys` in `cmd/util/gen_i18n/main.go`. Otherwise the CI checker will flag it as stale.
+Release builds gate on `make check-i18n`, which will **block the CI/PR** if any strings in foreign language files are exactly identical to their English counterparts (as this usually implies an untranslated placeholder). 
+
+However, many strings—especially Proper Nouns, museum names, and geographic locations—are legitimately identical across languages (e.g., "The Getty", "Los Angeles, CA, USA").
+
+If you encounter CI failures for these strings:
+1. Open `cmd/util/gen_i18n/main.go`.
+2. Add your string to the `allowIdenticalToEnglish` map.
+3. This bypasses the strict translation check for that specific key.
+
+### 8.4 Dynamic Keys
+
+If your provider selects translation keys at runtime via a variable (e.g. iterating over a JSON object), the AST parser will not see them. Add these keys to the `dynamicI18nKeys` list in `cmd/util/gen_i18n/main.go` to prevent the CI checker from flagging them as "stale" keys.
 
 For full details, see `internal_developer_context.md` §9.
 

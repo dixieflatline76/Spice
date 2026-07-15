@@ -88,7 +88,7 @@ func (m *MockPluginManager) RebuildTrayMenu() {
 	m.Called()
 }
 
-func (m *MockPluginManager) ShowAnchorPopup(_ int, _ provider.CropAnchor, _ [9]string, _ [9]provider.CropAnchor, _ func(provider.CropAnchor, func())) {
+func (m *MockPluginManager) ShowTuneImagePopup(_ int, _ provider.TuningOptions, _ provider.TuningOptions, _ [9]string, _ [9]provider.CropAnchor, _ bool, _ func(provider.TuningOptions, func()), _ func()) {
 }
 
 // MockOS is a mock implementation of the OS interface.
@@ -182,8 +182,8 @@ func (m *MockImageStore) SetFavorited(id string, favorited bool) bool {
 	return args.Bool(0)
 }
 
-func (m *MockImageStore) SetCropAnchor(id string, resKey string, anchor provider.CropAnchor) bool {
-	args := m.Called(id, resKey, anchor)
+func (m *MockImageStore) SetTuningOptions(id string, resKey string, opts provider.TuningOptions) bool {
+	args := m.Called(id, resKey, opts)
 	return args.Bool(0)
 }
 
@@ -299,8 +299,8 @@ func (m *MockImageProcessor) EncodeImage(ctx context.Context, img image.Image, c
 	return args.Get(0).([]byte), args.Error(1)
 }
 
-func (m *MockImageProcessor) FitImage(ctx context.Context, img image.Image, targetWidth, targetHeight int, anchor provider.CropAnchor) (image.Image, error) {
-	args := m.Called(ctx, img, targetWidth, targetHeight, anchor)
+func (m *MockImageProcessor) FitImage(ctx context.Context, img image.Image, targetWidth, targetHeight int, opts provider.TuningOptions) (image.Image, error) {
+	args := m.Called(ctx, img, targetWidth, targetHeight, opts)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}

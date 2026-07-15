@@ -186,8 +186,8 @@ func (wp *Plugin) CreateTrayMenuItems() []*fyne.MenuItem {
 			res = append(res, mItems.FavoriteMenuItem)
 		}
 		if wp.cfg.GetSmartFitMode() != SmartFitOff {
-			anchorItem := wp.manager.CreateMenuItem(i18n.T("Crop Anchor"), func() {
-				wp.showAnchorPopup(mID)
+			anchorItem := wp.manager.CreateMenuItem(i18n.T("Tune Image"), func() {
+				wp.showTuneImagePopup(mID)
 			}, "anchor.png")
 			res = append(res, anchorItem)
 		}
@@ -245,9 +245,9 @@ func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 	// 3. Assemble Tabs
 	tabs := container.NewAppTabs(
 		container.NewTabItemWithIcon(i18n.T("General"), theme.SettingsIcon(), generalTab),
+		container.NewTabItemWithIcon(i18n.T("Museums"), theme.ColorPaletteIcon(), museumTab),
 		container.NewTabItemWithIcon(i18n.T("Community"), theme.GridIcon(), onlineTab),
 		container.NewTabItemWithIcon(i18n.T("Personal"), theme.FolderIcon(), localTab),
-		container.NewTabItemWithIcon(i18n.T("Museums"), theme.ColorPaletteIcon(), museumTab),
 	)
 	wp.settingsTabs = tabs
 	tabs.SetTabLocation(container.TabLocationLeading)

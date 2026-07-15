@@ -5,7 +5,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
-	"math/rand"
+
 	"net/http"
 	"sort"
 	"strconv"
@@ -235,11 +235,6 @@ func (p *Provider) fetchCurated(ctx context.Context, entry *CollectionEntry, pag
 	ids := make([]int, len(entry.IDs))
 	copy(ids, entry.IDs)
 
-	if p.cfg.GetImgShuffle() {
-		r := rand.New(rand.NewSource(time.Now().UnixNano())) //nolint:gosec // Not security-sensitive
-		r.Shuffle(len(ids), func(i, j int) { ids[i], ids[j] = ids[j], ids[i] })
-	}
-
 	const pageSize = 20
 	start := (page - 1) * pageSize
 	if start >= len(ids) {
@@ -253,33 +248,17 @@ func (p *Provider) fetchCurated(ctx context.Context, entry *CollectionEntry, pag
 	pageIDs := ids[start:end]
 
 	var images []provider.Image
-	var mu sync.Mutex
-
-	// Fetch each artwork individually with bounded concurrency
-	sem := make(chan struct{}, 5)
-	var wg sync.WaitGroup
 
 	for _, id := range pageIDs {
-		wg.Add(1)
-		go func(id int) {
-			defer wg.Done()
-			sem <- struct{}{}
-			defer func() { <-sem }()
-
-			art, err := p.fetchSingleArtwork(ctx, id)
-			if err != nil {
-				log.Debugf("Cleveland: Error fetching artwork %d: %v", id, err)
-				return
-			}
-			if img := p.artworkToImage(art); img != nil {
-				mu.Lock()
-				images = append(images, *img)
-				mu.Unlock()
-			}
-		}(id)
+		art, err := p.fetchSingleArtwork(ctx, id)
+		if err != nil {
+			log.Debugf("Cleveland: Error fetching artwork %d: %v", id, err)
+			continue
+		}
+		if img := p.artworkToImage(art); img != nil {
+			images = append(images, *img)
+		}
 	}
-
-	wg.Wait()
 	log.Debugf("Cleveland: Curated page %d: %d images from %d IDs", page, len(images), len(pageIDs))
 	return images, nil
 }
@@ -326,10 +305,6 @@ func (p *Provider) fetchSearch(ctx context.Context, entry *CollectionEntry, page
 		}
 
 		sort.Ints(allIDs)
-		if p.cfg.GetImgShuffle() {
-			r := rand.New(rand.NewSource(time.Now().UnixNano())) //nolint:gosec // Not security-sensitive
-			r.Shuffle(len(allIDs), func(i, j int) { allIDs[i], allIDs[j] = allIDs[j], allIDs[i] })
-		}
 
 		p.idCacheMu.Lock()
 		p.idCache[entry.Key] = allIDs
@@ -441,15 +416,7 @@ func (p *Provider) artworkToImage(art *apiArtwork) *provider.Image {
 		return nil
 	}
 
-	// Check dimensions for landscape orientation
-	w, _ := strconv.Atoi(imgSize.Width)
-	h, _ := strconv.Atoi(imgSize.Height)
-	if w > 0 && h > 0 {
-		ratio := float64(w) / float64(h)
-		if ratio < 1.2 {
-			return nil // Portrait or near-square
-		}
-	}
+	// We no longer filter by landscape orientation
 
 	// Build attribution
 	artist := ""
@@ -496,14 +463,16 @@ func (p *Provider) EnrichImage(_ context.Context, img provider.Image) (provider.
 // CreateSettingsPanel returns the museum info panel.
 func (p *Provider) CreateSettingsPanel(sm setting.SettingsManager) *schema.PanelSchema {
 	return schema.CreateMuseumSettingsPanel(schema.MuseumSettingsConfig{
-		ID:          "CMA",
-		Title:       i18n.T("Cleveland Museum of Art"),
-		Location:    i18n.T("Cleveland, OH, USA"),
-		LicenseURL:  "https://www.clevelandart.org/open-access",
-		Description: i18n.T("One of America's most distinguished comprehensive art museums. Its Open Access collection spans 6,000 years of achievement in art, all freely available for any use."),
-		MapQuery:    "Cleveland Museum of Art",
-		WebsiteURL:  WebBaseURL,
-		DonateURL:   "https://www.clevelandart.org/give",
+		MuseumFramingGetFunc: func() bool { return p.cfg.GetMuseumFraming(p.ID()) },
+		MuseumFramingSetFunc: func(val bool) { p.cfg.SetMuseumFraming(p.ID(), val) },
+		ID:                   "CMA",
+		Title:                i18n.T("Cleveland Museum of Art"),
+		Location:             i18n.T("Cleveland, OH, USA"),
+		LicenseURL:           "https://www.clevelandart.org/open-access",
+		Description:          i18n.T("One of America's most distinguished comprehensive art museums. Its Open Access collection spans 6,000 years of achievement in art, all freely available for any use."),
+		MapQuery:             "Cleveland Museum of Art",
+		WebsiteURL:           WebBaseURL,
+		DonateURL:            "https://www.clevelandart.org/give",
 	}, sm.OpenURL)
 }
 
@@ -525,7 +494,7 @@ func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, _ string) *schem
 	var curatedItems []schema.ItemSchema
 	if col != nil {
 		for _, entry := range col.Entries {
-			curatedItems = append(curatedItems, p.makeCollectionItem(entry.Name, entry.Key))
+			curatedItems = append(curatedItems, p.makeCollectionItem(entry.Name, entry.NameTranslations, entry.Key))
 		}
 	}
 
@@ -539,7 +508,8 @@ func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, _ string) *schem
 	}
 }
 
-func (p *Provider) makeCollectionItem(label, key string) schema.BoolItem {
+func (p *Provider) makeCollectionItem(label string, translations map[string]string, key string) schema.BoolItem {
+	// Helper to find existing query state
 	getQuery := func(key string) (bool, string) {
 		for _, q := range p.cfg.GetQueries() {
 			if q.Provider == p.ID() && q.URL == key {
@@ -553,7 +523,7 @@ func (p *Provider) makeCollectionItem(label, key string) schema.BoolItem {
 
 	return schema.BoolItem{
 		Name:         p.ID() + "_" + key,
-		Label:        label,
+		Label:        i18n.TMap(label, translations),
 		InitialValue: active,
 		NeedsRefresh: true,
 		ApplyFunc: func(b bool) {

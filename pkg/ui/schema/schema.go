@@ -70,6 +70,7 @@ type TextItem struct {
 	PlaceHolder        string
 	IsPassword         bool
 	DisplayStatus      bool
+	IsNumeric          bool
 	ValidationDebounce time.Duration
 	Validator          func(string) error // Pure Go validator
 	PostValidateCheck  func(string) error
@@ -98,6 +99,25 @@ type SelectItem struct {
 }
 
 func (SelectItem) isItemSchema() {}
+
+// SliderItem represents a slider control for numeric values.
+type SliderItem struct {
+	Name         string
+	Label        string
+	Help         string
+	Min          float64
+	Max          float64
+	Step         float64
+	InitialValue float64
+	Format       string // e.g. "%.0f%%"
+	OnChanged    func(float64)
+	ApplyFunc    func(float64)
+	NeedsRefresh bool
+	EnabledIf    func() bool
+	VisibleIf    func() bool
+}
+
+func (SliderItem) isItemSchema() {}
 
 // AsyncButtonItem represents a button that performs a background task.
 type AsyncButtonItem struct {

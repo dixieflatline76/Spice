@@ -55,12 +55,13 @@ func (c *Collection) migrate() {
 //   - "search":     Calls the Met search API with Query
 //   - "department": Calls the Met department API with DeptID
 type CollectionEntry struct {
-	Name   string `json:"name"`
-	Key    string `json:"key"`
-	Type   string `json:"type"`              // "curated", "search", "department"
-	IDs    []int  `json:"ids,omitempty"`     // For "curated" type
-	Query  string `json:"query,omitempty"`   // For "search" type
-	DeptID int    `json:"dept_id,omitempty"` // For "department" type
+	Name             string            `json:"name"`
+	NameTranslations map[string]string `json:"name_translations,omitempty"`
+	Key              string            `json:"key"`
+	Type             string            `json:"type"`              // "curated", "search", "department"
+	IDs              []int             `json:"ids,omitempty"`     // For "curated" type
+	Query            string            `json:"query,omitempty"`   // For "search" type
+	DeptID           int               `json:"dept_id,omitempty"` // For "department" type
 }
 
 const (
@@ -178,6 +179,9 @@ func fetchRemote() (*Collection, error) {
 		return nil, err
 	}
 	col.migrate()
+	if len(col.Entries) == 0 {
+		return nil, fmt.Errorf("remote collection is empty or malformed (schema mismatch)")
+	}
 	return &col, nil
 }
 
@@ -214,6 +218,9 @@ func loadCache(path string) (*Collection, error) {
 		return nil, err
 	}
 	col.migrate()
+	if len(col.Entries) == 0 {
+		return nil, fmt.Errorf("remote collection is empty or malformed (schema mismatch)")
+	}
 	return &col, nil
 }
 

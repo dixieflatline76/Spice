@@ -142,6 +142,9 @@ func (p *Pipeline) stateManagerLoop() {
 			}
 			if res.Error != nil {
 				p.logPipelineError(res.Error)
+				if res.Image.ID != "" {
+					p.store.Add(res.Image)
+				}
 				continue
 			}
 			if !p.store.Add(res.Image) {

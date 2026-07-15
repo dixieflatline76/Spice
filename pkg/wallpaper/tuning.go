@@ -4,8 +4,11 @@ package wallpaper
 // These are currently static but centralized here to allow for future remote configuration.
 type TuningConfig struct {
 	// Smart Fit 2.0 (Core)
-	AspectThreshold      float64 `json:"aspect_threshold"`      // Default: 0.9 (Base tolerance)
-	AggressiveMultiplier float64 `json:"aggressive_multiplier"` // Default: 1.9 (Flexibility mode boost)
+	AspectThreshold               float64 `json:"aspect_threshold"`                 // Default: 0.9 (Base tolerance)
+	AggressiveMultiplier          float64 `json:"aggressive_multiplier"`            // Default: 2.5 (Flexibility mode boost)
+	QualityOrientationMaxDiff     float64 `json:"quality_orientation_max_diff"`     // Default: 0.5 (Orientation mismatch cap for Quality)
+	FlexibilityAbsoluteMaxDiff    float64 `json:"flexibility_absolute_max_diff"`    // Default: 1.5 (Absolute cap for Flexibility)
+	FlexibilityOrientationMaxDiff float64 `json:"flexibility_orientation_max_diff"` // Default: 0.8 (Orientation mismatch cap for Flexibility)
 
 	// Dual Safety (v1.6.2)
 	MinEnergyThreshold           float64 `json:"min_energy_threshold"`             // Default: 0.05
@@ -36,24 +39,27 @@ type TuningConfig struct {
 // DefaultTuningConfig returns the standard values for Spice 1.6.2.
 func DefaultTuningConfig() TuningConfig {
 	return TuningConfig{
-		AspectThreshold:              0.9,
-		AggressiveMultiplier:         2.5,
-		MinEnergyThreshold:           0.05,
-		FeetGuardRatio:               0.5,
-		FeetGuardSlackThreshold:      0.8,
-		FeetGuardSlackRelaxed:        1.0,
-		FeetGuardHighEnergyThreshold: 0.2,
-		EnergyThumbSize:              128,
-		FaceRescueQThreshold:         20.0,
-		FaceBottomEdgeThreshold:      0.7,
-		FaceBottomEdgeMinQ:           20.0,
-		FaceIoUThreshold:             0.2,
-		FaceScaleFactor:              1.1,
-		FaceDetectConfidence:         10.0,
-		FaceDetectMinSizePct:         1,
-		FaceDetectShift:              0.1,
-		EncodingQuality:              95,
-		AnchorBlendFace:              0.6,
-		AnchorBlendNoFace:            0.85,
+		AspectThreshold:               0.9,
+		AggressiveMultiplier:          2.5,
+		QualityOrientationMaxDiff:     0.5,
+		FlexibilityAbsoluteMaxDiff:    1.5,
+		FlexibilityOrientationMaxDiff: 0.8,
+		MinEnergyThreshold:            0.05,
+		FeetGuardRatio:                0.5,
+		FeetGuardSlackThreshold:       0.8,
+		FeetGuardSlackRelaxed:         1.0,
+		FeetGuardHighEnergyThreshold:  0.2,
+		EnergyThumbSize:               128,
+		FaceRescueQThreshold:          20.0,
+		FaceBottomEdgeThreshold:       0.7,
+		FaceBottomEdgeMinQ:            20.0,
+		FaceIoUThreshold:              0.2,
+		FaceScaleFactor:               1.1,
+		FaceDetectConfidence:          10.0,
+		FaceDetectMinSizePct:          1,
+		FaceDetectShift:               0.1,
+		EncodingQuality:               95,
+		AnchorBlendFace:               0.6,
+		AnchorBlendNoFace:             0.85,
 	}
 }

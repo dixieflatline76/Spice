@@ -387,7 +387,7 @@ func handleAnchor(mgr ui.PluginManager, anchor provider.CropAnchor) {
 	handleTargeted(mgr, func(mid int) string {
 		wp := wallpaper.GetInstance()
 		if wp != nil {
-			wp.SetCropAnchor(mid, anchor)
+			wp.SetTuningOptions(mid, provider.TuningOptions{Anchor: anchor})
 			return i18n.Tf("Display {{.ID}}: Anchor {{.Anchor}}", map[string]any{"ID": mid + 1, "Anchor": anchor.String()})
 		}
 		return ""

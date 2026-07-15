@@ -5,7 +5,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
-	"math/rand"
+
 	"net/http"
 	"sort"
 	"strings"
@@ -18,7 +18,6 @@ import (
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
 	"github.com/dixieflatline76/Spice/v2/pkg/wallpaper"
 	"github.com/dixieflatline76/Spice/v2/util/log"
-	"golang.org/x/sync/errgroup"
 )
 
 // Provider implements the Rijksmuseum wallpaper provider.
@@ -190,17 +189,6 @@ func (p *Provider) fetchCurated(entry *CollectionEntry, page int) ([]provider.Im
 		return nil, nil
 	}
 
-	// Apply shuffle if enabled
-	if p.cfg.GetImgShuffle() {
-		shuffled := make([]CuratedItem, len(items))
-		copy(shuffled, items)
-		r := rand.New(rand.NewSource(time.Now().UnixNano())) //nolint:gosec // Not security-sensitive
-		r.Shuffle(len(shuffled), func(i, j int) {
-			shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
-		})
-		items = shuffled
-	}
-
 	// Paginate
 	const pageSize = 20
 	start := (page - 1) * pageSize
@@ -250,12 +238,9 @@ func (p *Provider) fetchSearch(ctx context.Context, entry *CollectionEntry, page
 	}
 
 	var images []provider.Image
-	var mu sync.Mutex
 
 	for b := 0; b < maxBatches; b++ {
-		mu.Lock()
 		got := len(images)
-		mu.Unlock()
 		if got >= targetCount {
 			break
 		}
@@ -274,27 +259,15 @@ func (p *Provider) fetchSearch(ctx context.Context, entry *CollectionEntry, page
 			break
 		}
 
-		g, gctx := errgroup.WithContext(ctx)
-		g.SetLimit(3) // Conservative: 3 concurrent resolution chains
-
 		for _, objID := range batch {
-			objID := objID
-			g.Go(func() error {
-				img, err := p.resolveObjectToImage(gctx, objID)
-				if err != nil || img == nil {
-					return nil
-				}
-				mu.Lock()
-				if len(images) < targetCount {
-					images = append(images, *img)
-				}
-				mu.Unlock()
-				return nil
-			})
-		}
-
-		if err := g.Wait(); err != nil {
-			log.Printf("Rijksmuseum: Batch resolve error: %v", err)
+			if len(images) >= targetCount {
+				break
+			}
+			img, err := p.resolveObjectToImage(ctx, objID)
+			if err != nil || img == nil {
+				continue
+			}
+			images = append(images, *img)
 		}
 
 		time.Sleep(300 * time.Millisecond)
@@ -339,14 +312,6 @@ func (p *Provider) resolveSearchIDs(ctx context.Context, entry *CollectionEntry)
 
 	// Sort for stable pagination
 	sort.Strings(allIDs)
-
-	// Shuffle if enabled
-	if p.cfg.GetImgShuffle() {
-		r := rand.New(rand.NewSource(time.Now().UnixNano())) //nolint:gosec // Not security-sensitive
-		r.Shuffle(len(allIDs), func(i, j int) {
-			allIDs[i], allIDs[j] = allIDs[j], allIDs[i]
-		})
-	}
 
 	// Cache
 	p.searchCacheMu.Lock()
@@ -424,17 +389,7 @@ func (p *Provider) resolveObjectToImage(ctx context.Context, objectID string) (*
 	objectNumber := ExtractObjectNumber(obj.IdentifiedBy)
 	artist := ExtractArtist(obj.ProducedBy)
 
-	// Check dimensions for landscape orientation
-	width, height := ExtractDimensions(obj.ReferredToBy)
-	if width > 0 && height > 0 {
-		ratio := width / height
-		if ratio < 1.2 {
-			// Portrait or near-square — skip
-			p.cacheResult(objectID, nil)
-			return nil, nil
-		}
-	}
-
+	// We no longer filter by landscape orientation
 	// Step 2: Get VisualItem reference
 	if len(obj.Shows) == 0 {
 		p.cacheResult(objectID, nil)
@@ -578,14 +533,16 @@ func (p *Provider) EnrichImage(_ context.Context, img provider.Image) (provider.
 // CreateSettingsPanel returns the museum info panel.
 func (p *Provider) CreateSettingsPanel(sm setting.SettingsManager) *schema.PanelSchema {
 	return schema.CreateMuseumSettingsPanel(schema.MuseumSettingsConfig{
-		ID:          "Rijks",
-		Title:       i18n.T("Rijksmuseum"),
-		Location:    i18n.T("Amsterdam, Netherlands"),
-		LicenseURL:  "https://www.rijksmuseum.nl/en/research/conduct-research/data/policy",
-		Description: i18n.T("The national museum of the Netherlands, home to Rembrandt's Night Watch, Vermeer's Milkmaid, and the finest collection of Dutch Golden Age masterpieces in the world."),
-		MapQuery:    "Rijksmuseum Amsterdam",
-		WebsiteURL:  WebBaseURL,
-		DonateURL:   "https://www.rijksmuseum.nl/en/support",
+		MuseumFramingGetFunc: func() bool { return p.cfg.GetMuseumFraming(p.ID()) },
+		MuseumFramingSetFunc: func(val bool) { p.cfg.SetMuseumFraming(p.ID(), val) },
+		ID:                   "Rijks",
+		Title:                i18n.T("Rijksmuseum"),
+		Location:             i18n.T("Amsterdam, Netherlands"),
+		LicenseURL:           "https://www.rijksmuseum.nl/en/research/conduct-research/data/policy",
+		Description:          i18n.T("The national museum of the Netherlands, home to Rembrandt's Night Watch, Vermeer's Milkmaid, and the finest collection of Dutch Golden Age masterpieces in the world."),
+		MapQuery:             "Rijksmuseum Amsterdam",
+		WebsiteURL:           WebBaseURL,
+		DonateURL:            "https://www.rijksmuseum.nl/en/support",
 	}, sm.OpenURL)
 }
 
@@ -607,7 +564,7 @@ func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, _ string) *schem
 	var curatedItems []schema.ItemSchema
 	if col != nil {
 		for _, entry := range col.Entries {
-			curatedItems = append(curatedItems, p.makeCollectionItem(entry.Name, entry.Key))
+			curatedItems = append(curatedItems, p.makeCollectionItem(entry.Name, entry.NameTranslations, entry.Key))
 		}
 	}
 
@@ -621,7 +578,8 @@ func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, _ string) *schem
 	}
 }
 
-func (p *Provider) makeCollectionItem(label, key string) schema.BoolItem {
+func (p *Provider) makeCollectionItem(label string, translations map[string]string, key string) schema.BoolItem {
+	// Helper to find existing query state
 	getQuery := func(key string) (bool, string) {
 		for _, q := range p.cfg.GetQueries() {
 			if q.Provider == p.ID() && q.URL == key {
@@ -635,7 +593,7 @@ func (p *Provider) makeCollectionItem(label, key string) schema.BoolItem {
 
 	return schema.BoolItem{
 		Name:         p.ID() + "_" + key,
-		Label:        label,
+		Label:        i18n.TMap(label, translations),
 		InitialValue: active,
 		NeedsRefresh: true,
 		ApplyFunc: func(b bool) {

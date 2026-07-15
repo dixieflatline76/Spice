@@ -37,7 +37,7 @@ When one display is connected, the tray menu shows actions directly:
 | **Source:** | Shows the image provider (e.g., *Wallhaven*, *Met Museum*) |
 | **By:** | Shows attribution — click to open the original image on the web |
 | **Add to Favorites** | Save the current wallpaper locally *(only visible when Favorites is enabled)* |
-| **Crop Anchor** | Open the Smart Crop Anchor grid to fine-tune how the current wallpaper is cropped *(only visible when Smart Fit is active)* |
+| **Tune Image** | Open the Tune Image popup to manually toggle the Virtual Museum Frame or fine-tune crop anchors *(only visible when Smart Fit is active)* |
 | **Delete And Block** | Delete the image from cache and prevent it from ever appearing again |
 | *(separator)* | |
 | **Preferences** | Open the settings window |
@@ -89,12 +89,12 @@ Hold a **number key (1–9)** alongside the modifier to target a specific displa
 | **Pause / Play** | `Alt` + `N` + `P` | `Command` + `N` + `P` |
 | **Shuffle** | `Alt` + `N` + `R` | `Command` + `N` + `R` |
 | **Info** | `Alt` + `N` + `I` | `Command` + `N` + `I` |
-| **Anchor Up** | `Alt` + `N` + `W` | `Command` + `N` + `W` |
-| **Anchor Down** | `Alt` + `N` + `S` | `Command` + `N` + `S` |
-| **Anchor Left** | `Alt` + `N` + `A` | `Command` + `N` + `A` |
-| **Anchor Right** | `Alt` + `N` + `D` | `Command` + `N` + `D` |
-| **Anchor Center** | `Alt` + `N` + `E` | `Command` + `N` + `E` |
-| **Anchor Auto** | `Alt` + `N` + `Q` | `Command` + `N` + `Q` |
+| **Tune Up** | `Alt` + `N` + `W` | `Command` + `N` + `W` |
+| **Tune Down** | `Alt` + `N` + `S` | `Command` + `N` + `S` |
+| **Tune Left** | `Alt` + `N` + `A` | `Command` + `N` + `A` |
+| **Tune Right** | `Alt` + `N` + `D` | `Command` + `N` + `D` |
+| **Tune Center** | `Alt` + `N` + `E` | `Command` + `N` + `E` |
+| **Tune Auto** | `Alt` + `N` + `Q` | `Command` + `N` + `Q` |
 
 **Example:** To skip the wallpaper on your second monitor, press and hold `Alt` (Windows) or `Command` (macOS), tap `2`, and press `→`. 
 
@@ -138,7 +138,7 @@ The **Wallpaper** plugin tab appears immediately after the App tab. It contains 
 
 | Setting | Description |
 | :--- | :--- |
-| **Wallpaper Change Frequency** | How often Spice automatically rotates. Options range from *Every 5 Minutes* to *Daily*. Set to *Never* to disable automatic rotation entirely (you can still change manually via the tray or hotkeys). |
+| **Wallpaper Change Frequency** | A flexible freeform minutes input that determines how often Spice automatically rotates. Type `15` for 15 minutes, or `1440` for daily. Set to `0` to disable automatic rotation entirely (you can still change manually via the tray or hotkeys). |
 | **Cache Size** | How many images to keep on disk. A larger cache means faster display and fewer network requests at startup. Set to *None* to disable caching (images are fetched fresh each time). |
 | **Smart Fit Mode** | Controls how Spice fits images to your screen — see below. |
 | **Enable Face Crop** | When Smart Fit is active, the cropper aggressively centers on the largest detected face. **Note**: This setting is automatically disabled if Smart Fit Mode is "Disabled". |
@@ -150,42 +150,56 @@ The **Wallpaper** plugin tab appears immediately after the App tab. It contains 
 | **Clear Wallpaper Cache** | Deletes all downloaded images from disk. You will need an internet connection before new wallpapers appear again. Requires confirmation. |
 | **Blocked Images → Reset** | Clears the list of blocked images, allowing previously deleted images to be re-downloaded. Requires confirmation. |
 
-#### Smart Fit Modes
+#### Smart Fit Feature Matrix
 
-| Mode | Behaviour |
-| :--- | :--- |
-| **Disabled** | Images are used as-is — no processing. Fastest. |
-| **Quality** | Rejects images whose aspect ratio doesn't match your monitor. No black bars, no stretched photos. May skip some images. |
-| **Flexibility** | Accepts high-resolution images even if their aspect ratio differs from your screen, then crops intelligently. More variety. |
+The following table breaks down exactly how the engine processes images and controls the Tune Image UI depending on your chosen mode:
+
+| Feature / Processing Stage | Quality Mode | Flexibility Mode |
+| :--- | :--- | :--- |
+| **Core Philosophy** | **Pristine Fit:** "Protect me from bad crops at all costs. Skip images if they don't fit perfectly." | **Maximum Variety:** "I accept aggressive crops and missing details to see more variety." |
+| **Aspect Ratio Limits** | **Strict:** Rejects images unless they closely match your monitor's physical aspect ratio. | **Dynamic / Loose:** Accepts wide mismatches (e.g. a square image on an ultrawide monitor). |
+| **Orientation Safety** | **Strict:** Will immediately reject portrait images on a landscape monitor (unless rescued by Museum Frame). | **Loose:** Will attempt to crop a portrait image to fit a landscape monitor (resulting in an extreme "slice"). |
+| **Face Detection Crop** | **Conservative:** Will shift the crop slightly to keep a face in view, but refuses to ruin the composition. | **Aggressive:** Will ruthlessly crop out the rest of the image just to center the primary face. |
+| **Entropy / Saliency Crop** | **Minimal:** Uses edge-detection just to avoid cropping out the most interesting 10% of the edges. | **Maximum:** Will scan the entire image for energy (complexity) and heavily crop to focus on the busiest region. |
+| **Auto-Salvage (Framing)** | **High Frequency:** Many images fail the strict check and are automatically wrapped in a Museum Frame to prevent skipping them. | **Low Frequency:** Because limits are loose, images rarely fail, so auto-framing almost never triggers. |
+| **Museum Mode Auto-Frame** | Applies to all museum art regardless of aspect ratio. | Applies to all museum art regardless of aspect ratio. |
+| **Tune Image: Unframe** | **Contextual Lock:** You *cannot* remove the frame from an image if cropping it would violate your strict Quality limit. The checkbox is disabled. | **Always Unlocked:** You can rip the frame off *any* image and let the system aggressively chop it to pieces. |
+| **Tune Image: Frame Styling**| **Unlocked:** You can adjust the frame size, paper matting, and wall color (even if the frame toggle is locked). | **Unlocked:** You can adjust all frame properties. |
+| **Tune Image: Manual Anchor**| Adjusts the crop within safe, minor boundaries. | Allows extreme panning across the heavily cropped image (e.g. pan to the bottom of a portrait). |
+| **Processing Speed** | **Fastest:** Instantly skips incompatible images before doing heavy processing. | **Slower:** Performs heavy math (entropy/face scanning) on almost every image to find a viable crop. |
 
 ---
 
-### Smart Crop Anchors
+### Tune Image & Virtual Museum Frame
 
-Smart Crop Anchors give you manual control over *where* Spice focuses when cropping a wallpaper. By default, Spice uses a combination of face detection and entropy analysis to find the best region. Anchors let you override that decision.
+The **Tune Image** popup provides manual control over how Spice frames and crops your wallpaper. 
 
-**How it works:**
-- Click **Crop Anchor** in the tray menu (or a display's submenu) to open the 3×3 anchor grid.
-- Select a direction: the wallpaper is immediately re-processed to emphasize that region.
+By default, Spice uses a combination of face detection and entropy analysis to find the best crop region, and will automatically reject extreme aspect ratios (like portraits on a landscape monitor) unless the image can be salvaged via the Virtual Museum Frame. The Tune Image popup lets you override these automated pipeline decisions.
+
+**Virtual Museum Frame (Auto Salvage vs Manual):**
+- **Auto Salvage**: The pipeline automatically rescues extreme portraits and landscapes by displaying the entire uncropped image on a generated background, preserving the original aspect ratio. (You can enable this automatically for all art from a specific museum in the Museum settings).
+- **Manual Framing**: You can manually toggle the Virtual Museum Frame on *any* image by clicking **Enable Frame** in the Tune popup. You can adjust the **Frame Size** (e.g. 85%), toggle **Paper Matting**, and choose a **Wall Color** (e.g. Algorithmic).
+
+**Manual Crop Anchors:**
+If you prefer cropping instead of framing, the Tune popup provides a 3×3 crop anchor grid to hint which region to keep when cropping.
+- Select a direction: the wallpaper is immediately re-cropped to emphasize that region.
 - Select **Auto** to return to the intelligent default.
-- The anchor popup stays open so you can experiment with different positions in real-time.
 
 **Keyboard Shortcuts (WASD Layout):**
+You can set crop anchors directly from the keyboard using the same targeted modifier pattern as other shortcuts. Hold a number key (1-9) to target a specific display.
 
-You can set anchors directly from the keyboard using the same targeted modifier pattern as other shortcuts. Hold a number key (1-9) to target a specific display.
-
-| Key | Anchor |
+| Key | Action |
 | :--- | :--- |
-| `W` | Up ↑ |
-| `A` | Left ← |
-| `S` | Down ↓ |
-| `D` | Right → |
-| `E` | Center ● |
+| `W` | Tune Up ↑ |
+| `A` | Tune Left ← |
+| `S` | Tune Down ↓ |
+| `D` | Tune Right → |
+| `E` | Tune Center ● |
 | `Q` | Auto (pipeline default) |
 
 **Example:** To anchor the wallpaper on Display 2 to the top of the image, press and hold `Alt` (Windows) or `Command` (macOS), tap `2`, and press `W`.
 
-> **Note:** Smart Crop Anchors require **Smart Fit Mode** to be set to either *Quality* or *Flexibility*. When Smart Fit is *Disabled*, anchors have no effect since images are not cropped.
+> **Note:** Tune Image features require **Smart Fit Mode** to be set to either *Quality* or *Flexibility*. When Smart Fit is *Disabled*, images are not processed.
 
 ---
 
@@ -254,6 +268,9 @@ Art has no borders. Spice integrates with the world’s leading cultural institu
 - **Art Institute of Chicago** (Chicago, IL, USA)
 - **Cleveland Museum of Art** (Cleveland, OH, USA)
 - **Rijksmuseum** (Amsterdam, Netherlands)
+- **Statens Museum for Kunst** (Copenhagen, Denmark)
+- **National Palace Museum** (Taipei, Taiwan)
+- **Getty Images** (Los Angeles, CA, USA)
 
 **The "Director's Cut" Collections:**
 Each museum provides curated collections designed to showcase institutional highlights:
@@ -265,7 +282,8 @@ Each museum provides curated collections designed to showcase institutional high
 1. Open **Preferences → Wallpaper → Online**.
 2. Expand a museum card.
 3. Use the **Map** link to "Plan a Visit" and explore the institution's location.
-4. Toggle the collections you want and click **Apply**.
+4. (Optional) Check **"Download & Frame Mismatched Images"** to automatically salvage extreme portraits/landscapes for this specific museum by wrapping them in the Virtual Museum Frame.
+5. Toggle the collections you want and click **Apply**.
 
 #### Google Photos
  

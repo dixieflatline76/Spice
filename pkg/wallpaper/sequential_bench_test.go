@@ -45,7 +45,7 @@ func (m *BenchMockPluginManager) GetPreferences() fyne.Preferences { return nil 
 func (m *BenchMockPluginManager) GetAssetManager() *asset.Manager  { return nil }
 func (m *BenchMockPluginManager) RefreshTrayMenu()                 {}
 func (m *BenchMockPluginManager) RebuildTrayMenu()                 {}
-func (m *BenchMockPluginManager) ShowAnchorPopup(_ int, _ provider.CropAnchor, _ [9]string, _ [9]provider.CropAnchor, _ func(provider.CropAnchor, func())) {
+func (m *BenchMockPluginManager) ShowTuneImagePopup(_ int, _ provider.TuningOptions, _ provider.TuningOptions, _ [9]string, _ [9]provider.CropAnchor, _ bool, _ func(provider.TuningOptions, func()), _ func()) {
 }
 
 // BenchMockProvider

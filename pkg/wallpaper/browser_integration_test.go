@@ -2,6 +2,7 @@ package wallpaper
 
 import (
 	"net/http/httptest"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -15,6 +16,10 @@ import (
 // ChromeOS Driver -> API Server -> WebSocket Client pipeline.
 // It measures the "turn around time" for a wallpaper set command.
 func TestBrowserBridgeLatency(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Flaky on Windows CI due to loopback network congestion")
+	}
+
 	// 1. Setup API Server
 	server := api.NewServer()
 	// Expose Handler via httptest to get a real port

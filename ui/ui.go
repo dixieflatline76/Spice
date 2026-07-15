@@ -300,6 +300,50 @@ func (sa *SpiceApp) CreateTrayMenu() {
 	utilLog.Debug("System Tray Menu and Icon setup process completed.")
 }
 
+// LockTrayMenu replaces the system tray with a minimal locked menu during tuning
+func (sa *SpiceApp) LockTrayMenu(activeWindow fyne.Window) {
+	desk, ok := sa.App.(desktop.App)
+	if !ok {
+		return
+	}
+
+	items := []*fyne.MenuItem{}
+
+	disabledItem := sa.CreateMenuItem(i18n.T("Controls Disabled"), nil, "")
+	disabledItem.Disabled = true
+	items = append(items, disabledItem)
+
+	items = append(items, sa.CreateMenuItem(i18n.T("Close Tuning to Resume"), func() {
+		if activeWindow != nil {
+			activeWindow.RequestFocus()
+		}
+	}, ""))
+
+	items = append(items, fyne.NewMenuItemSeparator())
+	items = append(items, sa.CreateMenuItem(i18n.T("Help"), func() {
+		u, _ := url.Parse("https://spicebox.dev/support.html")
+		if u != nil {
+			_ = sa.OpenURL(u)
+		}
+	}, "help.png"))
+	items = append(items, sa.CreateMenuItem(i18n.T("About Spice"), func() {
+		sa.CreateAboutSplash()
+	}, "tray.png"))
+
+	quitItem := sa.CreateMenuItem(i18n.T("Quit"), func() {
+		sa.os.TransformToForeground()
+		time.Sleep(50 * time.Millisecond)
+		sa.deactivateAllPlugins()
+		time.Sleep(2 * time.Second)
+		sa.Quit()
+	}, "quit.png")
+	quitItem.IsQuit = true
+	items = append(items, fyne.NewMenuItemSeparator(), quitItem)
+
+	menu := fyne.NewMenu("", items...)
+	desk.SetSystemTrayMenu(menu)
+}
+
 // DeactivateAllPlugins deactivates all plugins in the application
 func (sa *SpiceApp) deactivateAllPlugins() {
 	// Deactivate all plugins
@@ -1242,16 +1286,18 @@ func anchorMonitorColor() color.NRGBA {
 type anchorCell struct {
 	widget.BaseWidget
 	active   bool
+	disabled bool
 	icon     image.Image
 	onTapped func()
 	bg       *canvas.Rectangle
 	img      *canvas.Image
 }
 
-func newAnchorCell(icon image.Image, active bool, onTapped func()) *anchorCell {
+func newAnchorCell(icon image.Image, active bool, disabled bool, onTapped func()) *anchorCell {
 	c := &anchorCell{
 		icon:     icon,
 		active:   active,
+		disabled: disabled,
 		onTapped: onTapped,
 	}
 	c.ExtendBaseWidget(c)
@@ -1259,6 +1305,9 @@ func newAnchorCell(icon image.Image, active bool, onTapped func()) *anchorCell {
 }
 
 func (c *anchorCell) Tapped(_ *fyne.PointEvent) {
+	if c.disabled {
+		return
+	}
 	if c.onTapped != nil {
 		c.onTapped()
 	}
@@ -1269,6 +1318,9 @@ func (c *anchorCell) CreateRenderer() fyne.WidgetRenderer {
 	if c.active {
 		bgColor = anchorCellActiveColor()
 	}
+	if c.disabled {
+		bgColor.A = 80
+	}
 
 	c.bg = canvas.NewRectangle(bgColor)
 	c.bg.CornerRadius = 6
@@ -1276,6 +1328,9 @@ func (c *anchorCell) CreateRenderer() fyne.WidgetRenderer {
 	c.img = canvas.NewImageFromImage(c.icon)
 	c.img.FillMode = canvas.ImageFillContain
 	c.img.ScaleMode = canvas.ImageScalePixels // Preserve pixel art crispness
+	if c.disabled {
+		c.img.Translucency = 0.6
+	}
 
 	return &anchorCellRenderer{
 		cell:    c,
@@ -1308,8 +1363,17 @@ func (r *anchorCellRenderer) Refresh() {
 	if r.cell.active {
 		bgColor = anchorCellActiveColor()
 	}
+	if r.cell.disabled {
+		bgColor.A = 80
+	}
 	r.cell.bg.FillColor = bgColor
 	r.cell.bg.Refresh()
+
+	if r.cell.disabled {
+		r.cell.img.Translucency = 0.6
+	} else {
+		r.cell.img.Translucency = 0.0
+	}
 	r.cell.img.Refresh()
 }
 
@@ -1428,7 +1492,8 @@ func drawCrosshair(size int, col color.NRGBA) image.Image {
 // This is the ADAPTER implementation — it owns window lifecycle and OpenGL recovery.
 // The window stays open after selection, showing a processing overlay and redrawing
 // with the updated active anchor when reprocessing completes.
-func (sa *SpiceApp) ShowAnchorPopup(monitorID int, currentAnchor provider.CropAnchor, labels [9]string, values [9]provider.CropAnchor, onSelect func(anchor provider.CropAnchor, onDone func())) {
+// ShowTuneImagePopup displays the popup for tuning images.
+func (sa *SpiceApp) ShowTuneImagePopup(monitorID int, currentOpts provider.TuningOptions, effectiveOpts provider.TuningOptions, labels [9]string, values [9]provider.CropAnchor, lockFrame bool, onSelect func(opts provider.TuningOptions, onDone func()), onClose func()) {
 	// Guard: skip if OpenGL is unavailable.
 	if !sysinfo.CanCreateWindows() {
 		utilLog.Println("OpenGL unavailable — anchor popup cannot be created")
@@ -1438,7 +1503,7 @@ func (sa *SpiceApp) ShowAnchorPopup(monitorID int, currentAnchor provider.CropAn
 
 	sa.os.TransformToForeground()
 
-	title := fmt.Sprintf("%s — %s %d", i18n.T("Crop Anchor"), i18n.T("Display"), monitorID+1)
+	title := fmt.Sprintf("%s — %s %d", i18n.T("Tune Image"), i18n.T("Display"), monitorID+1)
 
 	// Create window with OpenGL panic recovery (matches CreatePreferencesWindow pattern)
 	var w fyne.Window
@@ -1461,12 +1526,13 @@ func (sa *SpiceApp) ShowAnchorPopup(monitorID int, currentAnchor provider.CropAn
 	}
 
 	w.SetFixedSize(true)
+	sa.LockTrayMenu(w)
 
 	// -- Load icons from existing next.png asset --
 	icons := sa.loadAnchorIcons(48)
 
 	// -- Shared state --
-	activeAnchor := currentAnchor
+	activeOpts := effectiveOpts
 	processing := false
 
 	// -- Mutable content container (swapped between grid and overlay) --
@@ -1477,13 +1543,13 @@ func (sa *SpiceApp) ShowAnchorPopup(monitorID int, currentAnchor provider.CropAn
 	buildContent = func() {
 		// -- Header --
 		headerText := canvas.NewText(i18n.T("Crop Anchor"), anchorHeaderColor())
-		headerText.TextSize = 14
+		headerText.TextSize = 16
 		headerText.TextStyle = fyne.TextStyle{Bold: true}
 		headerText.Alignment = fyne.TextAlignCenter
 
 		// -- Description label --
 		descText := canvas.NewText(i18n.T("Anchor Description"), anchorDescColor())
-		descText.TextSize = 10
+		descText.TextSize = 11
 		descText.Alignment = fyne.TextAlignCenter
 
 		// -- Monitor label --
@@ -1495,14 +1561,16 @@ func (sa *SpiceApp) ShowAnchorPopup(monitorID int, currentAnchor provider.CropAn
 		monitorText.TextStyle = fyne.TextStyle{Bold: true}
 		monitorText.Alignment = fyne.TextAlignCenter
 
+		isFramed := activeOpts.FrameOverride == provider.FrameOverrideForceOn
+
 		// -- 3×3 grid of icon cells --
 		gridContainer := container.NewGridWithColumns(3)
 		for i := 0; i < 9; i++ {
 			idx := i
 			anchor := values[idx]
-			isActive := anchor == activeAnchor
+			isActive := anchor == activeOpts.Anchor && !isFramed
 
-			cell := newAnchorCell(icons[idx], isActive, func() {
+			cell := newAnchorCell(icons[idx], isActive, isFramed, func() {
 				if processing {
 					return // Ignore clicks while processing
 				}
@@ -1526,9 +1594,11 @@ func (sa *SpiceApp) ShowAnchorPopup(monitorID int, currentAnchor provider.CropAn
 					contentStack.Refresh()
 				})
 
+				// Update local state first
+				activeOpts.Anchor = anchor
+
 				// Dispatch anchor change with done callback
-				onSelect(anchor, func() {
-					activeAnchor = anchor
+				onSelect(activeOpts, func() {
 					processing = false
 					// Redraw grid on UI thread with new active state
 					fyne.Do(func() {
@@ -1540,10 +1610,13 @@ func (sa *SpiceApp) ShowAnchorPopup(monitorID int, currentAnchor provider.CropAn
 		}
 
 		// -- Auto button (custom tappable — uses exact same highlight color as grid cells) --
-		autoActive := activeAnchor == provider.AnchorAuto || activeAnchor == 0
+		autoActive := (activeOpts.Anchor == provider.AnchorAuto || activeOpts.Anchor == 0) && !isFramed
 		autoBgColor := anchorCellInactiveColor()
 		autoTextColor := anchorTextInactiveColor()
-		if autoActive {
+		if isFramed {
+			autoBgColor.A = 80
+			autoTextColor.A = 80
+		} else if autoActive {
 			autoBgColor = anchorCellActiveColor()
 			autoTextColor = anchorTextActiveColor()
 		}
@@ -1558,7 +1631,7 @@ func (sa *SpiceApp) ShowAnchorPopup(monitorID int, currentAnchor provider.CropAn
 		autoBtn := container.NewStack(autoBg, container.NewPadded(container.NewCenter(autoLabel)))
 
 		autoTap := newTappableContainer(func() {
-			if processing {
+			if isFramed || processing {
 				return
 			}
 			processing = true
@@ -1579,8 +1652,8 @@ func (sa *SpiceApp) ShowAnchorPopup(monitorID int, currentAnchor provider.CropAn
 				contentStack.Refresh()
 			})
 
-			onSelect(provider.AnchorAuto, func() {
-				activeAnchor = provider.AnchorAuto
+			activeOpts.Anchor = provider.AnchorAuto
+			onSelect(activeOpts, func() {
 				processing = false
 				fyne.Do(func() {
 					buildContent()
@@ -1589,8 +1662,136 @@ func (sa *SpiceApp) ShowAnchorPopup(monitorID int, currentAnchor provider.CropAn
 		}, autoBtn)
 
 		// -- Separator line --
+		frameSep := canvas.NewRectangle(color.NRGBA{R: 70, G: 70, B: 80, A: 255})
+		frameSep.SetMinSize(fyne.NewSize(0, 1))
+
+		// -- Header --
+		frameHeader := canvas.NewText(i18n.T("Virtual Museum Frame"), anchorHeaderColor())
+		frameHeader.TextSize = 16
+		frameHeader.TextStyle = fyne.TextStyle{Bold: true}
+		frameHeader.Alignment = fyne.TextAlignCenter
+
+		frameDesc := canvas.NewText(i18n.T("Display the entire uncropped image on a generated background"), anchorDescColor())
+		frameDesc.TextSize = 11
+		frameDesc.Alignment = fyne.TextAlignCenter
+
+		// -- Framing Controls --
+		frameGroup := container.NewVBox(
+			container.NewPadded(frameSep),
+			container.NewCenter(frameHeader),
+			container.NewCenter(frameDesc),
+		)
+
+		triggerApply := func() {
+			if processing {
+				return
+			}
+			processing = true
+			fyne.Do(func() {
+				overlayText := canvas.NewText(i18n.T("Applying..."), color.NRGBA{R: 240, G: 240, B: 245, A: 255})
+				overlayText.TextSize = 14
+				overlayText.TextStyle = fyne.TextStyle{Bold: true}
+				overlayText.Alignment = fyne.TextAlignCenter
+				overlayBg := canvas.NewRectangle(color.NRGBA{R: 30, G: 30, B: 35, A: 200})
+				overlay := container.NewStack(overlayBg, container.NewCenter(overlayText))
+				contentStack.Objects = []fyne.CanvasObject{overlay}
+				contentStack.Refresh()
+			})
+			onSelect(activeOpts, func() {
+				processing = false
+				fyne.Do(func() { buildContent() })
+			})
+		}
+
+		frameToggle := widget.NewCheck("Enable Frame", nil)
+		sizeLabel := widget.NewLabel("Frame Size (%):")
+		sizeSlider := widget.NewSlider(50, 90)
+		mattingToggle := widget.NewCheck("Paper Matting", nil)
+		wallColorLabel := widget.NewLabel("Wall Color:")
+		wallColorSelect := widget.NewSelect([]string{"Algorithmic", "Neutral"}, nil)
+
+		// Setup initial state FIRST (before attaching callbacks that trigger backend sync)
+		frameToggle.SetChecked(activeOpts.FrameOverride == provider.FrameOverrideForceOn)
+		if lockFrame {
+			frameToggle.Disable()
+		}
+		mattingToggle.SetChecked(activeOpts.Matting == provider.MattingOverrideOn)
+
+		if activeOpts.WallColor == provider.WallColorOverrideAlgorithmic {
+			wallColorSelect.SetSelected("Algorithmic")
+		} else {
+			wallColorSelect.SetSelected("Neutral")
+		}
+
+		sizeSlider.Step = 1
+		sizeSlider.SetValue(activeOpts.FrameSize * 100)
+		sizeLabel.SetText(fmt.Sprintf("Frame Size (%d%%):", int(sizeSlider.Value)))
+
+		// Now attach the callbacks
+		mattingToggle.OnChanged = func(checked bool) {
+			if checked {
+				activeOpts.Matting = provider.MattingOverrideOn
+			} else {
+				activeOpts.Matting = provider.MattingOverrideOff
+			}
+			triggerApply()
+		}
+
+		wallColorSelect.OnChanged = func(s string) {
+			if s == "Algorithmic" {
+				activeOpts.WallColor = provider.WallColorOverrideAlgorithmic
+			} else {
+				activeOpts.WallColor = provider.WallColorOverrideNeutral
+			}
+			triggerApply()
+		}
+
+		sizeSlider.OnChanged = func(val float64) {
+			sizeLabel.SetText(fmt.Sprintf("Frame Size (%d%%):", int(val)))
+			activeOpts.FrameSize = val / 100.0
+		}
+		sizeSlider.OnChangeEnded = func(val float64) {
+			activeOpts.FrameSize = val / 100.0
+			triggerApply()
+		}
+
+		// Dependency logic: Only enable size/matting/color if frame is toggled on
+		updateDependencies := func() {
+			if frameToggle.Checked {
+				sizeSlider.Enable()
+				mattingToggle.Enable()
+				wallColorSelect.Enable()
+			} else {
+				sizeSlider.Disable()
+				mattingToggle.Disable()
+				wallColorSelect.Disable()
+			}
+		}
+
+		frameToggle.OnChanged = func(checked bool) {
+			if checked {
+				activeOpts.FrameOverride = provider.FrameOverrideForceOn
+			} else {
+				activeOpts.FrameOverride = provider.FrameOverrideForceOff
+			}
+			updateDependencies()
+			triggerApply()
+		}
+
+		updateDependencies() // Run once initially
+
+		frameGroup.Add(frameToggle)
+		frameGroup.Add(sizeLabel)
+		frameGroup.Add(sizeSlider)
+		frameGroup.Add(mattingToggle)
+		frameGroup.Add(wallColorLabel)
+		frameGroup.Add(wallColorSelect)
+
+		// -- Separator line --
 		separator := canvas.NewRectangle(color.NRGBA{R: 70, G: 70, B: 80, A: 255})
 		separator.SetMinSize(fyne.NewSize(0, 1))
+		separator2 := canvas.NewRectangle(color.NRGBA{R: 70, G: 70, B: 80, A: 255})
+		separator2.SetMinSize(fyne.NewSize(0, 1))
 
 		// -- Close button (same styling as Auto for consistency) --
 		closeBg := canvas.NewRectangle(anchorCellInactiveColor())
@@ -1615,6 +1816,10 @@ func (sa *SpiceApp) ShowAnchorPopup(monitorID int, currentAnchor provider.CropAn
 			layout.NewSpacer(),
 			separator,
 			autoTap,
+			layout.NewSpacer(),
+			separator,
+			frameGroup,
+			separator2,
 			closeTap,
 		)
 
@@ -1634,6 +1839,10 @@ func (sa *SpiceApp) ShowAnchorPopup(monitorID int, currentAnchor provider.CropAn
 
 	w.SetOnClosed(func() {
 		sa.os.TransformToBackground()
+		if onClose != nil {
+			onClose()
+		}
+		sa.CreateTrayMenu()
 	})
 
 	w.Show()

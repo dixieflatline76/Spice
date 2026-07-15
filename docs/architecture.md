@@ -5,7 +5,7 @@ title: Architecture
 
 # Spice Architecture Documentation
 
-> **Status**: Current as of v2.3.2
+> **Status**: Current as of v2.6.0
 > **Scope**: System design, data flow, and component roles
 
 ## 1. Executive Summary
@@ -17,6 +17,7 @@ Key design principles:
 - **Pipeline Serialization**: Image ingestion from workers flows through a single goroutine, eliminating lock contention on the hot path
 - **Hexagonal Architecture**: All providers are framework-agnostic — they declare UI via pure Go structs, not Fyne widgets
 - **Resolution Buckets**: Images are indexed by resolution, enabling O(1) per-monitor image selection
+- **I18n Localization**: Decoupled translation system delivering native UI strings across 12 languages via embedded JSON.
 
 ## 2. System Architecture (Plugin System)
 
@@ -29,6 +30,7 @@ graph TD
 
     App[Spice Application]:::core
     PM[Plugin Manager]:::core
+    I18n[I18n Engine]:::core
     
     subgraph Plugins ["Loaded Plugins"]
         WP[Wallpaper Plugin]:::plug
@@ -36,6 +38,7 @@ graph TD
     end
 
     App -->|Initializes| PM
+    App -->|Initializes| I18n
     PM -->|Manages Lifecycle| Plugins
     
     WP -->|Injects| SettingsUI[Settings Tab]:::core
@@ -54,12 +57,12 @@ graph LR
     classDef display fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,color:#000;
 
     A["1. Fetch<br/>(Provider API)"]:::fetch
-    B["2. Process<br/>(Pipeline Workers)"]:::pipe
+    B["2. Process<br/>(SmartFit / Virtual Framer)"]:::pipe
     C["3. Store<br/>(ImageStore)"]:::store
     D["4. Display<br/>(Monitor Actor)"]:::display
 
     A -->|"Raw URLs"| B
-    B -->|"Processed Image"| C
+    B -->|"Processed Image / Museum Frame"| C
     C -->|"Resolution Bucket Query"| D
 ```
 
@@ -126,6 +129,10 @@ The thread-safe data repository.
 - **Resolution Buckets**: `map[string][]string` mapping `"WxH"` → list of compatible image IDs. Enables instant per-monitor image selection
 - **Persistence**: Debounced (2s) JSON writes using snapshot-under-RLock
 - **Writers**: Pipeline (hot path: `Add`, `MarkSeen`) and Plugin (admin: `Remove`, `Wipe`, `Sync`, `RemoveByQueryID`)
+- **FIFO Cache Management (`Sync`)**: The store enforces a global, user-configured cache size limit (e.g., 50 images). The `Sync` method acts as a strict **FIFO (First-In, First-Out)** queue. As the Pipeline downloads new images, they are appended to the `s.images` slice. During the nightly or periodic sync, if `len(s.images) > limit`, the Store slices off the *oldest* excess images from the front of the array and permanently deletes their physical `.jpg` files from disk via an asynchronous background job.
+	- **Architectural Rule**: Because the Store manages its own cache via FIFO truncation, **Providers must never randomly shuffle their returned API arrays.** Providers must return deterministic pages so the Store can predictably ingest the newest API items while deleting the oldest. The `MonitorController` manages all actual wallpaper shuffling for display.
+- **Master Preservation & Baked Derivatives**: When an image is downloaded, the untouched original is saved as a "Master" file. When processing layers (like `SmartImageProcessor` or `VirtualFramer`) crop or frame the image, the output is saved as a resolution-specific "Derivative" (e.g., `1920x1080.jpg`). 
+- **Processing Hash & Cache Invalidation**: The Store tracks a `targetFlags` map (the Processing Hash) consisting of all settings that alter image pixels (e.g., SmartFit, FaceCrop, Framing rules). When `Sync()` is called, if the current flags do not match the flags used when an image was cached, the Store automatically invalidates and deletes the stale derivative file. This forces the Pipeline to dynamically re-generate a fresh derivative from the preserved Master image using the new settings.
 
 ### 4.3 Pipeline (`pipeline.go`)
 
@@ -141,8 +148,20 @@ Image fetching is triggered by monitors and throttled by the plugin:
 
 1. **MonitorController** detects starvation (bucket < 5 images) or cycle exhaustion (> 80% of shuffle list consumed)
 2. **`RequestFetch()`** (centralized gatekeeper) — anti-loop protection with cooldowns
-3. **`FetchNewImages()`** — iterates active queries, each tracking its own page counter persisted to `query_pages.json`
-4. **Safe Page Wrapping** — when a provider returns 0 results for page > 1, auto-resets to page 1
+3. **`FetchNewImages()`** — iterates active queries, each tracking its own global `page` counter persisted to `query_pages.json`.
+4. **Safe Page Wrapping** — when a provider returns 0 results for page > 1, auto-resets to page 1.
+
+#### The Museum Provider Overlapping Stride Architecture
+
+While standard providers (like Wallhaven) respond linearly to the global `page` variable passed by `FetchNewImages`, museum APIs often lack stable, sequential pagination. Furthermore, many museum artifacts are aggressively rejected by the SmartFit pipeline due to extreme aspect ratios. 
+
+To ensure a steady stream of usable images without skipping IDs, museum providers employ a "Workaround Architecture":
+- **`idCache`**: A localized list of pre-scraped artifact IDs.
+- **`poolCache`**: An on-disk cache representing a large bucket of potentially valid artwork.
+
+Instead of directly querying an API page-by-page, the museum provider reads the global `page` integer provided by `FetchNewImages()` and uses it as an *index multiplier* against its `idCache`. 
+
+**The Overlapping Stride Fix:** Because the SmartFit pipeline acts as a strict gatekeeper, fetching 100 images might only yield 20 accepted wallpapers. If the global `page` simply skipped ahead by the number of *scanned* items, the system would mathematically skip over massive chunks of unscanned IDs. To solve this, museum providers use an **Overlapping Stride**. The index stride strictly matches the `targetCount` (e.g., 20) instead of the scan size (e.g., 300). This guarantees that Page 2 starts exactly where Page 1 *should* have stopped if yield was 100%, re-scanning the gap. Since previously fetched items are stored in the local `poolCache`, re-scanning this overlap is instantaneous and network-free, ensuring zero valid IDs are skipped.
 
 ### 4.5 Scheduler & Nightly Maintenance (`scheduler.go`)
 
@@ -264,9 +283,12 @@ graph TD
     classDef analysis fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#000;
     classDef strategy fill:#fff3e0,stroke:#e65100,stroke-width:2px,color:#000;
     classDef core fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px,color:#000;
+    classDef frame fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,color:#000;
 
-    A["FitImage()"]:::core --> B["analyzeFace() — pigo"]:::analysis
-    A --> C["calculateEnergy()"]:::analysis
+    A["FitImage()"]:::core --> VF{"VirtualFramed?"}:::frame
+    VF -->|"Yes"| VFF["VirtualFramer.Frame()"]:::frame
+    VF -->|"No"| B["analyzeFace() — pigo"]:::analysis
+    VF -->|"No"| C["calculateEnergy()"]:::analysis
     B --> D{"selectStrategy()"}:::core
     C --> D
     D -->|"Face + Crop ON"| E["FaceCropStrategy"]:::strategy
@@ -277,11 +299,15 @@ graph TD
     F --> I
     G --> I
     H --> I
+    VFF --> Out["Final Image"]:::core
+    I --> Out
 ```
 
-**Key design insight**: All strategies converge on `smartPanAndResize()`, which takes a center point and crops the largest possible region matching the target aspect ratio around that point. Face detection and smartcrop are **completely separate paths** — they never interact. This design makes extending the crop logic (e.g., user crop anchors) trivial: any new strategy just provides a center point.
+**Key design insight 1 (Virtual Framing)**: The `VirtualFramer` sits completely in front of the `SmartImageProcessor`. If an image has extreme aspect ratios but framing is enabled, the pipeline rescues it using a Sentinel Error (`ErrRequiresVirtualFraming`), skipping the crop logic entirely and rendering a blurred museum matting around the untouched artwork.
 
-> For the full decision tree, strategy details, and tuning parameters, see [Internal Developer Context — Section 8](internal_developer_context.md#8-smart-fit-20--image-processing-pipeline).
+**Key design insight 2 (Crop Strategies)**: All cropping strategies converge on `smartPanAndResize()`, which takes a center point and crops the largest possible region matching the target aspect ratio around that point. Face detection and smartcrop are **completely separate paths** — they never interact. This design makes extending the crop logic (e.g., user crop anchors) trivial: any new strategy just provides a center point.
+
+> For the full decision tree, Sentinel Error handling, and tuning parameters, see [Internal Developer Context — Section 8](internal_developer_context.md#8-smart-fit-20--image-processing-pipeline).
 
 ## 8. ID Namespacing (Middleware)
 

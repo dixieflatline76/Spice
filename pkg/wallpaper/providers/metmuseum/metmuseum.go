@@ -5,7 +5,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
-	"math/rand"
+
 	"net/http"
 	"sort"
 	"strconv"
@@ -19,7 +19,6 @@ import (
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
 	"github.com/dixieflatline76/Spice/v2/pkg/wallpaper"
 	"github.com/dixieflatline76/Spice/v2/util/log"
-	"golang.org/x/sync/errgroup"
 )
 
 type Provider struct {
@@ -174,16 +173,13 @@ func (p *Provider) FetchImages(ctx context.Context, query string, page int) ([]p
 	}
 
 	var images []provider.Image
-	var mu sync.Mutex
 
 	// We'll verify chunks until we get enough images or hit max attempts
 	// Max scan: 5 batches (300 items) to prevent indefinite loading for a single page
 
 	for b := 0; b < maxBatches; b++ {
 		// Stop if we have enough
-		mu.Lock()
 		got := len(images)
-		mu.Unlock()
 		if got >= targetCount {
 			break
 		}
@@ -203,35 +199,20 @@ func (p *Provider) FetchImages(ctx context.Context, query string, page int) ([]p
 			break
 		}
 
-		// Fetch batch in parallel
-		g, ctx := errgroup.WithContext(ctx)
-		g.SetLimit(5) // Conservative limit (Target: <20-30 req/s active)
-
 		for _, id := range batchIDs {
-			id := id // capture
-			g.Go(func() error {
-				img, err := p.fetchObjectDetails(ctx, id)
-				if err != nil {
-					return nil
-				}
-				if img != nil {
-					mu.Lock()
-					if len(images) < targetCount {
-						images = append(images, *img)
-					}
-					mu.Unlock()
-				}
-				return nil
-			})
-		}
-		// Wait for this batch
-		if err := g.Wait(); err != nil {
-			log.Printf("MET: Batch fetch error: %v", err)
+			if len(images) >= targetCount {
+				break
+			}
+			img, err := p.fetchObjectDetails(ctx, id)
+			if err != nil {
+				continue
+			}
+			if img != nil {
+				images = append(images, *img)
+			}
 		}
 
 		// Throttle between batches to respect rate limits (80 req/s, but be gentle)
-		// We use Limit(5) above, so we don't burst too hard.
-		// A set sleep ensures we don't burst too hard.
 		time.Sleep(200 * time.Millisecond)
 	}
 
@@ -311,14 +292,6 @@ func (p *Provider) resolveQueryToIDs(ctx context.Context, query string) ([]int, 
 	// Logic: Stable Sort -> Optional Shuffle -> Cache
 	// 1. Sort to ensure deterministic baseline (fix random API order)
 	sort.Ints(ids)
-
-	// 2. Shuffle if enabled (Stable per session)
-	if p.cfg.GetImgShuffle() {
-		r := rand.New(rand.NewSource(time.Now().UnixNano())) //nolint:gosec // Not security-sensitive (UI Shuffle)
-		r.Shuffle(len(ids), func(i, j int) {
-			ids[i], ids[j] = ids[j], ids[i]
-		})
-	}
 
 	// 3. Cache it
 	p.idCacheMu.Lock()
@@ -456,54 +429,7 @@ func (p *Provider) fetchObjectDetails(ctx context.Context, id int) (*provider.Im
 		return nil, nil        // Skip if no image
 	}
 
-	// Strict Filter: Skip Portrait and Square-ish images
-	// We strictly require a "Wallpaper" aspect ratio.
-	// 1. Check consistency of Length vs Width.
-	//    Some objects (stelae) swap Length/Height. If Length is the dominant dimension, it's risky.
-	//    But simpler heuristic: Enforce Width must be significantly larger than Height.
-
-	isPortrait := false
-	hasMeasurements := false
-
-	if len(obj.Measurements) > 0 {
-		for _, m := range obj.Measurements {
-			h := m.ElementMeasurements.Height
-			w := m.ElementMeasurements.Width
-			// Some 3D objects use Length for the major dimension
-			// But usually Height/Width tracks the "Face".
-
-			if h > 0 && w > 0 {
-				hasMeasurements = true
-
-				// Calculate Aspect Ratio
-				ratio := w / h
-
-				// We require strict landscape (> 1.2)
-				// This filters out:
-				// - Portraits (ratio < 1)
-				// - Squares (ratio ~ 1)
-				// - Near-squares (ratio < 1.2)
-				// This solves the "Egyptian Stela" issue (12.5 vs 12 -> ratio 1.04)
-				// and ensures reliable wallpaper candidates.
-				if ratio < 1.2 {
-					isPortrait = true
-				}
-				break
-			}
-		}
-	}
-
-	if !hasMeasurements {
-		// No dimensions logic? Skip to be safe, as API has mix of orientations.
-		p.cacheResult(id, nil)
-		return nil, nil
-	}
-
-	if isPortrait {
-		// log.Printf("Skipping portrait: %s", obj.Title)
-		p.cacheResult(id, nil)
-		return nil, nil
-	}
+	// We no longer filter by landscape orientation
 
 	img := provider.Image{
 		ID:          strconv.Itoa(obj.ObjectID),
@@ -534,14 +460,16 @@ func (p *Provider) EnrichImage(ctx context.Context, img provider.Image) (provide
 // CreateSettingsPanel returns the declarative UI for MetMuseum settings.
 func (p *Provider) CreateSettingsPanel(sm setting.SettingsManager) *schema.PanelSchema {
 	return schema.CreateMuseumSettingsPanel(schema.MuseumSettingsConfig{
-		ID:          "Met",
-		Title:       i18n.T("The Metropolitan Museum of Art"),
-		Location:    i18n.T("New York City, USA"),
-		LicenseURL:  "https://www.metmuseum.org/about-the-met/policies-and-documents/open-access",
-		Description: i18n.T("The crown jewel of New York City. From ancient Egyptian temples to modern masterpieces, The Met houses 5,000 years of humanity's greatest creative achievements."),
-		MapQuery:    "The Metropolitan Museum of Art",
-		WebsiteURL:  "https://www.metmuseum.org",
-		DonateURL:   "https://www.metmuseum.org/donate",
+		MuseumFramingGetFunc: func() bool { return p.cfg.GetMuseumFraming(p.ID()) },
+		MuseumFramingSetFunc: func(val bool) { p.cfg.SetMuseumFraming(p.ID(), val) },
+		ID:                   "Met",
+		Title:                i18n.T("The Metropolitan Museum of Art"),
+		Location:             i18n.T("New York City, USA"),
+		LicenseURL:           "https://www.metmuseum.org/about-the-met/policies-and-documents/open-access",
+		Description:          i18n.T("The crown jewel of New York City. From ancient Egyptian temples to modern masterpieces, The Met houses 5,000 years of humanity's greatest creative achievements."),
+		MapQuery:             "The Metropolitan Museum of Art",
+		WebsiteURL:           "https://www.metmuseum.org",
+		DonateURL:            "https://www.metmuseum.org/donate",
 	}, sm.OpenURL)
 }
 
@@ -565,7 +493,7 @@ func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, _ string) *schem
 	var curatedItems []schema.ItemSchema
 	if col != nil {
 		for _, entry := range col.Entries {
-			curatedItems = append(curatedItems, p.makeCollectionItem(entry.Name, entry.Key))
+			curatedItems = append(curatedItems, p.makeCollectionItem(entry.Name, entry.NameTranslations, entry.Key))
 		}
 	}
 
@@ -579,7 +507,7 @@ func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, _ string) *schem
 	}
 }
 
-func (p *Provider) makeCollectionItem(label, key string) schema.BoolItem {
+func (p *Provider) makeCollectionItem(label string, translations map[string]string, key string) schema.BoolItem {
 	// Helper to find existing query state
 	getQuery := func(key string) (bool, string) {
 		for _, q := range p.cfg.GetQueries() {
@@ -594,7 +522,7 @@ func (p *Provider) makeCollectionItem(label, key string) schema.BoolItem {
 
 	return schema.BoolItem{
 		Name:         p.ID() + "_" + key,
-		Label:        label,
+		Label:        i18n.TMap(label, translations),
 		InitialValue: active,
 		NeedsRefresh: true,
 		ApplyFunc: func(b bool) {
