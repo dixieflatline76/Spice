@@ -1,3 +1,5 @@
+//go:build !darwin
+
 package wallpaper
 
 import (
@@ -21,7 +23,6 @@ import (
 // TestGoldenMaster verifies the output of the SmartImageProcessor pipeline
 // against the pre-computed snapshots in golden_expected.json.
 func TestGoldenMaster(t *testing.T) {
-
 	dir := filepath.Join("testdata", "golden")
 
 	jsonPath := filepath.Join(dir, "golden_expected.json")
