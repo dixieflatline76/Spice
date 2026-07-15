@@ -1498,13 +1498,13 @@ func (sa *SpiceApp) ShowTuneImagePopup(monitorID int, currentOpts provider.Tunin
 	buildContent = func() {
 		// -- Header --
 		headerText := canvas.NewText(i18n.T("Crop Anchor"), anchorHeaderColor())
-		headerText.TextSize = 14
+		headerText.TextSize = 16
 		headerText.TextStyle = fyne.TextStyle{Bold: true}
 		headerText.Alignment = fyne.TextAlignCenter
 
 		// -- Description label --
 		descText := canvas.NewText(i18n.T("Anchor Description"), anchorDescColor())
-		descText.TextSize = 10
+		descText.TextSize = 11
 		descText.Alignment = fyne.TextAlignCenter
 
 		// -- Monitor label --
@@ -1622,12 +1622,12 @@ func (sa *SpiceApp) ShowTuneImagePopup(monitorID int, currentOpts provider.Tunin
 
 		// -- Header --
 		frameHeader := canvas.NewText(i18n.T("Virtual Museum Frame"), anchorHeaderColor())
-		frameHeader.TextSize = 14
+		frameHeader.TextSize = 16
 		frameHeader.TextStyle = fyne.TextStyle{Bold: true}
 		frameHeader.Alignment = fyne.TextAlignCenter
 
 		frameDesc := canvas.NewText(i18n.T("Display the entire uncropped image on a generated background"), anchorDescColor())
-		frameDesc.TextSize = 10
+		frameDesc.TextSize = 11
 		frameDesc.Alignment = fyne.TextAlignCenter
 
 		// -- Framing Controls --
