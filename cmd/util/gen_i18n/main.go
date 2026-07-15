@@ -52,6 +52,8 @@ var allowIdenticalToEnglish = map[string]bool{
 	"Actions":   true,
 	"Automatically generate a museum frame for art that doesn't fit your screen.": true,
 	"Virtual Frame Aspect Mismatches:":                                            true,
+	"Close Tuning to Resume":                                                      true,
+	"Controls Disabled":                                                           true,
 
 	// Brand names / tech terms kept in English
 	"Pexels":                  true,

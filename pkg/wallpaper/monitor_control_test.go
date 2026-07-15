@@ -10,6 +10,7 @@ import (
 
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 )
 
 func TestMonitorController_Initialization(t *testing.T) {
@@ -126,4 +127,133 @@ func TestMonitorController_HistoryPrev(t *testing.T) {
 func TestMonitorController_Delete(t *testing.T) {
 	// Plan: Send CmdDelete, verify Delete callback is invoked (mocked)
 	// TODO: Needs DeleteDelegate interface
+}
+
+func TestMonitorController_TuningBlocksNextAuto(t *testing.T) {
+	mockStore := new(MockImageStore)
+	mockStore.On("GetUpdateChannel").Return((<-chan struct{})(nil))
+	mockStore.On("GetByID", "id0").Return(provider.Image{ID: "id0", FilePath: "img0.jpg"}, true)
+	mockStore.On("GetByID", "id1").Return(provider.Image{ID: "id1", FilePath: "img1.jpg"}, true)
+	mockStore.On("MarkSeen", "img1.jpg").Return()
+	mockStore.On("MarkSeen", "img0.jpg").Return()
+	mockStore.On("GetIDsForResolution", mock.Anything).Return([]string{"id0", "id1"})
+
+	mockOS := new(MockOS)
+	mockOS.On("Stat", "img1.jpg").Return(nil, nil)
+	mockOS.On("Stat", "img0.jpg").Return(nil, nil)
+	mockOS.On("SetWallpaper", "img1.jpg", 1).Return(nil)
+	mockOS.On("SetWallpaper", "img0.jpg", 1).Return(nil)
+
+	cfg := GetConfig(NewMockPreferences())
+	mockIP := new(MockImageProcessor)
+	mc := NewMonitorController(1, Monitor{ID: 1}, mockStore, nil, mockOS, cfg, mockIP)
+
+	// Set initial state
+	mc.State.ShuffleIDs = []string{"id0", "id1"}
+	mc.State.RandomPos = 0
+	mc.State.CurrentID = "id0"
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go mc.Run(ctx)
+
+	// 1. Send TuningStart
+	mc.Commands <- CmdTuningStart
+	time.Sleep(50 * time.Millisecond) // Allow actor to process
+
+	mc.mu.RLock()
+	assert.True(t, mc.State.TuningInProgress, "TuningInProgress should be true")
+	mc.mu.RUnlock()
+
+	// 2. Send NextAuto
+	mc.Commands <- CmdNextAuto
+	time.Sleep(50 * time.Millisecond)
+
+	mc.mu.RLock()
+	assert.Equal(t, "id0", mc.State.CurrentID, "CurrentID should NOT change because tuning is active")
+	mc.mu.RUnlock()
+}
+
+func TestMonitorController_TuningEndResumesAuto(t *testing.T) {
+	mockStore := new(MockImageStore)
+	mockStore.On("GetUpdateChannel").Return((<-chan struct{})(nil))
+	mockStore.On("GetByID", "id0").Return(provider.Image{ID: "id0", FilePath: "img0.jpg"}, true)
+	mockStore.On("GetByID", "id1").Return(provider.Image{ID: "id1", FilePath: "img1.jpg"}, true)
+	mockStore.On("MarkSeen", "img1.jpg").Return()
+	mockStore.On("MarkSeen", "img0.jpg").Return()
+	mockStore.On("GetIDsForResolution", mock.Anything).Return([]string{"id0", "id1"})
+
+	mockOS := new(MockOS)
+	mockOS.On("Stat", "img1.jpg").Return(nil, nil)
+	mockOS.On("Stat", "img0.jpg").Return(nil, nil)
+	mockOS.On("SetWallpaper", "img1.jpg", 1).Return(nil)
+	mockOS.On("SetWallpaper", "img0.jpg", 1).Return(nil)
+
+	cfg := GetConfig(NewMockPreferences())
+	mockIP := new(MockImageProcessor)
+	mc := NewMonitorController(1, Monitor{ID: 1}, mockStore, nil, mockOS, cfg, mockIP)
+
+	// Set initial state
+	mc.State.ShuffleIDs = []string{"id0", "id1"}
+	mc.State.RandomPos = 1
+	mc.State.CurrentID = "id0"
+	mc.State.TuningInProgress = true // Start paused
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go mc.Run(ctx)
+
+	// 1. Send TuningEnd
+	mc.Commands <- CmdTuningEnd
+	time.Sleep(50 * time.Millisecond)
+
+	mc.mu.RLock()
+	assert.False(t, mc.State.TuningInProgress, "TuningInProgress should be false")
+	mc.mu.RUnlock()
+
+	// 2. Send NextAuto
+	mc.Commands <- CmdNextAuto
+	time.Sleep(50 * time.Millisecond)
+
+	mc.mu.RLock()
+	assert.Equal(t, "id1", mc.State.CurrentID, "CurrentID SHOULD change after tuning ends")
+	mc.mu.RUnlock()
+}
+
+func TestMonitorController_TuningAllowsManualNext(t *testing.T) {
+	mockStore := new(MockImageStore)
+	mockStore.On("GetUpdateChannel").Return((<-chan struct{})(nil))
+	mockStore.On("GetByID", "id0").Return(provider.Image{ID: "id0", FilePath: "img0.jpg"}, true)
+	mockStore.On("GetByID", "id1").Return(provider.Image{ID: "id1", FilePath: "img1.jpg"}, true)
+	mockStore.On("MarkSeen", "img1.jpg").Return()
+	mockStore.On("MarkSeen", "img0.jpg").Return()
+	mockStore.On("GetIDsForResolution", mock.Anything).Return([]string{"id0", "id1"})
+
+	mockOS := new(MockOS)
+	mockOS.On("Stat", "img1.jpg").Return(nil, nil)
+	mockOS.On("Stat", "img0.jpg").Return(nil, nil)
+	mockOS.On("SetWallpaper", "img1.jpg", 1).Return(nil)
+	mockOS.On("SetWallpaper", "img0.jpg", 1).Return(nil)
+
+	cfg := GetConfig(NewMockPreferences())
+	mockIP := new(MockImageProcessor)
+	mc := NewMonitorController(1, Monitor{ID: 1}, mockStore, nil, mockOS, cfg, mockIP)
+
+	// Set initial state
+	mc.State.ShuffleIDs = []string{"id0", "id1"}
+	mc.State.RandomPos = 1
+	mc.State.CurrentID = "id0"
+	mc.State.TuningInProgress = true // Tuning is active
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go mc.Run(ctx)
+
+	// 1. Send manual Next
+	mc.Commands <- CmdNext
+	time.Sleep(50 * time.Millisecond)
+
+	mc.mu.RLock()
+	assert.Equal(t, "id1", mc.State.CurrentID, "Manual CmdNext SHOULD succeed even when tuning is active")
+	mc.mu.RUnlock()
 }

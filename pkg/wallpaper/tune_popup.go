@@ -78,6 +78,9 @@ func (wp *Plugin) showTuneImagePopup(monitorID int) {
 		}
 	}
 
+	// Send CmdTuningStart to pause the controller
+	mc.Commands <- CmdTuningStart
+
 	wp.manager.ShowTuneImagePopup(monitorID, currentOpts, effectiveOpts, anchorLabels, anchorValues, lockFrame,
 		func(opts provider.TuningOptions, onDone func()) {
 			log.Debugf("showTuneImagePopup: User selected options %v for monitor %d", opts, monitorID)
@@ -118,6 +121,10 @@ func (wp *Plugin) showTuneImagePopup(monitorID int) {
 					onDone()
 				}
 			}()
+		},
+		func() {
+			// Resume automatic rotation when popup closes
+			mc.Commands <- CmdTuningEnd
 		},
 	)
 }

@@ -300,6 +300,50 @@ func (sa *SpiceApp) CreateTrayMenu() {
 	utilLog.Debug("System Tray Menu and Icon setup process completed.")
 }
 
+// LockTrayMenu replaces the system tray with a minimal locked menu during tuning
+func (sa *SpiceApp) LockTrayMenu(activeWindow fyne.Window) {
+	desk, ok := sa.App.(desktop.App)
+	if !ok {
+		return
+	}
+
+	items := []*fyne.MenuItem{}
+
+	disabledItem := sa.CreateMenuItem(i18n.T("Controls Disabled"), nil, "")
+	disabledItem.Disabled = true
+	items = append(items, disabledItem)
+
+	items = append(items, sa.CreateMenuItem(i18n.T("Close Tuning to Resume"), func() {
+		if activeWindow != nil {
+			activeWindow.RequestFocus()
+		}
+	}, ""))
+
+	items = append(items, fyne.NewMenuItemSeparator())
+	items = append(items, sa.CreateMenuItem(i18n.T("Help"), func() {
+		u, _ := url.Parse("https://spicebox.dev/support.html")
+		if u != nil {
+			_ = sa.OpenURL(u)
+		}
+	}, "help.png"))
+	items = append(items, sa.CreateMenuItem(i18n.T("About Spice"), func() {
+		sa.CreateAboutSplash()
+	}, "tray.png"))
+
+	quitItem := sa.CreateMenuItem(i18n.T("Quit"), func() {
+		sa.os.TransformToForeground()
+		time.Sleep(50 * time.Millisecond)
+		sa.deactivateAllPlugins()
+		time.Sleep(2 * time.Second)
+		sa.Quit()
+	}, "quit.png")
+	quitItem.IsQuit = true
+	items = append(items, fyne.NewMenuItemSeparator(), quitItem)
+
+	menu := fyne.NewMenu("", items...)
+	desk.SetSystemTrayMenu(menu)
+}
+
 // DeactivateAllPlugins deactivates all plugins in the application
 func (sa *SpiceApp) deactivateAllPlugins() {
 	// Deactivate all plugins
@@ -1449,7 +1493,7 @@ func drawCrosshair(size int, col color.NRGBA) image.Image {
 // The window stays open after selection, showing a processing overlay and redrawing
 // with the updated active anchor when reprocessing completes.
 // ShowTuneImagePopup displays the popup for tuning images.
-func (sa *SpiceApp) ShowTuneImagePopup(monitorID int, currentOpts provider.TuningOptions, effectiveOpts provider.TuningOptions, labels [9]string, values [9]provider.CropAnchor, lockFrame bool, onSelect func(opts provider.TuningOptions, onDone func())) {
+func (sa *SpiceApp) ShowTuneImagePopup(monitorID int, currentOpts provider.TuningOptions, effectiveOpts provider.TuningOptions, labels [9]string, values [9]provider.CropAnchor, lockFrame bool, onSelect func(opts provider.TuningOptions, onDone func()), onClose func()) {
 	// Guard: skip if OpenGL is unavailable.
 	if !sysinfo.CanCreateWindows() {
 		utilLog.Println("OpenGL unavailable — anchor popup cannot be created")
@@ -1482,6 +1526,7 @@ func (sa *SpiceApp) ShowTuneImagePopup(monitorID int, currentOpts provider.Tunin
 	}
 
 	w.SetFixedSize(true)
+	sa.LockTrayMenu(w)
 
 	// -- Load icons from existing next.png asset --
 	icons := sa.loadAnchorIcons(48)
@@ -1794,6 +1839,10 @@ func (sa *SpiceApp) ShowTuneImagePopup(monitorID int, currentOpts provider.Tunin
 
 	w.SetOnClosed(func() {
 		sa.os.TransformToBackground()
+		if onClose != nil {
+			onClose()
+		}
+		sa.CreateTrayMenu()
 	})
 
 	w.Show()

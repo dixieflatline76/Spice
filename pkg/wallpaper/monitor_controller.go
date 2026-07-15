@@ -29,6 +29,10 @@ const (
 	CmdPause
 	CmdNextAuto
 
+	// Tuning Commands
+	CmdTuningStart
+	CmdTuningEnd
+
 	// Legacy Anchor commands
 	CmdAnchorAuto Command = 200
 	CmdAnchorTL   Command = 201
@@ -94,6 +98,7 @@ type MonitorState struct {
 	CurrentImage     provider.Image
 	WaitingForImages bool
 	Paused           bool
+	TuningInProgress bool
 	ManualRecovery   bool // True if WaitingForImages was triggered by a manual request
 }
 
@@ -232,6 +237,10 @@ func (mc *MonitorController) handleCommand(cmd Command) {
 		mc.syncState()
 	case CmdPause:
 		mc.togglePause()
+	case CmdTuningStart:
+		mc.State.TuningInProgress = true
+	case CmdTuningEnd:
+		mc.State.TuningInProgress = false
 	}
 }
 
@@ -247,8 +256,8 @@ func (mc *MonitorController) togglePause() {
 }
 
 func (mc *MonitorController) next(manual bool) {
-	if !manual && mc.State.Paused {
-		log.Debugf("[Monitor %d] Skipping automatic Next (Monitor is paused)", mc.ID)
+	if !manual && (mc.State.Paused || mc.State.TuningInProgress) {
+		log.Debugf("[Monitor %d] Skipping automatic Next (Monitor is paused or tuning)", mc.ID)
 		return
 	}
 	width, height := mc.Monitor.Rect.Dx(), mc.Monitor.Rect.Dy()
