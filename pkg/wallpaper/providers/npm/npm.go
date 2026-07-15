@@ -162,31 +162,18 @@ func (p *Provider) fetchCurated(ctx context.Context, entry *CollectionEntry, pag
 
 	pageIDs := ids[start:end]
 	var images []provider.Image
-	var mu sync.Mutex
-	sem := make(chan struct{}, 3)
-	var wg sync.WaitGroup
 
 	for _, id := range pageIDs {
-		wg.Add(1)
-		go func(cid int) {
-			defer wg.Done()
-			sem <- struct{}{}
-			defer func() { <-sem }()
-
-			img, err := p.fetchImageByCID(ctx, cid)
-			if err != nil {
-				log.Printf("NPM: Error fetching artwork %d: %v", cid, err)
-				return
-			}
-			if img != nil {
-				mu.Lock()
-				images = append(images, *img)
-				mu.Unlock()
-			}
-		}(id)
+		img, err := p.fetchImageByCID(ctx, id)
+		if err != nil {
+			log.Printf("NPM: Error fetching artwork %d: %v", id, err)
+			continue
+		}
+		if img != nil {
+			images = append(images, *img)
+		}
 	}
 
-	wg.Wait()
 	return images, nil
 }
 
@@ -270,8 +257,8 @@ func (p *Provider) EnrichImage(_ context.Context, img provider.Image) (provider.
 
 func (p *Provider) CreateSettingsPanel(sm setting.SettingsManager) *schema.PanelSchema {
 	return schema.CreateMuseumSettingsPanel(schema.MuseumSettingsConfig{
-		MuseumFramingGetFunc: func() bool { return p.cfg.GetMuseumFraming("NPM") },
-		MuseumFramingSetFunc: func(val bool) { p.cfg.SetMuseumFraming("NPM", val) },
+		MuseumFramingGetFunc: func() bool { return p.cfg.GetMuseumFraming(p.ID()) },
+		MuseumFramingSetFunc: func(val bool) { p.cfg.SetMuseumFraming(p.ID(), val) },
 		ID:                   "NPM",
 		Title:                i18n.T("國立故宮博物院 - National Palace Museum"),
 		Location:             i18n.T("Taipei, Taiwan"),

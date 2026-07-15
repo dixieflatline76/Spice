@@ -441,12 +441,12 @@ func (b *PrefsPanelBuilder) createProviderAccordionItem(p provider.ImageProvider
 
 	if isPending {
 		switch p.Type() {
-		case provider.TypePersonal:
-			tabIndex = 2
 		case provider.TypeMuseum:
+			tabIndex = 1
+		case provider.TypePersonal:
 			tabIndex = 3
 		default:
-			tabIndex = 1
+			tabIndex = 2
 		}
 	}
 

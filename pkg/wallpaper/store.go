@@ -799,8 +799,10 @@ func (s *ImageStore) Sync(limit int, targetFlags map[string]bool, activeQueryIDs
 
 // determineSyncAction decides what to do with an image during sync.
 func (s *ImageStore) determineSyncAction(img provider.Image, activeQueryIDs map[string]bool, targetFlags map[string]bool) ImageSyncAction {
+	isProtected := img.IsFavorited || img.Provider == "Favorites" || strings.Contains(img.ID, "_favorite_images_")
+
 	// Strict Mode Check
-	if activeQueryIDs != nil {
+	if activeQueryIDs != nil && !isProtected {
 		isActive := img.SourceQueryID != "" && activeQueryIDs[img.SourceQueryID]
 		isOrphan := img.SourceQueryID == ""
 		if isOrphan || !isActive {
@@ -810,12 +812,17 @@ func (s *ImageStore) determineSyncAction(img provider.Image, activeQueryIDs map[
 	}
 
 	// AvoidSet Check
-	if s.avoidSet[img.ID] {
+	if s.avoidSet[img.ID] && !isProtected {
 		return ImageActionDelete
 	}
 
 	// Master File Check
 	if !s.masterFileExists(img.ID) {
+		// If it's a known incompatible image, keep it in the DB (as a zombie)
+		// so we don't forget its processing flags and redownload it over and over!
+		if s.hasIncompatibleFlags(img) {
+			return ImageActionKeep
+		}
 		return ImageActionDelete
 	}
 
@@ -826,24 +833,16 @@ func (s *ImageStore) determineSyncAction(img provider.Image, activeQueryIDs map[
 		}
 	}
 
-	// Recovery: Detect zombie images from prior invalidation bugs.
-	// If an image has a master file and matching flags but zero derivatives,
-	// it was corrupted by the old flagsMatch length-comparison bug and is
-	// permanently invisible to monitors. Delete it so the fetcher can
-	// re-download and reprocess it on the next cycle.
-	if len(img.DerivativePaths) == 0 {
-		// Preserve images with user-set Tuning: they are legitimately invalidated
-		// (not true zombies) and will be reprocessed via backlog healing on the next
-		// fetch cycle, where MergeExistingMetadata will copy the tuning forward.
-		if len(img.Tuning) > 0 {
-			log.Debugf("[Sync] Keeping invalidated image %s (has %d tuning overrides)", img.ID, len(img.Tuning))
-			return ImageActionKeep
-		}
-		log.Debugf("[Sync] Recovery: deleting zombie image %s (master exists, flags match, but no derivatives)", img.ID)
-		return ImageActionDelete
-	}
-
 	return ImageActionKeep
+}
+
+func (s *ImageStore) hasIncompatibleFlags(img provider.Image) bool {
+	for k, v := range img.ProcessingFlags {
+		if v && strings.HasPrefix(k, "incompatible:") {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *ImageStore) masterFileExists(id string) bool {

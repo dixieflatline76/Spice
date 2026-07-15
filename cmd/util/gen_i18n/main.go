@@ -37,6 +37,10 @@ var allowIdenticalToEnglish = map[string]bool{
 	"The J. Paul Getty Museum": true,
 	"Los Angeles, CA, USA":     true,
 
+	// SMK Proper Nouns
+	"Statens Museum for Kunst": true,
+	"Copenhagen, Denmark":      true,
+
 	// International loanwords / identical across many languages
 	"App":       true,
 	"Community": true,

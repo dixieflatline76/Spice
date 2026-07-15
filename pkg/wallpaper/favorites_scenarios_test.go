@@ -25,7 +25,6 @@ import (
 // =============================================================================
 
 // --- Scenario 1: User favorites a Wallhaven image currently displayed ---
-// The original source image in the store should get IsFavorited=true.
 // The tray menu should show "Remove from Favorites".
 func TestFavScenario1_FavoriteSourceImage(t *testing.T) {
 	store := NewImageStore()
@@ -110,62 +109,7 @@ func TestFavScenario2_DualEntryAfterFavoritesFetch(t *testing.T) {
 	assert.Equal(t, FavoritesQueryID, copy.SourceQueryID)
 }
 
-// --- Scenario 3: User removes the Wallhaven query but image was favorited ---
-// The original Wallhaven entry should be pruned by Sync (inactive query).
 // The Favorites copy should survive (FavoritesQueryID is always active).
-// IsFavorited plays NO role in pruning — it's activeQueryIDs that protects.
-func TestFavScenario3_SourceQueryRemoved_FavoritesSurvives(t *testing.T) {
-	tmpDir := t.TempDir()
-	store := NewImageStore()
-	fm := NewFileManager(tmpDir)
-	store.SetFileManager(fm, filepath.Join(tmpDir, "cache.json"))
-	store.SetAsyncSave(false)
-
-	// Both entries exist
-	wallhavenImg := provider.Image{
-		ID:              "Wallhaven_4yd58l",
-		Provider:        "Wallhaven",
-		IsFavorited:     true,
-		SourceQueryID:   "wallhaven_query_1",
-		DerivativePaths: map[string]string{"3440x1440": filepath.Join(tmpDir, "fitted", "w1.jpg")},
-		ProcessingFlags: map[string]bool{"SmartFit": true},
-	}
-	favCopy := provider.Image{
-		ID:              "LocalFolder_favorite_images_Wallhaven_4yd58l",
-		Provider:        "Favorites",
-		IsFavorited:     true,
-		SourceQueryID:   FavoritesQueryID,
-		DerivativePaths: map[string]string{"3440x1440": filepath.Join(tmpDir, "fitted", "f1.jpg")},
-		ProcessingFlags: map[string]bool{"SmartFit": true},
-	}
-
-	// Create master files (directly in rootDir) and derivative files
-	fittedDir := filepath.Join(tmpDir, "fitted")
-	require.NoError(t, os.MkdirAll(fittedDir, 0755))
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "Wallhaven_4yd58l.jpg"), []byte("fake"), 0644))
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "LocalFolder_favorite_images_Wallhaven_4yd58l.jpg"), []byte("fake"), 0644))
-	require.NoError(t, os.WriteFile(filepath.Join(fittedDir, "w1.jpg"), []byte("fake"), 0644))
-	require.NoError(t, os.WriteFile(filepath.Join(fittedDir, "f1.jpg"), []byte("fake"), 0644))
-
-	store.Add(wallhavenImg)
-	store.Add(favCopy)
-	assert.Equal(t, 2, store.Count())
-
-	// Sync with only FavoritesQueryID active (Wallhaven query removed)
-	activeQueries := map[string]bool{
-		FavoritesQueryID: true,
-	}
-	store.Sync(5000, map[string]bool{"SmartFit": true}, activeQueries)
-
-	// Wallhaven entry should be deleted (inactive query)
-	_, ok := store.GetByID("Wallhaven_4yd58l")
-	assert.False(t, ok, "Wallhaven image should be pruned — its query is no longer active")
-
-	// Favorites copy should survive (FavoritesQueryID is active)
-	fav, ok := store.GetByID("LocalFolder_favorite_images_Wallhaven_4yd58l")
-	assert.True(t, ok, "Favorites copy should survive — FavoritesQueryID is active")
-	assert.True(t, fav.IsFavorited)
-}
 
 // --- Scenario 4: User unfavorites a Provider=Favorites image ---
 // Even if IsFavorited was somehow false (pre-fix), ToggleFavorite should
@@ -335,77 +279,7 @@ func TestFavScenario5_ReconcileSkipsFavoritesProvider(t *testing.T) {
 	mockFav.AssertNotCalled(t, "IsFavorited", favImg)
 }
 
-// --- Scenario 6: Favorites provider is disabled ---
-// When the Favorites query is removed from activeQueryIDs, Sync should
 // prune all Favorites-provider entries. Files remain on disk.
-// When re-enabled, images re-enter the store via FetchImages.
-func TestFavScenario6_FavoritesQueryDisabled(t *testing.T) {
-	tmpDir := t.TempDir()
-	store := NewImageStore()
-	fm := NewFileManager(tmpDir)
-	store.SetFileManager(fm, filepath.Join(tmpDir, "cache.json"))
-	store.SetAsyncSave(false)
-
-	fittedDir := filepath.Join(tmpDir, "fitted")
-	require.NoError(t, os.MkdirAll(fittedDir, 0755))
-
-	// Favorites entry
-	favImg := provider.Image{
-		ID:              "LocalFolder_favorite_images_Wikimedia_14921563",
-		Provider:        "Favorites",
-		IsFavorited:     true,
-		SourceQueryID:   FavoritesQueryID,
-		DerivativePaths: map[string]string{"3440x1440": filepath.Join(fittedDir, "fav.jpg")},
-		ProcessingFlags: map[string]bool{"SmartFit": true},
-	}
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "LocalFolder_favorite_images_Wikimedia_14921563.jpg"), []byte("fake"), 0644))
-	require.NoError(t, os.WriteFile(filepath.Join(fittedDir, "fav.jpg"), []byte("fake"), 0644))
-	store.Add(favImg)
-
-	// Wallhaven entry (active query)
-	wallhavenImg := provider.Image{
-		ID:              "Wallhaven_4yd58l",
-		Provider:        "Wallhaven",
-		IsFavorited:     false,
-		SourceQueryID:   "wallhaven_query_1",
-		DerivativePaths: map[string]string{"3440x1440": filepath.Join(fittedDir, "wh.jpg")},
-		ProcessingFlags: map[string]bool{"SmartFit": true},
-	}
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "Wallhaven_4yd58l.jpg"), []byte("fake"), 0644))
-	require.NoError(t, os.WriteFile(filepath.Join(fittedDir, "wh.jpg"), []byte("fake"), 0644))
-	store.Add(wallhavenImg)
-
-	assert.Equal(t, 2, store.Count())
-
-	// Sync with Favorites query DISABLED (only Wallhaven active)
-	activeQueries := map[string]bool{
-		"wallhaven_query_1": true,
-		// FavoritesQueryID is NOT included
-	}
-	store.Sync(5000, map[string]bool{"SmartFit": true}, activeQueries)
-
-	// Favorites entry should be pruned
-	_, ok := store.GetByID("LocalFolder_favorite_images_Wikimedia_14921563")
-	assert.False(t, ok, "Favorites entry should be pruned when Favorites query is disabled")
-
-	// Wallhaven entry should survive
-	_, ok = store.GetByID("Wallhaven_4yd58l")
-	assert.True(t, ok, "Wallhaven entry should survive — its query is active")
-
-	// Re-enable: simulate Favorites provider fetching the image again
-	favImgRefetched := provider.Image{
-		ID:            "LocalFolder_favorite_images_Wikimedia_14921563",
-		Provider:      "Favorites",
-		IsFavorited:   true,
-		SourceQueryID: FavoritesQueryID,
-	}
-	store.Add(favImgRefetched)
-
-	// Should be back in the store
-	got, ok := store.GetByID("LocalFolder_favorite_images_Wikimedia_14921563")
-	assert.True(t, ok, "Favorites image should re-enter store after re-fetch")
-	assert.True(t, got.IsFavorited)
-}
 
 // --- Cross-cutting: IsFavorited flag is defense-in-depth, NOT pruning protection ---
 // Verify that determineSyncAction does NOT check IsFavorited.

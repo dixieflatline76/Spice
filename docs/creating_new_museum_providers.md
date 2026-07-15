@@ -11,6 +11,7 @@ To guarantee a premium aesthetic experience, Museum Providers are strictly **cur
 *   **Curated Tours:** Collections are presented as fixed "Tours" or "Highlights" (e.g., "Director's Cut", "Impressionist Vistas", "American Wing").
 *   **Evangelist UI:** The UI is designed to promote the institution, with a large header, romance copy, and links to "Plan a Visit" and donate. We use their open APIs for free, so we give them premium placement in our settings UI.
 *   **Remote Curation (CDN):** The list of IDs that define a "Tour" is driven by a remote JSON file on GitHub. This allows developers/curators to update the curated collections (e.g., adding newly digitized masterpieces) without shipping a new binary of Spice.
+*   **Virtual Framing Safety Net:** Because historical artworks have extreme aspect ratios (tall portraits, wide scrolls) that would normally be destroyed by aggressive cropping on ultrawide monitors, Museum Providers opt-in to the **Virtual Framer**. This uses a Sentinel Error (`ErrRequiresVirtualFraming`) to safely rescue the artwork from pipeline rejection, generating a beautiful blurred background matting to perfectly frame the uncropped art.
 
 ## 2. Directory Structure
 
@@ -27,7 +28,16 @@ pkg/wallpaper/providers/<name>/
 
 > Ensure you generate `.png` assets for the museum logo to display in the UI.
 
-## 3. Implementing the Museum UI (Schema-Based)
+## 3. Provider Interface Definitions
+
+When implementing `provider.ImageProvider`, you must be extremely precise with how you define the naming methods. Mixing them up causes UI layout bugs and translation failures.
+
+*   `ID() string`: Returns a stable, **non-localized** string (e.g., `"ArtInstituteChicago"`). This is strictly for internal state tracking, database persistence, and configuration keys. It must NEVER change, as changing it will break users' saved settings.
+*   `Name() string`: Returns the localized, **long-form** proper name of the provider wrapped in translation (e.g., `i18n.T("Art Institute of Chicago")`). This is displayed in areas with ample space, such as the full Museum settings page or "About" sections.
+*   `Title() string`: Returns the **short-form** display title (e.g., `"AIC"`). It is NOT localized. This is used in extremely space-constrained UI elements, specifically the Windows System Tray menu and the compact headers of the settings schema.
+*   `GetProviderIcon() interface{}`: Returns the embedded `[]byte` data of the `.png` or `.ico` file associated with the provider.
+
+## 4. Implementing the Museum UI (Schema-Based)
 
 Museums use `schema.CreateMuseumSettingsPanel` for the rich header, and `schema.BoolItem` for the curated collection toggles. **No Fyne imports are needed** — everything is declared as pure Go schema structs.
 
@@ -53,14 +63,14 @@ func (p *Provider) CreateSettingsPanel(sm setting.SettingsManager) *schema.Panel
 
 ```go
 func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, _ string) *schema.PanelSchema {
-    tourItems := make([]schema.ItemSchema, 0)
-    for key, tour := range p.curatedList.Tours {
-        key := key // shadow for closure
-        isActive, queryID := p.getQueryState(key)
+    var tourItems []schema.ItemSchema
+    for _, entry := range p.collection.Entries {
+        entry := entry // shadow for closure
+        isActive, queryID := p.getQueryState(entry.Key)
 
         tourItems = append(tourItems, schema.BoolItem{
-            Name:         "cma_tour_" + key,
-            Label:        tour.Name,
+            Name:         "cma_tour_" + entry.Key,
+            Label:        entry.Name,
             InitialValue: isActive,
             ApplyFunc: func(on bool) {
                 if on {
@@ -94,6 +104,14 @@ The rendering engine handles all dirty tracking, Apply button state, and widget 
 
 Museum APIs often have hundreds of thousands of items, many of which are boring (coins, broken pottery) or portraits. Spice solves this by maintaining a hardcoded list of "Good Wallpapers", managed via a `remote.go` pattern.
 
+### 4.0 The Source of Truth & CI/CD
+> [!WARNING]
+> The singular Source of Truth for all museum curation JSON files is the `docs/collections/` directory.
+
+When modifying a museum collection (e.g. replacing copyrighted IDs), **you must only edit the JSON file in `docs/collections/<name>.json`.** Do **not** manually edit the fallback JSON embedded in the provider directory (`pkg/wallpaper/providers/<name>/<name>.json`). 
+
+During our GitHub Actions CI/CD release pipeline, the `cmd/util/sync_collections/main.go` script runs automatically. This script reads the JSON from `docs/collections/`, updates the `"version"` string with the GitHub release tag, and overwrites the embedded JSON in `pkg/wallpaper/providers/` before building the release binaries. If you edit the embedded copy directly, your changes will be permanently overwritten and lost during the next release!
+
 ### 4.1 The Fetch Hierarchy
 The provider must implement a hierarchy to get the curated IDs:
 1.  **Remote GitHub JSON:** Attempt to fetch the latest `docs/collections/<name>.json` from the `main` branch.
@@ -108,22 +126,34 @@ The curated lists map a logical string key to a slice of integer/string object I
 {
   "version": 1,
   "description": "CMA Highlights",
-  "tours": {
-    "highlights": {
+  "collections": [
+    {
+      "key": "highlights",
       "type": "curated",
       "name": "Director's Cut",
       "ids": [ 1234, 5678, 91011 ]
     },
-    "european_paintings": {
+    {
+      "key": "european_paintings",
       "type": "search",
       "name": "European Paintings",
       "query": "departmentId=11&q=painting"
     }
-  }
+  ]
 }
 ```
+> [!IMPORTANT]
+> **No Maps Allowed!** You must strictly define your JSON schema as a `"collections": [...]` array. Using an object map (`"tours": {...}`) causes Go to use random map iteration order, breaking the UI sorting predictability. 
 
-### 4.3 Curated vs Dynamic Queries
+### 4.3 Resilience Validation
+To prevent silent cache poisoning when a schema changes, all `remote.go` implementations must include a structural validation check immediately after `json.Unmarshal`. If the parsed collection is unexpectedly empty, you must return an error so the provider falls back to the embedded JSON safely:
+```go
+	if len(col.Entries) == 0 {
+		return nil, fmt.Errorf("remote collection is empty or malformed (schema mismatch)")
+	}
+```
+
+### 4.4 Curated vs Dynamic Queries
 Museum Providers typically support two types of collections, differentiated by the `"type"` field in the JSON:
 1. **Curated (`"type": "curated"`)**: The most common type. A hardcoded array of `ids` that point directly to hand-picked masterpieces.
 2. **Dynamic Search (`"type": "search"`)**: Used when a museum has an excellent API and you want to pull live results (e.g., all items in a specific department). Instead of `ids`, it provides a `query` string (like URL parameters). The provider code reads this `query` string and dynamically fetches a list of IDs from the museum's REST API search endpoint before paginating through them.
@@ -185,7 +215,12 @@ Determine your provider's limits and implement responsible scraping. If using II
 
 When implementing your UI panels, all user-facing strings must be wrapped in `i18n.T("...")`. 
 
-However, Museum Providers frequently include **Proper Nouns** (like the museum's name, e.g., "The J. Paul Getty Museum") and geographic locations (e.g., "Los Angeles, CA, USA") that do not translate and are perfectly valid to remain as their English equivalents in other languages.
+### 7.1 Translating GetProviderTitle()
+**CRITICAL**: The `GetProviderTitle()` method must no longer return a hardcoded English string. It must return a translation key that corresponds to the keys defined in your `en.json` file.
+For example, instead of returning `"Statens Museum for Kunst"`, it must return `"SMK_TITLE"`. The frontend router and UI components will automatically pass this key through the translation engine before rendering.
+
+### 7.2 Proper Nouns and the CI Pipeline
+Museum Providers frequently include **Proper Nouns** (like the museum's name, e.g., "The J. Paul Getty Museum") and geographic locations (e.g., "Los Angeles, CA, USA") that do not translate and are perfectly valid to remain as their English equivalents in other languages.
 
 Because our CI pipelines enforce strict translation checks (`make check-i18n`) and fail if a translated string is identical to the English original, you must whitelist these specific proper nouns.
 

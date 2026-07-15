@@ -2,6 +2,7 @@ package wallpaper
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"image"
 	"io"
@@ -90,7 +91,7 @@ func (wp *Plugin) ProcessImageJob(ctx context.Context, job DownloadJob) (resultI
 		}
 
 		// Perform actual check
-		if err := wp.imgProcessor.CheckCompatibility(img.Width, img.Height, res.Width, res.Height); err != nil {
+		if err := wp.imgProcessor.CheckCompatibility(img.Width, img.Height, res.Width, res.Height); err != nil && !errors.Is(err, ErrRequiresVirtualFraming) {
 			log.Debugf("Image %s is incompatible with %s: %v. Tagging.", img.ID, resKey, err)
 			if img.ProcessingFlags == nil {
 				img.ProcessingFlags = make(map[string]bool)
@@ -181,7 +182,7 @@ func (wp *Plugin) checkImageCompatibility(img provider.Image) error {
 			continue
 		}
 
-		if err := wp.imgProcessor.CheckCompatibility(img.Width, img.Height, res.Width, res.Height); err != nil {
+		if err := wp.imgProcessor.CheckCompatibility(img.Width, img.Height, res.Width, res.Height); err != nil && !errors.Is(err, ErrRequiresVirtualFraming) {
 			incompatibleCount++
 		}
 	}
@@ -462,7 +463,7 @@ func (wp *Plugin) generateMissingDerivatives(ctx context.Context, img provider.I
 		}
 
 		// Compatibility check
-		if err := wp.imgProcessor.CheckCompatibility(srcImg.Bounds().Dx(), srcImg.Bounds().Dy(), res.Width, res.Height); err != nil {
+		if err := wp.imgProcessor.CheckCompatibility(srcImg.Bounds().Dx(), srcImg.Bounds().Dy(), res.Width, res.Height); err != nil && !errors.Is(err, ErrRequiresVirtualFraming) {
 			log.Debugf("Skipping derivative for %s: incompatible: %v", resDir, err)
 			continue
 		}
@@ -485,6 +486,12 @@ func (wp *Plugin) generateMissingDerivatives(ctx context.Context, img provider.I
 		}
 		if err != nil {
 			log.Printf("Error fitting image for %s: %v", resDir, err)
+			if strings.Contains(err.Error(), "rejected:") || strings.Contains(err.Error(), "incompatible") {
+				if img.ProcessingFlags == nil {
+					img.ProcessingFlags = make(map[string]bool)
+				}
+				img.ProcessingFlags["incompatible:"+resDir] = true
+			}
 			continue
 		}
 

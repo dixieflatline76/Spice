@@ -88,7 +88,7 @@ func (m *MockPluginManager) RebuildTrayMenu() {
 	m.Called()
 }
 
-func (m *MockPluginManager) ShowTuneImagePopup(_ int, _ provider.TuningOptions, _ provider.TuningOptions, _ [9]string, _ [9]provider.CropAnchor, _ func(provider.TuningOptions, func())) {
+func (m *MockPluginManager) ShowTuneImagePopup(_ int, _ provider.TuningOptions, _ provider.TuningOptions, _ [9]string, _ [9]provider.CropAnchor, _ bool, _ func(provider.TuningOptions, func())) {
 }
 
 // MockOS is a mock implementation of the OS interface.

@@ -1306,6 +1306,34 @@ func (c *Config) GetArtInstituteChicagoQueries() []ImageQuery {
 	return queries
 }
 
+// AddStatensMuseumForKunstQuery adds a new SMK query.
+func (c *Config) AddStatensMuseumForKunstQuery(description, url string, active bool) (string, error) {
+	return c.AddProviderQuery(description, url, "StatensMuseumForKunst", active, false)
+}
+
+// EnableStatensMuseumForKunstQuery enables an SMK query.
+func (c *Config) EnableStatensMuseumForKunstQuery(id string) error {
+	return c.EnableImageQuery(id)
+}
+
+// DisableStatensMuseumForKunstQuery disables an SMK query.
+func (c *Config) DisableStatensMuseumForKunstQuery(id string) error {
+	return c.DisableImageQuery(id)
+}
+
+// GetStatensMuseumForKunstQueries returns a copy of the SMK queries.
+func (c *Config) GetStatensMuseumForKunstQueries() []ImageQuery {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	var queries []ImageQuery
+	for _, q := range c.Queries {
+		if q.Provider == "StatensMuseumForKunst" {
+			queries = append(queries, q)
+		}
+	}
+	return queries
+}
+
 // AddRijksmuseumQuery adds a new Rijksmuseum query.
 func (c *Config) AddRijksmuseumQuery(description, url string, active bool) (string, error) {
 	return c.AddProviderQuery(description, url, "Rijksmuseum", active, false)

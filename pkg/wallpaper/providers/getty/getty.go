@@ -134,31 +134,17 @@ func (p *Provider) FetchImages(ctx context.Context, query string, page int) ([]p
 
 	pageIDs := ids[start:end]
 	var images []provider.Image
-	var mu sync.Mutex
-	sem := make(chan struct{}, 3)
-	var wg sync.WaitGroup
 
 	for _, uuid := range pageIDs {
-		wg.Add(1)
-		go func(id string) {
-			defer wg.Done()
-			sem <- struct{}{}
-			defer func() { <-sem }()
-
-			img, err := p.fetchObjectByUUID(ctx, id)
-			if err != nil {
-				log.Printf("Getty: Error fetching artwork %s: %v", id, err)
-				return
-			}
-			if img != nil {
-				mu.Lock()
-				images = append(images, *img)
-				mu.Unlock()
-			}
-		}(uuid)
+		img, err := p.fetchObjectByUUID(ctx, uuid)
+		if err != nil {
+			log.Printf("Getty: Error fetching artwork %s: %v", uuid, err)
+			continue
+		}
+		if img != nil {
+			images = append(images, *img)
+		}
 	}
-
-	wg.Wait()
 	return images, nil
 }
 
@@ -285,8 +271,8 @@ func (p *Provider) EnrichImage(_ context.Context, img provider.Image) (provider.
 
 func (p *Provider) CreateSettingsPanel(sm setting.SettingsManager) *schema.PanelSchema {
 	return schema.CreateMuseumSettingsPanel(schema.MuseumSettingsConfig{
-		MuseumFramingGetFunc: func() bool { return p.cfg.GetMuseumFraming("Getty") },
-		MuseumFramingSetFunc: func(val bool) { p.cfg.SetMuseumFraming("Getty", val) },
+		MuseumFramingGetFunc: func() bool { return p.cfg.GetMuseumFraming(p.ID()) },
+		MuseumFramingSetFunc: func(val bool) { p.cfg.SetMuseumFraming(p.ID(), val) },
 		ID:                   "Getty",
 		Title:                i18n.T("The J. Paul Getty Museum"),
 		Location:             i18n.T("Los Angeles, CA, USA"),

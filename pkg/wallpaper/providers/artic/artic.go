@@ -8,7 +8,6 @@ import (
 	"io"
 
 	"net/http"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -19,7 +18,6 @@ import (
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
 	"github.com/dixieflatline76/Spice/v2/pkg/wallpaper"
 	"github.com/dixieflatline76/Spice/v2/util/log"
-	"golang.org/x/sync/errgroup"
 )
 
 //go:embed artic.png
@@ -100,12 +98,13 @@ func (b *aicLockedBody) Close() error {
 }
 
 type CuratedList struct {
-	Version     string              `json:"version"`
-	Description string              `json:"description"`
-	Tours       map[string]TourData `json:"tours"`
+	Version     string            `json:"version"`
+	Description string            `json:"description"`
+	Entries     []CollectionEntry `json:"collections"`
 }
 
-type TourData struct {
+type CollectionEntry struct {
+	Key  string `json:"key"`
 	Name string `json:"name"`
 	IDs  []int  `json:"ids"`
 }
@@ -250,28 +249,16 @@ func (p *Provider) FetchImages(ctx context.Context, query string, page int) ([]p
 	batch := ids[start:end]
 
 	var images []provider.Image
-	var mu sync.Mutex
-	g, ctx := errgroup.WithContext(ctx)
 
 	for _, id := range batch {
-		id := id
-		g.Go(func() error {
-			img, err := p.fetchArtworkDetails(ctx, id)
-			if err != nil {
-				log.Printf("AIC: Error fetching artwork %d: %v", id, err)
-				return nil // Don't fail the whole batch
-			}
-			if img != nil {
-				mu.Lock()
-				images = append(images, *img)
-				mu.Unlock()
-			}
-			return nil
-		})
-	}
-
-	if err := g.Wait(); err != nil {
-		return nil, err
+		img, err := p.fetchArtworkDetails(ctx, id)
+		if err != nil {
+			log.Printf("AIC: Error fetching artwork %d: %v", id, err)
+			continue // Don't fail the whole batch
+		}
+		if img != nil {
+			images = append(images, *img)
+		}
 	}
 
 	return images, nil
@@ -288,9 +275,18 @@ func (p *Provider) resolveQueryToIDs(ctx context.Context, query string) ([]int, 
 	var ids []int
 
 	// Case 1: Curated Tour
-	if tour, ok := p.curatedList.Tours[query]; ok {
-		ids = make([]int, len(tour.IDs))
-		copy(ids, tour.IDs)
+	found := false
+	for _, entry := range p.curatedList.Entries {
+		if entry.Key == query {
+			ids = make([]int, len(entry.IDs))
+			copy(ids, entry.IDs)
+			found = true
+			break
+		}
+	}
+
+	if found {
+		// Processed
 	} else if strings.HasPrefix(query, "object:") {
 		// Case 2: Direct Object
 		idStr := strings.TrimPrefix(query, "object:")
@@ -304,8 +300,13 @@ func (p *Provider) resolveQueryToIDs(ctx context.Context, query string) ([]int, 
 		ids, err = p.searchArtworkIDs(ctx, query)
 		if err != nil {
 			log.Printf("AIC: Search failed for %s: %v, falling back to highlights", query, err)
-			ids = make([]int, len(p.curatedList.Tours[CollectionHighlights].IDs))
-			copy(ids, p.curatedList.Tours[CollectionHighlights].IDs)
+			for _, entry := range p.curatedList.Entries {
+				if entry.Key == CollectionHighlights {
+					ids = make([]int, len(entry.IDs))
+					copy(ids, entry.IDs)
+					break
+				}
+			}
 		}
 	}
 
@@ -362,12 +363,7 @@ func (p *Provider) fetchArtworkDetails(ctx context.Context, id int) (*provider.I
 		return nil, nil // No image available
 	}
 
-	// Filter for landscape
-	if !isLandscape(result.Data.Thumbnail.Width, result.Data.Thumbnail.Height) {
-		return nil, nil
-	}
-
-	// Use IIIF for high-res landscape
+	// Use IIIF for high-res image
 	// We use 4K (4096x4096) as our "Ultra-Premium" target to ensure it looks great on all monitors.
 	// The downloader can further refine this via WithResolution if a specific screen size is known.
 	imgURL := getIIIFURL(result.Data.ImageID, 4096, 4096)
@@ -432,22 +428,10 @@ func (p *Provider) searchArtworkIDs(ctx context.Context, query string) ([]int, e
 
 	var ids []int
 	for _, item := range result.Data {
-		// Pre-filter for landscape if possible
-		if !isLandscape(item.Thumbnail.Width, item.Thumbnail.Height) {
-			continue
-		}
 		ids = append(ids, item.ID)
 	}
 
 	return ids, nil
-}
-
-func isLandscape(width, height int) bool {
-	if width <= 0 || height <= 0 {
-		return false
-	}
-	ratio := float64(width) / float64(height)
-	return ratio >= 1.1
 }
 
 // getIIIFURL constructs a dynamic resizing URL using the IIIF Image API.
@@ -462,8 +446,8 @@ func getIIIFURL(imageID string, width, height int) string {
 // CreateSettingsPanel returns the declarative UI for ArtIC settings.
 func (p *Provider) CreateSettingsPanel(sm setting.SettingsManager) *schema.PanelSchema {
 	return schema.CreateMuseumSettingsPanel(schema.MuseumSettingsConfig{
-		MuseumFramingGetFunc: func() bool { return p.cfg.GetMuseumFraming("AIC") },
-		MuseumFramingSetFunc: func(val bool) { p.cfg.SetMuseumFraming("AIC", val) },
+		MuseumFramingGetFunc: func() bool { return p.cfg.GetMuseumFraming(p.ID()) },
+		MuseumFramingSetFunc: func(val bool) { p.cfg.SetMuseumFraming(p.ID(), val) },
 		ID:                   "AIC",
 		Title:                i18n.T("Art Institute of Chicago"),
 		Location:             i18n.T("Chicago, IL, USA"),
@@ -478,26 +462,9 @@ func (p *Provider) CreateSettingsPanel(sm setting.SettingsManager) *schema.Panel
 // CreateQueryPanel creates the image query management panel.
 func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, _ string) *schema.PanelSchema {
 	// 1. Curated Tours Section
-	keys := make([]string, 0, len(p.curatedList.Tours))
-	for k := range p.curatedList.Tours {
-		keys = append(keys, k)
-	}
-	sort.Slice(keys, func(i, j int) bool {
-		nameI := p.curatedList.Tours[keys[i]].Name
-		nameJ := p.curatedList.Tours[keys[j]].Name
-		if strings.HasPrefix(nameI, "⭐") && !strings.HasPrefix(nameJ, "⭐") {
-			return true
-		}
-		if strings.HasPrefix(nameJ, "⭐") && !strings.HasPrefix(nameI, "⭐") {
-			return false
-		}
-		return nameI < nameJ
-	})
-
-	tourItems := make([]schema.ItemSchema, 0, len(keys))
-	for _, key := range keys {
-		tour := p.curatedList.Tours[key]
-		key := key // shadow for closure
+	var tourItems []schema.ItemSchema
+	for _, entry := range p.curatedList.Entries {
+		entry := entry // shadow for closure
 
 		// Helper to find existing query state
 		getQuery := func(key string) (bool, string) {
@@ -509,21 +476,21 @@ func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, _ string) *schem
 			return false, ""
 		}
 
-		active, _ := getQuery(key)
+		active, _ := getQuery(entry.Key)
 
 		// We use BoolItem for each tour, mimicking the legacy NewCheck approach
 		tourItems = append(tourItems, schema.BoolItem{
-			Name:         ProviderName + "_" + key,
-			Label:        tour.Name,
+			Name:         ProviderName + "_" + entry.Key,
+			Label:        entry.Name,
 			InitialValue: active,
 			NeedsRefresh: true,
 			ApplyFunc: func(b bool) {
-				_, cid := getQuery(key)
+				_, cid := getQuery(entry.Key)
 				if b {
 					if cid != "" {
 						_ = p.cfg.EnableArtInstituteChicagoQuery(cid)
 					} else {
-						_, _ = p.cfg.AddArtInstituteChicagoQuery(tour.Name, key, true)
+						_, _ = p.cfg.AddArtInstituteChicagoQuery(entry.Name, entry.Key, true)
 					}
 				} else {
 					if cid != "" {

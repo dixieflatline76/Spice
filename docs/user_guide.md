@@ -150,13 +150,23 @@ The **Wallpaper** plugin tab appears immediately after the App tab. It contains 
 | **Clear Wallpaper Cache** | Deletes all downloaded images from disk. You will need an internet connection before new wallpapers appear again. Requires confirmation. |
 | **Blocked Images → Reset** | Clears the list of blocked images, allowing previously deleted images to be re-downloaded. Requires confirmation. |
 
-#### Smart Fit Modes
+#### Smart Fit Feature Matrix
 
-| Mode | Behaviour |
-| :--- | :--- |
-| **Disabled** | Images are used as-is — no processing. Fastest. |
-| **Quality** | Rejects images whose aspect ratio doesn't match your monitor. No black bars, no stretched photos. May skip some images. |
-| **Flexibility** | Accepts high-resolution images even if their aspect ratio differs from your screen, then crops intelligently. More variety. |
+The following table breaks down exactly how the engine processes images and controls the Tune Image UI depending on your chosen mode:
+
+| Feature / Processing Stage | Quality Mode | Flexibility Mode |
+| :--- | :--- | :--- |
+| **Core Philosophy** | **Pristine Fit:** "Protect me from bad crops at all costs. Skip images if they don't fit perfectly." | **Maximum Variety:** "I accept aggressive crops and missing details to see more variety." |
+| **Aspect Ratio Limits** | **Strict:** Rejects images unless they closely match your monitor's physical aspect ratio. | **Dynamic / Loose:** Accepts wide mismatches (e.g. a square image on an ultrawide monitor). |
+| **Orientation Safety** | **Strict:** Will immediately reject portrait images on a landscape monitor (unless rescued by Museum Frame). | **Loose:** Will attempt to crop a portrait image to fit a landscape monitor (resulting in an extreme "slice"). |
+| **Face Detection Crop** | **Conservative:** Will shift the crop slightly to keep a face in view, but refuses to ruin the composition. | **Aggressive:** Will ruthlessly crop out the rest of the image just to center the primary face. |
+| **Entropy / Saliency Crop** | **Minimal:** Uses edge-detection just to avoid cropping out the most interesting 10% of the edges. | **Maximum:** Will scan the entire image for energy (complexity) and heavily crop to focus on the busiest region. |
+| **Auto-Salvage (Framing)** | **High Frequency:** Many images fail the strict check and are automatically wrapped in a Museum Frame to prevent skipping them. | **Low Frequency:** Because limits are loose, images rarely fail, so auto-framing almost never triggers. |
+| **Museum Mode Auto-Frame** | Applies to all museum art regardless of aspect ratio. | Applies to all museum art regardless of aspect ratio. |
+| **Tune Image: Unframe** | **Contextual Lock:** You *cannot* remove the frame from an image if cropping it would violate your strict Quality limit. The checkbox is disabled. | **Always Unlocked:** You can rip the frame off *any* image and let the system aggressively chop it to pieces. |
+| **Tune Image: Frame Styling**| **Unlocked:** You can adjust the frame size, paper matting, and wall color (even if the frame toggle is locked). | **Unlocked:** You can adjust all frame properties. |
+| **Tune Image: Manual Anchor**| Adjusts the crop within safe, minor boundaries. | Allows extreme panning across the heavily cropped image (e.g. pan to the bottom of a portrait). |
+| **Processing Speed** | **Fastest:** Instantly skips incompatible images before doing heavy processing. | **Slower:** Performs heavy math (entropy/face scanning) on almost every image to find a viable crop. |
 
 ---
 
@@ -258,6 +268,7 @@ Art has no borders. Spice integrates with the world’s leading cultural institu
 - **Art Institute of Chicago** (Chicago, IL, USA)
 - **Cleveland Museum of Art** (Cleveland, OH, USA)
 - **Rijksmuseum** (Amsterdam, Netherlands)
+- **Statens Museum for Kunst** (Copenhagen, Denmark)
 - **National Palace Museum** (Taipei, Taiwan)
 - **Getty Images** (Los Angeles, CA, USA)
 

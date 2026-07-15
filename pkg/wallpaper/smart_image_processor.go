@@ -146,14 +146,15 @@ func (c *SmartImageProcessor) checkQualityModeCompatibility(imgWidth, imgHeight,
 		srcLand := imgWidth > imgHeight
 		tgtLand := systemWidth > systemHeight
 		if srcLand != tgtLand {
-			if aspectDiff > 0.5 {
-				return fmt.Errorf("incompatible orientation for Quality mode (Diff %.2f > 0.5)", aspectDiff)
+			maxOriDiff := math.Min(c.config.Tuning.QualityOrientationMaxDiff, c.config.Tuning.AspectThreshold)
+			if aspectDiff > maxOriDiff {
+				return fmt.Errorf("incompatible orientation for Quality mode (Diff %.2f > %.2f)", aspectDiff, maxOriDiff)
 			}
 		}
 	}
 
-	if aspectDiff > 1.5 {
-		return fmt.Errorf("aspect ratio diff too large for Quality mode (%.2f > 1.5)", aspectDiff)
+	if aspectDiff > c.config.Tuning.AspectThreshold {
+		return fmt.Errorf("aspect ratio diff too large for Quality mode (%.2f > %.2f)", aspectDiff, c.config.Tuning.AspectThreshold)
 	}
 	return nil
 }
@@ -163,13 +164,12 @@ func (c *SmartImageProcessor) checkFlexibilityModeCompatibility(imgWidth, imgHei
 	scaleY := float64(imgHeight) / float64(systemHeight)
 	surplus := math.Min(scaleX, scaleY)
 
-	// Dynamic Formula: Base * Surplus * AggressiveMultiplier (1.9)
+	// Dynamic Formula: Base * Surplus * AggressiveMultiplier
 	effectiveThreshold := c.config.Tuning.AspectThreshold * surplus * c.config.Tuning.AggressiveMultiplier
 
 	// SAFETY CAP: Even with high resolution, don't allow insane crops.
-	// 1.5 is the absolute limit for Flexibility. Anything beyond this regardless of resolution is a "sliver".
-	if effectiveThreshold > 1.5 {
-		effectiveThreshold = 1.5
+	if effectiveThreshold > c.config.Tuning.FlexibilityAbsoluteMaxDiff {
+		effectiveThreshold = c.config.Tuning.FlexibilityAbsoluteMaxDiff
 	}
 
 	// Orientation Safety: Block drastic mismatches (e.g. Landscape on Portrait)
@@ -180,9 +180,8 @@ func (c *SmartImageProcessor) checkFlexibilityModeCompatibility(imgWidth, imgHei
 		tgtLand := systemWidth > systemHeight
 		if srcLand != tgtLand {
 			// Orientation Mismatch: Cap threshold to block bad crops (e.g. 16:9 on 9:16)
-			// Limit of 0.8 allows 4:3 on Portrait (Diff ~0.7) but blocks 16:9 on Portrait (Diff ~1.15)
-			if effectiveThreshold > 0.8 {
-				effectiveThreshold = 0.8
+			if effectiveThreshold > c.config.Tuning.FlexibilityOrientationMaxDiff {
+				effectiveThreshold = c.config.Tuning.FlexibilityOrientationMaxDiff
 			}
 		}
 	}
@@ -213,12 +212,6 @@ func (c *SmartImageProcessor) FitImage(ctx context.Context, img image.Image, tar
 	imageWidth := img.Bounds().Dx()
 	imageHeight := img.Bounds().Dy()
 
-	// Pre-check basic compatibility
-	if err := c.CheckCompatibility(imageWidth, imageHeight, targetWidth, targetHeight); err != nil {
-		log.Debugf("FitImage: %v", err)
-		return nil, err
-	}
-
 	// Perfect fits or exact aspect checks
 	systemAspect := float64(systemWidth) / float64(systemHeight)
 	imageAspect := float64(imageWidth) / float64(imageHeight)
@@ -244,7 +237,7 @@ func (c *SmartImageProcessor) FitImage(ctx context.Context, img image.Image, tar
 	}()
 
 	// 1. Analysis Phase
-	faceFound, faceBox, faceQ, err := c.analyzeFace(img)
+	faceFound, faceBox, _, err := c.analyzeFace(img)
 	if err != nil {
 		log.Debugf("Face Logic: %v", err) // Log error but proceed (not fatal)
 	}
@@ -252,10 +245,9 @@ func (c *SmartImageProcessor) FitImage(ctx context.Context, img image.Image, tar
 	// Calculate Energy (needed for Flexible mode fallbacks and feet guard)
 	energy, energyErr := c.calculateImageEnergy(ctx, img)
 
-	// 2. Gate Checks
-	if err := c.checkQualityGate(imageAspect, systemAspect, faceFound, faceQ); err != nil {
-		return nil, err
-	}
+	// 2. Gate Checks - REPLACED BY CheckCompatibility (unifying internal and external checks)
+	// We no longer reject images after downloading. If they passed CheckCompatibility,
+	// they are guaranteed to be within the AspectThreshold limit, so we just process them.
 
 	// 3. Strategy Selection
 	strategy := c.selectStrategy(img, faceFound, faceBox, energy, energyErr, opts.Anchor)
@@ -279,26 +271,6 @@ func (c *SmartImageProcessor) analyzeFace(img image.Image) (bool, image.Rectangl
 
 	log.Debugf("Face Logic: Found face (Q:%.1f)", c.lastStats.Q)
 	return true, fb, c.lastStats.Q, nil
-}
-
-func (c *SmartImageProcessor) checkQualityGate(imgAspect, sysAspect float64, faceFound bool, faceQ float32) error {
-	if c.config.GetSmartFitMode() != SmartFitNormal {
-		return nil
-	}
-
-	aspectDiff := math.Abs(sysAspect - imgAspect)
-	if aspectDiff <= c.config.Tuning.AspectThreshold {
-		log.Debugf("SmartFit [Quality]: Accepted (Diff %.2f <= %.2f)", aspectDiff, c.config.Tuning.AspectThreshold)
-		return nil
-	}
-
-	// RETRY: Check for "Rescue" (Strong Face)
-	if faceFound && faceQ > c.config.Tuning.FaceRescueQThreshold {
-		log.Debugf("SmartFit [Quality]: EXCEPTION! Image preserved despite Aspect Diff %.2f (> %.2f) due to Strong Face (Q=%.1f)", aspectDiff, c.config.Tuning.AspectThreshold, faceQ)
-		return nil
-	}
-
-	return fmt.Errorf("quality mode rejected: aspect diff %.2f > %.2f and no strong face (Q>%.1f) to rescue", aspectDiff, c.config.Tuning.AspectThreshold, c.config.Tuning.FaceRescueQThreshold)
 }
 
 func (c *SmartImageProcessor) selectStrategy(img image.Image, faceFound bool, faceBox image.Rectangle, energy float64, energyErr error, anchor provider.CropAnchor) CropStrategy {

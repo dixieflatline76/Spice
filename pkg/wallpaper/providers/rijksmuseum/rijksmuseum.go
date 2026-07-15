@@ -18,7 +18,6 @@ import (
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
 	"github.com/dixieflatline76/Spice/v2/pkg/wallpaper"
 	"github.com/dixieflatline76/Spice/v2/util/log"
-	"golang.org/x/sync/errgroup"
 )
 
 // Provider implements the Rijksmuseum wallpaper provider.
@@ -239,12 +238,9 @@ func (p *Provider) fetchSearch(ctx context.Context, entry *CollectionEntry, page
 	}
 
 	var images []provider.Image
-	var mu sync.Mutex
 
 	for b := 0; b < maxBatches; b++ {
-		mu.Lock()
 		got := len(images)
-		mu.Unlock()
 		if got >= targetCount {
 			break
 		}
@@ -263,27 +259,15 @@ func (p *Provider) fetchSearch(ctx context.Context, entry *CollectionEntry, page
 			break
 		}
 
-		g, gctx := errgroup.WithContext(ctx)
-		g.SetLimit(3) // Conservative: 3 concurrent resolution chains
-
 		for _, objID := range batch {
-			objID := objID
-			g.Go(func() error {
-				img, err := p.resolveObjectToImage(gctx, objID)
-				if err != nil || img == nil {
-					return nil
-				}
-				mu.Lock()
-				if len(images) < targetCount {
-					images = append(images, *img)
-				}
-				mu.Unlock()
-				return nil
-			})
-		}
-
-		if err := g.Wait(); err != nil {
-			log.Printf("Rijksmuseum: Batch resolve error: %v", err)
+			if len(images) >= targetCount {
+				break
+			}
+			img, err := p.resolveObjectToImage(ctx, objID)
+			if err != nil || img == nil {
+				continue
+			}
+			images = append(images, *img)
 		}
 
 		time.Sleep(300 * time.Millisecond)
@@ -405,17 +389,7 @@ func (p *Provider) resolveObjectToImage(ctx context.Context, objectID string) (*
 	objectNumber := ExtractObjectNumber(obj.IdentifiedBy)
 	artist := ExtractArtist(obj.ProducedBy)
 
-	// Check dimensions for landscape orientation
-	width, height := ExtractDimensions(obj.ReferredToBy)
-	if width > 0 && height > 0 {
-		ratio := width / height
-		if ratio < 1.2 {
-			// Portrait or near-square — skip
-			p.cacheResult(objectID, nil)
-			return nil, nil
-		}
-	}
-
+	// We no longer filter by landscape orientation
 	// Step 2: Get VisualItem reference
 	if len(obj.Shows) == 0 {
 		p.cacheResult(objectID, nil)
@@ -559,8 +533,8 @@ func (p *Provider) EnrichImage(_ context.Context, img provider.Image) (provider.
 // CreateSettingsPanel returns the museum info panel.
 func (p *Provider) CreateSettingsPanel(sm setting.SettingsManager) *schema.PanelSchema {
 	return schema.CreateMuseumSettingsPanel(schema.MuseumSettingsConfig{
-		MuseumFramingGetFunc: func() bool { return p.cfg.GetMuseumFraming("Rijks") },
-		MuseumFramingSetFunc: func(val bool) { p.cfg.SetMuseumFraming("Rijks", val) },
+		MuseumFramingGetFunc: func() bool { return p.cfg.GetMuseumFraming(p.ID()) },
+		MuseumFramingSetFunc: func(val bool) { p.cfg.SetMuseumFraming(p.ID(), val) },
 		ID:                   "Rijks",
 		Title:                i18n.T("Rijksmuseum"),
 		Location:             i18n.T("Amsterdam, Netherlands"),

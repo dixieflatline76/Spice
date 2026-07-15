@@ -64,59 +64,43 @@ func TestVirtualFramer_Passthrough_TinyImage(t *testing.T) {
 func TestVirtualFramer_ThresholdLogic(t *testing.T) {
 	tests := []struct {
 		name             string
-		setting          VirtualFramingMode
+		aspectThreshold  float64
 		srcW, srcH       int
 		targetW, targetH int
 		shouldFrame      bool
 	}{
 		{
-			name:    "Square on Ultrawide with Any Significant -> Frames",
-			setting: FramingSignificant,
-			srcW:    1000, srcH: 1000, // 1.0 ratio
-			targetW: 3440, targetH: 1440, // 2.38 ratio (mismatch = 2.38)
+			name:            "Square on Ultrawide with 0.9 Threshold -> Frames",
+			aspectThreshold: 0.9,
+			srcW:            1000, srcH: 1000, // 1.0 ratio
+			targetW: 3440, targetH: 1440, // 2.38 ratio (mismatch = 1.38)
 			shouldFrame: true,
 		},
 		{
-			name:    "Square on Ultrawide with Extreme Only -> Bypasses",
-			setting: FramingExtreme,
-			srcW:    1000, srcH: 1000, // 1.0 ratio
-			targetW: 3440, targetH: 1440, // 2.38 ratio. mismatch is 2.38, < 2.5
+			name:            "Square on Ultrawide with 1.5 Threshold -> Bypasses",
+			aspectThreshold: 1.5,
+			srcW:            1000, srcH: 1000, // 1.0 ratio
+			targetW: 3440, targetH: 1440, // 2.38 ratio. mismatch is 1.38, < 1.5
 			shouldFrame: false,
 		},
 		{
-			name:    "Portrait on Widescreen with Extreme Only -> Frames",
-			setting: FramingExtreme,
-			srcW:    1000, srcH: 1500, // 0.66 ratio
-			targetW: 1920, targetH: 1080, // 1.77 ratio (mismatch = 1.77 / 0.66 = 2.68)
-			shouldFrame: true,
-		},
-		{
-			name:    "Landscape on Ultrawide -> Bypasses",
-			setting: FramingSignificant,
-			srcW:    1920, srcH: 1080, // 1.77 ratio
-			targetW: 3440, targetH: 1440, // 2.38 ratio (mismatch = 2.38 / 1.77 = 1.34) -> < 2.0 -> Bypasses
+			name:            "Landscape on Ultrawide with 0.9 Threshold -> Bypasses",
+			aspectThreshold: 0.9,
+			srcW:            1920, srcH: 1080, // 1.77 ratio
+			targetW: 3440, targetH: 1440, // 2.38 ratio (mismatch = 0.61) -> < 0.9 -> Bypasses
 			shouldFrame: false,
-		},
-		{
-			name:    "4K on 1080p -> Bypasses (Safe to scale)",
-			setting: FramingSignificant,
-			srcW:    3840, srcH: 2160, // 1.77
-			targetW: 1920, targetH: 1080, // 1.77 (mismatch = 1.0)
-			shouldFrame: false,
-		},
-		{
-			name:    "Inverted Mismatch (Panorama on Portrait) -> Frames",
-			setting: FramingExtreme,
-			srcW:    3440, srcH: 1080, // 3.18
-			targetW: 1080, targetH: 1920, // 0.56 (mismatch = 3.18 / 0.56 = 5.67) -> > 2.5 -> Frames
-			shouldFrame: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockProcessor := new(MockImageProcessor)
-			cfg := &Config{VirtualFramingFallback: true}
+			cfg := &Config{
+				VirtualFramingFallback: true,
+				Tuning: TuningConfig{
+					AspectThreshold: tt.aspectThreshold,
+				},
+			}
 
 			framer := NewVirtualFramer(mockProcessor, cfg)
 
@@ -126,7 +110,8 @@ func TestVirtualFramer_ThresholdLogic(t *testing.T) {
 				mockProcessor.On("CheckCompatibility", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 				mockProcessor.On("FitImage", mock.Anything, srcImg, tt.targetW, tt.targetH, provider.TuningOptions{Anchor: provider.AnchorAuto}).Return(createColoredTestImage(tt.targetW, tt.targetH, color.Black), nil)
 			} else {
-				mockProcessor.On("CheckCompatibility", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(fmt.Errorf("incompatible"))
+				// With the new logic, CheckCompatibility might not even be called if aspectDiff > threshold!
+				// We don't mock CheckCompatibility here, or we use mock.Anything.
 			}
 
 			outImg, err := framer.FitImage(context.Background(), srcImg, tt.targetW, tt.targetH, provider.TuningOptions{Anchor: provider.AnchorAuto})
@@ -165,7 +150,13 @@ func createNoisyImage(width, height int) image.Image {
 }
 
 func TestVirtualFramer_ObjectHeuristic(t *testing.T) {
-	cfg := &Config{VirtualFramingFallback: true}
+	// Set threshold to 1.5 so that AspectDiff doesn't force framing automatically (1000/2000 vs 1920/1080 diff is 1.27)
+	cfg := &Config{
+		VirtualFramingFallback: true,
+		Tuning: TuningConfig{
+			AspectThreshold: 1.5,
+		},
+	}
 
 	t.Run("Solid Grey Border (simulating studio object) -> Bypasses", func(t *testing.T) {
 		mockProcessor := new(MockImageProcessor)
@@ -232,4 +223,45 @@ func TestVirtualFramer_Integration(t *testing.T) {
 	assert.NotNil(t, outImg)
 	assert.Equal(t, 1920, outImg.Bounds().Dx())
 	assert.Equal(t, 1080, outImg.Bounds().Dy())
+}
+
+func TestVirtualFramer_CheckCompatibility_ReturnsSentinelError(t *testing.T) {
+	mockProcessor := new(MockImageProcessor)
+	cfg := &Config{VirtualFramingFallback: true}
+	framer := NewVirtualFramer(mockProcessor, cfg)
+
+	// SmartFit says incompatible
+	mockProcessor.On("CheckCompatibility", 1000, 2000, 1920, 1080).Return(fmt.Errorf("incompatible aspect ratio"))
+
+	err := framer.CheckCompatibility(1000, 2000, 1920, 1080)
+	assert.Error(t, err)
+	assert.ErrorIs(t, err, ErrRequiresVirtualFraming)
+	mockProcessor.AssertExpectations(t)
+}
+
+func TestVirtualFramer_CheckCompatibility_PassesThroughSizeError(t *testing.T) {
+	mockProcessor := new(MockImageProcessor)
+	cfg := &Config{VirtualFramingFallback: true}
+	framer := NewVirtualFramer(mockProcessor, cfg)
+
+	// SmartFit says too small
+	originalErr := fmt.Errorf("insufficient size")
+	mockProcessor.On("CheckCompatibility", 5, 5, 1920, 1080).Return(originalErr)
+
+	err := framer.CheckCompatibility(5, 5, 1920, 1080)
+	assert.Error(t, err)
+	assert.Equal(t, originalErr, err) // Should be original error, NOT sentinel
+	mockProcessor.AssertExpectations(t)
+}
+
+func TestVirtualFramer_CheckCompatibility_PassesThroughCompatible(t *testing.T) {
+	mockProcessor := new(MockImageProcessor)
+	cfg := &Config{VirtualFramingFallback: true}
+	framer := NewVirtualFramer(mockProcessor, cfg)
+
+	mockProcessor.On("CheckCompatibility", 1920, 1080, 1920, 1080).Return(nil)
+
+	err := framer.CheckCompatibility(1920, 1080, 1920, 1080)
+	assert.NoError(t, err)
+	mockProcessor.AssertExpectations(t)
 }

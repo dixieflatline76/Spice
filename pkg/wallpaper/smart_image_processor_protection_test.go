@@ -53,12 +53,13 @@ func TestFitImage_Protection_Strategies(t *testing.T) {
 		// Target: 100x100 (1.0)
 		// Input: 120x100 (1.2) -> Diff 0.2.
 		// Compass Check: Diff 0.2 < 0.5 (Orientation OK).
-		// Fit Check: Diff 0.2 > 0.1 (Strict Limit). -> Expect Rejection.
+		// Fit Check: Used to reject, but FitImage no longer gatekeeps aspect ratio to allow manual tuning.
+		// So it should successfully crop the image.
 		img := createSolidImage(120, 100, color.White)
 
-		_, err := processor.FitImage(context.Background(), img, 100, 100, provider.TuningOptions{})
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "quality mode rejected")
+		out, err := processor.FitImage(context.Background(), img, 100, 100, provider.TuningOptions{})
+		require.NoError(t, err)
+		assert.Equal(t, 100, out.Bounds().Dx())
 	})
 
 	t.Run("Strategy_Flexibility_LowEnergy_Fallback", func(t *testing.T) {

@@ -5,7 +5,7 @@ title: Architecture
 
 # Spice Architecture Documentation
 
-> **Status**: Current as of v2.3.2
+> **Status**: Current as of v2.6.0
 > **Scope**: System design, data flow, and component roles
 
 ## 1. Executive Summary
@@ -17,6 +17,7 @@ Key design principles:
 - **Pipeline Serialization**: Image ingestion from workers flows through a single goroutine, eliminating lock contention on the hot path
 - **Hexagonal Architecture**: All providers are framework-agnostic — they declare UI via pure Go structs, not Fyne widgets
 - **Resolution Buckets**: Images are indexed by resolution, enabling O(1) per-monitor image selection
+- **I18n Localization**: Decoupled translation system delivering native UI strings across 12 languages via embedded JSON.
 
 ## 2. System Architecture (Plugin System)
 
@@ -29,6 +30,7 @@ graph TD
 
     App[Spice Application]:::core
     PM[Plugin Manager]:::core
+    I18n[I18n Engine]:::core
     
     subgraph Plugins ["Loaded Plugins"]
         WP[Wallpaper Plugin]:::plug
@@ -36,6 +38,7 @@ graph TD
     end
 
     App -->|Initializes| PM
+    App -->|Initializes| I18n
     PM -->|Manages Lifecycle| Plugins
     
     WP -->|Injects| SettingsUI[Settings Tab]:::core
@@ -54,12 +57,12 @@ graph LR
     classDef display fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,color:#000;
 
     A["1. Fetch<br/>(Provider API)"]:::fetch
-    B["2. Process<br/>(Pipeline Workers)"]:::pipe
+    B["2. Process<br/>(SmartFit / Virtual Framer)"]:::pipe
     C["3. Store<br/>(ImageStore)"]:::store
     D["4. Display<br/>(Monitor Actor)"]:::display
 
     A -->|"Raw URLs"| B
-    B -->|"Processed Image"| C
+    B -->|"Processed Image / Museum Frame"| C
     C -->|"Resolution Bucket Query"| D
 ```
 
@@ -280,9 +283,12 @@ graph TD
     classDef analysis fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#000;
     classDef strategy fill:#fff3e0,stroke:#e65100,stroke-width:2px,color:#000;
     classDef core fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px,color:#000;
+    classDef frame fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,color:#000;
 
-    A["FitImage()"]:::core --> B["analyzeFace() — pigo"]:::analysis
-    A --> C["calculateEnergy()"]:::analysis
+    A["FitImage()"]:::core --> VF{"VirtualFramed?"}:::frame
+    VF -->|"Yes"| VFF["VirtualFramer.Frame()"]:::frame
+    VF -->|"No"| B["analyzeFace() — pigo"]:::analysis
+    VF -->|"No"| C["calculateEnergy()"]:::analysis
     B --> D{"selectStrategy()"}:::core
     C --> D
     D -->|"Face + Crop ON"| E["FaceCropStrategy"]:::strategy
@@ -293,11 +299,15 @@ graph TD
     F --> I
     G --> I
     H --> I
+    VFF --> Out["Final Image"]:::core
+    I --> Out
 ```
 
-**Key design insight**: All strategies converge on `smartPanAndResize()`, which takes a center point and crops the largest possible region matching the target aspect ratio around that point. Face detection and smartcrop are **completely separate paths** — they never interact. This design makes extending the crop logic (e.g., user crop anchors) trivial: any new strategy just provides a center point.
+**Key design insight 1 (Virtual Framing)**: The `VirtualFramer` sits completely in front of the `SmartImageProcessor`. If an image has extreme aspect ratios but framing is enabled, the pipeline rescues it using a Sentinel Error (`ErrRequiresVirtualFraming`), skipping the crop logic entirely and rendering a blurred museum matting around the untouched artwork.
 
-> For the full decision tree, strategy details, and tuning parameters, see [Internal Developer Context — Section 8](internal_developer_context.md#8-smart-fit-20--image-processing-pipeline).
+**Key design insight 2 (Crop Strategies)**: All cropping strategies converge on `smartPanAndResize()`, which takes a center point and crops the largest possible region matching the target aspect ratio around that point. Face detection and smartcrop are **completely separate paths** — they never interact. This design makes extending the crop logic (e.g., user crop anchors) trivial: any new strategy just provides a center point.
+
+> For the full decision tree, Sentinel Error handling, and tuning parameters, see [Internal Developer Context — Section 8](internal_developer_context.md#8-smart-fit-20--image-processing-pipeline).
 
 ## 8. ID Namespacing (Middleware)
 

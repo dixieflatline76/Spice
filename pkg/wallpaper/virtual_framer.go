@@ -2,15 +2,23 @@ package wallpaper
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"image"
 	"image/color"
 	"image/draw"
 	"math"
 	"math/rand"
+	"strings"
 
 	"github.com/disintegration/imaging"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
+	"github.com/dixieflatline76/Spice/v2/util/log"
 )
+
+// ErrRequiresVirtualFraming is returned when an image is mathematically incompatible
+// with the monitor dimensions, but it can be rescued by the Virtual Framer.
+var ErrRequiresVirtualFraming = errors.New("incompatible but rescued by virtual framer")
 
 type FrameStyle int
 
@@ -52,8 +60,13 @@ func (v *VirtualFramer) CheckCompatibility(imgWidth, imgHeight, targetWidth, tar
 	err := v.next.CheckCompatibility(imgWidth, imgHeight, targetWidth, targetHeight)
 
 	if err != nil {
+		// Do NOT rescue images that are too small. Virtual framing can't fix low resolution.
+		if strings.Contains(err.Error(), "insufficient size") {
+			return err
+		}
+
 		if v.cfg.VirtualFramingFallback {
-			return nil // Rescue
+			return ErrRequiresVirtualFraming // Rescue aspect ratio mismatches
 		}
 
 		v.cfg.mu.RLock()
@@ -67,7 +80,7 @@ func (v *VirtualFramer) CheckCompatibility(imgWidth, imgHeight, targetWidth, tar
 		v.cfg.mu.RUnlock()
 
 		if hasMuseumMode {
-			return nil
+			return ErrRequiresVirtualFraming
 		}
 	}
 
@@ -81,92 +94,57 @@ func (v *VirtualFramer) FitImage(ctx context.Context, img image.Image, targetWid
 	}
 
 	shouldFrame := false
+	frameReason := ""
 
 	// 1. User Override (Tune Image Popup)
 	switch opts.FrameOverride {
 	case provider.FrameOverrideForceOn:
 		shouldFrame = true
+		frameReason = "User Override Force On"
 	case provider.FrameOverrideForceOff:
 		shouldFrame = false
+		frameReason = "User Override Force Off"
 	default:
 		// 2. Museum Mode (Always Frame for specific providers)
 		if providerID, ok := ctx.Value(provider.ProviderIDKey).(string); ok && providerID != "" {
 			if v.cfg.GetMuseumFraming(providerID) {
 				shouldFrame = true
+				frameReason = "Museum Mode for provider " + providerID
 			}
 		}
 
 		// 3. Fallback Mode (Rescue Misfit Images)
 		if !shouldFrame && v.cfg.VirtualFramingFallback {
 			// Ask the next processor (SmartFit) if it WOULD reject this image.
-			err := v.next.CheckCompatibility(img.Bounds().Dx(), img.Bounds().Dy(), targetWidth, targetHeight)
-			if err != nil {
+			// Since SmartFit's CheckCompatibility is permissive for Quality mode, we must
+			// also do an explicit aspect ratio check here to prevent it from throwing away images later.
+			imageAspect := float64(img.Bounds().Dx()) / float64(img.Bounds().Dy())
+			systemAspect := float64(targetWidth) / float64(targetHeight)
+			aspectDiff := math.Abs(systemAspect - imageAspect)
+
+			if aspectDiff > v.cfg.Tuning.AspectThreshold {
 				shouldFrame = true
+				frameReason = fmt.Sprintf("Aspect Diff %.2f > Threshold %.2f", aspectDiff, v.cfg.Tuning.AspectThreshold)
+			} else {
+				err := v.next.CheckCompatibility(img.Bounds().Dx(), img.Bounds().Dy(), targetWidth, targetHeight)
+				if err != nil {
+					shouldFrame = true
+					frameReason = "SmartFit CheckCompatibility rejected it: " + err.Error()
+				}
 			}
 		}
 	}
 
 	if !shouldFrame {
+		log.Debugf("VirtualFramer: Bypassing framing, passing to SmartFit. (Reason: %s)", frameReason)
 		return v.next.FitImage(ctx, img, targetWidth, targetHeight, opts)
 	}
 
-	if v.isStudioObject(img) && opts.FrameOverride != provider.FrameOverrideForceOn {
-		return v.next.FitImage(ctx, img, targetWidth, targetHeight, opts)
-	}
-
+	log.Debugf("VirtualFramer: Applying Gallery Wall frame (Reason: %s)", frameReason)
 	if ptr, ok := ctx.Value(provider.VirtualFramedKey).(*bool); ok && ptr != nil {
 		*ptr = true
 	}
 	return v.renderGalleryWall(img, targetWidth, targetHeight, opts)
-}
-
-func (v *VirtualFramer) isStudioObject(img image.Image) bool {
-	// Simple edge variance heuristic
-	// Sample pixels along the border. If they are almost identical, it's a studio object.
-	bounds := img.Bounds()
-	if bounds.Dx() < 10 || bounds.Dy() < 10 {
-		return false
-	}
-
-	// Downsample massively to get a quick average of the border
-	thumb := imaging.Resize(img, 10, 10, imaging.NearestNeighbor)
-
-	// Sample outer pixels
-	var rSum, gSum, bSum uint32
-	var rSq, gSq, bSq float64
-	count := 0
-
-	for x := 0; x < 10; x++ {
-		for y := 0; y < 10; y++ {
-			if x == 0 || x == 9 || y == 0 || y == 9 {
-				r, g, b, _ := thumb.At(x, y).RGBA()
-				r8, g8, b8 := r>>8, g>>8, b>>8
-				rSum += r8
-				gSum += g8
-				bSum += b8
-				count++
-			}
-		}
-	}
-
-	rAvg := float64(rSum) / float64(count)
-	gAvg := float64(gSum) / float64(count)
-	bAvg := float64(bSum) / float64(count)
-
-	for x := 0; x < 10; x++ {
-		for y := 0; y < 10; y++ {
-			if x == 0 || x == 9 || y == 0 || y == 9 {
-				r, g, b, _ := thumb.At(x, y).RGBA()
-				r8, g8, b8 := r>>8, g>>8, b>>8
-				rSq += math.Pow(float64(r8)-rAvg, 2)
-				gSq += math.Pow(float64(g8)-gAvg, 2)
-				bSq += math.Pow(float64(b8)-bAvg, 2)
-			}
-		}
-	}
-
-	variance := (rSq + gSq + bSq) / float64(count*3)
-	return variance < 100.0 // Very low variance indicates a solid studio background
 }
 
 func (v *VirtualFramer) determineFrameStyle(avgColor color.Color) FrameStyle {

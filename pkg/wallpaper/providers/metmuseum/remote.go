@@ -178,6 +178,9 @@ func fetchRemote() (*Collection, error) {
 		return nil, err
 	}
 	col.migrate()
+	if len(col.Entries) == 0 {
+		return nil, fmt.Errorf("remote collection is empty or malformed (schema mismatch)")
+	}
 	return &col, nil
 }
 
@@ -214,6 +217,9 @@ func loadCache(path string) (*Collection, error) {
 		return nil, err
 	}
 	col.migrate()
+	if len(col.Entries) == 0 {
+		return nil, fmt.Errorf("remote collection is empty or malformed (schema mismatch)")
+	}
 	return &col, nil
 }
 

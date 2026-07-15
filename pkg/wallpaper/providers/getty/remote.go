@@ -151,6 +151,9 @@ func fetchRemote() (*Collection, error) {
 	if err := json.NewDecoder(resp.Body).Decode(&col); err != nil {
 		return nil, err
 	}
+	if len(col.Entries) == 0 {
+		return nil, fmt.Errorf("remote collection is empty or malformed (schema mismatch)")
+	}
 	return &col, nil
 }
 
@@ -163,6 +166,9 @@ func loadCache(path string) (*Collection, error) {
 	var col Collection
 	if err := json.NewDecoder(f).Decode(&col); err != nil {
 		return nil, err
+	}
+	if len(col.Entries) == 0 {
+		return nil, fmt.Errorf("remote collection is empty or malformed (schema mismatch)")
 	}
 	return &col, nil
 }

@@ -245,9 +245,9 @@ func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
 	// 3. Assemble Tabs
 	tabs := container.NewAppTabs(
 		container.NewTabItemWithIcon(i18n.T("General"), theme.SettingsIcon(), generalTab),
+		container.NewTabItemWithIcon(i18n.T("Museums"), theme.ColorPaletteIcon(), museumTab),
 		container.NewTabItemWithIcon(i18n.T("Community"), theme.GridIcon(), onlineTab),
 		container.NewTabItemWithIcon(i18n.T("Personal"), theme.FolderIcon(), localTab),
-		container.NewTabItemWithIcon(i18n.T("Museums"), theme.ColorPaletteIcon(), museumTab),
 	)
 	wp.settingsTabs = tabs
 	tabs.SetTabLocation(container.TabLocationLeading)

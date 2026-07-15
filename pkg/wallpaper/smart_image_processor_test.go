@@ -295,78 +295,13 @@ func TestSmartImageProcessor_FitImage_Quality_Rejection(t *testing.T) {
 	// Try Portrait: 160x200 (0.8)
 	// Diff: |1.77 - 0.8| = 0.97.  0.97 > 0.9.
 	// Width 160 >= 160, Height 200 >= 90.
-	// Expect REJECTION.
+	// FitImage no longer gatekeeps aspect ratio to allow manual tuning overrides.
+	// Expect SUCCESS (cropped image).
 	inputImg := createTestImage(160, 200)
 
-	_, err := processor.FitImage(context.Background(), inputImg, 160, 90, provider.TuningOptions{})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "Quality mode")
-}
-
-func TestSmartImageProcessor_FitImage_Quality_Rescue(t *testing.T) {
-	// Requirements:
-	// Mode: Quality
-	// Input: Bad Aspect (Diff > 0.9)
-	// Face: Strong (Q > 20)
-	// Expect: Success
-
-	ResetConfig()
-	prefs := NewMockPreferences()
-	cfg := GetConfig(prefs)
-	cfg.SetSmartFitMode(SmartFitNormal)
-	cfg.SetFaceCropEnabled(true)
-
-	// Load Pigo
-	am := asset.NewManager()
-	modelData, err := am.GetModel("facefinder")
-	if err != nil {
-		t.Skip("Facefinder model not found")
-	}
-	p := pigo.NewPigo()
-	pigoInstance, _ := p.Unpack(modelData)
-
-	mockOS := new(MockOS)
-	// Target: 16:9 (160x90) (Aspect 1.77)
-	mockOS.On("GetDesktopDimension").Return(160, 90, nil)
-
-	cfg.Tuning.AspectThreshold = 0.9
-	processor := &SmartImageProcessor{
-		os:        mockOS,
-		config:    cfg,
-		pigo:      pigoInstance,
-		resampler: imaging.Lanczos,
-	}
-
-	// Input: Face Image (Square-ish?) "testdata/face.png"
-	// We need to check its aspect.
-	// Let's assume we load it and it has a face.
-	f, err := os.Open("testdata/face.png")
-	if err != nil {
-		t.Skip("testdata/face.png not found")
-	}
-	defer f.Close()
-	faceImg, _, _ := image.Decode(f)
-
-	// If face.png is square (likely), Aspect 1.0. Diff ~0.77.
-	// 0.77 < 0.9. It passes naturally!
-	// We need to FORCE a bad aspect ratio.
-	// Let's Pad the image to make it extremely tall (portrait)?
-	// Or crop it?
-	// If we crop it to be very tall, we might lose the face or make it small.
-	// Better: Change the Desktop target to be Ultrawide (21:9)!
-	// 21:9 = ~2.33.
-	// Image (Square 1.0). Diff: 1.33 > 0.9.
-	// This forces Rejection UNLESS Rescued.
-	mockOS2 := new(MockOS)
-	mockOS2.On("GetDesktopDimension").Return(210, 90, nil) // 21:9
-	processor.os = mockOS2
-
-	outputImg, err := processor.FitImage(context.Background(), faceImg, 210, 90, provider.TuningOptions{})
-
-	// If rescue works, no error.
+	out, err := processor.FitImage(context.Background(), inputImg, 160, 90, provider.TuningOptions{})
 	require.NoError(t, err)
-	require.NotNil(t, outputImg)
-	assert.Equal(t, 210, outputImg.Bounds().Dx())
+	assert.Equal(t, 160, out.Bounds().Dx())
 }
 
 // Removed outdated fallback test - replaced by DualSafety test

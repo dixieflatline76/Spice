@@ -255,37 +255,55 @@ const (
 
 // ImageProvider defines the interface for an image service.
 type ImageProvider interface {
-	// ID returns a stable, non-localized provider ID.
+	// --- Identity & Core Display ---
+
+	// ID returns a stable, non-localized internal identifier for the provider (e.g., "ArtInstituteChicago").
+	// This is used internally for configuration keys, UI schema control names, and state tracking.
+	// It must NEVER change, as changing it will break backwards compatibility for user settings.
 	ID() string
-	// Name returns the localized provider name.
+
+	// Name returns the localized, long-form proper name of the provider (e.g., i18n.T("Art Institute of Chicago")).
+	// This is typically used in the UI for long-form display elements where full context is preferred.
 	Name() string
-	// Type returns the provider category (Online, Local, AI).
+
+	// Title returns the short-form display title for the provider (e.g., "AIC").
+	// This is used where UI space is limited, such as in the Windows System Tray menu,
+	// or as the concise header for the provider's configuration section.
+	Title() string
+
+	// GetProviderIcon returns the provider's icon for UI display (e.g., tray menu, settings header).
+	// It should return a high-quality, recognizable icon (e.g., []byte for embedded PNG/ICO).
+	// Returns nil if no icon is available.
+	GetProviderIcon() interface{}
+
+	// --- Provider Metadata ---
+
+	// Type returns the provider category (Online, Local, AI, Museum).
 	Type() ProviderType
+
 	// GetAttributionType returns the preferred phrasing for attribution (e.g. By or In).
 	GetAttributionType() AttributionType
+
 	// HomeURL returns the home URL of the provider service.
 	HomeURL() string
-	// ParseURL checks if the given web URL is valid for this provider and returns the API URL.
-	// It returns an error if the URL is invalid.
-	ParseURL(webURL string) (string, error)
-	// FetchImages fetches images from the provider using the given API URL and page number.
-	FetchImages(ctx context.Context, apiURL string, page int) ([]Image, error)
-	// EnrichImage fetches additional details for the image (e.g. attribution) if missing.
-	EnrichImage(ctx context.Context, img Image) (Image, error)
+
 	// SupportsUserQueries returns true if the provider allows users to add custom queries (e.g. search terms, URLs).
 	// Returns false if the provider is curated-only (e.g. Museums, Daily Photo).
 	SupportsUserQueries() bool
 
+	// --- Core Capabilities ---
+
+	// ParseURL checks if the given web URL is valid for this provider and returns the API URL.
+	// It returns an error if the URL is invalid.
+	ParseURL(webURL string) (string, error)
+
+	// FetchImages fetches images from the provider using the given API URL and page number.
+	FetchImages(ctx context.Context, apiURL string, page int) ([]Image, error)
+
+	// EnrichImage fetches additional details for the image (e.g. attribution) if missing.
+	EnrichImage(ctx context.Context, img Image) (Image, error)
+
 	// --- UI Integration ---
-
-	// Title returns the display title for the provider section (e.g., "Image Sources (Unsplash)").
-	Title() string
-
-	// GetProviderIcon returns the provider's icon for UI display (e.g. tray menu, settings header).
-	// It should return a high-quality, recognizable icon, preferably 64x64 or larger.
-	// Returns nil if no icon is available.
-	// Note: This remains framework-coupled for now as icons are typically platform-specific resources.
-	GetProviderIcon() interface{}
 
 	// CreateSettingsPanel creates the general configuration panel (e.g., API Keys).
 	// Returns nil if the provider has no general settings.

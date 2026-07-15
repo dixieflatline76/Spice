@@ -1,7 +1,16 @@
 package artic
 
 import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"math/rand"
+	"net/http"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -56,25 +65,67 @@ func TestGetIIIFURL(t *testing.T) {
 	expected := "https://www.artic.edu/iiif/2/e9667990-97ee-173f-29f9-55d9aff5d918/full/!1920,1080/0/default.jpg"
 	assert.Equal(t, expected, got)
 }
-func TestIsLandscape(t *testing.T) {
-	tests := []struct {
-		name   string
-		width  int
-		height int
-		want   bool
-	}{
-		{"Perfect Landscape 16:9", 1920, 1080, true},
-		{"Square", 1000, 1000, false},
-		{"Portrait", 1000, 1500, false},
-		{"Near Square (1.05)", 1050, 1000, false},
-		{"Edge Case Landscape (1.1)", 1100, 1000, true},
-		{"Zero Dims", 0, 0, false},
-		{"Negative Dims", -1, 100, false},
+
+func TestEmbeddedJSON(t *testing.T) {
+	var col CuratedList
+	err := json.Unmarshal(embeddedJSON, &col)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, col.Entries, "Embedded JSON should have parsed Collections successfully")
+}
+
+type mockRoundTripper struct{}
+
+func (m *mockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	// Add random delay to simulate concurrent jitter
+	time.Sleep(time.Duration(rand.Intn(50)) * time.Millisecond)
+
+	// Extract ID from URL
+	// https://api.artic.edu/api/v1/artworks/123?fields=...
+	parts := strings.Split(req.URL.Path, "/")
+	idStr := strings.Split(parts[len(parts)-1], "?")[0]
+
+	body := fmt.Sprintf(`{
+		"data": {
+			"id": %s,
+			"title": "Mock Artwork %s",
+			"image_id": "img-%s"
+		}
+	}`, idStr, idStr, idStr)
+
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       io.NopCloser(bytes.NewBufferString(body)),
+	}, nil
+}
+
+func TestFetchImages_SequentialOrder(t *testing.T) {
+	rand.Seed(time.Now().UnixNano())
+
+	p := &Provider{
+		httpClient: &http.Client{
+			Transport: &mockRoundTripper{},
+		},
+		idCache: make(map[string][]int),
+		curatedList: CuratedList{
+			Entries: []CollectionEntry{
+				{
+					Key:  "test_collection",
+					Name: "Test Collection",
+					IDs:  []int{101, 102, 103, 104, 105, 106, 107, 108, 109, 110},
+				},
+			},
+		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, isLandscape(tt.width, tt.height))
-		})
+	images, err := p.FetchImages(context.Background(), "test_collection", 1)
+	assert.NoError(t, err)
+	assert.Len(t, images, 10)
+
+	expectedIDs := []string{"101", "102", "103", "104", "105", "106", "107", "108", "109", "110"}
+	actualIDs := make([]string, len(images))
+	for i, img := range images {
+		actualIDs[i] = img.ID
 	}
+
+	assert.Equal(t, expectedIDs, actualIDs, "FetchImages should return images in the exact sequential order of the underlying query, despite network jitter.")
 }

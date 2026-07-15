@@ -409,6 +409,215 @@ When the user changes processing settings (e.g., toggles FaceCrop), the nightly 
 a flag mismatch and **invalidates** all derivatives — wiping `DerivativePaths` and
 `ProcessingFlags` so images are re-processed with the new settings.
 
+### 5.4 The Three Compatibility Gates (Multi-Monitor & Mode Resiliency)
+
+The downloader employs three distinct `CheckCompatibility` gates throughout its lifecycle. While this might appear redundant at first glance, it is a highly resilient architecture designed to protect multi-monitor setups and handle dynamic user setting changes gracefully.
+
+1. **Gate 1: The API Gate (`checkImageCompatibility`)**
+   - **When:** Immediately after fetching the API JSON (before any disk I/O).
+   - **Why:** Bandwidth optimization. If an image is mathematically incompatible with all monitors based on the API data, we reject it before downloading the 100MB master file. *(Note: Many museum APIs do not report dimensions in their JSON, so this gate is often bypassed).*
+2. **Gate 2: The Multi-Monitor Tagging Loop (Step 2.7)**
+   - **When:** After the master image is downloaded and its exact dimensions are probed from disk.
+   - **Why:** It iterates through the unique resolution profile of **every single plugged-in monitor**. It permanently tags the image (e.g., `img.ProcessingFlags["incompatible:3440x1440"] = true`) if it fails a specific monitor's geometry. This ensures an image is kept if it perfectly fits your 16:9 laptop screen, but tells the routing system to never send it to your 21:9 ultrawide. If the image fits *zero* monitors, the job aborts and the master file is deep-deleted.
+3. **Gate 3: The Generation Loop Safety Net (Step 3)**
+   - **When:** Inside `generateMissingDerivatives`, immediately before generating the fitted file.
+   - **Why:** Instead of just trusting the `incompatible` tag set by Gate 2, it dynamically re-evaluates the math against current global settings. This solves the **Mode Change Problem**. If an image was tagged incompatible yesterday under strict "Quality Mode", but the user switches to permissive "Flexibility Mode" today and opens the Tune Image UI, Gate 3 ignores the stale tag. It runs the math, sees it now passes under Flexibility Mode, and processes the crop.
+
+---
+
+## 6. store.Update() vs store.Add()
+
+This distinction is critical for understanding data flow and avoiding corruption.
+
+### 6.1 Add()
+
+Adds a **new** image to the store. Rejects duplicates.
+
+```go
+func (s *ImageStore) Add(img provider.Image) bool {
+    if _, exists := s.idSet[img.ID]; exists {
+        // Special case: Favorites provider can displace existing entries
+        if img.SourceQueryID == FavoritesQueryID {
+            // In-place update preserving Seen state
+            s.images[i] = img
+            return true
+        }
+        return false  // Duplicate — reject
+    }
+    // Reject images from queries disabled mid-download
+    if s.QueryActiveFunc != nil && !s.QueryActiveFunc(img.SourceQueryID) {
+        return false
+    }
+    if s.avoidSet[img.ID] { return false }  // Blocked image
+    s.images = append(s.images, img)
+    s.idSet[img.ID] = true
+    // Add to resolution buckets (incremental, not full rebuild)
+    for res := range img.DerivativePaths {
+        s.resolutionBuckets[res] = append(s.resolutionBuckets[res], img.ID)
+    }
+    s.scheduleSaveLocked()
+    s.notifyUpdateLocked()
+    return true
+}
+```
+
+**Key behavior**: If the ID already exists, `Add()` returns `false` and does **nothing**
+(unless the source is the Favorites provider, which is allowed to displace existing entries).
+This means a re-processed image must use the Add-or-Update fallback pattern in
+`stateManagerLoop` to ensure its results land in the store.
+
+### 6.2 Update()
+
+Replaces an **existing** image by ID. Full struct replacement.
+
+```go
+func (s *ImageStore) Update(img provider.Image) bool {
+    for i, existing := range s.images {
+        if existing.ID == img.ID {
+            s.images[i] = img  // FULL REPLACEMENT. Every field overwritten.
+            s.rebuildBucketsLocked()
+            s.scheduleSaveLocked()
+            return true
+        }
+    }
+    return false
+}
+```
+
+**Key behavior**: There is **no field-level merge**. If you call `Update()` with an image that
+has `DerivativePaths = nil`, it will overwrite the existing image's `DerivativePaths` — even if
+the existing one was perfectly good.
+
+### 6.3 All Call Sites (as of v2.5.3)
+
+| # | Location | Purpose | Has DerivativePaths? |
+|---|----------|---------|---------------------|
+| 1 | `pipeline.go:150` | Add-or-Update fallback in stateManagerLoop | Yes (fully processed) |
+| 2 | `wallpaper.go:831` | Un-favorite | Yes (from store.List()) |
+| 3 | `wallpaper.go:841` | Add favorite | Yes (from store.List()) |
+| 4 | `wallpaper.go:905` | Reconcile favorite flags | Yes (from store.List()) |
+| 5 | `monitor_controller.go:502` | Stale file → clear derivatives | Intentionally empty |
+| 6 | `monitor_controller.go:545` | Anchor update | Yes (from CurrentImage) |
+
+> **Note**: Prior to v2.5.3, `downloader.go` had two additional intermediate `Update()` calls
+> at steps 2.5 (resolution probing) and 2.7 (incompatibility tagging) that clobbered
+> `DerivativePaths`. These were removed as part of the fix described in §8.1.
+
+Call site 5 is an intentional clearing — any guard on `Update()` must not block it.
+
+---
+
+## 7. The Nightly Refresh Cycle
+
+**File**: `pkg/wallpaper/scheduler.go`
+
+The nightly scheduler runs as a persistent goroutine and triggers maintenance on day changes.
+
+### 7.1 Trigger Conditions
+
+A nightly refresh runs when:
+- The app starts and detects it's shortly after midnight (within 6 minutes)
+- The day has changed since the last check (detected every 5 minutes)
+- Network is available (checked via `https://connectivitycheck.gstatic.com/generate_204`)
+
+### 7.2 Maintenance Sequence
+
+```
+1. syncStoreWithConfig()          ← Reconcile store with current settings
+   → Builds targetFlags map from current config
+   → Calls store.Sync(cacheSize, targetFlags, activeQueryIDs)
+     → For each image: determineSyncAction()
+       → Delete if: inactive query, blocked, missing master, or zombie
+       → Invalidate if: processing flags mismatch
+       → Keep if: all checks pass
+
+2. fm.CleanupOrphans(knownIDs)    ← Delete files not in the store
+
+3. updateCallback()               ← Check for app updates (if callback set)
+
+4. SyncProviders()                ← Remote config sync (e.g., Wallhaven collections)
+
+5. FetchNewImages(false)          ← Download new images (if nightly refresh enabled)
+```
+
+### 7.3 Zombie Recovery
+
+The zombie check in `determineSyncAction()` catches images that have:
+- A master file on disk ✅
+- Matching processing flags ✅
+- **Zero derivatives** ❌
+
+These "zombie" images are invisible to monitors and block re-fetching (because `Add()` rejects
+duplicates). The zombie check deletes them from the store so the next fetch cycle can re-download
+and reprocess them.
+
+---
+
+## 8. Known Failure Modes
+
+### 8.1 DerivativePaths Clobbering (Pipeline Race Condition) — FIXED in v2.5.3
+
+**Root cause**: Prior to v2.5.3, `ProcessImageJob` called `wp.store.Update(img)` at steps
+2.5 and 2.7, where the local `img` variable had `DerivativePaths = nil`. This overwrote the
+existing image's `DerivativePaths` in the store. When the pipeline later called `store.Add()`
+with the fully-processed image, `Add()` rejected it as a duplicate.
+
+**Pre-fix timeline** (for historical reference):
+
+```
+T=0: img = job.Image  (from API — DerivativePaths = nil)
+
+T=1: Step 2.5 probes dimensions
+     wp.store.Update(img)  ← img.DerivativePaths is nil!
+     Store now has: {ID: "X", DerivativePaths: nil, Width: 4000, Height: 3000}
+     ↑ Clobbered! Store previously had DerivativePaths populated.
+
+T=2: Step 2.7 tags incompatibilities
+     wp.store.Update(img)  ← img.DerivativePaths is STILL nil!
+     Store still has: {ID: "X", DerivativePaths: nil}
+
+T=3: Step 3 generates derivatives
+     img.DerivativePaths = {"3440x1440": "/path/to/fitted.jpg"}
+     img.FilePath = "/path/to/fitted.jpg"
+
+T=4: stateManagerLoop calls store.Add(img)
+     Add() checks: idSet["X"] exists? → YES (from T=1's Update)
+     Add() returns false. FULLY-PROCESSED IMAGE IS REJECTED.
+
+Result: Image permanently stuck with DerivativePaths = nil.
+        Resolution bucket is empty. Monitor never shows it.
+        Files exist on disk but metadata is corrupted.
+```
+
+**Fix applied** (v2.5.3):
+1. **Removed** the two intermediate `wp.store.Update(img)` calls in `downloader.go` (steps
+   2.5 and 2.7). `ProcessImageJob` is now purely functional — it mutates its local `img`
+   variable and returns the final result without touching the store.
+2. **Added Add-or-Update fallback** in `stateManagerLoop`: if `store.Add()` rejects a
+   fully-processed image as a duplicate (e.g., during backlog healing), it falls back to
+   `store.Update()` to ensure the complete result always lands.
+3. **Added diagnostic logging** in `store.Update()`: a debug-level warning when
+   `DerivativePaths` are being cleared from a non-empty state (defense-in-depth canary).
+
+### 8.2 Flag Mismatch Invalidation Cascade
+
+If `syncStoreWithConfig()` builds a target flag map that doesn't match what the downloader
+sets, **all images** will be invalidated on every nightly cycle. This was caught by the
+regression guard tests (`TestNightlyGrooming_RegressionGuard_IncompleteFlags`).
+
+Both flag maps must be kept in sync — see `makeDownloaderFlags()` and `makeGroomingTarget()`
+in `store_test.go` for the consistency tests.
+
+### 8.3 Zombie → Delete → Re-Fetch → Zombie Loop
+
+- **Why:** Bandwidth optimization. If an image is mathematically incompatible with all monitors based on the API data, we reject it before downloading the 100MB master file. *(Note: Many museum APIs do not report dimensions in their JSON, so this gate is often bypassed).*
+2. **Gate 2: The Multi-Monitor Tagging Loop (Step 2.7)**
+   - **When:** After the master image is downloaded and its exact dimensions are probed from disk.
+   - **Why:** It iterates through the unique resolution profile of **every single plugged-in monitor**. It permanently tags the image (e.g., `img.ProcessingFlags["incompatible:3440x1440"] = true`) if it fails a specific monitor's geometry. This ensures an image is kept if it perfectly fits your 16:9 laptop screen, but tells the routing system to never send it to your 21:9 ultrawide. If the image fits *zero* monitors, the job aborts and the master file is deep-deleted.
+3. **Gate 3: The Generation Loop Safety Net (Step 3)**
+   - **When:** Inside `generateMissingDerivatives`, immediately before generating the fitted file.
+   - **Why:** Instead of just trusting the `incompatible` tag set by Gate 2, it dynamically re-evaluates the math against current global settings. This solves the **Mode Change Problem**. If an image was tagged incompatible yesterday under strict "Quality Mode", but the user switches to permissive "Flexibility Mode" today and opens the Tune Image UI, Gate 3 ignores the stale tag. It runs the math, sees it now passes under Flexibility Mode, and processes the crop.
+
 ---
 
 ## 6. store.Update() vs store.Add()
@@ -600,3 +809,29 @@ If the zombie recovery deletes images but the fetch cycle re-adds them without g
 derivatives (e.g., due to a compatibility rejection), the same images will be re-added as
 zombies and deleted again on the next nightly cycle. This is a benign loop (no data loss)
 but wastes API calls and disk I/O.
+
+---
+
+## 9. Virtual Framer & Tune Image Overrides
+
+The pipeline strictness described above is intentionally rigid to protect users from bad crops. However, Spice provides two massive override systems:
+
+### 9.1 The Virtual Framer Rescue Loop (Sentinel Error Pattern)
+
+When an image reaches Step 2.7 (Compatibility Check) and fails because its aspect ratio is too extreme (e.g., a tall portrait on an ultrawide monitor in Quality Mode), the pipeline normally rejects it and tags it as fundamentally incompatible.
+
+However, if **Virtual Framing** is enabled (usually globally via Museum Mode settings), the `VirtualFramer` intercepts the mathematical failure and explicitly returns the Sentinel Error `ErrRequiresVirtualFraming` instead of returning a standard error or `nil`.
+
+1. The three Compatibility Gates in `downloader.go` explicitly check for `!errors.Is(err, ErrRequiresVirtualFraming)`.
+2. If the sentinel error is detected, the gates bypass the normal rejection flow and allow the image to proceed down the pipeline as if it were valid.
+3. The image finally reaches `FitImage()`, where the `VirtualFramer` handles the actual composition: generating a blurred background and painting the uncropped image in the center.
+4. It tags the image with `VirtualFramed:<resolution>` in `ProcessingFlags`.
+
+This Sentinel Error pattern strictly decouples the *intent to rescue* (during the gate checks) from the *act of rescuing* (during `FitImage`), ensuring that no expensive processing occurs until absolutely necessary.
+
+### 9.2 Tune Image Dynamic Lock
+
+When the user opens the "Tune Image" dialog from the system tray, the UI queries the `SmartImageProcessor` *on the fly* to determine if the image is natively compatible with the current monitor and SmartFit mode.
+
+- **If Incompatible (Quality Mode)**: The user is locked out of unchecking the "Enable Frame" box. They can adjust frame size, matting, and wall color, but the pipeline enforces the frame to prevent a catastrophic manual crop.
+- **If Compatible (or Flexibility Mode)**: The user can freely uncheck the frame, and the system bypasses the normal `downloader.go` pipeline entirely, directly routing the raw master image through `FitImage` with the user's manual 9-slice anchor choices.

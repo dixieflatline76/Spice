@@ -1449,7 +1449,7 @@ func drawCrosshair(size int, col color.NRGBA) image.Image {
 // The window stays open after selection, showing a processing overlay and redrawing
 // with the updated active anchor when reprocessing completes.
 // ShowTuneImagePopup displays the popup for tuning images.
-func (sa *SpiceApp) ShowTuneImagePopup(monitorID int, currentOpts provider.TuningOptions, effectiveOpts provider.TuningOptions, labels [9]string, values [9]provider.CropAnchor, onSelect func(opts provider.TuningOptions, onDone func())) {
+func (sa *SpiceApp) ShowTuneImagePopup(monitorID int, currentOpts provider.TuningOptions, effectiveOpts provider.TuningOptions, labels [9]string, values [9]provider.CropAnchor, lockFrame bool, onSelect func(opts provider.TuningOptions, onDone func())) {
 	// Guard: skip if OpenGL is unavailable.
 	if !sysinfo.CanCreateWindows() {
 		utilLog.Println("OpenGL unavailable — anchor popup cannot be created")
@@ -1667,6 +1667,9 @@ func (sa *SpiceApp) ShowTuneImagePopup(monitorID int, currentOpts provider.Tunin
 
 		// Setup initial state FIRST (before attaching callbacks that trigger backend sync)
 		frameToggle.SetChecked(activeOpts.FrameOverride == provider.FrameOverrideForceOn)
+		if lockFrame {
+			frameToggle.Disable()
+		}
 		mattingToggle.SetChecked(activeOpts.Matting == provider.MattingOverrideOn)
 
 		if activeOpts.WallColor == provider.WallColorOverrideAlgorithmic {

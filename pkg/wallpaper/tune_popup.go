@@ -68,8 +68,17 @@ func (wp *Plugin) showTuneImagePopup(monitorID int) {
 			effectiveOpts.WallColor = provider.WallColorOverrideNeutral
 		}
 	}
+	// Determine if the frame should be locked
+	lockFrame := false
+	if effectiveOpts.FrameOverride == provider.FrameOverrideForceOn {
+		// Only lock if the image is actually incompatible with the current SmartFit mode.
+		// A perfectly 16:9 museum piece doesn't need to be locked even if framed by museum mode.
+		if err := wp.imgProcessor.CheckCompatibility(mc.State.CurrentImage.Width, mc.State.CurrentImage.Height, mc.Monitor.Rect.Dx(), mc.Monitor.Rect.Dy()); err != nil {
+			lockFrame = true
+		}
+	}
 
-	wp.manager.ShowTuneImagePopup(monitorID, currentOpts, effectiveOpts, anchorLabels, anchorValues,
+	wp.manager.ShowTuneImagePopup(monitorID, currentOpts, effectiveOpts, anchorLabels, anchorValues, lockFrame,
 		func(opts provider.TuningOptions, onDone func()) {
 			log.Debugf("showTuneImagePopup: User selected options %v for monitor %d", opts, monitorID)
 			go func() {
