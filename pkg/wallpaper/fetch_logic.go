@@ -159,8 +159,8 @@ func (wp *Plugin) RefreshImagesAndPulse() {
 		// Trigger immediate fetch (Forced because we just applied settings)
 		wp.FetchNewImages(true)
 
-		// Wait for images using event driven notification (up to 15s)
-		ctx, cancel := context.WithTimeout(wp.ctx, 15*time.Second)
+		// Wait for images using event driven notification (up to 60s to account for large slow fetches)
+		ctx, cancel := context.WithTimeout(wp.ctx, 60*time.Second)
 		defer cancel()
 
 		log.Debugf("[Init] Waiting for images before initial pulse...")
@@ -188,8 +188,8 @@ func (wp *Plugin) fetchFromProvider(fetchCtx context.Context, q ImageQuery, p pr
 	page := pg.Value()
 	log.Debugf("Fetching from provider: %s (Query: %s, Page: %d)", q.Provider, q.Description, page)
 
-	// Add timeout to prevent hangs
-	ctx, cancel := context.WithTimeout(fetchCtx, 30*time.Second)
+	// Add timeout to prevent hangs (increased to 60s to allow sequential API scraping loops to complete)
+	ctx, cancel := context.WithTimeout(fetchCtx, 60*time.Second)
 	defer cancel()
 
 	// Rate limit API calls via PacedProvider interface
