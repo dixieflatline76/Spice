@@ -37,7 +37,20 @@
                 "KMSsp211",
                 "KMSr14",
                 "KMS6394"
-            ]
+            ],
+            "name_translations": {
+                "fr": "⭐ Le Meilleur du SMK",
+                "es": "⭐ Lo Mejor del SMK",
+                "de": "⭐ Das Beste aus dem SMK",
+                "it": "⭐ Il Meglio del SMK",
+                "zh-CN": "⭐ 丹麦国立美术馆精选",
+                "zh-TW": "⭐ 丹麥國立美術館精選",
+                "ja": "⭐ SMKの名作",
+                "ko": "⭐ SMK 베스트",
+                "ru": "⭐ Лучшее из SMK",
+                "da": "⭐ Det Bedste fra SMK",
+                "nl": "⭐ Het Beste van SMK"
+            }
         },
         {
             "key": "Danish & Nordic Art (1750-1900)",
@@ -104,7 +117,20 @@
                 "KMS8588",
                 "KMS3402",
                 "KMS4888"
-            ]
+            ],
+            "name_translations": {
+                "fr": "Art Danois et Nordique (1750-1900)",
+                "es": "Arte Danés y Nórdico (1750-1900)",
+                "de": "Dänische & Nordische Kunst (1750-1900)",
+                "it": "Arte Danese e Nordica (1750-1900)",
+                "zh-CN": "丹麦与北欧艺术 (1750-1900)",
+                "zh-TW": "丹麥與北歐藝術 (1750-1900)",
+                "ja": "デンマークと北欧の美術 (1750-1900)",
+                "ko": "덴마크 및 북유럽 미술 (1750-1900)",
+                "ru": "Датское и Северное Искусство (1750-1900)",
+                "da": "Dansk og Nordisk Kunst (1750-1900)",
+                "nl": "Deense en Noordse Kunst (1750-1900)"
+            }
         },
         {
             "key": "European Old Masters (1300-1800)",
@@ -125,7 +151,20 @@
                 "KKSgb16521",
                 "KMS5493",
                 "KKSgb4811"
-            ]
+            ],
+            "name_translations": {
+                "fr": "Grands Maîtres Européens (1300-1800)",
+                "es": "Viejos Maestros Europeos (1300-1800)",
+                "de": "Alte Meister (1300-1800)",
+                "it": "Antichi Maestri Europei (1300-1800)",
+                "zh-CN": "欧洲古典大师 (1300-1800)",
+                "zh-TW": "歐洲古典大師 (1300-1800)",
+                "ja": "ヨーロッパ古典巨匠 (1300-1800)",
+                "ko": "유럽 고전 거장 (1300-1800)",
+                "ru": "Старые Мастера (1300-1800)",
+                "da": "Gamle Mestre (1300-1800)",
+                "nl": "Oude Meesters (1300-1800)"
+            }
         },
         {
             "key": "French Art (1900-1930)",
@@ -141,7 +180,20 @@
                 "KMS8867",
                 "KMSr157",
                 "KKS6417"
-            ]
+            ],
+            "name_translations": {
+                "fr": "Art Français (1900-1930)",
+                "es": "Arte Francés (1900-1930)",
+                "de": "Französische Kunst (1900-1930)",
+                "it": "Arte Francese (1900-1930)",
+                "zh-CN": "法国艺术 (1900-1930)",
+                "zh-TW": "法國藝術 (1900-1930)",
+                "ja": "フランス美術 (1900-1930)",
+                "ko": "프랑스 미술 (1900-1930)",
+                "ru": "Французское Искусство (1900-1930)",
+                "da": "Fransk Kunst (1900-1930)",
+                "nl": "Franse Kunst (1900-1930)"
+            }
         },
         {
             "key": "Danish Modernism",
@@ -161,7 +213,20 @@
                 "KMS9062",
                 "KMS4385",
                 "KMS7070"
-            ]
+            ],
+            "name_translations": {
+                "fr": "Modernisme Danois",
+                "es": "Modernismo Danés",
+                "de": "Dänische Moderne",
+                "it": "Modernismo Danese",
+                "zh-CN": "丹麦现代主义",
+                "zh-TW": "丹麥現代主義",
+                "ja": "デンマーク・モダニズム",
+                "ko": "덴마크 모더니즘",
+                "ru": "Датский Модернизм",
+                "da": "Dansk Modernisme",
+                "nl": "Deens Modernisme"
+            }
         },
         {
             "key": "Other Highlights",
@@ -170,7 +235,20 @@
             "ids": [
                 "KMS8241",
                 "KMS409"
-            ]
+            ],
+            "name_translations": {
+                "fr": "Autres Incontournables",
+                "es": "Otras Obras Destacadas",
+                "de": "Weitere Highlights",
+                "it": "Altri Capolavori",
+                "zh-CN": "其他精选",
+                "zh-TW": "其他精選",
+                "ja": "その他の見どころ",
+                "ko": "기타 하이라이트",
+                "ru": "Другие Шедевры",
+                "da": "Andre Højdepunkter",
+                "nl": "Andere Hoogtepunten"
+            }
         },
         {
             "ids": [

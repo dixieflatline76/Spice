@@ -32,11 +32,24 @@
                 "89c78d89-8afc-4205-aae6-76e60295c22d",
                 "71d9c889-377c-4a18-8980-689825f339bf",
                 "91a4e080-feda-4afa-aee8-826ef3feb46e"
-            ]
+            ],
+            "name_translations": {
+                "fr": "⭐ Le Meilleur du Getty",
+                "es": "⭐ Lo Mejor de Getty",
+                "de": "⭐ Das Beste aus dem Getty",
+                "it": "⭐ Il Meglio del Getty",
+                "zh-CN": "⭐ 盖蒂精选",
+                "zh-TW": "⭐ 蓋蒂精選",
+                "ja": "⭐ ゲティの名作",
+                "ko": "⭐ 게티 베스트",
+                "ru": "⭐ Лучшее из Гетти",
+                "da": "⭐ Det Bedste fra Getty",
+                "nl": "⭐ Het Beste van Getty"
+            }
         },
         {
             "key": "getty_paintings",
-            "name": "\ud83c\udfa8 European Paintings",
+            "name": "🎨 European Paintings",
             "type": "curated",
             "ids": [
                 "9c3b07db-021e-477a-b5f5-fc190aaa7ec1",
@@ -73,11 +86,24 @@
                 "28eab6b6-b670-49f2-b508-47b58ab1c763",
                 "fb9fd87a-74a0-4655-a553-49a50c98a6a9",
                 "d5265ca9-f3d4-48af-b3c1-ccd7993e2467"
-            ]
+            ],
+            "name_translations": {
+                "fr": "🎨 Peintures Européennes",
+                "es": "🎨 Pinturas Europeas",
+                "de": "🎨 Europäische Gemälde",
+                "it": "🎨 Dipinti Europei",
+                "zh-CN": "🎨 欧洲绘画",
+                "zh-TW": "🎨 歐洲繪畫",
+                "ja": "🎨 ヨーロッパ絵画",
+                "ko": "🎨 유럽 회화",
+                "ru": "🎨 Европейские Картины",
+                "da": "🎨 Europæiske Malerier",
+                "nl": "🎨 Europese Schilderijen"
+            }
         },
         {
             "key": "getty_photography",
-            "name": "\ud83d\udcf7 Vintage Photography",
+            "name": "📷 Vintage Photography",
             "type": "curated",
             "ids": [
                 "a21fa9d8-e881-4f04-8f6d-a7a2d4e84e2f",
@@ -87,11 +113,24 @@
                 "f1d493ca-6162-4d99-88d7-96bd36e84ce5",
                 "d42c73a9-3bd5-477a-aebd-b954cb5aa293",
                 "91a4e080-feda-4afa-aee8-826ef3feb46e"
-            ]
+            ],
+            "name_translations": {
+                "fr": "📷 Photographie Ancienne",
+                "es": "📷 Fotografía Vintage",
+                "de": "📷 Historische Fotografie",
+                "it": "📷 Fotografia d'Epoca",
+                "zh-CN": "📷 老照片",
+                "zh-TW": "📷 老照片",
+                "ja": "📷 ヴィンテージ写真",
+                "ko": "📷 빈티지 사진",
+                "ru": "📷 Винтажная Фотография",
+                "da": "📷 Vintage Fotografi",
+                "nl": "📷 Vintage Fotografie"
+            }
         },
         {
             "key": "getty_antiquities",
-            "name": "\ud83c\udfdb\ufe0f Antiquities & Artifacts",
+            "name": "🏛️ Antiquities & Artifacts",
             "type": "curated",
             "ids": [
                 "796d9f41-1948-49af-924b-4b86dbc9ebe7",
@@ -101,7 +140,20 @@
                 "85e1081f-4094-4e4b-96cf-70d83295d96f",
                 "89c78d89-8afc-4205-aae6-76e60295c22d",
                 "23fdde63-303a-42db-b64f-13a779a8add8"
-            ]
+            ],
+            "name_translations": {
+                "fr": "🏛️ Antiquités et Artéfacts",
+                "es": "🏛️ Antigüedades y Artefactos",
+                "de": "🏛️ Antiken & Artefakte",
+                "it": "🏛️ Antichità e Manufatti",
+                "zh-CN": "🏛️ 古物与文物",
+                "zh-TW": "🏛️ 古物與文物",
+                "ja": "🏛️ 古代遺物と工芸品",
+                "ko": "🏛️ 고대 유물 및 공예품",
+                "ru": "🏛️ Древности и Артефакты",
+                "da": "🏛️ Antikviteter & Artefakter",
+                "nl": "🏛️ Oudheden & Artefacten"
+            }
         }
     ]
 }

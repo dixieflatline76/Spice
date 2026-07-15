@@ -35,7 +35,20 @@
                 69780,
                 81558,
                 109780
-            ]
+            ],
+            "name_translations": {
+                "fr": "⭐ Le Meilleur de l'AIC",
+                "es": "⭐ Lo Mejor del AIC",
+                "de": "⭐ Das Beste aus dem AIC",
+                "it": "⭐ Il Meglio dell'AIC",
+                "zh-CN": "⭐ 芝加哥艺术博物馆精选",
+                "zh-TW": "⭐ 芝加哥藝術博物館精選",
+                "ja": "⭐ AICの名作",
+                "ko": "⭐ AIC 베스트",
+                "ru": "⭐ Лучшее из AIC",
+                "da": "⭐ Det Bedste fra AIC",
+                "nl": "⭐ Het Beste van AIC"
+            }
         },
         "artic_impressionism": {
             "name": "Impressionism & Post-Impressionism",
@@ -69,7 +82,20 @@
                 75507,
                 59944,
                 59908
-            ]
+            ],
+            "name_translations": {
+                "fr": "Impressionnisme et Post-Impressionnisme",
+                "es": "Impresionismo y Postimpresionismo",
+                "de": "Impressionismus & Post-Impressionismus",
+                "it": "Impressionismo e Post-Impressionismo",
+                "zh-CN": "印象派与后印象派",
+                "zh-TW": "印象派與後印象派",
+                "ja": "印象派およびポスト印象派",
+                "ko": "인상주의 및 후기 인상주의",
+                "ru": "Импрессионизм и Постимпрессионизм",
+                "da": "Impressionisme & Post-Impressionisme",
+                "nl": "Impressionisme en Post-impressionisme"
+            }
         },
         "artic_american": {
             "name": "American Art",
@@ -79,7 +105,20 @@
                 120154,
                 13742,
                 65290
-            ]
+            ],
+            "name_translations": {
+                "fr": "Art Américain",
+                "es": "Arte Americano",
+                "de": "Amerikanische Kunst",
+                "it": "Arte Americana",
+                "zh-CN": "美国艺术",
+                "zh-TW": "美國藝術",
+                "ja": "アメリカ美術",
+                "ko": "미국 미술",
+                "ru": "Американское Искусство",
+                "da": "Amerikansk Kunst",
+                "nl": "Amerikaanse Kunst"
+            }
         },
         "artic_asian": {
             "name": "Asian Art",
@@ -87,7 +126,20 @@
                 35620,
                 6762,
                 259172
-            ]
+            ],
+            "name_translations": {
+                "fr": "Art Asiatique",
+                "es": "Arte Asiático",
+                "de": "Asiatische Kunst",
+                "it": "Arte Asiatica",
+                "zh-CN": "亚洲艺术",
+                "zh-TW": "亞洲藝術",
+                "ja": "アジア美術",
+                "ko": "아시아 미술",
+                "ru": "Азиатское Искусство",
+                "da": "Asiatisk Kunst",
+                "nl": "Aziatische Kunst"
+            }
         },
         "artic_modern": {
             "name": "Modern & Contemporary Art",
@@ -96,7 +148,20 @@
                 87045,
                 152437,
                 8987
-            ]
+            ],
+            "name_translations": {
+                "fr": "Art Moderne et Contemporain",
+                "es": "Arte Moderno y Contemporáneo",
+                "de": "Moderne & Zeitgenössische Kunst",
+                "it": "Arte Moderna e Contemporanea",
+                "zh-CN": "现代与当代艺术",
+                "zh-TW": "現代與當代藝術",
+                "ja": "近現代美術",
+                "ko": "근현대 미술",
+                "ru": "Современное Искусство",
+                "da": "Moderne og Samtidskunst",
+                "nl": "Moderne en Hedendaagse Kunst"
+            }
         },
         "artic_european": {
             "name": "European Painting & Sculpture",
@@ -132,7 +197,20 @@
                 112080,
                 112113,
                 106307
-            ]
+            ],
+            "name_translations": {
+                "fr": "Peinture et Sculpture Européennes",
+                "es": "Pintura y Escultura Europea",
+                "de": "Europäische Malerei und Skulptur",
+                "it": "Pittura e Scultura Europea",
+                "zh-CN": "欧洲绘画与雕塑",
+                "zh-TW": "歐洲繪畫與雕塑",
+                "ja": "ヨーロッパ絵画と彫刻",
+                "ko": "유럽 회화 및 조각",
+                "ru": "Европейская Живопись и Скульптура",
+                "da": "Europæisk Maleri og Skulptur",
+                "nl": "Europese Schilder- en Beeldhouwkunst"
+            }
         }
     },
     "collections": [
@@ -171,7 +249,20 @@
                 69780,
                 81558,
                 109780
-            ]
+            ],
+            "name_translations": {
+                "fr": "⭐ Le Meilleur de l'AIC",
+                "es": "⭐ Lo Mejor del AIC",
+                "de": "⭐ Das Beste aus dem AIC",
+                "it": "⭐ Il Meglio dell'AIC",
+                "zh-CN": "⭐ 芝加哥艺术博物馆精选",
+                "zh-TW": "⭐ 芝加哥藝術博物館精選",
+                "ja": "⭐ AICの名作",
+                "ko": "⭐ AIC 베스트",
+                "ru": "⭐ Лучшее из AIC",
+                "da": "⭐ Det Bedste fra AIC",
+                "nl": "⭐ Het Beste van AIC"
+            }
         },
         {
             "key": "artic_impressionism",
@@ -207,7 +298,20 @@
                 75507,
                 59944,
                 59908
-            ]
+            ],
+            "name_translations": {
+                "fr": "Impressionnisme et Post-Impressionnisme",
+                "es": "Impresionismo y Postimpresionismo",
+                "de": "Impressionismus & Post-Impressionismus",
+                "it": "Impressionismo e Post-Impressionismo",
+                "zh-CN": "印象派与后印象派",
+                "zh-TW": "印象派與後印象派",
+                "ja": "印象派およびポスト印象派",
+                "ko": "인상주의 및 후기 인상주의",
+                "ru": "Импрессионизм и Постимпрессионизм",
+                "da": "Impressionisme & Post-Impressionisme",
+                "nl": "Impressionisme en Post-impressionisme"
+            }
         },
         {
             "key": "artic_american",
@@ -219,7 +323,20 @@
                 120154,
                 13742,
                 65290
-            ]
+            ],
+            "name_translations": {
+                "fr": "Art Américain",
+                "es": "Arte Americano",
+                "de": "Amerikanische Kunst",
+                "it": "Arte Americana",
+                "zh-CN": "美国艺术",
+                "zh-TW": "美國藝術",
+                "ja": "アメリカ美術",
+                "ko": "미국 미술",
+                "ru": "Американское Искусство",
+                "da": "Amerikansk Kunst",
+                "nl": "Amerikaanse Kunst"
+            }
         },
         {
             "key": "artic_asian",
@@ -229,7 +346,20 @@
                 35620,
                 6762,
                 259172
-            ]
+            ],
+            "name_translations": {
+                "fr": "Art Asiatique",
+                "es": "Arte Asiático",
+                "de": "Asiatische Kunst",
+                "it": "Arte Asiatica",
+                "zh-CN": "亚洲艺术",
+                "zh-TW": "亞洲藝術",
+                "ja": "アジア美術",
+                "ko": "아시아 미술",
+                "ru": "Азиатское Искусство",
+                "da": "Asiatisk Kunst",
+                "nl": "Aziatische Kunst"
+            }
         },
         {
             "key": "artic_modern",
@@ -240,7 +370,20 @@
                 87045,
                 152437,
                 8987
-            ]
+            ],
+            "name_translations": {
+                "fr": "Art Moderne et Contemporain",
+                "es": "Arte Moderno y Contemporáneo",
+                "de": "Moderne & Zeitgenössische Kunst",
+                "it": "Arte Moderna e Contemporanea",
+                "zh-CN": "现代与当代艺术",
+                "zh-TW": "現代與當代藝術",
+                "ja": "近現代美術",
+                "ko": "근현대 미술",
+                "ru": "Современное Искусство",
+                "da": "Moderne og Samtidskunst",
+                "nl": "Moderne en Hedendaagse Kunst"
+            }
         },
         {
             "key": "artic_european",
@@ -278,7 +421,20 @@
                 112080,
                 112113,
                 106307
-            ]
+            ],
+            "name_translations": {
+                "fr": "Peinture et Sculpture Européennes",
+                "es": "Pintura y Escultura Europea",
+                "de": "Europäische Malerei und Skulptur",
+                "it": "Pittura e Scultura Europea",
+                "zh-CN": "欧洲绘画与雕塑",
+                "zh-TW": "歐洲繪畫與雕塑",
+                "ja": "ヨーロッパ絵画と彫刻",
+                "ko": "유럽 회화 및 조각",
+                "ru": "Европейская Живопись и Скульптура",
+                "da": "Europæisk Maleri og Skulptur",
+                "nl": "Europese Schilder- en Beeldhouwkunst"
+            }
         },
         {
             "ids": [

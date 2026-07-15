@@ -215,37 +215,115 @@
             ],
             "key": "rijks_masterpieces",
             "name": "⭐ Best of Rijksmuseum",
-            "type": "curated"
+            "type": "curated",
+            "name_translations": {
+                "fr": "⭐ Le Meilleur du Rijksmuseum",
+                "es": "⭐ Lo Mejor del Rijksmuseum",
+                "de": "⭐ Das Beste aus dem Rijksmuseum",
+                "it": "⭐ Il Meglio del Rijksmuseum",
+                "zh-CN": "⭐ 荷兰国立博物馆精选",
+                "zh-TW": "⭐ 荷蘭國立博物館精選",
+                "ja": "⭐ アムステルダム国立美術館の名作",
+                "ko": "⭐ 국립미술관 베스트",
+                "ru": "⭐ Лучшее из Рейксмюзеума",
+                "da": "⭐ Det Bedste fra Rijksmuseum",
+                "nl": "⭐ Het Beste van het Rijksmuseum"
+            }
         },
         {
             "key": "rijks_golden_age",
             "name": "Dutch Golden Age",
             "search_params": "type=painting&creationDate.from=1600&creationDate.to=1700&imageAvailable=true",
-            "type": "search"
+            "type": "search",
+            "name_translations": {
+                "fr": "Siècle d'Or Néerlandais",
+                "es": "Edad de Oro Holandesa",
+                "de": "Goldenes Zeitalter der Niederlande",
+                "it": "Secolo d'Oro Olandese",
+                "zh-CN": "荷兰黄金时代",
+                "zh-TW": "荷蘭黃金時代",
+                "ja": "オランダ黄金時代",
+                "ko": "네덜란드 황금시대",
+                "ru": "Золотой Век Голландии",
+                "da": "Den Hollandske Guldalder",
+                "nl": "Nederlandse Gouden Eeuw"
+            }
         },
         {
             "key": "rijks_rembrandt",
             "name": "Rembrandt",
             "search_params": "type=painting&creator=Rembrandt+van+Rijn&imageAvailable=true",
-            "type": "search"
+            "type": "search",
+            "name_translations": {
+                "fr": "Rembrandt",
+                "es": "Rembrandt",
+                "de": "Rembrandt",
+                "it": "Rembrandt",
+                "zh-CN": "伦勃朗",
+                "zh-TW": "倫勃朗",
+                "ja": "レンブラント",
+                "ko": "렘브란트",
+                "ru": "Рембрандт",
+                "da": "Rembrandt",
+                "nl": "Rembrandt"
+            }
         },
         {
             "key": "rijks_landscapes",
             "name": "Dutch Landscapes",
             "search_params": "type=painting&description=landscape&imageAvailable=true",
-            "type": "search"
+            "type": "search",
+            "name_translations": {
+                "fr": "Paysages Néerlandais",
+                "es": "Paisajes Holandeses",
+                "de": "Niederländische Landschaften",
+                "it": "Paesaggi Olandesi",
+                "zh-CN": "荷兰风景画",
+                "zh-TW": "荷蘭風景畫",
+                "ja": "オランダ風景画",
+                "ko": "네덜란드 풍경화",
+                "ru": "Голландские Пейзажи",
+                "da": "Hollandske Landskaber",
+                "nl": "Nederlandse Landschappen"
+            }
         },
         {
             "key": "rijks_vermeer",
             "name": "Vermeer",
             "search_params": "type=painting&creator=Johannes+Vermeer&imageAvailable=true",
-            "type": "search"
+            "type": "search",
+            "name_translations": {
+                "fr": "Vermeer",
+                "es": "Vermeer",
+                "de": "Vermeer",
+                "it": "Vermeer",
+                "zh-CN": "维米尔",
+                "zh-TW": "維米爾",
+                "ja": "フェルメール",
+                "ko": "베르메르",
+                "ru": "Вермеер",
+                "da": "Vermeer",
+                "nl": "Vermeer"
+            }
         },
         {
             "key": "rijks_maritime",
             "name": "Maritime & Seascapes",
             "search_params": "type=painting&description=sea&imageAvailable=true",
-            "type": "search"
+            "type": "search",
+            "name_translations": {
+                "fr": "Marines",
+                "es": "Marinas y Paisajes Marinos",
+                "de": "Maritimes & Seestücke",
+                "it": "Marine",
+                "zh-CN": "海洋与海景",
+                "zh-TW": "海洋與海景",
+                "ja": "海洋と海景",
+                "ko": "해양 및 바다 풍경",
+                "ru": "Морские Пейзажи",
+                "da": "Maritime og Søstykker",
+                "nl": "Maritiem en Zeegezichten"
+            }
         },
         {
             "items": [
