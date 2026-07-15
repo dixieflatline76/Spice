@@ -199,8 +199,12 @@ func (c *Config) loadFromPrefs() error {
 		return err
 	}
 
-	if c.VirtualFrameSize == 0 {
-		c.VirtualFrameSize = 0.8
+	if c.VirtualFrameSize == 0 || c.VirtualFrameSize == 0.8 {
+		// Enforce new defaults for new users (0) and upgrade existing users (0.8)
+		c.VirtualFrameSize = 0.85
+		c.VirtualFramingFallback = true
+		c.VirtualPaperMatting = true
+		c.VirtualWallColor = WallAlgorithmic
 	}
 
 	// Execute Migration Chain
