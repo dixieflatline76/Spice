@@ -24,19 +24,13 @@
                 "DEP2",
                 "KMS3378",
                 "KMSr135",
-                "KMSr76",
                 "KMSr79",
-                "KMSr86",
-                "KMSr87",
-                "KMSr81",
-                "KMS8867",
                 "KMSr157",
                 "KMS3841",
                 "KMS3939",
                 "KMS9052",
                 "KMS3800",
-                "KMS4882",
-                "KMS4386"
+                "KMS4882"
             ]
         },
         {
@@ -176,6 +170,30 @@
             "ids": [
                 "KMS8241",
                 "KMS409"
+            ]
+        },
+        {
+            "categoryName": "Artistic Nudes",
+            "categoryNameTranslations": {
+                "fr": "Nus Artistiques",
+                "es": "Desnudos Artísticos",
+                "de": "Künstlerische Akte",
+                "it": "Nudi Artistici",
+                "zh-CN": "艺术裸体",
+                "zh-TW": "藝術裸體",
+                "ja": "芸術的なヌード",
+                "ko": "예술적 누드",
+                "ru": "Художественная Обнаженная Натура",
+                "da": "Kunstneriske Akter",
+                "nl": "Artistieke Naakten"
+            },
+            "ids": [
+                "KMSr81",
+                "KMSr86",
+                "KMSr87",
+                "KMS8867",
+                "KMSr76",
+                "KMS4386"
             ]
         }
     ]

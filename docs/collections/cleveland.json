@@ -27,7 +27,6 @@
                 155783,
                 147017,
                 128392,
-                138464,
                 115405,
                 135185,
                 142298,
@@ -40,32 +39,53 @@
         {
             "key": "cma_american",
             "name": "American Painting",
-            "search_params": "has_image=1\u0026type=Painting\u0026department=American+Painting+and+Sculpture",
+            "search_params": "has_image=1&type=Painting&department=American+Painting+and+Sculpture",
             "type": "search"
         },
         {
             "key": "cma_european",
             "name": "European Painting",
-            "search_params": "has_image=1\u0026type=Painting\u0026department=European+Painting+and+Sculpture",
+            "search_params": "has_image=1&type=Painting&department=European+Painting+and+Sculpture",
             "type": "search"
         },
         {
             "key": "cma_impressionism",
             "name": "Impressionism",
-            "search_params": "has_image=1\u0026type=Painting\u0026q=impressionism",
+            "search_params": "has_image=1&type=Painting&q=impressionism",
             "type": "search"
         },
         {
             "key": "cma_asian",
             "name": "Asian Art",
-            "search_params": "has_image=1\u0026type=Painting\u0026department=Chinese+Art",
+            "search_params": "has_image=1&type=Painting&department=Chinese+Art",
             "type": "search"
         },
         {
             "key": "cma_modern",
-            "name": "Modern \u0026 Contemporary",
-            "search_params": "has_image=1\u0026type=Painting\u0026department=Modern+European+Painting+and+Sculpture",
+            "name": "Modern & Contemporary",
+            "search_params": "has_image=1&type=Painting&department=Modern+European+Painting+and+Sculpture",
             "type": "search"
+        },
+        {
+            "ids": [
+                147043,
+                138464,
+                143547
+            ],
+            "categoryName": "Artistic Nudes",
+            "categoryNameTranslations": {
+                "fr": "Nus Artistiques",
+                "es": "Desnudos Artísticos",
+                "de": "Künstlerische Akte",
+                "it": "Nudi Artistici",
+                "zh-CN": "艺术裸体",
+                "zh-TW": "藝術裸體",
+                "ja": "芸術的なヌード",
+                "ko": "예술적 누드",
+                "ru": "Художественная Обнаженная Натура",
+                "da": "Kunstneriske Akter",
+                "nl": "Artistieke Naakten"
+            }
         }
     ],
     "description": "Cleveland Museum of Art: Curated Collections",

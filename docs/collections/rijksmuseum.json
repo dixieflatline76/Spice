@@ -220,32 +220,59 @@
         {
             "key": "rijks_golden_age",
             "name": "Dutch Golden Age",
-            "search_params": "type=painting\u0026creationDate.from=1600\u0026creationDate.to=1700\u0026imageAvailable=true",
+            "search_params": "type=painting&creationDate.from=1600&creationDate.to=1700&imageAvailable=true",
             "type": "search"
         },
         {
             "key": "rijks_rembrandt",
             "name": "Rembrandt",
-            "search_params": "type=painting\u0026creator=Rembrandt+van+Rijn\u0026imageAvailable=true",
+            "search_params": "type=painting&creator=Rembrandt+van+Rijn&imageAvailable=true",
             "type": "search"
         },
         {
             "key": "rijks_landscapes",
             "name": "Dutch Landscapes",
-            "search_params": "type=painting\u0026description=landscape\u0026imageAvailable=true",
+            "search_params": "type=painting&description=landscape&imageAvailable=true",
             "type": "search"
         },
         {
             "key": "rijks_vermeer",
             "name": "Vermeer",
-            "search_params": "type=painting\u0026creator=Johannes+Vermeer\u0026imageAvailable=true",
+            "search_params": "type=painting&creator=Johannes+Vermeer&imageAvailable=true",
             "type": "search"
         },
         {
             "key": "rijks_maritime",
-            "name": "Maritime \u0026 Seascapes",
-            "search_params": "type=painting\u0026description=sea\u0026imageAvailable=true",
+            "name": "Maritime & Seascapes",
+            "search_params": "type=painting&description=sea&imageAvailable=true",
             "type": "search"
+        },
+        {
+            "categoryName": "Artistic Nudes",
+            "categoryNameTranslations": {
+                "fr": "Nus Artistiques",
+                "es": "Desnudos Artísticos",
+                "de": "Künstlerische Akte",
+                "it": "Nudi Artistici",
+                "zh-CN": "艺术裸体",
+                "zh-TW": "藝術裸體",
+                "ja": "芸術的なヌード",
+                "ko": "예술적 누드",
+                "ru": "Художественная Обнаженная Натура",
+                "da": "Kunstneriske Akter",
+                "nl": "Artistieke Naakten"
+            },
+            "items": [
+                {
+                    "object_number": "SK-A-3841"
+                },
+                {
+                    "object_number": "SK-C-1351"
+                },
+                {
+                    "object_number": "SK-A-26"
+                }
+            ]
         }
     ],
     "description": "Rijksmuseum: Curated Collections",
