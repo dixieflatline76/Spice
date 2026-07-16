@@ -7,11 +7,13 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"sync"
 
 	"github.com/piprate/json-gold/ld"
 
+	"github.com/dixieflatline76/Spice/v2/config"
 	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/schema"
@@ -301,7 +303,7 @@ func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, _ string) *schem
 	var curatedItems []schema.ItemSchema
 	if col != nil {
 		for _, entry := range col.Entries {
-			curatedItems = append(curatedItems, p.makeCollectionItem(entry.Name, entry.NameTranslations, entry.Key))
+			curatedItems = append(curatedItems, p.makeCollectionItem(sm, entry))
 		}
 	}
 
@@ -315,7 +317,7 @@ func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, _ string) *schem
 	}
 }
 
-func (p *Provider) makeCollectionItem(label string, translations map[string]string, key string) schema.BoolItem {
+func (p *Provider) makeCollectionItem(sm setting.SettingsManager, entry CollectionEntry) schema.BoolItem {
 	// Helper to find existing query state
 	getQuery := func(key string) (bool, string) {
 		for _, q := range p.cfg.GetQueries() {
@@ -326,20 +328,40 @@ func (p *Provider) makeCollectionItem(label string, translations map[string]stri
 		return false, ""
 	}
 
-	active, _ := getQuery(key)
+	active, _ := getQuery(entry.Key)
+
+	actionText := ""
+	var actionFunc func()
+	if len(entry.IDs) > 0 {
+		actionText = fmt.Sprintf("%d Pieces", len(entry.IDs))
+		
+		// Wire up the hyperlink to open the unpacked local HTML gallery
+		actionFunc = func() {
+			safeName := strings.ReplaceAll(strings.ToLower(entry.Key), " ", "_")
+			fileName := fmt.Sprintf("%s.html", safeName)
+			providerCacheDir := filepath.Join(config.GetWorkingDir(), "cache", strings.ToLower(p.ID()))
+			outPath := filepath.Join(providerCacheDir, fileName)
+			
+			// Open the local HTML file in the default browser using a file URI
+			fileURL := fmt.Sprintf("file:///%s", filepath.ToSlash(outPath))
+			sm.OpenURL(fileURL)
+		}
+	}
 
 	return schema.BoolItem{
-		Name:         p.ID() + "_" + key,
-		Label:        i18n.TMap(label, translations),
+		Name:         p.ID() + "_" + entry.Key,
+		Label:        i18n.TMap(entry.Name, entry.NameTranslations),
+		ActionText:   actionText,
+		ActionFunc:   actionFunc,
 		InitialValue: active,
 		NeedsRefresh: true,
 		ApplyFunc: func(b bool) {
-			_, cid := getQuery(key)
+			_, cid := getQuery(entry.Key)
 			if b {
 				if cid != "" {
 					_ = p.cfg.EnableImageQuery(cid)
 				} else {
-					_, _ = p.cfg.AddProviderQuery(label, key, p.ID(), true, false)
+					_, _ = p.cfg.AddProviderQuery(entry.Name, entry.Key, p.ID(), true, false)
 				}
 			} else {
 				if cid != "" {

@@ -34,8 +34,8 @@ func main() {
 		root = parent
 	}
 
-	destDir := filepath.Join(root, "docs", "collections", "galleries")
-	if err := os.MkdirAll(destDir, 0755); err != nil {
+	baseDestDir := filepath.Join(root, "asset", "galleries")
+	if err := os.MkdirAll(baseDestDir, 0755); err != nil {
 		fmt.Printf("Error creating destination directory: %v\n", err)
 		os.Exit(1)
 	}
@@ -52,7 +52,8 @@ func main() {
 	// Wait a moment for getty to load embedded collection
 	time.Sleep(1 * time.Second)
 
-	if err := gettyProvider.GenerateGalleries(ctx, destDir); err != nil {
+	gettyDest := filepath.Join(baseDestDir, gettyProvider.ID())
+	if err := gettyProvider.GenerateGalleries(ctx, gettyDest); err != nil {
 		fmt.Printf("Getty generator error: %v\n", err)
 	} else {
 		fmt.Println("Getty galleries generated successfully.")

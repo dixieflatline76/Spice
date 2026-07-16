@@ -54,6 +54,7 @@ func InitRemoteCollection(cfg *wallpaper.Config) (*Collection, error) {
 	if err := os.MkdirAll(cacheDir, 0755); err != nil {
 		return &embeddedCollection, fmt.Errorf("failed to create cache dir: %w", err)
 	}
+
 	cachePath := filepath.Join(cacheDir, cacheFileName)
 
 	var wg sync.WaitGroup

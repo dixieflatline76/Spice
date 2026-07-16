@@ -4,7 +4,69 @@ import (
 	"bytes"
 	"fmt"
 	"html/template"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/dixieflatline76/Spice/v2/asset/galleries"
+	"github.com/dixieflatline76/Spice/v2/util/log"
 )
+
+// UnpackAll extracts all pre-generated HTML galleries from the embedded binary assets
+// into the user's local working cache directory. It unpacks them into provider-specific
+// subdirectories (e.g. cache/getty/).
+func UnpackAll(cacheRootDir string) error {
+	providers, err := fs.ReadDir(galleries.EmbeddedGalleries, ".")
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("failed to read embedded galleries root: %w", err)
+	}
+
+	for _, pEntry := range providers {
+		if !pEntry.IsDir() {
+			continue
+		}
+		
+		providerID := pEntry.Name()
+		// Convert to lowercase to match the existing cache folder structure (e.g. "Getty" -> "getty")
+		providerCacheDir := filepath.Join(cacheRootDir, strings.ToLower(providerID))
+		if err := os.MkdirAll(providerCacheDir, 0755); err != nil {
+			log.Printf("Gallery: Failed to create cache dir for %s: %v", providerID, err)
+			continue
+		}
+
+		entries, err := fs.ReadDir(galleries.EmbeddedGalleries, providerID)
+		if err != nil {
+			continue
+		}
+
+		for _, entry := range entries {
+			if entry.IsDir() || filepath.Ext(entry.Name()) != ".html" {
+				continue
+			}
+
+			assetPath := filepath.Join(providerID, entry.Name())
+			data, err := galleries.EmbeddedGalleries.ReadFile(filepath.ToSlash(assetPath))
+			if err != nil {
+				log.Printf("Gallery: Failed to read embedded file %s: %v", assetPath, err)
+				continue
+			}
+
+			outPath := filepath.Join(providerCacheDir, entry.Name())
+			// Only write it if it doesn't exist, to avoid overwriting newer galleries
+			// that the background sync might have generated since the app was built.
+			if _, err := os.Stat(outPath); os.IsNotExist(err) {
+				if err := os.WriteFile(outPath, data, 0644); err != nil {
+					log.Printf("Gallery: Failed to unpack %s to %s: %v", entry.Name(), outPath, err)
+				}
+			}
+		}
+	}
+	return nil
+}
 
 // GenerateHTML takes a collection title and up to 5 image URLs and returns
 // a beautiful virtual gallery wall HTML string.
