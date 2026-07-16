@@ -164,7 +164,7 @@
         {
             "key": "getty_nudes",
             "type": "curated",
-            "name": "Artistic Nudes",
+            "name": "Artistic Nudes (Painting & Sculpture)",
             "name_translations": {
                 "da": "Kunstneriske Akter"
             },
@@ -181,7 +181,29 @@
                 "2ccbcdcc-3260-4b40-9cfa-72efa357df1b",
                 "9c3b07db-021e-477a-b5f5-fc190aaa7ec1",
                 "83b4d6a0-9e9b-4660-a9bc-74efb0f7a5c4",
-                "fb9fd87a-74a0-4655-a553-49a50c98a6a9"
+                "fb9fd87a-74a0-4655-a553-49a50c98a6a9",
+                "107SKZ",
+                "108FAM",
+                "103QS5",
+                "103RAB",
+                "103R0M"
+            ]
+        },
+        {
+            "key": "getty_nudes_vintage",
+            "type": "curated",
+            "name": "Vintage Nudes (Photography)",
+            "name_translations": {
+                "da": "Vintage Akter (Fotografi)"
+            },
+            "ids": [
+                "1049MZ",
+                "104DT3",
+                "104K0Y",
+                "108QC9",
+                "108NMN",
+                "106FEV",
+                "1049BJ"
             ]
         }
     ],
