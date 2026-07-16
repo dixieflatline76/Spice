@@ -1,37 +1,10 @@
 {
+    "description": "Cleveland Museum of Art: Curated Collections",
+    "version": "v2.6.0",
     "collections": [
         {
-            "ids": [
-                141639,
-                92937,
-                151904,
-                106088,
-                93014,
-                135428,
-                143602,
-                136217,
-                170235,
-                110180,
-                134072,
-                172815,
-                171296,
-                136911,
-                150389,
-                145473,
-                140408,
-                125249,
-                125104,
-                122351,
-                136510,
-                155783,
-                147017,
-                128392,
-                115405,
-                135185,
-                142298,
-                92936
-            ],
             "key": "cma_masterpieces",
+            "type": "curated",
             "name": "⭐ Best of Cleveland",
             "name_translations": {
                 "da": "⭐ Det Bedste fra Cleveland",
@@ -46,67 +19,42 @@
                 "zh-CN": "⭐ 克利夫兰精选",
                 "zh-TW": "⭐ 克利夫蘭精選"
             },
-            "type": "curated"
-        },
-        {
-            "key": "cma_american",
-            "name": "American Painting",
-            "name_translations": {
-                "da": "Amerikansk Maleri",
-                "de": "Amerikanische Malerei",
-                "es": "Pintura Americana",
-                "fr": "Peinture Américaine",
-                "it": "Pittura Americana",
-                "ja": "アメリカ絵画",
-                "ko": "미국 회화",
-                "nl": "Amerikaanse Schilderkunst",
-                "ru": "Американская Живопись",
-                "zh-CN": "美国绘画",
-                "zh-TW": "美國繪畫"
-            },
-            "search_params": "has_image=1\u0026type=Painting\u0026department=American+Painting+and+Sculpture",
-            "type": "search"
-        },
-        {
-            "key": "cma_european",
-            "name": "European Painting",
-            "name_translations": {
-                "da": "Europæisk Maleri",
-                "de": "Europäische Malerei",
-                "es": "Pintura Europea",
-                "fr": "Peinture Européenne",
-                "it": "Pittura Europea",
-                "ja": "ヨーロッパ絵画",
-                "ko": "유럽 회화",
-                "nl": "Europese Schilderkunst",
-                "ru": "Европейская Живопись",
-                "zh-CN": "欧洲绘画",
-                "zh-TW": "歐洲繪畫"
-            },
-            "search_params": "has_image=1\u0026type=Painting\u0026department=European+Painting+and+Sculpture",
-            "type": "search"
-        },
-        {
-            "key": "cma_impressionism",
-            "name": "Impressionism",
-            "name_translations": {
-                "da": "Impressionisme",
-                "de": "Impressionismus",
-                "es": "Impresionismo",
-                "fr": "Impressionnisme",
-                "it": "Impressionismo",
-                "ja": "印象派",
-                "ko": "인상주의",
-                "nl": "Impressionisme",
-                "ru": "Импрессионизм",
-                "zh-CN": "印象派",
-                "zh-TW": "印象派"
-            },
-            "search_params": "has_image=1\u0026type=Painting\u0026q=impressionism",
-            "type": "search"
+            "ids": [
+                151904,
+                171296,
+                128392,
+                145450,
+                172815,
+                141639,
+                92936,
+                144968,
+                136510,
+                140078,
+                113202,
+                125247,
+                127571,
+                111811,
+                136911,
+                134072,
+                130163,
+                127227,
+                128072,
+                125234,
+                155860,
+                174043,
+                108544,
+                117901,
+                675579,
+                111518,
+                148008,
+                123985,
+                142771,
+                141744
+            ]
         },
         {
             "key": "cma_asian",
+            "type": "curated",
             "name": "Asian Art",
             "name_translations": {
                 "da": "Asiatisk Kunst",
@@ -121,36 +69,139 @@
                 "zh-CN": "亚洲艺术",
                 "zh-TW": "亞洲藝術"
             },
-            "search_params": "has_image=1\u0026type=Painting\u0026department=Chinese+Art",
-            "type": "search"
-        },
-        {
-            "key": "cma_modern",
-            "name": "Modern \u0026 Contemporary",
-            "name_translations": {
-                "da": "Moderne og Samtidskunst",
-                "de": "Moderne \u0026 Zeitgenössische Kunst",
-                "es": "Moderno y Contemporáneo",
-                "fr": "Moderne et Contemporain",
-                "it": "Moderno e Contemporaneo",
-                "ja": "近現代",
-                "ko": "근현대",
-                "nl": "Modern en Hedendaags",
-                "ru": "Современное Искусство",
-                "zh-CN": "现代与当代",
-                "zh-TW": "現代與當代"
-            },
-            "search_params": "has_image=1\u0026type=Painting\u0026department=Modern+European+Painting+and+Sculpture",
-            "type": "search"
-        },
-        {
             "ids": [
-                147043,
-                138464,
-                143547,
-                145463
-            ],
+                147155,
+                147084,
+                147588,
+                94676,
+                153727,
+                132835,
+                154710,
+                137127,
+                147576,
+                145412,
+                111811,
+                165154,
+                152440
+            ]
+        },
+        {
+            "key": "cma_american",
+            "type": "curated",
+            "name": "American Art & Landscapes",
+            "name_translations": {
+                "da": "Amerikansk Kunst",
+                "de": "Amerikanische Kunst",
+                "es": "Arte Americano",
+                "fr": "Art Américain",
+                "it": "Arte Americana",
+                "ja": "アメリカ美術",
+                "ko": "미국 미술",
+                "nl": "Amerikaanse Kunst",
+                "ru": "Американское Искусство",
+                "zh-CN": "美国艺术",
+                "zh-TW": "美國藝術"
+            },
+            "ids": [
+                92937,
+                151904,
+                172815,
+                172828,
+                156813,
+                127227,
+                117901,
+                92936,
+                144968,
+                102578,
+                141639
+            ]
+        },
+        {
+            "key": "cma_european",
+            "type": "curated",
+            "name": "European Painting",
+            "name_translations": {
+                "da": "Europæisk Maleri",
+                "de": "Europäische Malerei",
+                "es": "Pintura Europea",
+                "fr": "Peinture Européenne",
+                "it": "Pittura Europea",
+                "ja": "ヨーロッパ絵画",
+                "ko": "유럽 회화",
+                "nl": "Europese Schilderkunst",
+                "ru": "Европейская Живопись",
+                "zh-CN": "欧洲绘画",
+                "zh-TW": "歐洲繪畫"
+            },
+            "ids": [
+                128392,
+                145450,
+                125247,
+                113202,
+                136911,
+                130163,
+                128394,
+                128072,
+                135420,
+                135382,
+                127571,
+                136510,
+                140078,
+                136682,
+                117766,
+                109245,
+                173641,
+                170235,
+                131820,
+                128838,
+                125234,
+                141168,
+                155860,
+                108544,
+                150083,
+                174043,
+                151257,
+                142664,
+                140161,
+                138885
+            ]
+        },
+        {
+            "key": "cma_antiquities",
+            "type": "curated",
+            "name": "Antiquities & Artifacts",
+            "name_translations": {
+                "da": "Antikviteter",
+                "de": "Antiken",
+                "es": "Antigüedades",
+                "fr": "Antiquités",
+                "it": "Antichità",
+                "ja": "古美術",
+                "ko": "고대 미술",
+                "nl": "Oudheden",
+                "ru": "Античности",
+                "zh-CN": "文物",
+                "zh-TW": "文物"
+            },
+            "ids": [
+                144277,
+                111518,
+                148008,
+                141744,
+                159536,
+                123985,
+                142771,
+                675579,
+                123616,
+                370537,
+                156420,
+                167459,
+                143775
+            ]
+        },
+        {
             "key": "Artistic Nudes",
+            "type": "curated",
             "name": "Artistic Nudes",
             "name_translations": {
                 "da": "Kunstneriske Akter",
@@ -165,9 +216,15 @@
                 "zh-CN": "艺术裸体",
                 "zh-TW": "藝術裸體"
             },
-            "type": "curated"
+            "ids": [
+                147043,
+                138464,
+                143547,
+                145463,
+                149410,
+                147525,
+                101646
+            ]
         }
-    ],
-    "description": "Cleveland Museum of Art: Curated Collections",
-    "version": "v2.6.0"
+    ]
 }
