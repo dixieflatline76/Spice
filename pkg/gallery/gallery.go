@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/dixieflatline76/Spice/v2/asset/galleries"
 	"github.com/dixieflatline76/Spice/v2/util/log"
@@ -25,11 +26,18 @@ func UnpackAll(cacheRootDir string) error {
 		return fmt.Errorf("failed to read embedded galleries root: %w", err)
 	}
 
+	var execModTime time.Time
+	if execPath, err := os.Executable(); err == nil {
+		if stat, err := os.Stat(execPath); err == nil {
+			execModTime = stat.ModTime()
+		}
+	}
+
 	for _, pEntry := range providers {
 		if !pEntry.IsDir() {
 			continue
 		}
-		
+
 		providerID := pEntry.Name()
 		// Convert to lowercase to match the existing cache folder structure (e.g. "Getty" -> "getty")
 		providerCacheDir := filepath.Join(cacheRootDir, strings.ToLower(providerID))
@@ -56,10 +64,18 @@ func UnpackAll(cacheRootDir string) error {
 			}
 
 			outPath := filepath.Join(providerCacheDir, entry.Name())
-			// Only write it if it doesn't exist, to avoid overwriting newer galleries
-			// that the background sync might have generated since the app was built.
-			if _, err := os.Stat(outPath); os.IsNotExist(err) {
-				if err := os.WriteFile(outPath, data, 0644); err != nil {
+
+			shouldWrite := false
+			if stat, err := os.Stat(outPath); os.IsNotExist(err) {
+				shouldWrite = true
+			} else if err == nil && !execModTime.IsZero() && stat.ModTime().Before(execModTime) {
+				// The cached file is older than the current application binary.
+				// This means the embedded file is from a newer version of the app.
+				shouldWrite = true
+			}
+
+			if shouldWrite {
+				if err := os.WriteFile(outPath, data, 0600); err != nil {
 					log.Printf("Gallery: Failed to unpack %s to %s: %v", entry.Name(), outPath, err)
 				}
 			}
@@ -68,20 +84,9 @@ func UnpackAll(cacheRootDir string) error {
 	return nil
 }
 
-// GenerateHTML takes a collection title and up to 5 image URLs and returns
+// GenerateHTML takes a collection title and image URLs and returns
 // a beautiful virtual gallery wall HTML string.
 func GenerateHTML(title string, imageUrls []string) (string, error) {
-	// Pad or truncate to exactly 5 frames for the layout
-	var frames [5]string
-	for i := 0; i < 5; i++ {
-		if i < len(imageUrls) {
-			frames[i] = imageUrls[i]
-		} else {
-			// Placeholder gradient if not enough images
-			frames[i] = ""
-		}
-	}
-
 	tmplStr := `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -112,9 +117,9 @@ func GenerateHTML(title string, imageUrls []string) (string, error) {
 
         .gallery-container {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 60px;
-            max-width: 1400px;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 40px;
+            max-width: 1600px;
             width: 100%;
             align-items: center;
         }
@@ -134,19 +139,17 @@ func GenerateHTML(title string, imageUrls []string) (string, error) {
 
         .matboard {
             background-color: #fdfdfa;
-            padding: 35px;
+            padding: 25px;
             box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
-            display: flex;
-            justify-content: center;
-            align-items: center;
+            display: inline-block;
         }
 
         .artwork {
-            width: 100%;
+            max-width: 100%;
             height: auto;
+            max-height: 300px;
             display: block;
-            box-shadow: inset 0 0 15px rgba(0,0,0,0.3), 0 2px 5px rgba(0,0,0,0.2);
-            background: linear-gradient(45deg, #8b7355, #cdb49a);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.4);
         }
 
         /* Staggered masonry offsets */
@@ -161,40 +164,13 @@ func GenerateHTML(title string, imageUrls []string) (string, error) {
 <body>
     <h1>{{.Title}}</h1>
     <div class="gallery-container">
-        <!-- Frame 1 -->
+        {{range .Images}}
         <div class="frame">
             <div class="matboard">
-                <div class="artwork" style="aspect-ratio: 3/4; {{if .Image1}}background: url('{{.Image1}}') center/cover;{{end}}"></div>
+                <img class="artwork" src="{{.}}" />
             </div>
         </div>
-        
-        <!-- Frame 2 -->
-        <div class="frame">
-            <div class="matboard">
-                <div class="artwork" style="aspect-ratio: 1/1; {{if .Image2}}background: url('{{.Image2}}') center/cover;{{end}}"></div>
-            </div>
-        </div>
-
-        <!-- Frame 3 (Centerpiece) -->
-        <div class="frame" style="transform: scale(1.1); z-index: 10;">
-            <div class="matboard">
-                <div class="artwork" style="aspect-ratio: 4/3; {{if .Image3}}background: url('{{.Image3}}') center/cover;{{end}}"></div>
-            </div>
-        </div>
-
-        <!-- Frame 4 -->
-        <div class="frame">
-            <div class="matboard">
-                <div class="artwork" style="aspect-ratio: 3/4; {{if .Image4}}background: url('{{.Image4}}') center/cover;{{end}}"></div>
-            </div>
-        </div>
-
-        <!-- Frame 5 -->
-        <div class="frame">
-            <div class="matboard">
-                <div class="artwork" style="aspect-ratio: 4/5; {{if .Image5}}background: url('{{.Image5}}') center/cover;{{end}}"></div>
-            </div>
-        </div>
+        {{end}}
     </div>
 </body>
 </html>`
@@ -204,20 +180,18 @@ func GenerateHTML(title string, imageUrls []string) (string, error) {
 		return "", fmt.Errorf("failed to parse gallery template: %w", err)
 	}
 
+	safeImages := make([]template.URL, len(imageUrls))
+	for i, u := range imageUrls {
+		//nolint:gosec // These URLs are internally generated base64 strings or trusted provider thumbnails
+		safeImages[i] = template.URL(u)
+	}
+
 	data := struct {
 		Title  string
-		Image1 string
-		Image2 string
-		Image3 string
-		Image4 string
-		Image5 string
+		Images []template.URL
 	}{
 		Title:  title,
-		Image1: frames[0],
-		Image2: frames[1],
-		Image3: frames[2],
-		Image4: frames[3],
-		Image5: frames[4],
+		Images: safeImages,
 	}
 
 	var buf bytes.Buffer

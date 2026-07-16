@@ -5,12 +5,13 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
-
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/dixieflatline76/Spice/v2/pkg/curation"
 	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/schema"
@@ -27,8 +28,6 @@ type Provider struct {
 	cfg    *wallpaper.Config
 	client *http.Client
 	mu     sync.RWMutex
-
-	collection *Collection
 
 	// Cache for resolved image details
 	poolCache   map[int]*provider.Image
@@ -48,34 +47,8 @@ func NewProvider(cfg *wallpaper.Config, client *http.Client) *Provider {
 		client:    client,
 		poolCache: make(map[int]*provider.Image),
 	}
-	go func() {
-		col, err := InitRemoteCollection(cfg)
-		if err != nil {
-			log.Printf("NPM: Failed to init remote collection: %v", err)
-		} else {
-			p.mu.Lock()
-			p.collection = col
-			p.mu.Unlock()
-		}
-	}()
 	return p
 }
-
-// SyncRemoteConfig fetches the latest curated collections from GitHub.
-func (p *Provider) SyncRemoteConfig() error {
-	col, err := RefreshRemoteCollection()
-	if err != nil {
-		return err
-	}
-	if col != nil {
-		p.mu.Lock()
-		p.collection = col
-		p.mu.Unlock()
-	}
-	return nil
-}
-
-var _ provider.RemoteConfigSyncer = (*Provider)(nil)
 
 func (p *Provider) ID() string      { return ProviderName }
 func (p *Provider) HomeURL() string { return WebBaseURL }
@@ -114,25 +87,10 @@ func (p *Provider) ParseURL(url string) (string, error) {
 
 // FetchImages fetches wallpaper candidates.
 func (p *Provider) FetchImages(ctx context.Context, query string, page int) ([]provider.Image, error) {
-	p.mu.RLock()
-	col := p.collection
-	p.mu.RUnlock()
-
-	if col == nil {
-		var err error
-		col, err = InitRemoteCollection(p.cfg)
-		if err != nil {
-			return nil, fmt.Errorf("collection not loaded: %w", err)
-		}
-		p.mu.Lock()
-		p.collection = col
-		p.mu.Unlock()
-	}
-
-	entry := col.FindEntry(query)
+	entry := curation.GetManager().GetEntry(p.ID(), query)
 	if entry == nil {
 		log.Printf("NPM: Unknown collection key %q, falling back to masterpieces", query)
-		entry = col.FindEntry("npm_masterpieces")
+		entry = curation.GetManager().GetEntry(p.ID(), "npm_masterpieces")
 		if entry == nil {
 			return nil, fmt.Errorf("no collection entries available")
 		}
@@ -146,9 +104,13 @@ func (p *Provider) FetchImages(ctx context.Context, query string, page int) ([]p
 	return nil, nil
 }
 
-func (p *Provider) fetchCurated(ctx context.Context, entry *CollectionEntry, page int) ([]provider.Image, error) {
-	ids := make([]int, len(entry.IDs))
-	copy(ids, entry.IDs)
+func (p *Provider) fetchCurated(ctx context.Context, entry *curation.CollectionEntry, page int) ([]provider.Image, error) {
+	ids := make([]int, 0, len(entry.IDs))
+	for _, strID := range entry.IDs {
+		if id, err := strconv.Atoi(strID); err == nil {
+			ids = append(ids, id)
+		}
+	}
 
 	const pageSize = 10
 	start := (page - 1) * pageSize
@@ -248,6 +210,31 @@ func (p *Provider) fetchImageByCID(ctx context.Context, cid int) (*provider.Imag
 	return img, nil
 }
 
+// FetchThumbnails implements provider.ThumbnailProvider.
+func (p *Provider) FetchThumbnails(ctx context.Context, ids []string) ([]provider.Thumbnail, error) {
+	var thumbnails []provider.Thumbnail
+	for _, idStr := range ids {
+		var id int
+		if _, err := fmt.Sscanf(idStr, "%d", &id); err != nil {
+			log.Printf("NPM: invalid id format %s", idStr)
+			continue
+		}
+		img, err := p.fetchImageByCID(ctx, id)
+		if err != nil {
+			log.Printf("NPM: Failed to fetch %d for thumbnails: %v", id, err)
+			continue
+		}
+		if img.Path != "" {
+			thumbURL := strings.ReplaceAll(img.Path, "/full/max/0/default.jpg", "/full/800,/0/default.jpg")
+			thumbnails = append(thumbnails, provider.Thumbnail{
+				ID:  idStr,
+				URL: thumbURL,
+			})
+		}
+	}
+	return thumbnails, nil
+}
+
 // EnrichImage is a no-op
 func (p *Provider) EnrichImage(_ context.Context, img provider.Image) (provider.Image, error) {
 	return img, nil
@@ -271,69 +258,7 @@ func (p *Provider) CreateSettingsPanel(sm setting.SettingsManager) *schema.Panel
 }
 
 func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, _ string) *schema.PanelSchema {
-	p.mu.RLock()
-	col := p.collection
-	p.mu.RUnlock()
-
-	if col == nil {
-		if c, err := InitRemoteCollection(p.cfg); err == nil {
-			p.mu.Lock()
-			p.collection = c
-			p.mu.Unlock()
-			col = c
-		}
-	}
-
-	var curatedItems []schema.ItemSchema
-	if col != nil {
-		for _, entry := range col.Entries {
-			curatedItems = append(curatedItems, p.makeCollectionItem(entry.Name, entry.NameTranslations, entry.Key))
-		}
-	}
-
-	return &schema.PanelSchema{
-		Sections: []schema.SectionSchema{
-			{
-				Title: i18n.T("Museum Collections"),
-				Items: curatedItems,
-			},
-		},
-	}
-}
-
-func (p *Provider) makeCollectionItem(label string, translations map[string]string, key string) schema.BoolItem {
-	// Helper to find existing query state
-	getQuery := func(key string) (bool, string) {
-		for _, q := range p.cfg.GetQueries() {
-			if q.Provider == p.ID() && q.URL == key {
-				return q.Active, q.ID
-			}
-		}
-		return false, ""
-	}
-
-	active, _ := getQuery(key)
-
-	return schema.BoolItem{
-		Name:         p.ID() + "_" + key,
-		Label:        i18n.TMap(label, translations),
-		InitialValue: active,
-		NeedsRefresh: true,
-		ApplyFunc: func(b bool) {
-			_, cid := getQuery(key)
-			if b {
-				if cid != "" {
-					_ = p.cfg.EnableImageQuery(cid)
-				} else {
-					_, _ = p.cfg.AddNationalPalaceMuseumQuery(label, key, true)
-				}
-			} else {
-				if cid != "" {
-					_ = p.cfg.DisableImageQuery(cid)
-				}
-			}
-		},
-	}
+	return wallpaper.CreateCuratedQueryPanel(p, sm, p.cfg)
 }
 
 // selectBestCanvasID parses the IIIF manifest and returns the optimal canvas Service ID.

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/dixieflatline76/Spice/v2/pkg/curation"
 	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/schema"
@@ -19,17 +20,14 @@ import (
 //go:embed smk.png
 var iconData []byte
 
-//go:embed smk.json
-var embeddedCollection []byte
-
 const (
-	ProviderName         = "smk"
+	// ProviderName is the unique identifier used for plugin registration
+	ProviderName         = "StatensMuseumForKunst"
 	ProviderTitle        = "SMK"
 	APIBaseURL           = "https://api.smk.dk/api/v1/art"
 	CollectionHighlights = "Best of SMK"
 )
 
-// Config interface for the provider
 type Config interface {
 	GetImgShuffle() bool
 	AddStatensMuseumForKunstQuery(desc, url string, active bool) (string, error)
@@ -43,20 +41,9 @@ type Config interface {
 	SetMuseumFraming(providerID string, enabled bool)
 }
 
-// Provider implements the Statens Museum for Kunst image provider.
 type Provider struct {
-	cfg         Config
-	httpClient  *http.Client
-	curatedList struct {
-		Version     string `json:"version"`
-		Description string `json:"description"`
-		Entries     []struct {
-			Key              string            `json:"key"`
-			Name             string            `json:"name"`
-			NameTranslations map[string]string `json:"name_translations,omitempty"`
-			IDs              []string          `json:"ids"`
-		} `json:"collections"`
-	}
+	cfg        *wallpaper.Config
+	httpClient *http.Client
 }
 
 func init() {
@@ -65,19 +52,11 @@ func init() {
 	})
 }
 
-// NewProvider creates a new SMK provider.
-func NewProvider(cfg Config, httpClient *http.Client) *Provider {
-	p := &Provider{
+func NewProvider(cfg *wallpaper.Config, httpClient *http.Client) *Provider {
+	return &Provider{
 		cfg:        cfg,
 		httpClient: httpClient,
 	}
-
-	// Load the embedded JSON configuration
-	if err := json.Unmarshal(embeddedCollection, &p.curatedList); err != nil {
-		log.Printf("SMK: Failed to parse embedded collection: %v", err)
-	}
-
-	return p
 }
 
 func (p *Provider) ID() string {
@@ -156,23 +135,15 @@ func (p *Provider) FetchImages(ctx context.Context, apiURL string, page int) ([]
 }
 
 func (p *Provider) resolveQueryToIDs(query string) ([]string, error) {
-	for _, entry := range p.curatedList.Entries {
-		if entry.Key == query {
-			ids := make([]string, len(entry.IDs))
-			copy(ids, entry.IDs)
-			return ids, nil
-		}
+	entry := curation.GetManager().GetEntry(p.ID(), query)
+	if entry == nil {
+		entry = curation.GetManager().GetEntry(p.ID(), CollectionHighlights)
 	}
-
-	// Fallback to highlights if query is not found
-	for _, entry := range p.curatedList.Entries {
-		if entry.Key == CollectionHighlights {
-			ids := make([]string, len(entry.IDs))
-			copy(ids, entry.IDs)
-			return ids, nil
-		}
+	if entry != nil && entry.Type == "curated" {
+		ids := make([]string, len(entry.IDs))
+		copy(ids, entry.IDs)
+		return ids, nil
 	}
-
 	return nil, fmt.Errorf("query not found and fallback unavailable: %s", query)
 }
 
@@ -277,7 +248,27 @@ func (p *Provider) WithResolution(apiURL string, width, height int) string {
 	return apiURL
 }
 
-func (p *Provider) EnrichImage(ctx context.Context, img provider.Image) (provider.Image, error) {
+// FetchThumbnails implements provider.ThumbnailProvider.
+func (p *Provider) FetchThumbnails(ctx context.Context, ids []string) ([]provider.Thumbnail, error) {
+	var thumbnails []provider.Thumbnail
+	for _, id := range ids {
+		img, err := p.fetchArtworkDetails(ctx, id)
+		if err != nil {
+			log.Printf("SMK: Failed to fetch %s for thumbnails: %v", id, err)
+			continue
+		}
+		if img != nil && img.Path != "" {
+			thumbnails = append(thumbnails, provider.Thumbnail{
+				ID:  id,
+				URL: p.WithResolution(img.Path, 800, 800),
+			})
+		}
+	}
+	return thumbnails, nil
+}
+
+// EnrichImage is a no-op
+func (p *Provider) EnrichImage(_ context.Context, img provider.Image) (provider.Image, error) {
 	return img, nil
 }
 
@@ -307,53 +298,6 @@ func (p *Provider) CreateSettingsPanel(sm setting.SettingsManager) *schema.Panel
 	}, sm.OpenURL)
 }
 
-// CreateQueryPanel creates the image query management panel.
 func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, _ string) *schema.PanelSchema {
-	// 1. Curated Tours Section
-	var tourItems []schema.ItemSchema
-	for _, entry := range p.curatedList.Entries {
-		entry := entry // shadow for closure
-
-		// Helper to find existing query state
-		getQuery := func(key string) (bool, string) {
-			for _, q := range p.cfg.GetStatensMuseumForKunstQueries() {
-				if q.URL == key {
-					return q.Active, q.ID
-				}
-			}
-			return false, ""
-		}
-
-		active, _ := getQuery(entry.Key)
-
-		tourItems = append(tourItems, schema.BoolItem{
-			Name:         ProviderName + "_" + entry.Key,
-			Label:        i18n.TMap(entry.Name, entry.NameTranslations),
-			InitialValue: active,
-			NeedsRefresh: true,
-			ApplyFunc: func(b bool) {
-				_, cid := getQuery(entry.Key)
-				if b {
-					if cid != "" {
-						_ = p.cfg.EnableStatensMuseumForKunstQuery(cid)
-					} else {
-						_, _ = p.cfg.AddStatensMuseumForKunstQuery(entry.Name, entry.Key, true)
-					}
-				} else {
-					if cid != "" {
-						_ = p.cfg.DisableStatensMuseumForKunstQuery(cid)
-					}
-				}
-			},
-		})
-	}
-
-	toursSection := schema.SectionSchema{
-		Title: i18n.T("Curated Tours"),
-		Items: tourItems,
-	}
-
-	return &schema.PanelSchema{
-		Sections: []schema.SectionSchema{toursSection},
-	}
+	return wallpaper.CreateCuratedQueryPanel(p, sm, p.cfg)
 }

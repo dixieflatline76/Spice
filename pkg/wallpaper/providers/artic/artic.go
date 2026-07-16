@@ -8,10 +8,12 @@ import (
 	"io"
 
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/dixieflatline76/Spice/v2/pkg/curation"
 	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/schema"
@@ -37,15 +39,12 @@ type Config interface {
 	SetMuseumFraming(providerID string, enabled bool)
 }
 
-// Provider implements the Art Institute of Chicago image provider.
 type Provider struct {
-	cfg        Config
+	cfg        *wallpaper.Config
 	httpClient *http.Client
 
 	idCache   map[string][]int
 	idCacheMu sync.RWMutex
-
-	curatedList CuratedList
 }
 
 var aicRateLimitMu sync.Mutex // AIC requires single-threaded access for scraping
@@ -97,19 +96,6 @@ func (b *aicLockedBody) Close() error {
 	return err
 }
 
-type CuratedList struct {
-	Version     string            `json:"version"`
-	Description string            `json:"description"`
-	Entries     []CollectionEntry `json:"collections"`
-}
-
-type CollectionEntry struct {
-	Key              string            `json:"key"`
-	Name             string            `json:"name"`
-	NameTranslations map[string]string `json:"name_translations,omitempty"`
-	IDs              []int             `json:"ids"`
-}
-
 func init() {
 	wallpaper.RegisterProvider(ProviderName, func(cfg *wallpaper.Config, client *http.Client) provider.ImageProvider {
 		return NewProvider(cfg, client)
@@ -117,7 +103,7 @@ func init() {
 }
 
 // NewProvider creates a new AIC provider.
-func NewProvider(cfg Config, httpClient *http.Client) *Provider {
+func NewProvider(cfg *wallpaper.Config, httpClient *http.Client) *Provider {
 	// We wrap the provided client with our strict serialization logic
 	next := httpClient.Transport
 	if next == nil {
@@ -138,36 +124,8 @@ func NewProvider(cfg Config, httpClient *http.Client) *Provider {
 		httpClient: serializedClient,
 		idCache:    make(map[string][]int),
 	}
-	// Async init remote collection
-	go func() {
-		col, err := InitRemoteCollection()
-		if err != nil {
-			log.Printf("AIC: Failed to init remote collection: %v", err)
-		} else {
-			p.idCacheMu.Lock()
-			p.curatedList = *col
-			p.idCacheMu.Unlock()
-		}
-	}()
 	return p
 }
-
-// SyncRemoteConfig fetches the latest curated collections list from the remote repository.
-func (p *Provider) SyncRemoteConfig() error {
-	col, err := RefreshRemoteCollection()
-	if err != nil {
-		return err
-	}
-	if col != nil {
-		p.idCacheMu.Lock()
-		p.curatedList = *col
-		p.idCacheMu.Unlock()
-	}
-	return nil
-}
-
-// Ensure interface compliance
-var _ provider.RemoteConfigSyncer = (*Provider)(nil)
 
 func (p *Provider) ID() string {
 	return "ArtInstituteChicago"
@@ -277,13 +235,13 @@ func (p *Provider) resolveQueryToIDs(ctx context.Context, query string) ([]int, 
 
 	// Case 1: Curated Tour
 	found := false
-	for _, entry := range p.curatedList.Entries {
-		if entry.Key == query {
-			ids = make([]int, len(entry.IDs))
-			copy(ids, entry.IDs)
-			found = true
-			break
+	if entry := curation.GetManager().GetEntry(p.ID(), query); entry != nil && entry.Type == "curated" {
+		for _, strID := range entry.IDs {
+			if id, err := strconv.Atoi(strID); err == nil {
+				ids = append(ids, id)
+			}
 		}
+		found = true
 	}
 
 	if found {
@@ -301,11 +259,11 @@ func (p *Provider) resolveQueryToIDs(ctx context.Context, query string) ([]int, 
 		ids, err = p.searchArtworkIDs(ctx, query)
 		if err != nil {
 			log.Printf("AIC: Search failed for %s: %v, falling back to highlights", query, err)
-			for _, entry := range p.curatedList.Entries {
-				if entry.Key == CollectionHighlights {
-					ids = make([]int, len(entry.IDs))
-					copy(ids, entry.IDs)
-					break
+			if entry := curation.GetManager().GetEntry(p.ID(), CollectionHighlights); entry != nil {
+				for _, strID := range entry.IDs {
+					if id, err := strconv.Atoi(strID); err == nil {
+						ids = append(ids, id)
+					}
 				}
 			}
 		}
@@ -443,6 +401,43 @@ func getIIIFURL(imageID string, width, height int) string {
 	return fmt.Sprintf("https://www.artic.edu/iiif/2/%s/full/!%d,%d/0/default.jpg", imageID, width, height)
 }
 
+// FetchThumbnails implements provider.ThumbnailProvider.
+func (p *Provider) FetchThumbnails(ctx context.Context, ids []string) ([]provider.Thumbnail, error) {
+	thumbnails := make([]provider.Thumbnail, len(ids))
+	var wg sync.WaitGroup
+
+	for i, id := range ids {
+		wg.Add(1)
+		go func(index int, artworkID string) {
+			defer wg.Done()
+			var artID int
+			if _, err := fmt.Sscanf(artworkID, "%d", &artID); err != nil {
+				return
+			}
+			img, err := p.fetchArtworkDetails(ctx, artID)
+			if err != nil {
+				log.Printf("AIC: Failed to fetch %s for thumbnails: %v", artworkID, err)
+				return
+			}
+			if img != nil && img.Path != "" {
+				thumbnails[index] = provider.Thumbnail{
+					ID:  artworkID,
+					URL: p.WithResolution(img.Path, 800, 800),
+				}
+			}
+		}(i, id)
+	}
+	wg.Wait()
+
+	var validThumbnails []provider.Thumbnail
+	for _, t := range thumbnails {
+		if t.URL != "" {
+			validThumbnails = append(validThumbnails, t)
+		}
+	}
+	return validThumbnails, nil
+}
+
 // --- UI Implementation (Pure Go) ---
 
 // CreateSettingsPanel returns the declarative UI for ArtIC settings.
@@ -461,54 +456,6 @@ func (p *Provider) CreateSettingsPanel(sm setting.SettingsManager) *schema.Panel
 	}, sm.OpenURL)
 }
 
-// CreateQueryPanel creates the image query management panel.
 func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, _ string) *schema.PanelSchema {
-	// 1. Curated Tours Section
-	var tourItems []schema.ItemSchema
-	for _, entry := range p.curatedList.Entries {
-		entry := entry // shadow for closure
-
-		// Helper to find existing query state
-		getQuery := func(key string) (bool, string) {
-			for _, q := range p.cfg.GetArtInstituteChicagoQueries() {
-				if q.URL == key {
-					return q.Active, q.ID
-				}
-			}
-			return false, ""
-		}
-
-		active, _ := getQuery(entry.Key)
-
-		// We use BoolItem for each tour, mimicking the legacy NewCheck approach
-		tourItems = append(tourItems, schema.BoolItem{
-			Name:         ProviderName + "_" + entry.Key,
-			Label:        i18n.TMap(entry.Name, entry.NameTranslations),
-			InitialValue: active,
-			NeedsRefresh: true,
-			ApplyFunc: func(b bool) {
-				_, cid := getQuery(entry.Key)
-				if b {
-					if cid != "" {
-						_ = p.cfg.EnableArtInstituteChicagoQuery(cid)
-					} else {
-						_, _ = p.cfg.AddArtInstituteChicagoQuery(entry.Name, entry.Key, true)
-					}
-				} else {
-					if cid != "" {
-						_ = p.cfg.DisableArtInstituteChicagoQuery(cid)
-					}
-				}
-			},
-		})
-	}
-
-	toursSection := schema.SectionSchema{
-		Title: i18n.T("Curated Tours"),
-		Items: tourItems,
-	}
-
-	return &schema.PanelSchema{
-		Sections: []schema.SectionSchema{toursSection},
-	}
+	return wallpaper.CreateCuratedQueryPanel(p, sm, p.cfg)
 }

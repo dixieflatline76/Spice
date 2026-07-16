@@ -33,20 +33,10 @@
                 "KMSr14",
                 "KMS6394"
             ],
-            "key": "Best of SMK",
+            "key": "smk_highlights",
             "name": "⭐ Best of SMK",
             "name_translations": {
-                "da": "⭐ Det Bedste fra SMK",
-                "de": "⭐ Das Beste aus dem SMK",
-                "es": "⭐ Lo Mejor del SMK",
-                "fr": "⭐ Le Meilleur du SMK",
-                "it": "⭐ Il Meglio del SMK",
-                "ja": "⭐ SMKの名作",
-                "ko": "⭐ SMK 베스트",
-                "nl": "⭐ Het Beste van SMK",
-                "ru": "⭐ Лучшее из SMK",
-                "zh-CN": "⭐ 丹麦国立美术馆精选",
-                "zh-TW": "⭐ 丹麥國立美術館精選"
+                "en": "⭐ Best of SMK"
             },
             "type": "curated"
         },
@@ -113,20 +103,10 @@
                 "KMS3402",
                 "KMS4888"
             ],
-            "key": "Danish \u0026 Nordic Art (1750-1900)",
-            "name": "Danish \u0026 Nordic Art (1750-1900)",
+            "key": "smk_danish_nordic",
+            "name": "Danish & Nordic Art (1750-1900)",
             "name_translations": {
-                "da": "Dansk og Nordisk Kunst (1750-1900)",
-                "de": "Dänische \u0026 Nordische Kunst (1750-1900)",
-                "es": "Arte Danés y Nórdico (1750-1900)",
-                "fr": "Art Danois et Nordique (1750-1900)",
-                "it": "Arte Danese e Nordica (1750-1900)",
-                "ja": "デンマークと北欧の美術 (1750-1900)",
-                "ko": "덴마크 및 북유럽 미술 (1750-1900)",
-                "nl": "Deense en Noordse Kunst (1750-1900)",
-                "ru": "Датское и Северное Искусство (1750-1900)",
-                "zh-CN": "丹麦与北欧艺术 (1750-1900)",
-                "zh-TW": "丹麥與北歐藝術 (1750-1900)"
+                "en": "Danish & Nordic Art (1750-1900)"
             },
             "type": "curated"
         },
@@ -147,20 +127,10 @@
                 "KMS5493",
                 "KKSgb4811"
             ],
-            "key": "European Old Masters (1300-1800)",
+            "key": "smk_european_old_masters",
             "name": "European Old Masters (1300-1800)",
             "name_translations": {
-                "da": "Gamle Mestre (1300-1800)",
-                "de": "Alte Meister (1300-1800)",
-                "es": "Viejos Maestros Europeos (1300-1800)",
-                "fr": "Grands Maîtres Européens (1300-1800)",
-                "it": "Antichi Maestri Europei (1300-1800)",
-                "ja": "ヨーロッパ古典巨匠 (1300-1800)",
-                "ko": "유럽 고전 거장 (1300-1800)",
-                "nl": "Oude Meesters (1300-1800)",
-                "ru": "Старые Мастера (1300-1800)",
-                "zh-CN": "欧洲古典大师 (1300-1800)",
-                "zh-TW": "歐洲古典大師 (1300-1800)"
+                "en": "European Old Masters (1300-1800)"
             },
             "type": "curated"
         },
@@ -176,20 +146,10 @@
                 "KMSr157",
                 "KKS6417"
             ],
-            "key": "French Art (1900-1930)",
+            "key": "smk_french_art",
             "name": "French Art (1900-1930)",
             "name_translations": {
-                "da": "Fransk Kunst (1900-1930)",
-                "de": "Französische Kunst (1900-1930)",
-                "es": "Arte Francés (1900-1930)",
-                "fr": "Art Français (1900-1930)",
-                "it": "Arte Francese (1900-1930)",
-                "ja": "フランス美術 (1900-1930)",
-                "ko": "프랑스 미술 (1900-1930)",
-                "nl": "Franse Kunst (1900-1930)",
-                "ru": "Французское Искусство (1900-1930)",
-                "zh-CN": "法国艺术 (1900-1930)",
-                "zh-TW": "法國藝術 (1900-1930)"
+                "en": "French Art (1900-1930)"
             },
             "type": "curated"
         },
@@ -209,20 +169,10 @@
                 "KMS4385",
                 "KMS7070"
             ],
-            "key": "Danish Modernism",
+            "key": "smk_danish_modernism",
             "name": "Danish Modernism",
             "name_translations": {
-                "da": "Dansk Modernisme",
-                "de": "Dänische Moderne",
-                "es": "Modernismo Danés",
-                "fr": "Modernisme Danois",
-                "it": "Modernismo Danese",
-                "ja": "デンマーク・モダニズム",
-                "ko": "덴마크 모더니즘",
-                "nl": "Deens Modernisme",
-                "ru": "Датский Модернизм",
-                "zh-CN": "丹麦现代主义",
-                "zh-TW": "丹麥現代主義"
+                "en": "Danish Modernism"
             },
             "type": "curated"
         },
@@ -231,20 +181,10 @@
                 "KMS8241",
                 "KMS409"
             ],
-            "key": "Other Highlights",
+            "key": "smk_other_highlights",
             "name": "Other Highlights",
             "name_translations": {
-                "da": "Andre Højdepunkter",
-                "de": "Weitere Highlights",
-                "es": "Otras Obras Destacadas",
-                "fr": "Autres Incontournables",
-                "it": "Altri Capolavori",
-                "ja": "その他の見どころ",
-                "ko": "기타 하이라이트",
-                "nl": "Andere Hoogtepunten",
-                "ru": "Другие Шедевры",
-                "zh-CN": "其他精选",
-                "zh-TW": "其他精選"
+                "en": "Other Highlights"
             },
             "type": "curated"
         },
@@ -257,24 +197,14 @@
                 "KMSr76",
                 "KMS4386"
             ],
-            "key": "Artistic Nudes",
+            "key": "smk_artistic_nudes",
             "name": "Artistic Nudes",
             "name_translations": {
-                "da": "Kunstneriske Akter",
-                "de": "Künstlerische Akte",
-                "es": "Desnudos Artísticos",
-                "fr": "Nus Artistiques",
-                "it": "Nudi Artistici",
-                "ja": "芸術的なヌード",
-                "ko": "예술적 누드",
-                "nl": "Artistieke Naakten",
-                "ru": "Художественная Обнаженная Натура",
-                "zh-CN": "艺术裸体",
-                "zh-TW": "藝術裸體"
+                "en": "Artistic Nudes"
             },
             "type": "curated"
         }
     ],
-    "description": "Statens Museum for Kunst",
-    "version": "v2.6.0"
+    "description": "Statens Museum for Kunst: Curated Collections",
+    "version": "v1.0.0"
 }

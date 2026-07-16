@@ -79,7 +79,7 @@ func main() {
 		log.Printf("Failed to unpack embedded galleries: %v", err)
 	}
 
-	wallpaper.LoadPlugin(pm)    // Initialize the wallpaper plugin
+	wallpaper.LoadPlugin(pm) // Initialize the wallpaper plugin
 	breadcrumb("wallpaper plugin loaded")
 
 	// --- BROWSER INTEGRATION START ---

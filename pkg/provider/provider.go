@@ -236,6 +236,18 @@ type Favoriter interface {
 	GetSourceQueryID() string
 }
 
+// Thumbnail represents a lightweight image preview used for HTML gallery generation.
+type Thumbnail struct {
+	ID  string
+	URL string
+}
+
+// ThumbnailProvider defines the interface for providers that can resolve a batch of artwork IDs into thumbnail image URLs.
+// This is used by the central gallery generator to create static HTML gallery previews efficiently.
+type ThumbnailProvider interface {
+	FetchThumbnails(ctx context.Context, ids []string) ([]Thumbnail, error)
+}
+
 // ProviderType enum defines the category of an image provider.
 type ProviderType int
 

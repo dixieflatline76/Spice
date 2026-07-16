@@ -1,7 +1,6 @@
 package smk
 
 import (
-	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -66,19 +65,4 @@ func TestWithResolution(t *testing.T) {
 			assert.Equal(t, tt.expected, got)
 		})
 	}
-}
-
-func TestEmbeddedJSON(t *testing.T) {
-	var col struct {
-		Version     string `json:"version"`
-		Description string `json:"description"`
-		Entries     []struct {
-			Key  string   `json:"key"`
-			Name string   `json:"name"`
-			IDs  []string `json:"ids"`
-		} `json:"collections"`
-	}
-	err := json.Unmarshal(embeddedCollection, &col)
-	assert.NoError(t, err)
-	assert.NotEmpty(t, col.Entries, "Embedded JSON should have parsed Collections successfully")
 }

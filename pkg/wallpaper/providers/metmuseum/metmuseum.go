@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dixieflatline76/Spice/v2/pkg/curation"
 	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/schema"
@@ -25,8 +26,6 @@ type Provider struct {
 	cfg    *wallpaper.Config
 	client *http.Client
 	mu     sync.RWMutex
-	// Met Museum specific state
-	collection *Collection // In-memory cache of Spice Melange
 
 	// Cache for resolved IDs (to ensure stable pagination and shuffling)
 	idCache   map[string][]int
@@ -50,37 +49,8 @@ func NewProvider(cfg *wallpaper.Config, client *http.Client) *Provider {
 		idCache:   make(map[string][]int),
 		poolCache: make(map[int]*provider.Image),
 	}
-	// Try to load embedded collection immediately if possible, or wait/lazy load
-	// Async init remote collection
-	go func() {
-		col, err := InitRemoteCollection(cfg)
-		if err != nil {
-			log.Printf("MET: Failed to init remote collection: %v", err)
-		} else {
-			p.mu.Lock()
-			p.collection = col
-			p.mu.Unlock()
-		}
-	}()
 	return p
 }
-
-// SyncRemoteConfig fetches the latest curated collections list from the remote repository.
-func (p *Provider) SyncRemoteConfig() error {
-	col, err := RefreshRemoteCollection()
-	if err != nil {
-		return err
-	}
-	if col != nil {
-		p.mu.Lock()
-		p.collection = col
-		p.mu.Unlock()
-	}
-	return nil
-}
-
-// Ensure interface compliance
-var _ provider.RemoteConfigSyncer = (*Provider)(nil)
 
 func (p *Provider) ID() string {
 	return "MetMuseum"
@@ -245,28 +215,12 @@ func (p *Provider) resolveQueryToIDs(ctx context.Context, query string) ([]int, 
 	var ids []int
 	var err error
 
-	// Ensure collection is loaded
-	p.mu.RLock()
-	col := p.collection
-	p.mu.RUnlock()
-
-	if col == nil {
-		var initErr error
-		col, initErr = InitRemoteCollection(p.cfg)
-		if initErr != nil {
-			return nil, fmt.Errorf("collection not loaded: %w", initErr)
-		}
-		p.mu.Lock()
-		p.collection = col
-		p.mu.Unlock()
-	}
-
 	// Look up the collection entry by key
-	entry := col.FindEntry(query)
+	entry := curation.GetManager().GetEntry(p.ID(), query)
 	if entry == nil {
 		// Legacy fallback: treat unknown keys as the curated collection
 		log.Printf("MET: Unknown collection key %q, falling back to curated", query)
-		entry = col.FindEntry(CollectionSpiceMelange)
+		entry = curation.GetManager().GetEntry(p.ID(), CollectionSpiceMelange)
 		if entry == nil {
 			return nil, fmt.Errorf("no collection entries available")
 		}
@@ -275,8 +229,12 @@ func (p *Provider) resolveQueryToIDs(ctx context.Context, query string) ([]int, 
 	switch entry.Type {
 	case "curated":
 		// Copy IDs to avoid mutating the source collection
-		ids = make([]int, len(entry.IDs))
-		copy(ids, entry.IDs)
+		ids = make([]int, 0, len(entry.IDs))
+		for _, strID := range entry.IDs {
+			if id, err := strconv.Atoi(strID); err == nil {
+				ids = append(ids, id)
+			}
+		}
 	case "search":
 		ids, err = p.fetchSearchHighlights(ctx, entry.Query)
 	case "department":
@@ -408,6 +366,7 @@ func (p *Provider) fetchObjectDetails(ctx context.Context, id int) (*provider.Im
 		ObjectID      int    `json:"objectID"`
 		Title         string `json:"title"`
 		PrimaryImage  string `json:"primaryImage"`
+		PrimarySmall  string `json:"primaryImageSmall"`
 		ArtistDisplay string `json:"artistDisplayName"`
 		ObjectDate    string `json:"objectDate"`
 		ObjectURL     string `json:"objectURL"`
@@ -432,11 +391,17 @@ func (p *Provider) fetchObjectDetails(ctx context.Context, id int) (*provider.Im
 	// We no longer filter by landscape orientation
 
 	img := provider.Image{
-		ID:          strconv.Itoa(obj.ObjectID),
-		Path:        obj.PrimaryImage,
-		ViewURL:     obj.ObjectURL,
-		Attribution: fmt.Sprintf("%s - %s", obj.ArtistDisplay, obj.Title),
-		Provider:    p.ID(),
+		ID:              strconv.Itoa(obj.ObjectID),
+		Path:            obj.PrimaryImage,
+		ViewURL:         obj.ObjectURL,
+		Attribution:     fmt.Sprintf("%s - %s", obj.ArtistDisplay, obj.Title),
+		Provider:        p.ID(),
+		DerivativePaths: make(map[string]string),
+	}
+
+	// Store the thumbnail URL in DerivativePaths for gallery preview
+	if obj.PrimarySmall != "" {
+		img.DerivativePaths["thumbnail"] = obj.PrimarySmall
 	}
 
 	p.cacheResult(id, &img)
@@ -453,6 +418,48 @@ func (p *Provider) cacheResult(id int, img *provider.Image) {
 func (p *Provider) EnrichImage(ctx context.Context, img provider.Image) (provider.Image, error) {
 	// We fetch full details in FetchImages, so no enrichment needed
 	return img, nil
+}
+
+// FetchThumbnails implements provider.ThumbnailProvider.
+func (p *Provider) FetchThumbnails(ctx context.Context, ids []string) ([]provider.Thumbnail, error) {
+	thumbnails := make([]provider.Thumbnail, len(ids))
+	var wg sync.WaitGroup
+
+	for i, idStr := range ids {
+		wg.Add(1)
+		go func(index int, artworkID string) {
+			defer wg.Done()
+			var artID int
+			if _, err := fmt.Sscanf(artworkID, "%d", &artID); err != nil {
+				log.Printf("MET: invalid id format %s", artworkID)
+				return
+			}
+			img, err := p.fetchObjectDetails(ctx, artID)
+			if err != nil {
+				log.Printf("MET: Failed to fetch %s for thumbnails: %v", artworkID, err)
+				return
+			}
+			if img != nil && img.Path != "" {
+				thumbURL := img.Path // Fallback to full image
+				if thumb, ok := img.DerivativePaths["thumbnail"]; ok && thumb != "" {
+					thumbURL = thumb // Use PrimarySmall
+				}
+				thumbnails[index] = provider.Thumbnail{
+					ID:  artworkID,
+					URL: thumbURL,
+				}
+			}
+		}(i, idStr)
+	}
+	wg.Wait()
+
+	var validThumbnails []provider.Thumbnail
+	for _, t := range thumbnails {
+		if t.URL != "" {
+			validThumbnails = append(validThumbnails, t)
+		}
+	}
+	return validThumbnails, nil
 }
 
 // --- UI Implementation (Pure Go) ---
@@ -474,70 +481,6 @@ func (p *Provider) CreateSettingsPanel(sm setting.SettingsManager) *schema.Panel
 }
 
 // CreateQueryPanel creates the image query management panel.
-// Collection items are driven entirely from the JSON collection data.
 func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, _ string) *schema.PanelSchema {
-	// Ensure collection is loaded for dynamic rendering
-	p.mu.RLock()
-	col := p.collection
-	p.mu.RUnlock()
-
-	if col == nil {
-		if c, err := InitRemoteCollection(p.cfg); err == nil {
-			p.mu.Lock()
-			p.collection = c
-			p.mu.Unlock()
-			col = c
-		}
-	}
-
-	var curatedItems []schema.ItemSchema
-	if col != nil {
-		for _, entry := range col.Entries {
-			curatedItems = append(curatedItems, p.makeCollectionItem(entry.Name, entry.NameTranslations, entry.Key))
-		}
-	}
-
-	curatedSection := schema.SectionSchema{
-		Title: i18n.T("Museum Collections"),
-		Items: curatedItems,
-	}
-
-	return &schema.PanelSchema{
-		Sections: []schema.SectionSchema{curatedSection},
-	}
-}
-
-func (p *Provider) makeCollectionItem(label string, translations map[string]string, key string) schema.BoolItem {
-	// Helper to find existing query state
-	getQuery := func(key string) (bool, string) {
-		for _, q := range p.cfg.GetQueries() {
-			if q.Provider == p.ID() && q.URL == key {
-				return q.Active, q.ID
-			}
-		}
-		return false, ""
-	}
-
-	active, _ := getQuery(key)
-
-	return schema.BoolItem{
-		Name:         p.ID() + "_" + key,
-		Label:        i18n.TMap(label, translations),
-		InitialValue: active,
-		NeedsRefresh: true,
-		ApplyFunc: func(b bool) {
-			_, cid := getQuery(key)
-			if b {
-				if cid != "" {
-					_ = p.cfg.EnableImageQuery(cid)
-				} else {
-					_, _ = p.cfg.AddMetMuseumQuery(label, key, true)
-				}
-			} else {
-				if cid != "" {
-					_ = p.cfg.DisableImageQuery(cid)
-				}
-			}
-		},
-	}
+	return wallpaper.CreateCuratedQueryPanel(p, sm, p.cfg)
 }

@@ -1,7 +1,6 @@
 package cleveland
 
 import (
-	"encoding/json"
 	"testing"
 
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
@@ -33,51 +32,6 @@ func TestObjectURLRegex(t *testing.T) {
 				t.Errorf("expected no match for %q, got %v", tt.url, matches)
 			}
 		}
-	}
-}
-
-func TestCollectionFindEntry(t *testing.T) {
-	col := &Collection{
-		Entries: []CollectionEntry{
-			{Key: "cma_masterpieces", Name: "Masterpieces"},
-			{Key: "cma_european", Name: "European"},
-		},
-	}
-
-	entry := col.FindEntry("cma_european")
-	if entry == nil || entry.Name != "European" {
-		t.Errorf("expected European entry, got %v", entry)
-	}
-
-	entry = col.FindEntry("nonexistent")
-	if entry != nil {
-		t.Errorf("expected nil for nonexistent key, got %v", entry)
-	}
-}
-
-func TestEmbeddedCollection(t *testing.T) {
-	var col Collection
-	if err := json.Unmarshal(embeddedJSON, &col); err != nil {
-		t.Fatalf("failed to parse embedded collection: %v", err)
-	}
-
-	if col.Version == "" {
-		t.Error("expected non-empty version string")
-	}
-
-	if len(col.Entries) == 0 {
-		t.Error("expected at least one collection entry")
-	}
-
-	masterpieces := col.FindEntry(CollectionMasterpieces)
-	if masterpieces == nil {
-		t.Fatal("expected masterpieces entry")
-	}
-	if masterpieces.Type != "curated" {
-		t.Errorf("expected curated type, got %q", masterpieces.Type)
-	}
-	if len(masterpieces.IDs) == 0 {
-		t.Error("expected curated IDs")
 	}
 }
 

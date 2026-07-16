@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dixieflatline76/Spice/v2/pkg/curation"
 	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/schema"
@@ -27,8 +28,6 @@ type Provider struct {
 	cfg    *wallpaper.Config
 	client *http.Client
 	mu     sync.RWMutex
-
-	collection *Collection
 
 	// Cache for search result IDs (stable pagination)
 	idCache   map[string][]int
@@ -93,34 +92,8 @@ func NewProvider(cfg *wallpaper.Config, client *http.Client) *Provider {
 		idCache:   make(map[string][]int),
 		poolCache: make(map[int]*provider.Image),
 	}
-	go func() {
-		col, err := InitRemoteCollection(cfg)
-		if err != nil {
-			log.Printf("Cleveland: Failed to init remote collection: %v", err)
-		} else {
-			p.mu.Lock()
-			p.collection = col
-			p.mu.Unlock()
-		}
-	}()
 	return p
 }
-
-// SyncRemoteConfig fetches the latest curated collections from GitHub.
-func (p *Provider) SyncRemoteConfig() error {
-	col, err := RefreshRemoteCollection()
-	if err != nil {
-		return err
-	}
-	if col != nil {
-		p.mu.Lock()
-		p.collection = col
-		p.mu.Unlock()
-	}
-	return nil
-}
-
-var _ provider.RemoteConfigSyncer = (*Provider)(nil)
 
 func (p *Provider) ID() string      { return ProviderName }
 func (p *Provider) HomeURL() string { return WebBaseURL }
@@ -170,32 +143,16 @@ func (p *Provider) ParseURL(url string) (string, error) {
 
 // FetchImages fetches wallpaper candidates.
 func (p *Provider) FetchImages(ctx context.Context, query string, page int) ([]provider.Image, error) {
-	// Ensure collection is loaded
-	p.mu.RLock()
-	col := p.collection
-	p.mu.RUnlock()
-
-	if col == nil {
-		var err error
-		col, err = InitRemoteCollection(p.cfg)
-		if err != nil {
-			return nil, fmt.Errorf("collection not loaded: %w", err)
-		}
-		p.mu.Lock()
-		p.collection = col
-		p.mu.Unlock()
-	}
-
 	// Handle direct object URL
 	if strings.HasPrefix(query, "object:") {
 		accNum := strings.TrimPrefix(query, "object:")
 		return p.fetchByAccessionNumber(ctx, accNum)
 	}
 
-	entry := col.FindEntry(query)
+	entry := curation.GetManager().GetEntry(p.ID(), query)
 	if entry == nil {
 		log.Printf("Cleveland: Unknown collection key %q, falling back to masterpieces", query)
-		entry = col.FindEntry(CollectionMasterpieces)
+		entry = curation.GetManager().GetEntry(p.ID(), CollectionMasterpieces)
 		if entry == nil {
 			return nil, fmt.Errorf("no collection entries available")
 		}
@@ -231,9 +188,13 @@ func (p *Provider) fetchByAccessionNumber(ctx context.Context, accNum string) ([
 // fetchCurated fetches images for curated (ID-based) collections.
 // Each artwork is fetched individually via /api/artworks/{id} since the CMA API
 // does not support batch ID lookups.
-func (p *Provider) fetchCurated(ctx context.Context, entry *CollectionEntry, page int) ([]provider.Image, error) {
-	ids := make([]int, len(entry.IDs))
-	copy(ids, entry.IDs)
+func (p *Provider) fetchCurated(ctx context.Context, entry *curation.CollectionEntry, page int) ([]provider.Image, error) {
+	ids := make([]int, 0, len(entry.IDs))
+	for _, strID := range entry.IDs {
+		if id, err := strconv.Atoi(strID); err == nil {
+			ids = append(ids, id)
+		}
+	}
 
 	const pageSize = 20
 	start := (page - 1) * pageSize
@@ -264,7 +225,7 @@ func (p *Provider) fetchCurated(ctx context.Context, entry *CollectionEntry, pag
 }
 
 // fetchSearch queries the API with search parameters.
-func (p *Provider) fetchSearch(ctx context.Context, entry *CollectionEntry, page int) ([]provider.Image, error) {
+func (p *Provider) fetchSearch(ctx context.Context, entry *curation.CollectionEntry, page int) ([]provider.Image, error) {
 	// Check ID cache
 	p.idCacheMu.RLock()
 	cachedIDs, hasCached := p.idCache[entry.Key]
@@ -455,7 +416,47 @@ func (p *Provider) artworkToImage(art *apiArtwork) *provider.Image {
 
 // EnrichImage is a no-op — all metadata comes from the initial fetch.
 func (p *Provider) EnrichImage(_ context.Context, img provider.Image) (provider.Image, error) {
+	img.Provider = ProviderName
+	img.FileType = "image/jpeg"
+
 	return img, nil
+}
+
+// FetchThumbnails implements provider.ThumbnailProvider.
+func (p *Provider) FetchThumbnails(ctx context.Context, ids []string) ([]provider.Thumbnail, error) {
+	thumbnails := make([]provider.Thumbnail, len(ids))
+	var wg sync.WaitGroup
+
+	for i, idStr := range ids {
+		wg.Add(1)
+		go func(index int, artworkID string) {
+			defer wg.Done()
+			var artID int
+			if _, err := fmt.Sscanf(artworkID, "%d", &artID); err != nil {
+				return
+			}
+			img, err := p.fetchSingleArtwork(ctx, artID)
+			if err != nil {
+				log.Printf("CMA: Failed to fetch %s for thumbnails: %v", artworkID, err)
+				return
+			}
+			if img != nil && img.Images != nil && img.Images.Web != nil && img.Images.Web.URL != "" {
+				thumbnails[index] = provider.Thumbnail{
+					ID:  artworkID,
+					URL: img.Images.Web.URL,
+				}
+			}
+		}(i, idStr)
+	}
+	wg.Wait()
+
+	var validThumbnails []provider.Thumbnail
+	for _, t := range thumbnails {
+		if t.URL != "" {
+			validThumbnails = append(validThumbnails, t)
+		}
+	}
+	return validThumbnails, nil
 }
 
 // --- UI Implementation ---
@@ -478,67 +479,5 @@ func (p *Provider) CreateSettingsPanel(sm setting.SettingsManager) *schema.Panel
 
 // CreateQueryPanel creates the collection toggle panel.
 func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, _ string) *schema.PanelSchema {
-	p.mu.RLock()
-	col := p.collection
-	p.mu.RUnlock()
-
-	if col == nil {
-		if c, err := InitRemoteCollection(p.cfg); err == nil {
-			p.mu.Lock()
-			p.collection = c
-			p.mu.Unlock()
-			col = c
-		}
-	}
-
-	var curatedItems []schema.ItemSchema
-	if col != nil {
-		for _, entry := range col.Entries {
-			curatedItems = append(curatedItems, p.makeCollectionItem(entry.Name, entry.NameTranslations, entry.Key))
-		}
-	}
-
-	return &schema.PanelSchema{
-		Sections: []schema.SectionSchema{
-			{
-				Title: i18n.T("Museum Collections"),
-				Items: curatedItems,
-			},
-		},
-	}
-}
-
-func (p *Provider) makeCollectionItem(label string, translations map[string]string, key string) schema.BoolItem {
-	// Helper to find existing query state
-	getQuery := func(key string) (bool, string) {
-		for _, q := range p.cfg.GetQueries() {
-			if q.Provider == p.ID() && q.URL == key {
-				return q.Active, q.ID
-			}
-		}
-		return false, ""
-	}
-
-	active, _ := getQuery(key)
-
-	return schema.BoolItem{
-		Name:         p.ID() + "_" + key,
-		Label:        i18n.TMap(label, translations),
-		InitialValue: active,
-		NeedsRefresh: true,
-		ApplyFunc: func(b bool) {
-			_, cid := getQuery(key)
-			if b {
-				if cid != "" {
-					_ = p.cfg.EnableImageQuery(cid)
-				} else {
-					_, _ = p.cfg.AddClevelandMuseumQuery(label, key, true)
-				}
-			} else {
-				if cid != "" {
-					_ = p.cfg.DisableImageQuery(cid)
-				}
-			}
-		},
-	}
+	return wallpaper.CreateCuratedQueryPanel(p, sm, p.cfg)
 }
