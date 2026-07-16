@@ -1172,7 +1172,15 @@ func (sm *SettingsManager) RenderSchema(p schema.PanelSchema) fyne.CanvasObject 
 						})
 					}
 					sm.allWidgets[v.Name] = check
-					sectionContainer.Add(check)
+
+					if v.ActionText != "" && v.ActionFunc != nil {
+						link := widget.NewHyperlink(v.ActionText, nil)
+						link.OnTapped = v.ActionFunc
+						hbox := container.NewHBox(check, layout.NewSpacer(), link)
+						sectionContainer.Add(hbox)
+					} else {
+						sectionContainer.Add(check)
+					}
 				} else {
 					sm.renderBoolSetting(&boolConfig{
 						Name:         v.Name,

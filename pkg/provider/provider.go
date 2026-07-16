@@ -346,6 +346,12 @@ type RemoteConfigSyncer interface {
 	SyncRemoteConfig() error
 }
 
+// GalleryProvider is an optional interface for providers that can generate
+// static HTML virtual gallery walls for their curated collections.
+type GalleryProvider interface {
+	GenerateGalleries(ctx context.Context, destDir string) error
+}
+
 // ThrottledProvider is an optional interface for providers that can signal
 // they are currently in a cooldown state (e.g., due to a 429 error).
 type ThrottledProvider interface {
