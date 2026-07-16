@@ -73,8 +73,8 @@
                 "47390ab4-fbf1-4249-add8-931691c943e8",
                 "28eab6b6-b670-49f2-b508-47b58ab1c763",
                 "d5265ca9-f3d4-48af-b3c1-ccd7993e2467",
-                "103RR7",
-                "103RQ0"
+                "dc126a6e-8835-4b0b-88ed-302b9f47356c",
+                "abd6e879-945c-4ede-ad93-eb50d094ec01"
             ],
             "key": "getty_paintings",
             "name": "🎨 European Paintings",
@@ -129,20 +129,20 @@
                 "85e1081f-4094-4e4b-96cf-70d83295d96f",
                 "89c78d89-8afc-4205-aae6-76e60295c22d",
                 "23fdde63-303a-42db-b64f-13a779a8add8",
-                "103TG8",
-                "103T2V",
-                "103TQ0",
-                "1096DP",
-                "103T5K",
-                "103Y0B",
-                "103VMT",
-                "103YK2",
-                "103SSD",
-                "103VD7",
-                "10965Y",
-                "103STM",
-                "1097PM",
-                "103SXA"
+                "ae82b7de-e7f8-4ace-a2f4-1cb6984de448",
+                "d9bda2c0-59c6-4e02-98c9-d9bbcc966b91",
+                "ab128600-a71f-4012-845c-481fe4a36d80",
+                "c0a99717-d232-4996-a7a1-751cd2c41bdb",
+                "e69ac8a5-0b7b-4fe9-8e58-3e10799c2a51",
+                "e7a4081f-f62d-4c52-ade6-d1d753451e9a",
+                "ebd647cb-c3a2-47d7-83fa-691d493916e2",
+                "eb84b922-cfc7-45c5-8fc0-34707758e0d6",
+                "f3422786-454a-41f5-b6b7-725051859bdb",
+                "f8c5166f-9b02-47a6-b1c0-d65b78de3a81",
+                "ffb7121d-1c16-489a-8be8-275b09df1cf2",
+                "fbe3ae29-d5fa-40f5-b3c9-e51969bafbb8",
+                "fb2e2b85-d2d3-4a26-94e1-e030083da631",
+                "fad1fcbd-fc80-4593-97f1-df559dddcbf9"
             ],
             "key": "getty_antiquities",
             "name": "🏛️ Antiquities & Artifacts",
@@ -169,24 +169,23 @@
                 "da": "Kunstneriske Akter"
             },
             "ids": [
-                "103RQD",
-                "103SVY",
-                "103SQD",
-                "103SP3",
-                "10989Y",
-                "109NY4",
-                "109NAS",
+                "c8c21ff6-a3c9-4a9e-a954-71bf1e9f14ff",
+                "e590756a-ed73-4ad4-82e3-1c23b4371ca0",
+                "e61484c7-0b18-4149-804b-da064790841b",
+                "e73a575a-4dc5-4965-870e-402e5433edb3",
+                "e8cfe0bd-db6c-425a-ba32-9c6533f41af9",
+                "f7b4e5c5-448f-4691-a189-561864463a89",
+                "fdecb62e-d3ea-4805-ad7f-089b6b881f27",
                 "9a9c0a0c-bcbc-46bc-8a7a-d1dcb06085ed",
                 "d91348af-37bf-49cd-8322-f7d4f0751cd9",
                 "2ccbcdcc-3260-4b40-9cfa-72efa357df1b",
                 "9c3b07db-021e-477a-b5f5-fc190aaa7ec1",
                 "83b4d6a0-9e9b-4660-a9bc-74efb0f7a5c4",
                 "fb9fd87a-74a0-4655-a553-49a50c98a6a9",
-                "107SKZ",
-                "108FAM",
-                "103QS5",
-                "103RAB",
-                "103R0M"
+                "720d9d31-d394-416e-911e-1156fd8cc7d5",
+                "4a82fd0b-d134-477e-b9ad-03eb123bbbd8",
+                "cc2eecef-4ea7-4274-a1bd-19b1b423f4b5",
+                "90a1b3c2-13d8-4a0a-994a-6a5909f95dc7"
             ]
         },
         {
@@ -197,13 +196,13 @@
                 "da": "Vintage Akter (Fotografi)"
             },
             "ids": [
-                "1049MZ",
-                "104DT3",
-                "104K0Y",
-                "108QC9",
-                "108NMN",
-                "106FEV",
-                "1049BJ"
+                "9e5d8fad-16db-4278-b80d-d2731bcc1afa",
+                "77a3fdab-d3e7-4fc4-bef8-7fe4a0091b79",
+                "c1e88275-b26f-49b7-a165-33b8c11c9dc4",
+                "ca9023dd-235f-4344-ac1e-73e5e5f44ceb",
+                "cca6ce55-2381-4a92-b572-bbc5def38ef2",
+                "965b3925-6c77-43c2-b73b-a744aad286a7",
+                "0732cea0-3ef1-4f0a-97fd-17cd54a9c5af"
             ]
         }
     ],
