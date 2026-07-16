@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>⭐ Best of Getty - Spice Gallery</title>
+    <style>
+        body {
+            background-color: #4a3b2c;
+            margin: 0;
+            padding: 60px 40px;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            font-family: system-ui, -apple-system, sans-serif;
+        }
+
+        h1 {
+            color: rgba(255, 255, 255, 0.9);
+            font-weight: 300;
+            letter-spacing: 2px;
+            margin-bottom: 60px;
+            text-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            text-align: center;
+        }
+
+        .gallery-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 60px;
+            max-width: 1400px;
+            width: 100%;
+            align-items: center;
+        }
+
+        .frame {
+            background: linear-gradient(135deg, #4a2f1d, #2d1c11);
+            padding: 12px;
+            border-radius: 4px;
+            box-shadow: 0 30px 60px rgba(0, 0, 0, 0.6), 0 10px 20px rgba(0, 0, 0, 0.4);
+            transition: transform 0.3s ease;
+            position: relative;
+        }
+
+        .frame:hover {
+            transform: scale(1.02) translateY(-5px);
+        }
+
+        .matboard {
+            background-color: #fdfdfa;
+            padding: 35px;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .artwork {
+            width: 100%;
+            height: auto;
+            display: block;
+            box-shadow: inset 0 0 15px rgba(0,0,0,0.3), 0 2px 5px rgba(0,0,0,0.2);
+            background: linear-gradient(45deg, #8b7355, #cdb49a);
+        }
+
+         
+        .frame:nth-child(even) {
+            transform: translateY(40px);
+        }
+        .frame:nth-child(even):hover {
+            transform: scale(1.02) translateY(35px);
+        }
+    </style>
+</head>
+<body>
+    <h1>⭐ Best of Getty</h1>
+    <div class="gallery-container">
+        
+        <div class="frame">
+            <div class="matboard">
+                <div class="artwork" style="aspect-ratio: 3/4; background: url('https://media.getty.edu/iiif/image/4390e866-ea9b-4c69-9b23-5064d5e79cfc/full/max/0/default.jpg') center/cover;"></div>
+            </div>
+        </div>
+        
+        
+        <div class="frame">
+            <div class="matboard">
+                <div class="artwork" style="aspect-ratio: 1/1; background: url('https://media.getty.edu/iiif/image/128fc40d-7e8f-4cb1-ad65-29ba041b2e23/full/max/0/default.jpg') center/cover;"></div>
+            </div>
+        </div>
+
+        
+        <div class="frame" style="transform: scale(1.1); z-index: 10;">
+            <div class="matboard">
+                <div class="artwork" style="aspect-ratio: 4/3; background: url('https://media.getty.edu/iiif/image/3edc339a-7e2f-4fc5-8243-ce5b97929ad6/full/max/0/default.jpg') center/cover;"></div>
+            </div>
+        </div>
+
+        
+        <div class="frame">
+            <div class="matboard">
+                <div class="artwork" style="aspect-ratio: 3/4; background: url('https://media.getty.edu/iiif/image/1a776f13-a3e7-4416-b28e-d702de736159/full/max/0/default.jpg') center/cover;"></div>
+            </div>
+        </div>
+
+        
+        <div class="frame">
+            <div class="matboard">
+                <div class="artwork" style="aspect-ratio: 4/5; background: url('https://media.getty.edu/iiif/image/df15bf54-fbd9-4e30-8d72-d172d36693d6/full/max/0/default.jpg') center/cover;"></div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
