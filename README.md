@@ -33,6 +33,7 @@ Spice is more than a utility; it's a high-performance framework for desktop envi
 ### 🌎 Infinite Sources
 *   **🔗 Browser Companion:** Use our [**Chrome Extension**](https://chromewebstore.google.com/detail/ekodikedjmhnganfcfleabcfohdjkoeb) or [**Firefox Add-on**](https://addons.mozilla.org/en-US/firefox/addon/spice-wallpaper-manager/) to seamlessly send any image from the web to your desktop.
 *   **🏛️ The Museum Experience:** Turn your desk into a gallery with 4K+ Open Access masterpieces from **The Met**, **Art Institute of Chicago**, **Cleveland Museum of Art**, the **Rijksmuseum** (Amsterdam), the **National Palace Museum** (Taiwan), **Statens Museum for Kunst** (Denmark), and **Getty Images**.
+    *   **Offline Salon Galleries:** Browse curated collections directly in your browser with our stunning, locally-generated masonry preview galleries—available offline with a single click from the preferences panel.
 *   **📸 Curated Sources:** Native support for **Wallhaven**, **Pexels**, and **Wikimedia Commons**.
 *   **☁️ Personal Collections:** Seamlessly cycle your own memories with **Google Photos** integration.
 *   **📁 Local Folders:** Point Spice to any directory on your computer to use your existing wallpaper library.
