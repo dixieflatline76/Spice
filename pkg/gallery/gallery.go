@@ -364,9 +364,10 @@ func GenerateHTML(title string, titleTranslations map[string]string, items []Gal
 	// Inject title translations into the map
 	for langCode, localizedTitle := range titleTranslations {
 		// Normalize JSON locales to app locales for the web gallery
-		if langCode == "zh-CN" {
+		switch langCode {
+		case "zh-CN":
 			langCode = "zh"
-		} else if langCode == "zh-TW" {
+		case "zh-TW":
 			langCode = "zh-Hant"
 		}
 

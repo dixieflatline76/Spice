@@ -68,7 +68,7 @@ func buildCuratedUIItem(p provider.ImageProvider, sm setting.SettingsManager, cf
 
 			langParam := i18n.GetLanguage()
 			localeJSPath := filepath.Join(providerCacheDir, "current_locale.js")
-			_ = os.WriteFile(localeJSPath, []byte(fmt.Sprintf("window.spiceAppLocale = '%s';", langParam)), 0600)
+			_ = os.WriteFile(localeJSPath, fmt.Appendf(nil, "window.spiceAppLocale = '%s';", langParam), 0600)
 
 			fileURL := fmt.Sprintf("file:///%s", filepath.ToSlash(outPath))
 			if u, err := url.Parse(fileURL); err == nil {
@@ -88,7 +88,7 @@ func buildCuratedUIItem(p provider.ImageProvider, sm setting.SettingsManager, cf
 
 			langParam := i18n.GetLanguage()
 			localeJSPath := filepath.Join(providerCacheDir, "current_locale.js")
-			_ = os.WriteFile(localeJSPath, []byte(fmt.Sprintf("window.spiceAppLocale = '%s';", langParam)), 0600)
+			_ = os.WriteFile(localeJSPath, fmt.Appendf(nil, "window.spiceAppLocale = '%s';", langParam), 0600)
 
 			fileURL := fmt.Sprintf("file:///%s", filepath.ToSlash(outPath))
 			if u, err := url.Parse(fileURL); err == nil {
