@@ -3,3 +3,6 @@ makefile text eol=lf
 Makefile text eol=lf
 *.sh text eol=lf
 *.entitlements text eol=lf
+
+# Ignore generated HTML galleries for GitHub language statistics
+asset/galleries/**/*.html linguist-generated=true
