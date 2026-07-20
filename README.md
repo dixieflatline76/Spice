@@ -20,13 +20,13 @@ Spice is a premium wallpaper manager that automatically cycles high-quality wall
   <img src="images/screen4-jwst.webp" alt="Spice Screenshot" width="1000">
 </p>
 
-## ⚙️ Why Spice? (A Modular Desktop Engine)
+## ⚙️ Built for Performance (A Modular Engine)
 
-Spice is more than a utility; it's a high-performance framework for desktop environment management.
+Spice isn't just a basic script; it's a high-performance, multi-threaded desktop engine written in Go.
 
-*   **Low-Contention UI Pipeline:** Separates heavy 4K I/O operations from the Fyne UI thread using a hybrid-concurrency pipeline with serialized hot-path writes and O(1) state stores.
-*   **Actor-Model Multi-Monitor:** Independent goroutines manage each connected display autonomously without synchronous blocking.
-*   **Plugin Ecosystem:** Exposes a robust `ui.Plugin` interface allowing developers to inject custom Fyne preference panels and system tray menus safely into the host engine.
+*   **Zero UI Lag:** Heavy 4K image processing is completely separated from the user interface, meaning the app stays lightning-fast even under heavy loads.
+*   **True Multi-Monitor:** Each of your displays is managed independently in the background, meaning rotation on one screen will never block or freeze another.
+*   **Plugin-Ready:** Built with a modular architecture that allows new museum integrations, custom preference panels, and tray menus to be safely plugged into the core engine.
 
 ## ✨ Key Features
 
