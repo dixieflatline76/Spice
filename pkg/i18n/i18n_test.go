@@ -38,3 +38,20 @@ func TestSetLanguage(t *testing.T) {
 		t.Errorf("Expected currentLanguage to be empty for System Default, got %s", currentLanguage)
 	}
 }
+
+func TestGetTranslationsForKeys(t *testing.T) {
+	keys := []string{"Preferences", "Active"}
+	res := GetTranslationsForKeys(keys)
+
+	if len(res) == 0 {
+		t.Fatal("Expected translations map to be populated")
+	}
+
+	if dePrefs, ok := res["de"]["Preferences"]; !ok || dePrefs == "" {
+		t.Errorf("Expected 'de' translation for 'Preferences', got %v", dePrefs)
+	}
+
+	if frLang, ok := res["fr"]["Active"]; !ok || frLang == "" {
+		t.Errorf("Expected 'fr' translation for 'Active', got %v", frLang)
+	}
+}

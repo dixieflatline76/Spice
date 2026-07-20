@@ -26,4 +26,8 @@ func TestRijksmuseum_FetchThumbnails(t *testing.T) {
 	if thumbnails[0].URL != "https://iiif.micr.io/bRWvw/full/800,/0/default.jpg" {
 		t.Errorf("Expected URL 'https://iiif.micr.io/bRWvw/full/800,/0/default.jpg', got %s", thumbnails[0].URL)
 	}
+
+	if thumbnails[0].ViewURL != "https://www.rijksmuseum.nl/en/collection/SK-C-229" {
+		t.Errorf("Expected ViewURL 'https://www.rijksmuseum.nl/en/collection/SK-C-229', got %s", thumbnails[0].ViewURL)
+	}
 }

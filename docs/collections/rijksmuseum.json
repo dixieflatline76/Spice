@@ -1,331 +1,1661 @@
 {
     "collections": [
         {
-            "items": [
-                {
-                    "artist": "Rembrandt van Rijn",
-                    "image_url": "https://iiif.micr.io/PJEZO/full/max/0/default.jpg",
-                    "title": "The Night Watch",
-                    "id": "200107928",
-                    "accession_id": "SK-C-5"
-                },
-                {
-                    "artist": "Johannes Vermeer",
-                    "image_url": "https://iiif.micr.io/QkOGy/full/max/0/default.jpg",
-                    "title": "The Milkmaid",
-                    "id": "200108369",
-                    "accession_id": "SK-A-2344"
-                },
-                {
-                    "artist": "Rembrandt van Rijn",
-                    "image_url": "https://iiif.micr.io/cWWQE/full/max/0/default.jpg",
-                    "title": "The Syndics",
-                    "id": "200107929",
-                    "accession_id": "SK-C-6"
-                },
-                {
-                    "artist": "Johannes Vermeer",
-                    "image_url": "https://iiif.micr.io/hqxQG/full/max/0/default.jpg",
-                    "title": "The Love Letter",
-                    "id": "200108370",
-                    "accession_id": "SK-A-1595"
-                },
-                {
-                    "artist": "Johannes Vermeer",
-                    "image_url": "https://iiif.micr.io/VWEov/full/max/0/default.jpg",
-                    "title": "The Little Street",
-                    "id": "200108371",
-                    "accession_id": "SK-A-2860"
-                },
-                {
-                    "artist": "Johannes Vermeer",
-                    "image_url": "https://iiif.micr.io/aehHx/full/max/0/default.jpg",
-                    "title": "Woman in Blue Reading a Letter",
-                    "id": "200108372",
-                    "accession_id": "SK-C-251"
-                },
-                {
-                    "artist": "Rembrandt van Rijn",
-                    "image_url": "https://iiif.micr.io/uRWXq/full/max/0/default.jpg",
-                    "title": "The Jewish Bride",
-                    "id": "200107934",
-                    "accession_id": "SK-C-216"
-                },
-                {
-                    "artist": "Rembrandt van Rijn",
-                    "image_url": "https://iiif.micr.io/zQBxS/full/max/0/default.jpg",
-                    "title": "Jeremiah Lamenting the Destruction of Jerusalem",
-                    "id": "200107946",
-                    "accession_id": "SK-A-3276"
-                },
-                {
-                    "artist": "Govert Flinck",
-                    "image_url": "https://iiif.micr.io/URZpJ/full/max/0/default.jpg",
-                    "title": "The Company of Captain Albert Bas",
-                    "id": "200109287",
-                    "accession_id": "SK-C-371"
-                },
-                {
-                    "artist": "Rembrandt van Rijn",
-                    "image_url": "https://iiif.micr.io/VzuFK/full/max/0/default.jpg",
-                    "title": "Man in Oriental Dress",
-                    "id": "200107930",
-                    "accession_id": "SK-A-3340"
-                },
-                {
-                    "artist": "Rembrandt van Rijn",
-                    "image_url": "https://iiif.micr.io/vBXKy/full/max/0/default.jpg",
-                    "title": "Still Life with Peacocks",
-                    "id": "200107931",
-                    "accession_id": "SK-A-3981"
-                },
-                {
-                    "artist": "Rembrandt van Rijn",
-                    "image_url": "https://iiif.micr.io/bAqDD/full/max/0/default.jpg",
-                    "title": "St Peter's Denial",
-                    "id": "200107933",
-                    "accession_id": "SK-A-3137"
-                },
-                {
-                    "artist": "Rembrandt van Rijn",
-                    "image_url": "https://iiif.micr.io/hdvov/full/max/0/default.jpg",
-                    "title": "Musical Company",
-                    "id": "200107935",
-                    "accession_id": "SK-A-4674"
-                },
-                {
-                    "artist": "Rembrandt van Rijn",
-                    "image_url": "https://iiif.micr.io/myXdn/full/max/0/default.jpg",
-                    "title": "Tobit and Anna with the Kid",
-                    "id": "200107945",
-                    "accession_id": "SK-A-4717"
-                },
-                {
-                    "artist": "Nicolaes Moeyaert",
-                    "image_url": "https://iiif.micr.io/NxFOh/full/max/0/default.jpg",
-                    "title": "The Meeting of Jacob and Rachel",
-                    "id": "200107761",
-                    "accession_id": "SK-A-1485"
-                },
-                {
-                    "artist": "Jan Asselijn",
-                    "image_url": "https://iiif.micr.io/njLvs/full/max/0/default.jpg",
-                    "title": "The Threatened Swan",
-                    "id": "200107004",
-                    "accession_id": "SK-A-4"
-                },
-                {
-                    "artist": "Hendrick Avercamp",
-                    "image_url": "https://iiif.micr.io/OkRwZ/full/max/0/default.jpg",
-                    "title": "Winter Landscape with Ice Skaters",
-                    "id": "200108171",
-                    "accession_id": "SK-A-1718"
-                },
-                {
-                    "artist": "Vincent van Gogh",
-                    "image_url": "https://iiif.micr.io/OUtXF/full/max/0/default.jpg",
-                    "title": "Self-portrait",
-                    "id": "200109326",
-                    "accession_id": "SK-A-3262"
-                },
-                {
-                    "artist": "Jan Steen",
-                    "image_url": "https://iiif.micr.io/bRWvw/full/max/0/default.jpg",
-                    "title": "The Merry Family",
-                    "id": "200107229",
-                    "accession_id": "SK-C-229"
-                },
-                {
-                    "artist": "Jan Willem Pieneman",
-                    "image_url": "https://iiif.micr.io/GebpD/full/max/0/default.jpg",
-                    "title": "The Battle of Waterloo",
-                    "id": "200107874",
-                    "accession_id": "SK-A-1115"
-                },
-                {
-                    "artist": "Frans Hals and Pieter Codde",
-                    "image_url": "https://iiif.micr.io/sUZPV/full/max/0/default.jpg",
-                    "title": "Militia Company of District XI (The Meagre Company)",
-                    "id": "200107374",
-                    "accession_id": "SK-C-374"
-                },
-                {
-                    "artist": "Hendrik Voogd",
-                    "image_url": "https://iiif.micr.io/FDLZM/full/max/0/default.jpg",
-                    "title": "Italian Landscape with Umbrella Pines",
-                    "id": "200108385",
-                    "accession_id": "SK-A-4688"
-                },
-                {
-                    "artist": "Joos de Momper (II)",
-                    "image_url": "https://iiif.micr.io/VShfh/full/max/0/default.jpg",
-                    "title": "Mountainous Landscape",
-                    "id": "200107516",
-                    "accession_id": "SK-A-1559"
-                },
-                {
-                    "artist": "Jacob van Ruisdael",
-                    "image_url": "https://iiif.micr.io/LkJYZ/full/max/0/default.jpg",
-                    "title": "Winter Landscape",
-                    "id": "200107102",
-                    "accession_id": "SK-A-349"
-                },
-                {
-                    "artist": "Jacob van Ruisdael",
-                    "image_url": "https://iiif.micr.io/dNkMA/full/max/0/default.jpg",
-                    "title": "View of Haarlem with Bleaching Fields",
-                    "id": "200107104",
-                    "accession_id": "SK-A-351"
-                },
-                {
-                    "artist": "Jan Asselijn",
-                    "image_url": "https://iiif.micr.io/rSqZv/full/max/0/default.jpg",
-                    "title": "Italian Landscape with the Ponte Lucano",
-                    "id": "200107006",
-                    "accession_id": "SK-A-2313"
-                },
-                {
-                    "artist": "Jacob van Ruisdael",
-                    "image_url": "https://iiif.micr.io/XWEFp/full/max/0/default.jpg",
-                    "title": "The Windmill at Wijk bij Duurstede",
-                    "id": "200109312",
-                    "accession_id": "SK-C-211"
-                },
-                {
-                    "artist": "Rembrandt van Rijn",
-                    "image_url": "https://iiif.micr.io/hodeb/full/max/0/default.jpg",
-                    "title": "Landscape with a Stone Bridge",
-                    "id": "200107940",
-                    "accession_id": "SK-A-1935"
-                },
-                {
-                    "artist": "Willem van de Velde (II)",
-                    "image_url": "https://iiif.micr.io/DCMua/full/max/0/default.jpg",
-                    "title": "The Cannon Shot",
-                    "id": "200108460",
-                    "accession_id": "SK-A-4133"
-                }
-            ],
             "key": "rijks_masterpieces",
             "name": "⭐ Best of Rijksmuseum",
             "name_translations": {
-                "da": "⭐ Det Bedste fra Rijksmuseum",
-                "de": "⭐ Das Beste aus dem Rijksmuseum",
+                "de": "⭐ Das Beste vom Rijksmuseum",
                 "es": "⭐ Lo Mejor del Rijksmuseum",
                 "fr": "⭐ Le Meilleur du Rijksmuseum",
                 "it": "⭐ Il Meglio del Rijksmuseum",
-                "ja": "⭐ アムステルダム国立美術館の名作",
-                "ko": "⭐ 국립미술관 베스트",
-                "nl": "⭐ Het Beste van het Rijksmuseum",
+                "ja": "⭐ アムステルダム国立美術館のベスト",
+                "pt": "⭐ O Melhor do Rijksmuseum",
                 "ru": "⭐ Лучшее из Рейксмюзеума",
-                "zh-CN": "⭐ 荷兰国立博物馆精选",
-                "zh-TW": "⭐ 荷蘭國立博物館精選"
+                "uk": "⭐ Найкраще з Рейксмюзеума",
+                "zh-CN": "⭐ 国家博物馆精选",
+                "zh-TW": "⭐ 國家博物館精選"
             },
-            "type": "curated"
-        },
-        {
-            "key": "rijks_golden_age",
-            "name": "Dutch Golden Age",
-            "name_translations": {
-                   "de": "Rembrandt",
-                "es": "Rembrandt",
-                "fr": "Rembrandt",
-                "it": "Rembrandt",
-                "ja": "レンブラント",
-                "ko": "렘브란트",
-                "nl": "Rembrandt",
-                "ru": "Рембрандт",
-                "zh-CN": "伦勃朗",
-                "zh-TW": "倫勃朗"
-            },
-            "search_params": "type=painting&creator=Rembrandt+van+Rijn&imageAvailable=true",
-            "type": "search"
-        },
-        {
-            "key": "rijks_landscapes",
-            "name": "Dutch Landscapes",
-            "name_translations": {
-                "da": "Hollandske Landskaber",
-                "de": "Niederländische Landschaften",
-                "es": "Paisajes Holandeses",
-                "fr": "Paysages Néerlandais",
-                "it": "Paesaggi Olandesi",
-                "ja": "オランダ風景画",
-                "ko": "네덜란드 풍경화",
-                "nl": "Nederlandse Landschappen",
-                "ru": "Голландские Пейзажи",
-                "zh-CN": "荷兰风景画",
-                "zh-TW": "荷蘭風景畫"
-            },
-            "search_params": "type=painting&description=landscape&imageAvailable=true",
-            "type": "search"
-        },
-        {
-            "key": "rijks_vermeer",
-            "name": "Vermeer",
-            "name_translations": {
-                "da": "Vermeer",
-                "de": "Vermeer",
-                "es": "Vermeer",
-                "fr": "Vermeer",
-                "it": "Vermeer",
-                "ja": "フェルメール",
-                "ko": "베르메르",
-                "nl": "Vermeer",
-                "ru": "Вермеер",
-                "zh-CN": "维米尔",
-                "zh-TW": "維米爾"
-            },
-            "search_params": "type=painting&creator=Johannes+Vermeer&imageAvailable=true",
-            "type": "search"
-        },
-        {
-            "key": "rijks_maritime",
-            "name": "Maritime & Seascapes",
-            "name_translations": {
-                "da": "Maritime og Søstykker",
-                "de": "Maritimes & Seestücke",
-                "es": "Marinas y Paisajes Marinos",
-                "fr": "Marines",
-                "it": "Marine",
-                "ja": "海洋と海景",
-                "ko": "해양 및 바다 풍경",
-                "nl": "Maritiem en Zeegezichten",
-                "ru": "Морские Пейзажи",
-                "zh-CN": "海洋与海景",
-                "zh-TW": "海洋與海景"
-            },
-            "search_params": "type=painting&description=sea&imageAvailable=true",
-            "type": "search"
-        },
-        {
+            "type": "curated",
             "items": [
                 {
-                    "accession_id": "SK-A-3841"
+                    "accession_id": "SK-A-2344",
+                    "artist": "Johannes Vermeer",
+                    "id": "200108369",
+                    "image_url": "https://iiif.micr.io/QkOGy/full/max/0/default.jpg",
+                    "title": "The Milkmaid"
                 },
                 {
-                    "accession_id": "SK-C-1351"
+                    "accession_id": "SK-C-5",
+                    "artist": "Rembrandt van Rijn",
+                    "id": "200107928",
+                    "image_url": "https://iiif.micr.io/PJEZO/full/max/0/default.jpg",
+                    "title": "The Night Watch Militia Company of District II under the Command of Captain Frans Banninck Cocq"
                 },
                 {
-                    "accession_id": "SK-A-26"
+                    "accession_id": "SK-A-2860",
+                    "artist": "Johannes Vermeer",
+                    "id": "200108371",
+                    "image_url": "https://iiif.micr.io/VWEov/full/max/0/default.jpg",
+                    "title": "View of Houses in Delft, Known as ‘The Little Street’"
+                },
+                {
+                    "accession_id": "SK-C-251",
+                    "artist": "Johannes Vermeer",
+                    "id": "200108372",
+                    "image_url": "https://iiif.micr.io/aehHx/full/max/0/default.jpg",
+                    "title": "Woman Reading a Letter"
+                },
+                {
+                    "accession_id": "SK-C-229",
+                    "artist": "Jan Havicksz. Steen",
+                    "id": "200108012",
+                    "image_url": "https://iiif.micr.io/SbsFC/full/max/0/default.jpg",
+                    "title": "The Merry Family"
+                },
+                {
+                    "accession_id": "SK-A-4691",
+                    "artist": "Rembrandt van Rijn",
+                    "id": "200107941",
+                    "image_url": "https://iiif.micr.io/YfhED/full/max/0/default.jpg",
+                    "title": "Self-portrait"
+                },
+                {
+                    "accession_id": "SK-C-216",
+                    "artist": "Rembrandt van Rijn",
+                    "id": "200107934",
+                    "image_url": "https://iiif.micr.io/uRWXq/full/max/0/default.jpg",
+                    "title": "Isaac and Rebecca, Known as ‘The Jewish Bride’"
+                },
+                {
+                    "accession_id": "SK-C-229",
+                    "artist": "Jan Havicksz. Steen",
+                    "id": "200108012",
+                    "image_url": "https://iiif.micr.io/SbsFC/full/max/0/default.jpg",
+                    "title": "The Merry Family"
+                },
+                {
+                    "accession_id": "SK-A-4050",
+                    "artist": "Rembrandt van Rijn",
+                    "id": "200107952",
+                    "image_url": "https://iiif.micr.io/wqcDn/full/max/0/default.jpg",
+                    "title": "Self-portrait as the Apostle Paul"
+                },
+                {
+                    "accession_id": "SK-C-211",
+                    "artist": "Jacob Isaacksz van Ruisdael",
+                    "id": "200107959",
+                    "image_url": "https://iiif.micr.io/XWEFp/full/max/0/default.jpg",
+                    "title": "The Windmill at Wijk bij Duurstede"
+                },
+                {
+                    "accession_id": "SK-A-2382",
+                    "artist": "Jozef Israëls",
+                    "id": "200109406",
+                    "image_url": "https://iiif.micr.io/nnjuR/full/max/0/default.jpg",
+                    "title": "Children of the Sea"
+                },
+                {
+                    "accession_id": "SK-A-4",
+                    "artist": "Jan Asselijn",
+                    "id": "200108146",
+                    "image_url": "https://iiif.micr.io/hZepb/full/max/0/default.jpg",
+                    "title": "The Threatened Swan"
+                },
+                {
+                    "accession_id": "SK-A-3602",
+                    "artist": "Anton Mauve (mentioned on object)",
+                    "id": "200109454",
+                    "image_url": "https://iiif.micr.io/eVjnU/full/max/0/default.jpg",
+                    "title": "Morning Ride along the Beach"
+                },
+                {
+                    "accession_id": "SK-A-175",
+                    "artist": "Melchior d&#39; Hondecoeter",
+                    "id": "200109383",
+                    "image_url": "https://iiif.micr.io/BaFQb/full/max/0/default.jpg",
+                    "title": "A Pelican and other Birds near a Pool, Known as ‘The Floating Feather’"
+                },
+                {
+                    "accession_id": "SK-A-1892",
+                    "artist": "Claude Monet",
+                    "id": "200108883",
+                    "image_url": "https://iiif.micr.io/VPrnZ/full/max/0/default.jpg",
+                    "title": "La Corniche near Monaco"
+                },
+                {
+                    "accession_id": "SK-A-3262",
+                    "artist": "Vincent van Gogh",
+                    "id": "200109794",
+                    "image_url": "https://iiif.micr.io/vjYfT/full/max/0/default.jpg",
+                    "title": "Self-portrait"
+                },
+                {
+                    "accession_id": "SK-A-3584",
+                    "artist": "George Hendrik Breitner (mentioned on object)",
+                    "id": "200108304",
+                    "image_url": "https://iiif.micr.io/cQMKz/full/max/0/default.jpg",
+                    "title": "Girl in a White Kimono"
+                },
+                {
+                    "accession_id": "SK-A-5005",
+                    "artist": "Caesar van Everdingen",
+                    "id": "200516039",
+                    "image_url": "https://iiif.micr.io/txKxF/full/max/0/default.jpg",
+                    "title": "Woman in a Large Hat"
+                },
+                {
+                    "accession_id": "SK-C-1672",
+                    "artist": "Jan Adam Kruseman",
+                    "id": "200412737",
+                    "image_url": "https://iiif.micr.io/wEuxE/full/max/0/default.jpg",
+                    "title": "Portrait of Alida Christina Assink"
+                },
+                {
+                    "accession_id": "SK-A-1703",
+                    "artist": "Thérèse Schwartze",
+                    "id": "200108843",
+                    "image_url": "https://iiif.micr.io/wJkMC/full/max/0/default.jpg",
+                    "title": "Young Italian Woman, with ‘Puck’ the Dog"
+                },
+                {
+                    "accession_id": "SK-C-214",
+                    "artist": "Jan Davidsz. de Heem",
+                    "id": "20029045",
+                    "image_url": "https://iiif.micr.io/Gfuby/full/max/0/default.jpg",
+                    "title": "Still Life with Flowers in a Glass Vase"
+                },
+                {
+                    "accession_id": "SK-A-268",
+                    "artist": "Abraham Mignon",
+                    "id": "20027070",
+                    "image_url": "https://iiif.micr.io/DpDCm/full/max/0/default.jpg",
+                    "title": "Still Life with Flowers and a Watch"
+                },
+                {
+                    "accession_id": "SK-A-1718",
+                    "artist": "Hendrick Avercamp (signed by artist)",
+                    "id": "200108163",
+                    "image_url": "https://iiif.micr.io/aXnzA/full/max/0/default.jpg",
+                    "title": "Winter Landscape with Ice Skaters"
+                },
+                {
+                    "accession_id": "SK-A-799",
+                    "artist": "Hans Bollongier (signed by artist)",
+                    "id": "200108261",
+                    "image_url": "https://iiif.micr.io/hoBLZ/full/max/0/default.jpg",
+                    "title": "Floral Still Life"
+                },
+                {
+                    "accession_id": "SK-A-4688",
+                    "artist": "Hendrik Voogd",
+                    "id": "200108385",
+                    "image_url": "https://iiif.micr.io/FDLZM/full/max/0/default.jpg",
+                    "title": "Italian Landscape with Umbrella Pines"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "circle of Adolphe Burdet",
+                    "id": "200414739",
+                    "image_url": "https://iiif.micr.io/ijdQK/full/max/0/default.jpg",
+                    "title": "Eight Children by a Sloop, North Sea Coast"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "Richard Tepe (mentioned on object)",
+                    "id": "200471071",
+                    "image_url": "https://iiif.micr.io/xMbAY/full/max/0/default.jpg",
+                    "title": "Sneeuwklokjes"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "circle of Adolphe Burdet",
+                    "id": "200472892",
+                    "image_url": "https://iiif.micr.io/xLrZA/full/max/0/default.jpg",
+                    "title": "Drie kinderen spelend aan het Noordzeestrand"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "Karl Blossfeldt",
+                    "id": "200581361",
+                    "image_url": "https://iiif.micr.io/PBKwf/full/max/0/default.jpg",
+                    "title": "Plantstudie"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "Jacob Merkelbach (mentioned on object)",
+                    "id": "200328397",
+                    "image_url": "https://iiif.micr.io/aQLoD/full/max/0/default.jpg",
+                    "title": "Portret van een vrouw in een rode jurk"
                 }
-            ],
-            "key": "Artistic Nudes",
-            "name": "Artistic Nudes",
+            ]
+        },
+        {
+            "key": "rijks_dutch_masters",
+            "name": "Dutch Masters",
             "name_translations": {
-                "da": "Kunstneriske Akter",
-                "de": "Künstlerische Akte",
-                "es": "Desnudos Artísticos",
-                "fr": "Nus Artistiques",
-                "it": "Nudi Artistici",
-                "ja": "芸術的なヌード",
-                "ko": "예술적 누드",
-                "nl": "Artistieke Naakten",
-                "ru": "Художественная Обнаженная Натура",
-                "zh-CN": "艺术裸体",
-                "zh-TW": "藝術裸體"
+                "de": "Holländische Meister",
+                "es": "Maestros Holandeses",
+                "fr": "Maîtres Néerlandais",
+                "it": "Maestri Olandesi",
+                "ja": "オランダの巨匠",
+                "pt": "Mestres Holandeses",
+                "ru": "Голландские мастера",
+                "uk": "Голландські майстри",
+                "zh-CN": "荷兰大师",
+                "zh-TW": "荷蘭大師"
             },
-            "type": "curated"
+            "type": "curated",
+            "items": [
+                {
+                    "accession_id": "SK-A-2344",
+                    "artist": "Johannes Vermeer",
+                    "id": "200108369",
+                    "image_url": "https://iiif.micr.io/QkOGy/full/max/0/default.jpg",
+                    "title": "The Milkmaid"
+                },
+                {
+                    "accession_id": "SK-C-5",
+                    "artist": "Rembrandt van Rijn",
+                    "id": "200107928",
+                    "image_url": "https://iiif.micr.io/PJEZO/full/max/0/default.jpg",
+                    "title": "The Night Watch Militia Company of District II under the Command of Captain Frans Banninck Cocq"
+                },
+                {
+                    "accession_id": "SK-A-2860",
+                    "artist": "Johannes Vermeer",
+                    "id": "200108371",
+                    "image_url": "https://iiif.micr.io/VWEov/full/max/0/default.jpg",
+                    "title": "View of Houses in Delft, Known as ‘The Little Street’"
+                },
+                {
+                    "accession_id": "SK-C-251",
+                    "artist": "Johannes Vermeer",
+                    "id": "200108372",
+                    "image_url": "https://iiif.micr.io/aehHx/full/max/0/default.jpg",
+                    "title": "Woman Reading a Letter"
+                },
+                {
+                    "accession_id": "SK-C-229",
+                    "artist": "Jan Havicksz. Steen",
+                    "id": "200108012",
+                    "image_url": "https://iiif.micr.io/SbsFC/full/max/0/default.jpg",
+                    "title": "The Merry Family"
+                },
+                {
+                    "accession_id": "SK-A-4691",
+                    "artist": "Rembrandt van Rijn",
+                    "id": "200107941",
+                    "image_url": "https://iiif.micr.io/YfhED/full/max/0/default.jpg",
+                    "title": "Self-portrait"
+                },
+                {
+                    "accession_id": "SK-C-216",
+                    "artist": "Rembrandt van Rijn",
+                    "id": "200107934",
+                    "image_url": "https://iiif.micr.io/uRWXq/full/max/0/default.jpg",
+                    "title": "Isaac and Rebecca, Known as ‘The Jewish Bride’"
+                },
+                {
+                    "accession_id": "SK-C-229",
+                    "artist": "Jan Havicksz. Steen",
+                    "id": "200108012",
+                    "image_url": "https://iiif.micr.io/SbsFC/full/max/0/default.jpg",
+                    "title": "The Merry Family"
+                },
+                {
+                    "accession_id": "SK-A-4050",
+                    "artist": "Rembrandt van Rijn",
+                    "id": "200107952",
+                    "image_url": "https://iiif.micr.io/wqcDn/full/max/0/default.jpg",
+                    "title": "Self-portrait as the Apostle Paul"
+                },
+                {
+                    "accession_id": "SK-C-211",
+                    "artist": "Jacob Isaacksz van Ruisdael",
+                    "id": "200107959",
+                    "image_url": "https://iiif.micr.io/XWEFp/full/max/0/default.jpg",
+                    "title": "The Windmill at Wijk bij Duurstede"
+                },
+                {
+                    "accession_id": "SK-C-6",
+                    "artist": "Rembrandt van Rijn",
+                    "id": "200107929",
+                    "image_url": "https://iiif.micr.io/cWWQE/full/max/0/default.jpg",
+                    "title": "The Sampling Officials of the Amsterdam Drapers’ Guild, Known as ‘The Syndics’"
+                },
+                {
+                    "accession_id": "SK-C-149",
+                    "artist": "Pieter de Hooch",
+                    "id": "20028104",
+                    "image_url": "https://iiif.micr.io/SgpJY/full/max/0/default.jpg",
+                    "title": "A Mother Delousing her Child’s Hair, Known as ‘A Mother’s Duty’"
+                },
+                {
+                    "accession_id": "SK-C-597",
+                    "artist": "Rembrandt van Rijn",
+                    "id": "200107942",
+                    "image_url": "https://iiif.micr.io/FeurF/full/max/0/default.jpg",
+                    "title": "Portrait of a Woman, Probably Maria Trip (1619-1683)"
+                },
+                {
+                    "accession_id": "SK-A-4118",
+                    "artist": "Aelbert Cuyp (mentioned on object)",
+                    "id": "200109265",
+                    "image_url": "https://iiif.micr.io/uMHxo/full/max/0/default.jpg",
+                    "title": "River Landscape with Riders"
+                },
+                {
+                    "accession_id": "SK-A-3276",
+                    "artist": "Rembrandt van Rijn (mentioned on object)",
+                    "id": "200107946",
+                    "image_url": "https://iiif.micr.io/zQBxS/full/max/0/default.jpg",
+                    "title": "Jeremiah Lamenting the Destruction of Jerusalem"
+                },
+                {
+                    "accession_id": "SK-A-3066",
+                    "artist": "Rembrandt van Rijn (mentioned on object)",
+                    "id": "200107947",
+                    "image_url": "https://iiif.micr.io/CNSQg/full/max/0/default.jpg",
+                    "title": "Old Woman Reading, Probably the Prophetess Anna"
+                },
+                {
+                    "accession_id": "SK-A-3138",
+                    "artist": "Rembrandt van Rijn (mentioned on object)",
+                    "id": "200107937",
+                    "image_url": "https://iiif.micr.io/OzDjp/full/max/0/default.jpg",
+                    "title": "Rembrandt’s Son Titus in a Monk’s Habit"
+                },
+                {
+                    "accession_id": "SK-A-4885",
+                    "artist": "Rembrandt van Rijn",
+                    "id": "200138946",
+                    "image_url": "https://iiif.micr.io/vWfAy/full/max/0/default.jpg",
+                    "title": "Johannes Wtenbogaert"
+                },
+                {
+                    "accession_id": "SK-A-135",
+                    "artist": "Frans Hals (signed by artist)",
+                    "id": "200109347",
+                    "image_url": "https://iiif.micr.io/CgrHr/full/max/0/default.jpg",
+                    "title": "The Merry Drinker"
+                },
+                {
+                    "accession_id": "SK-A-182",
+                    "artist": "Pieter de Hooch",
+                    "id": "200109391",
+                    "image_url": "https://iiif.micr.io/DSKRH/full/max/0/default.jpg",
+                    "title": "A Maid with a Child in a Pantry"
+                },
+                {
+                    "accession_id": "SK-A-3340",
+                    "artist": "Rembrandt van Rijn",
+                    "id": "200107930",
+                    "image_url": "https://iiif.micr.io/VzuFK/full/max/0/default.jpg",
+                    "title": "Man in Oriental Dress"
+                },
+                {
+                    "accession_id": "SK-A-4052",
+                    "artist": "Jan Havicksz. Steen",
+                    "id": "200107999",
+                    "image_url": "https://iiif.micr.io/QQSGo/full/max/0/default.jpg",
+                    "title": "Woman at her Toilet"
+                },
+                {
+                    "accession_id": "SK-C-205",
+                    "artist": "Paulus Potter",
+                    "id": "20026075",
+                    "image_url": "https://iiif.micr.io/JFBTc/full/max/0/default.jpg",
+                    "title": "Two Horses in a Meadow near a Gate"
+                },
+                {
+                    "accession_id": "SK-A-390",
+                    "artist": "Jan Havicksz. Steen",
+                    "id": "2006409",
+                    "image_url": "https://iiif.micr.io/ZVUun/full/max/0/default.jpg",
+                    "title": "Baker’s Couple Arent Oostwaard and Catharina Keizerswaard"
+                }
+            ]
+        },
+        {
+            "key": "rijks_historical_genre",
+            "name": "Historical & Genre Scenes",
+            "name_translations": {
+                "de": "Historische & Genremalerei",
+                "es": "Escenas Históricas y de Género",
+                "fr": "Scènes Historiques et de Genre",
+                "it": "Scene Storiche e di Genere",
+                "ja": "歴史画と風俗画",
+                "pt": "Cenas Históricas e de Gênero",
+                "ru": "Исторические и жанровые сцены",
+                "uk": "Історичні та жанрові сцени",
+                "zh-CN": "历史与风俗画",
+                "zh-TW": "歷史與風俗畫"
+            },
+            "type": "curated",
+            "items": [
+                {
+                    "accession_id": "SK-A-2382",
+                    "artist": "Jozef Israëls",
+                    "id": "200109406",
+                    "image_url": "https://iiif.micr.io/nnjuR/full/max/0/default.jpg",
+                    "title": "Children of the Sea"
+                },
+                {
+                    "accession_id": "SK-A-4",
+                    "artist": "Jan Asselijn",
+                    "id": "200108146",
+                    "image_url": "https://iiif.micr.io/hZepb/full/max/0/default.jpg",
+                    "title": "The Threatened Swan"
+                },
+                {
+                    "accession_id": "SK-A-3602",
+                    "artist": "Anton Mauve (mentioned on object)",
+                    "id": "200109454",
+                    "image_url": "https://iiif.micr.io/eVjnU/full/max/0/default.jpg",
+                    "title": "Morning Ride along the Beach"
+                },
+                {
+                    "accession_id": "SK-A-175",
+                    "artist": "Melchior d&#39; Hondecoeter",
+                    "id": "200109383",
+                    "image_url": "https://iiif.micr.io/BaFQb/full/max/0/default.jpg",
+                    "title": "A Pelican and other Birds near a Pool, Known as ‘The Floating Feather’"
+                },
+                {
+                    "accession_id": "SK-A-1892",
+                    "artist": "Claude Monet",
+                    "id": "200108883",
+                    "image_url": "https://iiif.micr.io/VPrnZ/full/max/0/default.jpg",
+                    "title": "La Corniche near Monaco"
+                },
+                {
+                    "accession_id": "SK-A-3580",
+                    "artist": "George Hendrik Breitner (mentioned on object)",
+                    "id": "200108317",
+                    "image_url": "https://iiif.micr.io/RXguV/full/max/0/default.jpg",
+                    "title": "The Singel Bridge at the Paleisstraat in Amsterdam"
+                },
+                {
+                    "accession_id": "SK-A-372",
+                    "artist": "Jan van Scorel",
+                    "id": "200107985",
+                    "image_url": "https://iiif.micr.io/VGOCe/full/max/0/default.jpg",
+                    "title": "Mary Magdalene"
+                },
+                {
+                    "accession_id": "SK-A-3597",
+                    "artist": "Isaac Israels (mentioned on object)",
+                    "id": "200109402",
+                    "image_url": "https://iiif.micr.io/bTTgH/full/max/0/default.jpg",
+                    "title": "Donkey Rides on the Beach"
+                },
+                {
+                    "accession_id": "SK-A-180",
+                    "artist": "Gerard van Honthorst (signed by artist)",
+                    "id": "200109388",
+                    "image_url": "https://iiif.micr.io/LAWVX/full/max/0/default.jpg",
+                    "title": "The Merry Fiddler"
+                },
+                {
+                    "accession_id": "SK-A-3089",
+                    "artist": "Henriëtte Ronner (mentioned on object)",
+                    "id": "200105887",
+                    "image_url": "https://iiif.micr.io/YAxov/full/max/0/default.jpg",
+                    "title": "Cat at Play"
+                },
+                {
+                    "accession_id": "SK-A-1891",
+                    "artist": "Hendrik Willem Mesdag",
+                    "id": "20027448",
+                    "image_url": "https://iiif.micr.io/QvwMz/full/max/0/default.jpg",
+                    "title": "Kalme zee"
+                },
+                {
+                    "accession_id": "SK-A-2879",
+                    "artist": "George Hendrik Breitner",
+                    "id": "20026774",
+                    "image_url": "https://iiif.micr.io/vDabJ/full/max/0/default.jpg",
+                    "title": "The Damrak, Amsterdam"
+                },
+                {
+                    "accession_id": "SK-A-1065",
+                    "artist": "Willem Bartel van der Kooi",
+                    "id": "200108660",
+                    "image_url": "https://iiif.micr.io/VkWeX/full/max/0/default.jpg",
+                    "title": "Piano Practice Interrupted"
+                },
+                {
+                    "accession_id": "SK-A-2910",
+                    "artist": "Jac van Looij",
+                    "id": "20028468",
+                    "image_url": "https://iiif.micr.io/erfbV/full/max/0/default.jpg",
+                    "title": "Blooming Clover"
+                },
+                {
+                    "accession_id": "SK-A-2457",
+                    "artist": "Jacob Maris",
+                    "id": "20027558",
+                    "image_url": "https://iiif.micr.io/TQAHc/full/max/0/default.jpg",
+                    "title": "Fishing for Shells"
+                },
+                {
+                    "accession_id": "SK-A-2257",
+                    "artist": "attributed to Nicolas Toussaint Charlet",
+                    "id": "20027517",
+                    "image_url": "https://iiif.micr.io/eitnh/full/max/0/default.jpg",
+                    "title": "Head of a Dog"
+                },
+                {
+                    "accession_id": "SK-C-163",
+                    "artist": "Henriëtte Ronner",
+                    "id": "20026215",
+                    "image_url": "https://iiif.micr.io/UFbXj/full/max/0/default.jpg",
+                    "title": "Cat with Kittens"
+                },
+                {
+                    "accession_id": "SK-A-2706",
+                    "artist": "Willem Maris",
+                    "id": "200109449",
+                    "image_url": "https://iiif.micr.io/ZSMJQ/full/max/0/default.jpg",
+                    "title": "Cow beside a Ditch"
+                },
+                {
+                    "accession_id": "SK-A-2616",
+                    "artist": "Jozef Israëls",
+                    "id": "20027584",
+                    "image_url": "https://iiif.micr.io/JUkbH/full/max/0/default.jpg",
+                    "title": "'The Little Seamstress'"
+                },
+                {
+                    "accession_id": "SK-A-3184",
+                    "artist": "Anton Mauve (mentioned on object)",
+                    "id": "20028285",
+                    "image_url": "https://iiif.micr.io/EyNmc/full/max/0/default.jpg",
+                    "title": "Shepherdess with a Flock of Sheep"
+                },
+                {
+                    "accession_id": "SK-C-197",
+                    "artist": "Anthony Oberman",
+                    "id": "200107812",
+                    "image_url": "https://iiif.micr.io/zRfVE/full/max/0/default.jpg",
+                    "title": "Adriaan van der Hoop’s Trotter ‘De Vlugge’ (The Fast One) in a Meadow"
+                },
+                {
+                    "accession_id": "SK-A-4840",
+                    "artist": "Odilon Redon (signed by artist)",
+                    "id": "20026153",
+                    "image_url": "https://iiif.micr.io/etdwk/full/max/0/default.jpg",
+                    "title": "Ophélie, la cape bleue sur les eaux (Ophelia with a Blue Wimple in the Water)"
+                },
+                {
+                    "accession_id": "SK-A-2981",
+                    "artist": "Jan van Essen",
+                    "id": "20027858",
+                    "image_url": "https://iiif.micr.io/NxOrX/full/max/0/default.jpg",
+                    "title": "Lioness Resting"
+                },
+                {
+                    "accession_id": "SK-A-4996",
+                    "artist": "Johan Barthold Jongkind (signed by artist)",
+                    "id": "2004267",
+                    "image_url": "https://iiif.micr.io/JBFfm/full/max/0/default.jpg",
+                    "title": "Rue Notre-Dame, Paris"
+                },
+                {
+                    "accession_id": "SK-C-1671",
+                    "artist": "Charles van Beveren",
+                    "id": "20065878",
+                    "image_url": "https://iiif.micr.io/Xmmhk/full/max/0/default.jpg",
+                    "title": "The Duet"
+                }
+            ]
+        },
+        {
+            "key": "rijks_portraits",
+            "name": "Portraits & People",
+            "name_translations": {
+                "de": "Porträts & Menschen",
+                "es": "Retratos y Personas",
+                "fr": "Portraits et Personnes",
+                "it": "Ritratti e Persone",
+                "ja": "肖像画と人々",
+                "pt": "Retratos e Pessoas",
+                "ru": "Портреты и люди",
+                "uk": "Портрети та люди",
+                "zh-CN": "肖像与人物",
+                "zh-TW": "肖像與人物"
+            },
+            "type": "curated",
+            "items": [
+                {
+                    "accession_id": "SK-A-3262",
+                    "artist": "Vincent van Gogh",
+                    "id": "200109794",
+                    "image_url": "https://iiif.micr.io/vjYfT/full/max/0/default.jpg",
+                    "title": "Self-portrait"
+                },
+                {
+                    "accession_id": "SK-A-3584",
+                    "artist": "George Hendrik Breitner (mentioned on object)",
+                    "id": "200108304",
+                    "image_url": "https://iiif.micr.io/cQMKz/full/max/0/default.jpg",
+                    "title": "Girl in a White Kimono"
+                },
+                {
+                    "accession_id": "SK-A-5005",
+                    "artist": "Caesar van Everdingen",
+                    "id": "200516039",
+                    "image_url": "https://iiif.micr.io/txKxF/full/max/0/default.jpg",
+                    "title": "Woman in a Large Hat"
+                },
+                {
+                    "accession_id": "SK-C-1672",
+                    "artist": "Jan Adam Kruseman",
+                    "id": "200412737",
+                    "image_url": "https://iiif.micr.io/wEuxE/full/max/0/default.jpg",
+                    "title": "Portrait of Alida Christina Assink"
+                },
+                {
+                    "accession_id": "SK-A-1703",
+                    "artist": "Thérèse Schwartze",
+                    "id": "200108843",
+                    "image_url": "https://iiif.micr.io/wJkMC/full/max/0/default.jpg",
+                    "title": "Young Italian Woman, with ‘Puck’ the Dog"
+                },
+                {
+                    "accession_id": "SK-A-3044",
+                    "artist": "Marie Wandscheer (mentioned on object)",
+                    "id": "20026926",
+                    "image_url": "https://iiif.micr.io/RwJsC/full/max/0/default.jpg",
+                    "title": "Portrait of a Woman"
+                },
+                {
+                    "accession_id": "SK-A-4679",
+                    "artist": "Isaac Israels",
+                    "id": "20028124",
+                    "image_url": "https://iiif.micr.io/MeKaK/full/max/0/default.jpg",
+                    "title": "Young Woman, Gazing at the Sea"
+                },
+                {
+                    "accession_id": "SK-A-4700",
+                    "artist": "Thérèse Schwartze",
+                    "id": "200107981",
+                    "image_url": "https://iiif.micr.io/zkwTG/full/max/0/default.jpg",
+                    "title": "Portrait of Lizzy Ansingh"
+                },
+                {
+                    "accession_id": "SK-A-2918",
+                    "artist": "Isaac Israels",
+                    "id": "20028127",
+                    "image_url": "https://iiif.micr.io/htSbb/full/max/0/default.jpg",
+                    "title": "Portrait of a Woman"
+                },
+                {
+                    "accession_id": "SK-A-3075",
+                    "artist": "Bernardus Johannes Blommers (mentioned on object)",
+                    "id": "200108238",
+                    "image_url": "https://iiif.micr.io/QaoFf/full/max/0/default.jpg",
+                    "title": "Girl Knitting in the Dunes"
+                },
+                {
+                    "accession_id": "SK-A-3596",
+                    "artist": "Isaac Israels (mentioned on object)",
+                    "id": "20028126",
+                    "image_url": "https://iiif.micr.io/GmJGR/full/max/0/default.jpg",
+                    "title": "Boy and Girl on Donkeys"
+                },
+                {
+                    "accession_id": "SK-A-3920",
+                    "artist": "Werner van den Valckert (signed by artist)",
+                    "id": "200108024",
+                    "image_url": "https://iiif.micr.io/pAJRo/full/max/0/default.jpg",
+                    "title": "Portrait of a Goldsmith, Probably Bartholomeus Jansz van Assendelft"
+                },
+                {
+                    "accession_id": "SK-C-106",
+                    "artist": "Hendrick Bloemaert (mentioned on object)",
+                    "id": "20026655",
+                    "image_url": "https://iiif.micr.io/HEJww/full/max/0/default.jpg",
+                    "title": "Old Woman Selling Eggs"
+                },
+                {
+                    "accession_id": "SK-A-1048",
+                    "artist": "Charles Howard Hodges",
+                    "id": "200109377",
+                    "image_url": "https://iiif.micr.io/AZYrA/full/max/0/default.jpg",
+                    "title": "Portrait of Emma Jane Hodges"
+                },
+                {
+                    "accession_id": "SK-A-4191",
+                    "artist": "Wybrand de Geest",
+                    "id": "20027906",
+                    "image_url": "https://iiif.micr.io/QLYVH/full/max/0/default.jpg",
+                    "title": "Portrait of an Officer"
+                }
+            ]
+        },
+        {
+            "key": "rijks_landscapes_still_lifes",
+            "name": "Landscapes & Still Lifes",
+            "name_translations": {
+                "de": "Landschaften & Stillleben",
+                "es": "Paisajes y Bodegones",
+                "fr": "Paysages et Natures Mortes",
+                "it": "Paesaggi e Nature Morte",
+                "ja": "風景画と静物画",
+                "pt": "Paisagens e Naturezas Mortas",
+                "ru": "Пейзажи и натюрморты",
+                "uk": "Пейзажі та натюрморти",
+                "zh-CN": "风景与静物画",
+                "zh-TW": "風景與靜物畫"
+            },
+            "type": "curated",
+            "items": [
+                {
+                    "accession_id": "SK-C-214",
+                    "artist": "Jan Davidsz. de Heem",
+                    "id": "20029045",
+                    "image_url": "https://iiif.micr.io/Gfuby/full/max/0/default.jpg",
+                    "title": "Still Life with Flowers in a Glass Vase"
+                },
+                {
+                    "accession_id": "SK-A-268",
+                    "artist": "Abraham Mignon",
+                    "id": "20027070",
+                    "image_url": "https://iiif.micr.io/DpDCm/full/max/0/default.jpg",
+                    "title": "Still Life with Flowers and a Watch"
+                },
+                {
+                    "accession_id": "SK-A-1718",
+                    "artist": "Hendrick Avercamp (signed by artist)",
+                    "id": "200108163",
+                    "image_url": "https://iiif.micr.io/aXnzA/full/max/0/default.jpg",
+                    "title": "Winter Landscape with Ice Skaters"
+                },
+                {
+                    "accession_id": "SK-A-799",
+                    "artist": "Hans Bollongier (signed by artist)",
+                    "id": "200108261",
+                    "image_url": "https://iiif.micr.io/hoBLZ/full/max/0/default.jpg",
+                    "title": "Floral Still Life"
+                },
+                {
+                    "accession_id": "SK-A-4688",
+                    "artist": "Hendrik Voogd",
+                    "id": "200108385",
+                    "image_url": "https://iiif.micr.io/FDLZM/full/max/0/default.jpg",
+                    "title": "Italian Landscape with Umbrella Pines"
+                },
+                {
+                    "accession_id": "SK-A-2338",
+                    "artist": "Rachel Ruysch (mentioned on object)",
+                    "id": "20027537",
+                    "image_url": "https://iiif.micr.io/OZhex/full/max/0/default.jpg",
+                    "title": "Still Life with Flowers on a Marble Tabletop"
+                },
+                {
+                    "accession_id": "SK-A-188",
+                    "artist": "Jan van Huysum",
+                    "id": "200108444",
+                    "image_url": "https://iiif.micr.io/jRAjx/full/max/0/default.jpg",
+                    "title": "Still Life with Flowers"
+                },
+                {
+                    "accession_id": "SK-A-1505",
+                    "artist": "Paul Joseph Constantin Gabriël",
+                    "id": "200109293",
+                    "image_url": "https://iiif.micr.io/HNwWx/full/max/0/default.jpg",
+                    "title": "A Windmill on a Polder Waterway, Known as ‘In the Month of July’"
+                },
+                {
+                    "accession_id": "SK-A-2099",
+                    "artist": "Adriaen Coorte (mentioned on object)",
+                    "id": "200109193",
+                    "image_url": "https://iiif.micr.io/OHDPD/full/max/0/default.jpg",
+                    "title": "Still Life with Asparagus"
+                },
+                {
+                    "accession_id": "SK-A-4821",
+                    "artist": "Floris Claesz van Dijck",
+                    "id": "200109260",
+                    "image_url": "https://iiif.micr.io/MbBYj/full/max/0/default.jpg",
+                    "title": "Still Life with Cheese"
+                },
+                {
+                    "accession_id": "SK-A-2102",
+                    "artist": "Jan Brueghel (I)",
+                    "id": "20013287",
+                    "image_url": "https://iiif.micr.io/VbqvH/full/max/0/default.jpg",
+                    "title": "Still Life with Flowers in a Glass"
+                },
+                {
+                    "accession_id": "SK-C-199",
+                    "artist": "Georgius Jacobus Johannes van Os",
+                    "id": "20025946",
+                    "image_url": "https://iiif.micr.io/cxWzz/full/max/0/default.jpg",
+                    "title": "Still Life with Flowers"
+                },
+                {
+                    "accession_id": "SK-A-1105",
+                    "artist": "Georgius Jacobus Johannes van Os",
+                    "id": "200108674",
+                    "image_url": "https://iiif.micr.io/kbbLm/full/max/0/default.jpg",
+                    "title": "Still Life with Flowers in a Greek Vase: Allegory of Spring"
+                },
+                {
+                    "accession_id": "SK-A-2103",
+                    "artist": "Balthasar van der Ast (signed by artist)",
+                    "id": "200108148",
+                    "image_url": "https://iiif.micr.io/aasHz/full/max/0/default.jpg",
+                    "title": "Still Life with Flowers"
+                },
+                {
+                    "accession_id": "SK-A-5003",
+                    "artist": "Gerrit Berckheyde",
+                    "id": "20013086",
+                    "image_url": "https://iiif.micr.io/vYQLC/full/max/0/default.jpg",
+                    "title": "View of the Golden Bend in the Herengracht"
+                },
+                {
+                    "accession_id": "SK-A-3454",
+                    "artist": "Eelke Jelles Eelkema (mentioned on object)",
+                    "id": "200109818",
+                    "image_url": "https://iiif.micr.io/mgVAs/full/max/0/default.jpg",
+                    "title": "Still Life with Flowers"
+                },
+                {
+                    "accession_id": "SK-A-1848",
+                    "artist": "Willem van de Velde (II)",
+                    "id": "200108359",
+                    "image_url": "https://iiif.micr.io/eBrWZ/full/max/0/default.jpg",
+                    "title": "A Ship on the High Seas Caught by a Squall, Known as ‘The Gust’"
+                },
+                {
+                    "accession_id": "SK-A-3899",
+                    "artist": "anonymous",
+                    "id": "20027976",
+                    "image_url": "https://iiif.micr.io/ecYuz/full/max/0/default.jpg",
+                    "title": "Flowers"
+                },
+                {
+                    "accession_id": "SK-A-1522",
+                    "artist": "Ambrosius Bosschaert (signed by artist)",
+                    "id": "200108291",
+                    "image_url": "https://iiif.micr.io/orvhH/full/max/0/default.jpg",
+                    "title": "Still Life with Flowers in a Wan-Li Vase"
+                },
+                {
+                    "accession_id": "SK-C-2",
+                    "artist": "Bartholomeus van der Helst",
+                    "id": "200109366",
+                    "image_url": "https://iiif.micr.io/stWFo/full/max/0/default.jpg",
+                    "title": "Banquet at the Crossbowmen’s Guild in Celebration of the Treaty of Münster"
+                },
+                {
+                    "accession_id": "SK-A-742",
+                    "artist": "Frans Jansz Post",
+                    "id": "200107887",
+                    "image_url": "https://iiif.micr.io/zcGWb/full/max/0/default.jpg",
+                    "title": "View of Olinda, Brazil"
+                },
+                {
+                    "accession_id": "SK-C-165",
+                    "artist": "Barend Cornelis Koekkoek",
+                    "id": "200111820",
+                    "image_url": "https://iiif.micr.io/jVXTZ/full/max/0/default.jpg",
+                    "title": "Winter Landscape"
+                },
+                {
+                    "accession_id": "SK-C-109",
+                    "artist": "Jan Both (mentioned on object)",
+                    "id": "200108293",
+                    "image_url": "https://iiif.micr.io/PpsTW/full/max/0/default.jpg",
+                    "title": "Italian Landscape with a Draughtsman"
+                },
+                {
+                    "accession_id": "SK-A-772",
+                    "artist": "Jacob Marrel (mentioned on object)",
+                    "id": "200109450",
+                    "image_url": "https://iiif.micr.io/GyDSH/full/max/0/default.jpg",
+                    "title": "Still Life with a Vase of Flowers and a Dead Frog"
+                },
+                {
+                    "accession_id": "SK-A-4644",
+                    "artist": "Wijnand Nuijen",
+                    "id": "200107810",
+                    "image_url": "https://iiif.micr.io/DeWrv/full/max/0/default.jpg",
+                    "title": "Shipwreck off a Rocky Coast"
+                },
+                {
+                    "accession_id": "SK-A-2433",
+                    "artist": "Anton Mauve",
+                    "id": "20027553",
+                    "image_url": "https://iiif.micr.io/MOnyI/full/max/0/default.jpg",
+                    "title": "Winter in the Scheveningen Woods"
+                },
+                {
+                    "accession_id": "SK-A-3922",
+                    "artist": "Charles Leickert (signed by artist)",
+                    "id": "20029334",
+                    "image_url": "https://iiif.micr.io/gxOZj/full/max/0/default.jpg",
+                    "title": "Winter op het IJ voor Amsterdam"
+                }
+            ]
+        },
+        {
+            "key": "rijks_vintage_photography",
+            "name": "Vintage Photography",
+            "name_translations": {
+                "de": "Vintage-Fotografie",
+                "es": "Fotografía Vintage",
+                "fr": "Photographie Vintage",
+                "it": "Fotografia d'Epoca",
+                "ja": "ビンテージ写真",
+                "pt": "Fotografia Vintage",
+                "ru": "Винтажная фотография",
+                "uk": "Вінтажна фотографія",
+                "zh-CN": "老照片",
+                "zh-TW": "復古攝影"
+            },
+            "type": "curated",
+            "items": [
+                {
+                    "accession_id": "",
+                    "artist": "circle of Adolphe Burdet",
+                    "id": "200414739",
+                    "image_url": "https://iiif.micr.io/ijdQK/full/max/0/default.jpg",
+                    "title": "Eight Children by a Sloop, North Sea Coast"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "Richard Tepe (mentioned on object)",
+                    "id": "200471071",
+                    "image_url": "https://iiif.micr.io/xMbAY/full/max/0/default.jpg",
+                    "title": "Sneeuwklokjes"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "circle of Adolphe Burdet",
+                    "id": "200472892",
+                    "image_url": "https://iiif.micr.io/xLrZA/full/max/0/default.jpg",
+                    "title": "Drie kinderen spelend aan het Noordzeestrand"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "Karl Blossfeldt",
+                    "id": "200581361",
+                    "image_url": "https://iiif.micr.io/PBKwf/full/max/0/default.jpg",
+                    "title": "Plantstudie"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "Jacob Merkelbach (mentioned on object)",
+                    "id": "200328397",
+                    "image_url": "https://iiif.micr.io/aQLoD/full/max/0/default.jpg",
+                    "title": "Portret van een vrouw in een rode jurk"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "Karl Blossfeldt",
+                    "id": "200581337",
+                    "image_url": "https://iiif.micr.io/lEUjh/full/max/0/default.jpg",
+                    "title": "Plant Studies"
+                },
+                {
+                    "accession_id": "SK-A-4679",
+                    "artist": "Eva Watson-Schütze (mentioned on object)",
+                    "id": "200473274",
+                    "image_url": "https://iiif.micr.io/DGKXu/full/max/0/default.jpg",
+                    "title": "Portrait of an Unknown Girl Among Flowers"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "attributed to Raimund von Stillfried-Ratenitz",
+                    "id": "200407894",
+                    "image_url": "https://iiif.micr.io/mgrYz/full/max/0/default.jpg",
+                    "title": "Onbekende Japanse vrouw in acrobatische pose"
+                },
+                {
+                    "accession_id": "SK-A-2949",
+                    "artist": "attributed to Willem Witsen",
+                    "id": "200410689",
+                    "image_url": "https://iiif.micr.io/rMANj/full/max/0/default.jpg",
+                    "title": "Portraits of Lise Jordan, George Hendrik Breitner, Lise Jordan, Jaap Batavier, Hein Boeken, Paul Verlaine and Herman Gorter"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "Léopold Reutlinger",
+                    "id": "200522820",
+                    "image_url": "https://iiif.micr.io/EFfPy/full/max/0/default.jpg",
+                    "title": "Portret van de danseres Cléo de Mérode"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "circle of Adolphe Burdet",
+                    "id": "200472895",
+                    "image_url": "https://iiif.micr.io/btZsF/full/max/0/default.jpg",
+                    "title": "Gezicht (vanaf een duin) over het Noordzeestrand, met rechtsonder helmgras en middenonder een sloep op het strand"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "Johannes Hendrikus Antonius Maria Lutz",
+                    "id": "200589551",
+                    "image_url": "https://iiif.micr.io/Icoyd/full/max/0/default.jpg",
+                    "title": "Person Dressed Up as a Fox"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "Herman Anne Marie Cato Dibbits",
+                    "id": "200470238",
+                    "image_url": "https://iiif.micr.io/anZqt/full/max/0/default.jpg",
+                    "title": "Washington Bridge, New York"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "Richard Tepe (mentioned on object)",
+                    "id": "200105282",
+                    "image_url": "https://iiif.micr.io/iVslD/full/max/0/default.jpg",
+                    "title": "Takken met bloesem van een Japanse sierkers"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "Lewis Wickes Hine",
+                    "id": "200486786",
+                    "image_url": "https://iiif.micr.io/puzkR/full/max/0/default.jpg",
+                    "title": "Newspaper Vendor"
+                },
+                {
+                    "accession_id": "SK-A-3611",
+                    "artist": "Johannes Hendrikus Antonius Maria Lutz",
+                    "id": "200590832",
+                    "image_url": "https://iiif.micr.io/zOuLM/full/max/0/default.jpg",
+                    "title": "Vrouw met bloemen"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "Richard Tepe (mentioned on object)",
+                    "id": "200105280",
+                    "image_url": "https://iiif.micr.io/RQMTT/full/max/0/default.jpg",
+                    "title": "Bosje weegbreezonnebloemen"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "anonymous",
+                    "id": "200414738",
+                    "image_url": "https://iiif.micr.io/zWKEn/full/max/0/default.jpg",
+                    "title": "Stilleven met fruit, groenten en een koperen ketel"
+                },
+                {
+                    "accession_id": "SK-A-3580",
+                    "artist": "attributed to workshop of George Hendrik Breitner",
+                    "id": "200407675",
+                    "image_url": "https://iiif.micr.io/cKvSl/full/max/0/default.jpg",
+                    "title": "Gezicht op de Singel in Amsterdam op een regenachtige dag"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "Jacob Olie jr.",
+                    "id": "200418412",
+                    "image_url": "https://iiif.micr.io/PAxkt/full/max/0/default.jpg",
+                    "title": "The Kes Family in Volendam"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "Dorothea Lange (mentioned on object)",
+                    "id": "200321143",
+                    "image_url": "https://iiif.micr.io/VzFXe/full/max/0/default.jpg",
+                    "title": "Portret van Florence Owens Thompson"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "Gertrude Käsebier",
+                    "id": "200321121",
+                    "image_url": "https://iiif.micr.io/sLcfI/full/max/0/default.jpg",
+                    "title": "The sketch (Beatrice Baxter Ruyl)"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "circle of Adolphe Burdet",
+                    "id": "200472897",
+                    "image_url": "https://iiif.micr.io/uQZAy/full/max/0/default.jpg",
+                    "title": "Fietsenstalling in Wijk aan Zee, met op de voorgrond een aantal rieten badstoelen"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "George Hendrik Breitner",
+                    "id": "200407636",
+                    "image_url": "https://iiif.micr.io/GbaAL/full/max/0/default.jpg",
+                    "title": "Straatgezicht van het Rokin in Amsterdam"
+                },
+                {
+                    "accession_id": "SK-A-2879",
+                    "artist": "attributed to James Higson",
+                    "id": "200477458",
+                    "image_url": "https://iiif.micr.io/tPSSV/full/max/0/default.jpg",
+                    "title": "Rokin in Amsterdam"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "anonymous",
+                    "id": "200641389",
+                    "image_url": "https://iiif.micr.io/HJWIl/full/max/0/default.jpg",
+                    "title": "Vaas met bloemen"
+                },
+                {
+                    "accession_id": "SK-A-3580",
+                    "artist": "George Hendrik Breitner",
+                    "id": "200407648",
+                    "image_url": "https://iiif.micr.io/JEqub/full/max/0/default.jpg",
+                    "title": "Meisje op de brug van Prinseneiland in Amsterdam"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "attributed to Raimund von Stillfried-Ratenitz",
+                    "id": "200334971",
+                    "image_url": "https://iiif.micr.io/OstvU/full/max/0/default.jpg",
+                    "title": "Japanse worstelaars"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "Raimund von Stillfried-Ratenitz (possibly)",
+                    "id": "200407761",
+                    "image_url": "https://iiif.micr.io/MRzaN/full/max/0/default.jpg",
+                    "title": "Portret van een zittende jonge Chinese vrouw"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "anonymous",
+                    "id": "200324893",
+                    "image_url": "https://iiif.micr.io/tzNDt/full/max/0/default.jpg",
+                    "title": "Twee onbekende vrouwen op de pier in Clacton on Sea"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "anonymous",
+                    "id": "200639603",
+                    "image_url": "https://iiif.micr.io/DXMtA/full/max/0/default.jpg",
+                    "title": "Groepsportret van drie Japanse meisjes"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "anonymous",
+                    "id": "200564982",
+                    "image_url": "https://iiif.micr.io/PFuWp/full/max/0/default.jpg",
+                    "title": "Fotoreproductie van een schilderij met jonge katten in een mand van Eugène Lambert"
+                },
+                {
+                    "accession_id": "SK-A-3611",
+                    "artist": "Johannes Hendrikus Antonius Maria Lutz",
+                    "id": "200589550",
+                    "image_url": "https://iiif.micr.io/ikIew/full/max/0/default.jpg",
+                    "title": "Vrouw in stoel"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "anonymous",
+                    "id": "200641386",
+                    "image_url": "https://iiif.micr.io/EkMZB/full/max/0/default.jpg",
+                    "title": "Bloeiende azalea in een pot"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "circle of Adolphe Burdet",
+                    "id": "200472893",
+                    "image_url": "https://iiif.micr.io/datBK/full/max/0/default.jpg",
+                    "title": "Twee kinderen spelend aan het Noordzeestrand"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "C.W. Immink",
+                    "id": "200425380",
+                    "image_url": "https://iiif.micr.io/URFIS/full/max/0/default.jpg",
+                    "title": "Bloemen (asters) op een vaas"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "Antonio Cavilla",
+                    "id": "200674595",
+                    "image_url": "https://iiif.micr.io/YIQOG/full/max/0/default.jpg",
+                    "title": "Portraits of a Young Man from North Africa"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "anonymous",
+                    "id": "200504485",
+                    "image_url": "https://iiif.micr.io/szTcY/full/max/0/default.jpg",
+                    "title": "Portrait of Three Girls"
+                },
+                {
+                    "accession_id": "SK-A-3611",
+                    "artist": "Johannes Hendrikus Antonius Maria Lutz",
+                    "id": "200590827",
+                    "image_url": "https://iiif.micr.io/RXKei/full/max/0/default.jpg",
+                    "title": "Zittende vrouw"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "circle of Adolphe Burdet",
+                    "id": "200472917",
+                    "image_url": "https://iiif.micr.io/cLCtG/full/max/0/default.jpg",
+                    "title": "Bloemen bij de achterzijde (?) van een huis"
+                },
+                {
+                    "accession_id": "SK-A-2725",
+                    "artist": "attributed to Felice Beato",
+                    "id": "200334963",
+                    "image_url": "https://iiif.micr.io/GfqBU/full/max/0/default.jpg",
+                    "title": "Portret van een Japans meisje met een muziekinstrument"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "circle of Adolphe Burdet",
+                    "id": "200473012",
+                    "image_url": "https://iiif.micr.io/VxJwE/full/max/0/default.jpg",
+                    "title": "Portret van een jonge vrouw in een stoel, mogelijk Elise Burdet"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "anonymous",
+                    "id": "200329088",
+                    "image_url": "https://iiif.micr.io/Exlyh/full/max/0/default.jpg",
+                    "title": "Portret van een onbekende Javaanse jonge vrouw"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "Richard Tepe (mentioned on object)",
+                    "id": "200105085",
+                    "image_url": "https://iiif.micr.io/GWWwL/full/max/0/default.jpg",
+                    "title": "Kind met konijn op schoot"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "Raimund von Stillfried-Ratenitz (possibly)",
+                    "id": "200407768",
+                    "image_url": "https://iiif.micr.io/kRSXa/full/max/0/default.jpg",
+                    "title": "Portret van een Chinese vrouw"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "attributed to Henry Pauw van Wieldrecht",
+                    "id": "200491786",
+                    "image_url": "https://iiif.micr.io/rKABt/full/max/0/default.jpg",
+                    "title": "Portret van Adriana Johanna Pauw van Wieldrecht"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "anonymous",
+                    "id": "200588690",
+                    "image_url": "https://iiif.micr.io/tXpdQ/full/max/0/default.jpg",
+                    "title": "Eiffeltoren bij nacht"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "anonymous",
+                    "id": "200499300",
+                    "image_url": "https://iiif.micr.io/XQphX/full/max/0/default.jpg",
+                    "title": "Chinese Muur vlakbij Nankou, Peking"
+                },
+                {
+                    "accession_id": "SK-A-4679",
+                    "artist": "Jacob Merkelbach (mentioned on object)",
+                    "id": "200328488",
+                    "image_url": "https://iiif.micr.io/oavCZ/full/max/0/default.jpg",
+                    "title": "Studioportret van dirigerende Willem Mengelberg"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "attributed to Thomas Annan",
+                    "id": "200407688",
+                    "image_url": "https://iiif.micr.io/hfcKh/full/max/0/default.jpg",
+                    "title": "The Slums of Glasgow"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "anonymous",
+                    "id": "200345708",
+                    "image_url": "https://iiif.micr.io/RwkgN/full/max/0/default.jpg",
+                    "title": "Japanse krijger in harnas, zittend"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "anonymous",
+                    "id": "200334967",
+                    "image_url": "https://iiif.micr.io/ZJspR/full/max/0/default.jpg",
+                    "title": "Begroetingsritueel van twee Japanse vrouwen"
+                },
+                {
+                    "accession_id": "SK-A-3580",
+                    "artist": "George Hendrik Breitner",
+                    "id": "200144322",
+                    "image_url": "https://iiif.micr.io/KlQte/full/max/0/default.jpg",
+                    "title": "Oudezijds Achterburgwal en links de achterzijde van de Zeedijk"
+                }
+            ]
+        },
+        {
+            "key": "rijks_nudes_photography",
+            "name": "Artistic Nudes (Vintage Photography)",
+            "name_translations": {
+                "de": "Künstlerische Akte (Fotografie)",
+                "es": "Desnudos Artísticos (Fotografía)",
+                "fr": "Nus Artistiques (Photographie)",
+                "it": "Nudi Artistici (Fotografia)",
+                "ja": "芸術的なヌード（ビンテージ写真）",
+                "pt": "Nus Artísticos (Fotografia Vintage)",
+                "ru": "Художественные Ню (Винтажная фотография)",
+                "uk": "Художні ню (Вінтажна фотографія)",
+                "zh-CN": "艺术裸体 (老照片)",
+                "zh-TW": "藝術裸體 (復古攝影)"
+            },
+            "type": "curated",
+            "items": [
+                {
+                    "accession_id": "",
+                    "artist": "attributed to Jacques Lalaing",
+                    "id": "200421031",
+                    "image_url": "https://iiif.micr.io/eKmZo/full/max/0/default.jpg",
+                    "title": "Studie van een vrouwelijk naaktmodel, op de rug gezien, in het atelier van Jacques de Lalaing, voorstudie voor cirkelvormige fontein"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "attributed to Jacques Lalaing",
+                    "id": "200473943",
+                    "image_url": "https://iiif.micr.io/gKeQQ/full/max/0/default.jpg",
+                    "title": "Studie van een vrouwelijk naaktmodel, van opzij gezien, in het atelier van Jacques de Lalaing, voorstudie voor element voor een fontein in Musee des Beaux arts, Doornik en voor cirkelvormige fontein"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "Julien Mandel (mentioned on object)",
+                    "id": "200651864",
+                    "image_url": "https://iiif.micr.io/HEMfm/full/max/0/default.jpg",
+                    "title": "Vrouwelijk naakt"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "Ernest James Bellocq (mentioned on object)",
+                    "id": "200319261",
+                    "image_url": "https://iiif.micr.io/vKkPt/full/max/0/default.jpg",
+                    "title": "Portret van een onbekende naakte vrouw in venster"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "Jacob Merkelbach",
+                    "id": "200359966",
+                    "image_url": "https://iiif.micr.io/fZtlJ/full/max/0/default.jpg",
+                    "title": "naakte zittende vrouw met de handen opgehouden naar een wit ingeschilderde cirkel licht"
+                },
+                {
+                    "accession_id": "SK-A-4679",
+                    "artist": "attributed to Jacob Merkelbach",
+                    "id": "200328483",
+                    "image_url": "https://iiif.micr.io/RXgzo/full/max/0/default.jpg",
+                    "title": "Portret van een zittend naakt"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "Arnold Genthe",
+                    "id": "200322122",
+                    "image_url": "https://iiif.micr.io/DxYlz/full/max/0/default.jpg",
+                    "title": "Nude Dancer with Aulos"
+                },
+                {
+                    "accession_id": "SK-A-3584",
+                    "artist": "George Hendrik Breitner",
+                    "id": "200407653",
+                    "image_url": "https://iiif.micr.io/UslVF/full/max/0/default.jpg",
+                    "title": "Vrouwelijk naakt voor spiegel"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "Louis Fleckenstein (signed by artist)",
+                    "id": "200322168",
+                    "image_url": "https://iiif.micr.io/OjDiJ/full/max/0/default.jpg",
+                    "title": "Portret van een onbekende jonge vrouw"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "Louis Bonnard",
+                    "id": "200421018",
+                    "image_url": "https://iiif.micr.io/qtJpH/full/max/0/default.jpg",
+                    "title": "Studie van een vrouwelijk naakt, buste van opzij gezien, het haar omhoog houdend"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "Neue Photographische Gesellschaft (possibly)",
+                    "id": "200564981",
+                    "image_url": "https://iiif.micr.io/YNojh/full/max/0/default.jpg",
+                    "title": "Fotoreproductie van een houtsnede naar het schilderij Wasserträgerin van Max Nonnenbruch"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "Léo (mentioned on object)",
+                    "id": "200322210",
+                    "image_url": "https://iiif.micr.io/lcrLJ/full/max/0/default.jpg",
+                    "title": "Vrouwelijk naakt met sluier"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "Jacob Merkelbach",
+                    "id": "200359966",
+                    "image_url": "https://iiif.micr.io/fZtlJ/full/max/0/default.jpg",
+                    "title": "naakte zittende vrouw met de handen opgehouden naar een wit ingeschilderde cirkel licht"
+                },
+                {
+                    "accession_id": "SK-A-4679",
+                    "artist": "Jacob Merkelbach (mentioned on object)",
+                    "id": "200328584",
+                    "image_url": "https://iiif.micr.io/UKPTd/full/max/0/default.jpg",
+                    "title": "Staand vrouwelijk naakt bij een (ingetekende) bron met koningszoon-kikker"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "Léo (mentioned on object)",
+                    "id": "200322212",
+                    "image_url": "https://iiif.micr.io/lVGix/full/max/0/default.jpg",
+                    "title": "Vrouwelijk naakt op stoel met bloem in haar hand"
+                },
+                {
+                    "accession_id": "SK-A-3584",
+                    "artist": "George Hendrik Breitner",
+                    "id": "200407652",
+                    "image_url": "https://iiif.micr.io/NQqOL/full/max/0/default.jpg",
+                    "title": "Portret van een vrouwelijk naakt met in de spiegel de fotograferende Breitner"
+                }
+            ]
+        },
+        {
+            "key": "rijks_nudes_mixed",
+            "name": "Artistic Nudes (Mixed Medium)",
+            "name_translations": {
+                "de": "Künstlerische Akte (Gemischt)",
+                "es": "Desnudos Artísticos (Mixto)",
+                "fr": "Nus Artistiques (Divers)",
+                "it": "Nudi Artistici (Misti)",
+                "ja": "芸術的なヌード（ミックスメディア）",
+                "pt": "Nus Artísticos (Mídia Mista)",
+                "ru": "Художественные Ню (Смешанная техника)",
+                "uk": "Художні ню (Змішана техніка)",
+                "zh-CN": "艺术裸体 (混合媒介)",
+                "zh-TW": "藝術裸體 (混合媒材)"
+            },
+            "type": "curated",
+            "items": [
+                {
+                    "accession_id": "SK-A-1042",
+                    "artist": "Pierre Van Hanselaere",
+                    "id": "20027248",
+                    "image_url": "https://iiif.micr.io/muHzd/full/max/0/default.jpg",
+                    "title": "Susanna and the Elders"
+                },
+                {
+                    "accession_id": "SK-A-276",
+                    "artist": "Paulus Moreelse (signed by artist)",
+                    "id": "200107770",
+                    "image_url": "https://iiif.micr.io/Vsdnv/full/max/0/default.jpg",
+                    "title": "A Shepherdess"
+                },
+                {
+                    "accession_id": "SK-A-2116",
+                    "artist": "Jacob van Loo",
+                    "id": "20027860",
+                    "image_url": "https://iiif.micr.io/XkYfJ/full/max/0/default.jpg",
+                    "title": "Amorous Couple"
+                },
+                {
+                    "accession_id": "SK-A-3483",
+                    "artist": "Jacob van Loo (signed by artist)",
+                    "id": "20028210",
+                    "image_url": "https://iiif.micr.io/PWbeY/full/max/0/default.jpg",
+                    "title": "Bacchanal"
+                },
+                {
+                    "accession_id": "SK-A-4866",
+                    "artist": "Hendrick Goltzius",
+                    "id": "200109306",
+                    "image_url": "https://iiif.micr.io/zVAvH/full/max/0/default.jpg",
+                    "title": "Lot and his Daughters"
+                },
+                {
+                    "accession_id": "SK-C-153",
+                    "artist": "copy after Arnold Houbraken",
+                    "id": "200109394",
+                    "image_url": "https://iiif.micr.io/KeWJo/full/max/0/default.jpg",
+                    "title": "The Painter and his Model"
+                },
+                {
+                    "accession_id": "SK-A-4173",
+                    "artist": "Lourens Alma Tadema (mentioned on object)",
+                    "id": "20026486",
+                    "image_url": "https://iiif.micr.io/idQrs/full/max/0/default.jpg",
+                    "title": "Mary Magdalene"
+                },
+                {
+                    "accession_id": "SK-A-3625",
+                    "artist": "Rik Wouters",
+                    "id": "200105926",
+                    "image_url": "https://iiif.micr.io/MIfGg/full/max/0/default.jpg",
+                    "title": "Standing Female Nude"
+                },
+                {
+                    "accession_id": "SK-C-5",
+                    "artist": "Rembrandt van Rijn (mentioned on object)",
+                    "id": "200382768",
+                    "image_url": "https://iiif.micr.io/jpLLr/full/max/0/default.jpg",
+                    "title": "Nude Young Man, Seated before a Curtain"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "Adolphe Joseph Huot (mentioned on object)",
+                    "id": "200207481",
+                    "image_url": "https://iiif.micr.io/NIkOO/full/max/0/default.jpg",
+                    "title": "Jonge naakte vrouw als 'La Cigale'"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "Gilles Demarteau (mentioned on object)",
+                    "id": "200395423",
+                    "image_url": "https://iiif.micr.io/PceIp/full/max/0/default.jpg",
+                    "title": "Liggend mannelijke naakt"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "Simon Moulijn (signed by artist)",
+                    "id": "200291783",
+                    "image_url": "https://iiif.micr.io/YHkxn/full/max/0/default.jpg",
+                    "title": "Staande naakte vrouw"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "Simon Moulijn",
+                    "id": "200291691",
+                    "image_url": "https://iiif.micr.io/gBTCp/full/max/0/default.jpg",
+                    "title": "Staande naakte vrouw"
+                },
+                {
+                    "accession_id": "SK-A-2952",
+                    "artist": "Willem Witsen",
+                    "id": "200300189",
+                    "image_url": "https://iiif.micr.io/dMZbL/full/max/0/default.jpg",
+                    "title": "Staande, naakte vrouw die zich afdroogt"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "François Boucher",
+                    "id": "200108553",
+                    "image_url": "https://iiif.micr.io/NTMLZ/full/max/0/default.jpg",
+                    "title": "Reclining Female Nude"
+                },
+                {
+                    "accession_id": "SK-C-6",
+                    "artist": "Rembrandt van Rijn",
+                    "id": "200118005",
+                    "image_url": "https://iiif.micr.io/vWAkW/full/max/0/default.jpg",
+                    "title": "Nude Woman Seated by a Stove"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "Samuel Jessurun de Mesquita",
+                    "id": "200371423",
+                    "image_url": "https://iiif.micr.io/umGhB/full/max/0/default.jpg",
+                    "title": "Seated Female Nude"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "Johan Braakensiek",
+                    "id": "200404752",
+                    "image_url": "https://iiif.micr.io/WRZhQ/full/max/0/default.jpg",
+                    "title": "Standing Female Nude, seen from the Rear"
+                },
+                {
+                    "accession_id": "SK-A-3672",
+                    "artist": "Pieter de Josselin de Jong",
+                    "id": "200371117",
+                    "image_url": "https://iiif.micr.io/TWqut/full/max/0/default.jpg",
+                    "title": "Seated Female Nude"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "Auguste Roedel (mentioned on object)",
+                    "id": "200629783",
+                    "image_url": "https://iiif.micr.io/LUOMA/full/max/0/default.jpg",
+                    "title": "Affiche voor boek- en prenthandel Fallou te Parijs"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "Imprimerie Crété (mentioned on object)",
+                    "id": "200656729",
+                    "image_url": "https://iiif.micr.io/aCOBt/full/max/0/default.jpg",
+                    "title": "Affiche voor een expositie met werk van Felicien Rops"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "anonymous",
+                    "id": "200773932",
+                    "image_url": "https://iiif.micr.io/SDQtq/full/max/0/default.jpg",
+                    "title": "The nude 1900"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "anonymous",
+                    "id": "200352462",
+                    "image_url": "https://iiif.micr.io/fgWFs/full/max/0/default.jpg",
+                    "title": "Portret van een naakte vrouw"
+                },
+                {
+                    "accession_id": "",
+                    "artist": "anonymous",
+                    "id": "200352467",
+                    "image_url": "https://iiif.micr.io/nbmlw/full/max/0/default.jpg",
+                    "title": "Twee naakte jonge vrouwen in een rivierbedding"
+                },
+                {
+                    "accession_id": "SK-A-3584",
+                    "artist": "George Hendrik Breitner (possibly)",
+                    "id": "200144419",
+                    "image_url": "https://iiif.micr.io/aBEOd/full/max/0/default.jpg",
+                    "title": "Fotoreproductie van een schilderij van een staand vrouwelijk naakt door George Hendrik Breitner"
+                }
+            ]
         }
     ],
     "description": "Rijksmuseum: Curated Collections",

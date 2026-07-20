@@ -39,6 +39,8 @@ coverage*
 !support.html
 !user_guide.html
 !extension/*.html
+!asset/galleries/**/*.html
+!asset/galleries/.hash_state.json
 *.test
 test_output_*.txt
 *_coverage
@@ -59,3 +61,6 @@ report_output/
 # Test-generated verification images and regression source photos
 pkg/wallpaper/testdata/anchor_verify/
 pkg/wallpaper/testdata/regressions/
+
+# Prototyping scripts
+scratch/

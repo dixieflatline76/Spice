@@ -1,6 +1,23 @@
 {
+    "description": "Best of the J. Paul Getty Museum Open Content",
+    "version": "v2.6.0",
     "collections": [
         {
+            "key": "getty_masterpieces",
+            "name": "⭐ Best of Getty",
+            "name_translations": {
+                "de": "⭐ Das Beste aus dem Getty",
+                "es": "⭐ Lo Mejor de Getty",
+                "fr": "⭐ Le Meilleur du Getty",
+                "it": "⭐ Il Meglio del Getty",
+                "ja": "⭐ ゲティのベスト",
+                "pt": "⭐ O Melhor do Getty",
+                "ru": "⭐ Лучшее из Гетти",
+                "uk": "⭐ Найкраще з Гетті",
+                "zh-CN": "⭐ 盖蒂精选",
+                "zh-TW": "⭐ 蓋蒂精選"
+            },
+            "type": "curated",
             "ids": [
                 "b5751c4b-2e9f-4a69-b0be-c345b5f13344",
                 "fd07ab3f-9e45-4fbc-b74d-be1bab608e69",
@@ -17,32 +34,31 @@
                 "e1c03428-47f9-4ce4-a787-e33b426df696",
                 "55ef0075-4ef8-4939-be24-43b7b73f88f3",
                 "a21fa9d8-e881-4f04-8f6d-a7a2d4e84e2f",
-                "9c620e2c-209c-480e-9bee-b1c9c2f9b967",
-                "f9320a72-41d1-4c20-8915-c4695599e7b8",
+                "fb3dce25-68d9-415a-b57f-6efdf963027f",
+                "9aff8cb3-4911-4f1e-8499-2d77af71e0dd",
                 "df980766-b875-475f-9100-3cc90de92b00",
                 "951295b7-dfb2-42fa-b06e-5a1c350dd88d",
                 "89c78d89-8afc-4205-aae6-76e60295c22d",
                 "71d9c889-377c-4a18-8980-689825f339bf",
                 "91a4e080-feda-4afa-aee8-826ef3feb46e"
-            ],
-            "key": "getty_masterpieces",
-            "name": "⭐ Best of Getty",
-            "name_translations": {
-                "da": "⭐ Det Bedste fra Getty",
-                "de": "⭐ Das Beste aus dem Getty",
-                "es": "⭐ Lo Mejor de Getty",
-                "fr": "⭐ Le Meilleur du Getty",
-                "it": "⭐ Il Meglio del Getty",
-                "ja": "⭐ ゲティの名作",
-                "ko": "⭐ 게티 베스트",
-                "nl": "⭐ Het Beste van Getty",
-                "ru": "⭐ Лучшее из Гетти",
-                "zh-CN": "⭐ 盖蒂精选",
-                "zh-TW": "⭐ 蓋蒂精選"
-            },
-            "type": "curated"
+            ]
         },
         {
+            "key": "getty_paintings",
+            "name": "European Paintings",
+            "name_translations": {
+                "de": "Europäische Gemälde",
+                "es": "Pinturas Europeas",
+                "fr": "Peintures Européennes",
+                "it": "Dipinti Europei",
+                "ja": "ヨーロッパ絵画",
+                "pt": "Pinturas Europeias",
+                "ru": "Европейские Картины",
+                "uk": "Європейські картини",
+                "zh-CN": "欧洲绘画",
+                "zh-TW": "歐洲繪畫"
+            },
+            "type": "curated",
             "ids": [
                 "b5751c4b-2e9f-4a69-b0be-c345b5f13344",
                 "9aff8cb3-4911-4f1e-8499-2d77af71e0dd",
@@ -75,25 +91,24 @@
                 "d5265ca9-f3d4-48af-b3c1-ccd7993e2467",
                 "dc126a6e-8835-4b0b-88ed-302b9f47356c",
                 "abd6e879-945c-4ede-ad93-eb50d094ec01"
-            ],
-            "key": "getty_paintings",
-            "name": "European Paintings",
-            "name_translations": {
-                "da": "Europæiske Malerier",
-                "de": "Europäische Gemälde",
-                "es": "Pinturas Europeas",
-                "fr": "Peintures Européennes",
-                "it": "Dipinti Europei",
-                "ja": "ヨーロッパ絵画",
-                "ko": "유럽 회화",
-                "nl": "Europese Schilderijen",
-                "ru": "Европейские Картины",
-                "zh-CN": "欧洲绘画",
-                "zh-TW": "歐洲繪畫"
-            },
-            "type": "curated"
+            ]
         },
         {
+            "key": "getty_antiquities",
+            "name": "Antiquities \u0026 Artifacts",
+            "name_translations": {
+                "de": "Antiken \u0026 Artefakte",
+                "es": "Antigüedades y Artefactos",
+                "fr": "Antiquités et Artéfacts",
+                "it": "Antichità e Manufatti",
+                "ja": "古代美術と遺物",
+                "pt": "Antiguidades e Artefatos",
+                "ru": "Древности и Артефакты",
+                "uk": "Старожитності та артефакти",
+                "zh-CN": "古物与文物",
+                "zh-TW": "古物與文物"
+            },
+            "type": "curated",
             "ids": [
                 "796d9f41-1948-49af-924b-4b86dbc9ebe7",
                 "2ccbcdcc-3260-4b40-9cfa-72efa357df1b",
@@ -116,25 +131,24 @@
                 "fbe3ae29-d5fa-40f5-b3c9-e51969bafbb8",
                 "fb2e2b85-d2d3-4a26-94e1-e030083da631",
                 "fad1fcbd-fc80-4593-97f1-df559dddcbf9"
-            ],
-            "key": "getty_antiquities",
-            "name": "Antiquities & Artifacts",
-            "name_translations": {
-                "da": "Antikviteter & Artefakter",
-                "de": "Antiken & Artefakte",
-                "es": "Antigüedades y Artefactos",
-                "fr": "Antiquités et Artéfacts",
-                "it": "Antichità e Manufatti",
-                "ja": "古代遺物と工芸品",
-                "ko": "고대 유물 및 공예품",
-                "nl": "Oudheden & Artefacten",
-                "ru": "Древности и Артефакты",
-                "zh-CN": "古物与文物",
-                "zh-TW": "古物與文物"
-            },
-            "type": "curated"
+            ]
         },
         {
+            "key": "getty_photography",
+            "name": "Vintage Photography (contains artistic nudes)",
+            "name_translations": {
+                "de": "Vintage-Fotografie (enthält künstlerische Akte)",
+                "es": "Fotografía Vintage (contiene desnudos artísticos)",
+                "fr": "Photographie Vintage (contient des nus artistiques)",
+                "it": "Fotografia Vintage (contiene nudi artistici)",
+                "ja": "ビンテージ写真 (芸術的なヌードを含む)",
+                "pt": "Fotografia Vintage (contém nus artísticos)",
+                "ru": "Винтажная Фотография (содержит художественные ню)",
+                "uk": "Вінтажна фотографія (містить художні ню)",
+                "zh-CN": "经典摄影（包含艺术裸体）",
+                "zh-TW": "經典攝影（包含藝術裸體）"
+            },
+            "type": "curated",
             "ids": [
                 "a21fa9d8-e881-4f04-8f6d-a7a2d4e84e2f",
                 "c01e6571-462e-4115-8e6d-ac95b5231d76",
@@ -142,32 +156,32 @@
                 "df980766-b875-475f-9100-3cc90de92b00",
                 "f1d493ca-6162-4d99-88d7-96bd36e84ce5",
                 "d42c73a9-3bd5-477a-aebd-b954cb5aa293",
-                "91a4e080-feda-4afa-aee8-826ef3feb46e"
-            ],
-            "key": "getty_photography",
-            "name": "Vintage Photography",
-            "name_translations": {
-                "da": "Vintage Fotografi",
-                "de": "Historische Fotografie",
-                "es": "Fotografía Vintage",
-                "fr": "Photographie Ancienne",
-                "it": "Fotografia d'Epoca",
-                "ja": "ヴィンテージ写真",
-                "ko": "빈티지 사진",
-                "nl": "Vintage Fotografie",
-                "ru": "Винтажная Фотография",
-                "zh-CN": "老照片",
-                "zh-TW": "老照片"
-            },
-            "type": "curated"
+                "91a4e080-feda-4afa-aee8-826ef3feb46e",
+                "9e5d8fad-16db-4278-b80d-d2731bcc1afa",
+                "77a3fdab-d3e7-4fc4-bef8-7fe4a0091b79",
+                "c1e88275-b26f-49b7-a165-33b8c11c9dc4",
+                "ca9023dd-235f-4344-ac1e-73e5e5f44ceb",
+                "cca6ce55-2381-4a92-b572-bbc5def38ef2",
+                "965b3925-6c77-43c2-b73b-a744aad286a7",
+                "0732cea0-3ef1-4f0a-97fd-17cd54a9c5af"
+            ]
         },
         {
             "key": "getty_nudes",
-            "type": "curated",
-            "name": "Artistic Nudes (Painting & Sculpture)",
+            "name": "Artistic Nudes (Painting \u0026 Sculpture)",
             "name_translations": {
-                "da": "Kunstneriske Akter"
+                "de": "Künstlerische Akte (Malerei \u0026 Skulptur)",
+                "es": "Desnudos Artísticos (Pintura y Escultura)",
+                "fr": "Nus Artistiques (Peinture et Sculpture)",
+                "it": "Nudi Artistici (Pittura e Scultura)",
+                "ja": "芸術的なヌード (絵画と彫刻)",
+                "pt": "Nus Artísticos (Pintura e Escultura)",
+                "ru": "Художественные Ню (Живопись и Скульптура)",
+                "uk": "Художні ню (Живопис і скульптура)",
+                "zh-CN": "艺术裸体（绘画与雕塑）",
+                "zh-TW": "藝術裸體（繪畫與雕塑）"
             },
+            "type": "curated",
             "ids": [
                 "c8c21ff6-a3c9-4a9e-a954-71bf1e9f14ff",
                 "e590756a-ed73-4ad4-82e3-1c23b4371ca0",
@@ -185,25 +199,9 @@
                 "720d9d31-d394-416e-911e-1156fd8cc7d5",
                 "4a82fd0b-d134-477e-b9ad-03eb123bbbd8",
                 "cc2eecef-4ea7-4274-a1bd-19b1b423f4b5",
-                "90a1b3c2-13d8-4a0a-994a-6a5909f95dc7"
-            ]
-        },
-        {
-            "key": "getty_nudes_vintage",
-            "type": "curated",
-            "name": "Vintage Nudes (Photography)",
-            "name_translations": {
-                "da": "Vintage Akter (Fotografi)"
-            },
-            "ids": [
-                "9e5d8fad-16db-4278-b80d-d2731bcc1afa",
-                "77a3fdab-d3e7-4fc4-bef8-7fe4a0091b79",
-                "c1e88275-b26f-49b7-a165-33b8c11c9dc4",
-                "965b3925-6c77-43c2-b73b-a744aad286a7",
-                "0732cea0-3ef1-4f0a-97fd-17cd54a9c5af"
+                "90a1b3c2-13d8-4a0a-994a-6a5909f95dc7",
+                "9c620e2c-209c-480e-9bee-b1c9c2f9b967"
             ]
         }
-    ],
-    "description": "Best of the J. Paul Getty Museum Open Content",
-    "version": "v2.6.0"
+    ]
 }

@@ -3,6 +3,7 @@ package wallpaper
 import (
 	"fmt"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -65,6 +66,10 @@ func buildCuratedUIItem(p provider.ImageProvider, sm setting.SettingsManager, cf
 			providerCacheDir := filepath.Join(config.GetWorkingDir(), "cache", strings.ToLower(p.ID()))
 			outPath := filepath.Join(providerCacheDir, fileName)
 
+			langParam := i18n.GetLanguage()
+			localeJSPath := filepath.Join(providerCacheDir, "current_locale.js")
+			_ = os.WriteFile(localeJSPath, []byte(fmt.Sprintf("window.spiceAppLocale = '%s';", langParam)), 0600)
+
 			fileURL := fmt.Sprintf("file:///%s", filepath.ToSlash(outPath))
 			if u, err := url.Parse(fileURL); err == nil {
 				_ = u
@@ -80,6 +85,10 @@ func buildCuratedUIItem(p provider.ImageProvider, sm setting.SettingsManager, cf
 			fileName := fmt.Sprintf("%s.html", safeName)
 			providerCacheDir := filepath.Join(config.GetWorkingDir(), "cache", strings.ToLower(p.ID()))
 			outPath := filepath.Join(providerCacheDir, fileName)
+
+			langParam := i18n.GetLanguage()
+			localeJSPath := filepath.Join(providerCacheDir, "current_locale.js")
+			_ = os.WriteFile(localeJSPath, []byte(fmt.Sprintf("window.spiceAppLocale = '%s';", langParam)), 0600)
 
 			fileURL := fmt.Sprintf("file:///%s", filepath.ToSlash(outPath))
 			if u, err := url.Parse(fileURL); err == nil {

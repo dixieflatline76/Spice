@@ -4,8 +4,14 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
+	"github.com/dixieflatline76/Spice/v2/config"
+	"github.com/dixieflatline76/Spice/v2/pkg/curation"
+	"github.com/dixieflatline76/Spice/v2/pkg/provider"
 	"github.com/dixieflatline76/Spice/v2/util/log"
 )
 
@@ -113,6 +119,29 @@ func (wp *Plugin) checkAndRunRefresh(now time.Time, lastRefreshDay int, isInitia
 		log.Print("Nightly Maintenance: Syncing providers...")
 		wp.SyncProviders()
 
+		// Conditional: Museum Collection OTA Sync
+		if wp.cfg.GetMuseumCollectionOTA() {
+			log.Print("Nightly Maintenance: Running Museum Collection OTA sync...")
+			// Timeout for OTA sync to prevent hanging the scheduler
+			otaCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+			updatedProviders, err := curation.GetManager().SyncAll(otaCtx)
+			cancel()
+
+			if err != nil {
+				log.Printf("Nightly Maintenance: Curation OTA sync failed: %v", err)
+			} else if len(updatedProviders) > 0 {
+				log.Printf("Nightly Maintenance: Curation OTA updated %d providers.", len(updatedProviders))
+				for _, provID := range updatedProviders {
+					if prov, ok := wp.providers[provID]; ok {
+						log.Printf("Nightly Maintenance: Spawning background gallery generation for %s", provID)
+						go wp.generateGalleryForOTA(prov)
+					}
+				}
+			} else {
+				log.Print("Nightly Maintenance: Curation OTA sync complete. No updates found.")
+			}
+		}
+
 		log.Print("Nightly Maintenance: All background tasks finished.")
 
 		// Conditional: Image Refresh
@@ -159,4 +188,48 @@ func (wp *Plugin) isNetworkAvailable() bool {
 
 	log.Debugf("isNetworkAvailable: Network check returned non-success status: %d", resp.StatusCode)
 	return false
+}
+
+// generateGalleryForOTA runs as a background worker to regenerate HTML cache for a provider updated via OTA.
+func (wp *Plugin) generateGalleryForOTA(prov provider.ImageProvider) {
+	// Conservative fallback: recover from any panics during generation
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("CRITICAL: Panic during OTA gallery generation for %s: %v. Reverting to embedded cache.", prov.ID(), r)
+		}
+	}()
+
+	cm := curation.GetManager()
+	col := cm.GetCollection(prov.ID())
+	if col == nil {
+		return
+	}
+
+	cacheDir := filepath.Join(config.GetWorkingDir(), "cache", strings.ToLower(prov.ID()))
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
+	defer cancel()
+
+	for _, entry := range col.Entries {
+		if len(entry.IDs) == 0 && len(entry.Items) == 0 {
+			continue
+		}
+
+		err := GenerateGalleryForProvider(ctx, prov, entry, wp.cfg, wp.httpClient, cacheDir, 0)
+		if err != nil {
+			log.Printf("OTA Gallery Gen: Failed for %s/%s: %v", prov.ID(), entry.Name, err)
+
+			// Trigger conservative fallback on failure
+			log.Printf("OTA Gallery Gen: Discarding OTA cache for %s due to failure.", prov.ID())
+			filename := fmt.Sprintf("%s.json", strings.ToLower(prov.ID()))
+			if mapped, ok := curation.ProviderIDToFilename[prov.ID()]; ok {
+				filename = mapped
+			}
+			os.Remove(filepath.Join(cm.CacheDir, filename))
+			cm.ClearCache(prov.ID())
+			os.RemoveAll(cacheDir)
+			return // Abort further generation for this provider
+		}
+	}
+
+	log.Printf("OTA Gallery Gen: Successfully generated cache for %s", prov.ID())
 }

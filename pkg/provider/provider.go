@@ -113,6 +113,7 @@ type TuningOptions struct {
 	WallColor     WallColorOverrideMode `json:",omitempty"`
 	Matting       MattingOverrideMode   `json:",omitempty"`
 	FrameSize     float64               `json:",omitempty"` // 0 means inherit global default
+	TightCrop     bool                  `json:",omitempty"` // Returns only framed art without wall background padding
 }
 
 type ContextKey string
@@ -123,10 +124,13 @@ const ProviderIDKey ContextKey = "provider_id"
 // Image represents a generic wallpaper image.
 type Image struct {
 	ID               string
-	Path             string                   // URL to download the image
-	ViewURL          string                   // URL to view the image in browser
-	FilePath         string                   // Local path after download (optional/computed)
-	Attribution      string                   // Photographer or Uploader name
+	Path             string // URL to download the image
+	ViewURL          string // URL to view the image in browser
+	FilePath         string // Local path after download (optional/computed)
+	Attribution      string // Photographer or Uploader name
+	Title            string
+	Artist           string
+	Year             string
 	Provider         string                   // Source provider name
 	FileType         string                   // Content type (e.g., "image/jpeg")
 	DownloadLocation string                   // URL to trigger download event (Unsplash requirement)
@@ -236,10 +240,14 @@ type Favoriter interface {
 	GetSourceQueryID() string
 }
 
-// Thumbnail represents a lightweight image preview used for HTML gallery generation.
+// Thumbnail represents a small version of an artwork for gallery previews.
 type Thumbnail struct {
-	ID  string
-	URL string
+	ID      string
+	URL     string
+	ViewURL string
+	Title   string
+	Artist  string
+	Year    string
 }
 
 // ThumbnailProvider defines the interface for providers that can resolve a batch of artwork IDs into thumbnail image URLs.

@@ -4,21 +4,20 @@
     "collections": [
         {
             "key": "cma_masterpieces",
-            "type": "curated",
             "name": "⭐ Best of Cleveland",
             "name_translations": {
-                "da": "⭐ Det Bedste fra Cleveland",
                 "de": "⭐ Das Beste aus Cleveland",
                 "es": "⭐ Lo Mejor de Cleveland",
                 "fr": "⭐ Le Meilleur de Cleveland",
                 "it": "⭐ Il Meglio di Cleveland",
-                "ja": "⭐ クリーブランドの名作",
-                "ko": "⭐ 클리블랜드 베스트",
-                "nl": "⭐ Het Beste van Cleveland",
+                "ja": "⭐ クリーブランドのベスト",
+                "pt": "⭐ O Melhor de Cleveland",
                 "ru": "⭐ Лучшее из Кливленда",
+                "uk": "⭐ Найкраще з Клівленда",
                 "zh-CN": "⭐ 克利夫兰精选",
                 "zh-TW": "⭐ 克利夫蘭精選"
             },
+            "type": "curated",
             "ids": [
                 "151904",
                 "171296",
@@ -49,26 +48,28 @@
                 "148008",
                 "123985",
                 "142771",
-                "141744"
+                "141744",
+                "140161",
+                "109238",
+                "109239"
             ]
         },
         {
             "key": "cma_asian",
-            "type": "curated",
             "name": "Asian Art",
             "name_translations": {
-                "da": "Asiatisk Kunst",
                 "de": "Asiatische Kunst",
                 "es": "Arte Asiático",
                 "fr": "Art Asiatique",
                 "it": "Arte Asiatica",
                 "ja": "アジア美術",
-                "ko": "아시아 미술",
-                "nl": "Aziatische Kunst",
+                "pt": "Arte Asiática",
                 "ru": "Азиатское Искусство",
+                "uk": "Азіатське мистецтво",
                 "zh-CN": "亚洲艺术",
-                "zh-TW": "亞洲藝術"
+                "zh-TW": "亚洲艺术"
             },
+            "type": "curated",
             "ids": [
                 "147155",
                 "147084",
@@ -103,21 +104,20 @@
         },
         {
             "key": "cma_american",
-            "type": "curated",
             "name": "American Art & Landscapes",
             "name_translations": {
-                "da": "Amerikansk Kunst",
-                "de": "Amerikanische Kunst",
-                "es": "Arte Americano",
-                "fr": "Art Américain",
-                "it": "Arte Americana",
-                "ja": "アメリカ美術",
-                "ko": "미국 미술",
-                "nl": "Amerikaanse Kunst",
-                "ru": "Американское Искусство",
-                "zh-CN": "美国艺术",
-                "zh-TW": "美國藝術"
+                "de": "Amerikanische Kunst & Landschaften",
+                "es": "Arte y Paisajes Americanos",
+                "fr": "Art et Paysages Américains",
+                "it": "Arte e Paesaggi Americani",
+                "ja": "アメリカ美術と風景",
+                "pt": "Arte e Paisagens Americanas",
+                "ru": "Американское Искусство и Пейзажи",
+                "uk": "Американське мистецтво та пейзажі",
+                "zh-CN": "美国艺术与风景",
+                "zh-TW": "美國藝術與風景"
             },
+            "type": "curated",
             "ids": [
                 "92937",
                 "151904",
@@ -146,7 +146,6 @@
                 "109239",
                 "125236",
                 "148312",
-                "98439",
                 "173542",
                 "117805",
                 "149422",
@@ -157,21 +156,20 @@
         },
         {
             "key": "cma_european",
-            "type": "curated",
             "name": "European Painting",
             "name_translations": {
-                "da": "Europæisk Maleri",
                 "de": "Europäische Malerei",
                 "es": "Pintura Europea",
                 "fr": "Peinture Européenne",
                 "it": "Pittura Europea",
                 "ja": "ヨーロッパ絵画",
-                "ko": "유럽 회화",
-                "nl": "Europese Schilderkunst",
+                "pt": "Pintura Europeia",
                 "ru": "Европейская Живопись",
+                "uk": "Європейський живопис",
                 "zh-CN": "欧洲绘画",
                 "zh-TW": "歐洲繪畫"
             },
+            "type": "curated",
             "ids": [
                 "128392",
                 "145450",
@@ -199,27 +197,26 @@
                 "108544",
                 "150083",
                 "151257",
-                "142664",
-                "138885"
+                "138885",
+                "124245"
             ]
         },
         {
             "key": "cma_antiquities",
-            "type": "curated",
             "name": "Antiquities & Artifacts",
             "name_translations": {
-                "da": "Antikviteter",
-                "de": "Antiken",
-                "es": "Antigüedades",
-                "fr": "Antiquités",
-                "it": "Antichità",
-                "ja": "古美術",
-                "ko": "고대 미술",
-                "nl": "Oudheden",
-                "ru": "Античности",
-                "zh-CN": "文物",
-                "zh-TW": "文物"
+                "de": "Antiken & Artefakte",
+                "es": "Antigüedades y Artefactos",
+                "fr": "Antiquités et Artéfacts",
+                "it": "Antichità e Manufatti",
+                "ja": "古代美術と遺物",
+                "pt": "Antiguidades e Artefatos",
+                "ru": "Древности и Артефакты",
+                "uk": "Старожитності та артефакти",
+                "zh-CN": "古物与文物",
+                "zh-TW": "古物與文物"
             },
+            "type": "curated",
             "ids": [
                 "144277",
                 "111518",
@@ -278,21 +275,20 @@
         },
         {
             "key": "Artistic Nudes",
-            "type": "curated",
             "name": "Artistic Nudes",
             "name_translations": {
-                "da": "Kunstneriske Akter",
                 "de": "Künstlerische Akte",
                 "es": "Desnudos Artísticos",
                 "fr": "Nus Artistiques",
                 "it": "Nudi Artistici",
                 "ja": "芸術的なヌード",
-                "ko": "예술적 누드",
-                "nl": "Artistieke Naakten",
-                "ru": "Художественная Обнаженная Натура",
+                "pt": "Nus Artísticos",
+                "ru": "Художественные Ню",
+                "uk": "Художні ню",
                 "zh-CN": "艺术裸体",
                 "zh-TW": "藝術裸體"
             },
+            "type": "curated",
             "ids": [
                 "147043",
                 "138464",
@@ -305,7 +301,10 @@
                 "108896",
                 "163448",
                 "687583",
-                "144908"
+                "144908",
+                "142664",
+                "173643",
+                "124245"
             ]
         }
     ]

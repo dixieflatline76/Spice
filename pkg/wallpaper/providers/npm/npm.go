@@ -174,13 +174,19 @@ func (p *Provider) fetchImageByCID(ctx context.Context, cid int) (*provider.Imag
 		return nil, fmt.Errorf("invalid IIIF manifest structure for CID %d", cid)
 	}
 
-	var title, englishTitle string
+	var title, englishTitle, artist, year string
 	for _, m := range manifest.Metadata {
 		if m.Label == "Chinese Title" {
 			title = m.Value
 		}
 		if m.Label == "English Title" {
 			englishTitle = m.Value
+		}
+		if m.Label == "Author" || m.Label == "Creator" {
+			artist = m.Value
+		}
+		if m.Label == "Dynasty" || m.Label == "Date" {
+			year = m.Value
 		}
 	}
 	if englishTitle != "" {
@@ -199,6 +205,9 @@ func (p *Provider) fetchImageByCID(ctx context.Context, cid int) (*provider.Imag
 		ID:          strconv.Itoa(cid),
 		Path:        imageURL,
 		Attribution: title,
+		Title:       title,
+		Artist:      artist,
+		Year:        year,
 		ViewURL:     viewURL,
 		Provider:    ProviderName,
 	}
@@ -227,8 +236,12 @@ func (p *Provider) FetchThumbnails(ctx context.Context, ids []string) ([]provide
 		if img.Path != "" {
 			thumbURL := strings.ReplaceAll(img.Path, "/full/max/0/default.jpg", "/full/800,/0/default.jpg")
 			thumbnails = append(thumbnails, provider.Thumbnail{
-				ID:  idStr,
-				URL: thumbURL,
+				ID:      idStr,
+				URL:     thumbURL,
+				ViewURL: img.ViewURL,
+				Title:   img.Title,
+				Artist:  img.Artist,
+				Year:    img.Year,
 			})
 		}
 	}

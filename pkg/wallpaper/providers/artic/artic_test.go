@@ -128,7 +128,9 @@ func TestFetchThumbnails_TDD(t *testing.T) {
 	assert.Len(t, thumbnails, 2)
 	assert.Equal(t, "123", thumbnails[0].ID)
 	assert.Equal(t, "https://www.artic.edu/iiif/2/img-123/full/!800,800/0/default.jpg", thumbnails[0].URL)
+	assert.Equal(t, "https://www.artic.edu/artworks/123", thumbnails[0].ViewURL)
 
 	assert.Equal(t, "456", thumbnails[1].ID)
 	assert.Equal(t, "https://www.artic.edu/iiif/2/img-456/full/!800,800/0/default.jpg", thumbnails[1].URL)
+	assert.Equal(t, "https://www.artic.edu/artworks/456", thumbnails[1].ViewURL)
 }

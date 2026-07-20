@@ -15,14 +15,12 @@ To guarantee a premium aesthetic experience, Museum Providers are strictly **cur
 
 ## 2. Directory Structure
 
-A museum provider requires at least three core files inside `pkg/wallpaper/providers/<name>/`:
+A museum provider requires at least two core files inside `pkg/wallpaper/providers/<name>/`:
 
 ```text
 pkg/wallpaper/providers/<name>/
 ├── <name>.go         # Main provider logic and UI implementation
 ├── const.go          # Regex, endpoints, and collection keys
-├── remote.go         # Remote JSON fetching, caching, and fallback logic
-├── <name>.json       # Embedded fallback curation data
 ├── <name>.png        # 64x64px provider icon
 ```
 
@@ -100,38 +98,42 @@ The rendering engine handles all dirty tracking, Apply button state, and widget 
 > **Cache Invalidation**
 > Notice `NeedsRefresh: true` in the snippet above. If a user toggles a museum tour, this triggers the `RefreshImagesAndPulse()` event. The central Image Store will reconcile its derivative cache against the new configuration, automatically invalidating stale files and refreshing the monitor wallpapers. Always set this flag if your setting alters image processing or fetching logic.
 
-## 4. Remote Curation (`remote.go`)
+## 4. Remote Curation (`curation.Manager`)
 
-Museum APIs often have hundreds of thousands of items, many of which are boring (coins, broken pottery) or portraits. Spice solves this by maintaining a hardcoded list of "Good Wallpapers", managed via a `remote.go` pattern.
+Museum APIs often have hundreds of thousands of items, many of which are boring (coins, broken pottery) or portraits. Spice solves this by maintaining a hardcoded list of "Good Wallpapers", managed via a centralized Curation Engine.
 
 ### 4.0 The Source of Truth & CI/CD
 > [!WARNING]
 > The singular Source of Truth for all museum curation JSON files is the `docs/collections/` directory.
 
-When modifying a museum collection (e.g. replacing copyrighted IDs), **you must only edit the JSON file in `docs/collections/<name>.json`.** Do **not** manually edit the fallback JSON embedded in the provider directory (`pkg/wallpaper/providers/<name>/<name>.json`). 
+When modifying a museum collection (e.g. replacing copyrighted IDs), **you must only edit the JSON file in `docs/collections/<name>.json`.** Do **not** manually edit anything generated in the `pkg/` directory.
 
-During our GitHub Actions CI/CD release pipeline, the `cmd/util/sync_collections/main.go` script runs automatically. This script reads the JSON from `docs/collections/`, updates the `"version"` string with the GitHub release tag, and overwrites the embedded JSON in `pkg/wallpaper/providers/` before building the release binaries. If you edit the embedded copy directly, your changes will be permanently overwritten and lost during the next release!
+During our GitHub Actions CI/CD release pipeline, the `cmd/util/sync_collections/main.go` script runs automatically. This script reads the JSON from `docs/collections/`, updates the `"version"` string with the GitHub release tag, and injects the JSON directly into the centralized `pkg/curation/zz_generated_provider_map.go` file before building the release binaries.
 
 ### 4.1 The Fetch Hierarchy
-The provider must implement a hierarchy to get the curated IDs:
-1.  **Remote GitHub JSON:** Attempt to fetch the latest `docs/collections/<name>.json` from the `main` branch.
-2.  **Local Cache:** If offline or timed out, fall back to `cache/<name>/<name>_cache.json`.
-3.  **Embedded Go Asset:** If cache is missing, use a `//go:embed` JSON file compiled into the binary.
-4.  **Hardcoded Struct:** Ground zero fallback if parsing fails.
+Providers no longer manage their own caching or JSON fetching. The `curation.Manager` handles this automatically with the following hierarchy:
+1.  **Remote GitHub JSON:** The Manager attempts to fetch the latest `docs/collections/<name>.json` from the `main` branch via the `SyncAll` OTA update.
+2.  **Local Cache:** If offline or timed out, it falls back to the local `cache/curation/` directory.
+3.  **Embedded Go Asset:** If cache is missing or older than the current binary version, it uses the embedded JSON generated in `zz_generated_provider_map.go`.
+
+To get your collection data in your provider, simply call:
+```go
+col := curation.GetManager().GetCollection(p.ID())
+```
 
 ### 4.2 Curation File format
 The curated lists map a logical string key to a slice of integer/string object IDs from the provider's API.
 
 ```json
 {
-  "version": 1,
+  "version": "v2.6.1",
   "description": "CMA Highlights",
   "collections": [
     {
       "key": "highlights",
       "type": "curated",
       "name": "Director's Cut",
-      "ids": [ 1234, 5678, 91011 ]
+      "ids": [ "1234", "5678", "91011" ]
     },
     {
       "key": "european_paintings",
@@ -143,15 +145,7 @@ The curated lists map a logical string key to a slice of integer/string object I
 }
 ```
 > [!IMPORTANT]
-> **No Maps Allowed!** You must strictly define your JSON schema as a `"collections": [...]` array. Using an object map (`"tours": {...}`) causes Go to use random map iteration order, breaking the UI sorting predictability. 
-
-### 4.3 Resilience Validation
-To prevent silent cache poisoning when a schema changes, all `remote.go` implementations must include a structural validation check immediately after `json.Unmarshal`. If the parsed collection is unexpectedly empty, you must return an error so the provider falls back to the embedded JSON safely:
-```go
-	if len(col.Entries) == 0 {
-		return nil, fmt.Errorf("remote collection is empty or malformed (schema mismatch)")
-	}
-```
+> **No Maps Allowed!** You must strictly define your JSON schema as a `"collections": [...]` array. Using an object map (`"tours": {...}`) causes Go to use random map iteration order, breaking the UI sorting predictability.
 
 ### 4.4 Curated vs Dynamic Queries
 Museum Providers typically support two types of collections, differentiated by the `"type"` field in the JSON:

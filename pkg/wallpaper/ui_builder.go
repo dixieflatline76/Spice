@@ -249,6 +249,15 @@ func (b *PrefsPanelBuilder) BuildGeneralTabSchema() *schema.PanelSchema {
 						},
 					},
 					schema.BoolItem{
+						Name:         "museumCollectionOTA",
+						Label:        i18n.T("Museum Collection OTA:"),
+						Help:         i18n.T("Over-the-Air updates for museum collections. If enabled, occasionally synchronizes curation files from the cloud to receive new curated collections without updating the app."),
+						InitialValue: b.plugin.cfg.GetMuseumCollectionOTA(),
+						ApplyFunc: func(val bool) {
+							b.plugin.cfg.SetMuseumCollectionOTA(val)
+						},
+					},
+					schema.BoolItem{
 						Name:         "chgImgOnStart",
 						Label:        i18n.T("Change wallpaper on start:"),
 						Help:         i18n.T("Disable if you prefer the wallpaper to change only based on its timer or a manual refresh."),

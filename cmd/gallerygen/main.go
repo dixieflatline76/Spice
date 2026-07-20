@@ -3,22 +3,17 @@ package main
 import (
 	"context"
 	"crypto/sha256"
-	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
-	_ "image/gif"
-	_ "image/png"
-	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/dixieflatline76/Spice/v2/pkg/curation"
-	"github.com/dixieflatline76/Spice/v2/pkg/gallery"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
 	"github.com/dixieflatline76/Spice/v2/pkg/wallpaper"
 	"github.com/dixieflatline76/Spice/v2/util/log"
@@ -33,21 +28,69 @@ import (
 	_ "github.com/dixieflatline76/Spice/v2/pkg/wallpaper/providers/smk"
 )
 
-
 func calculateHash(entry curation.CollectionEntry) string {
 	b, _ := json.Marshal(entry)
 	hash := sha256.Sum256(b)
-	return fmt.Sprintf("%x", hash)
+	return hex.EncodeToString(hash[:])
+}
+
+type galleryLink struct {
+	Name string
+	Path string
+}
+
+func generateIndexHTML(dir string, galleries map[string][]galleryLink) {
+	var builder strings.Builder
+	builder.WriteString(`<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Spice &#127798;</title>
+    <style>
+        body { font-family: sans-serif; background: #2b2b2b; color: #eee; padding: 2rem; max-width: 800px; margin: 0 auto; }
+        h1 { color: #f1c40f; }
+        h2 { border-bottom: 1px solid #555; padding-bottom: 0.5rem; margin-top: 2rem; }
+        ul { list-style-type: none; padding: 0; }
+        li { margin-bottom: 0.5rem; }
+        a { color: #3498db; text-decoration: none; font-size: 1.1rem; }
+        a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <h1>Spice &#127798;</h1>
+`)
+
+	for museum, links := range galleries {
+		builder.WriteString(fmt.Sprintf("    <h2>%s</h2>\n    <ul>\n", museum))
+		for _, link := range links {
+			builder.WriteString(fmt.Sprintf(`        <li><a href="%s">%s</a></li>`+"\n", link.Path, link.Name))
+		}
+		builder.WriteString("    </ul>\n")
+	}
+
+	builder.WriteString(`</body>
+</html>`)
+
+	if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte(builder.String()), 0600); err != nil {
+		fmt.Printf("Failed to write index.html: %v\n", err)
+	}
 }
 
 func main() {
 	debugFlag := flag.Bool("debug", false, "Enable debug logging")
+	fullFlag := flag.Bool("full", false, "Generate full galleries and index.html")
+	limitFlag := flag.Int("limit", 8, "Maximum number of items per gallery (ignored if --full is used)")
+	outFlag := flag.String("out", "", "Output directory (mandatory if --full is used)")
 	flag.Parse()
+
+	if *fullFlag && *outFlag == "" {
+		fmt.Println("Error: --out is mandatory when using --full to prevent clobbering embedded app galleries.")
+		os.Exit(1)
+	}
 
 	log.SetDebugEnabled(*debugFlag)
 
-	// Generating galleries for all museums can take several minutes due to API rate limiting
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*3600*time.Second) // Allowing longer for large tasks
 	defer cancel()
 
 	fmt.Println("Starting Virtual Gallery Generator...")
@@ -67,24 +110,27 @@ func main() {
 	}
 
 	baseDestDir := filepath.Join(root, "asset", "galleries")
+	if *outFlag != "" {
+		if filepath.IsAbs(*outFlag) {
+			baseDestDir = *outFlag
+		} else {
+			baseDestDir = filepath.Join(root, *outFlag)
+		}
+	}
 	if err := os.MkdirAll(baseDestDir, 0755); err != nil {
 		fmt.Printf("Error creating destination directory: %v\n", err)
 		os.Exit(1)
 	}
 
-	// Load Cache State
 	hashStatePath := filepath.Join(baseDestDir, ".hash_state.json")
 	hashState := make(map[string]string)
 	if b, err := os.ReadFile(hashStatePath); err == nil {
-		if err := json.Unmarshal(b, &hashState); err != nil {
-			fmt.Printf("Warning: failed to unmarshal hash state: %v\n", err)
-		}
+		_ = json.Unmarshal(b, &hashState)
 	}
 
+	museumGalleries := make(map[string][]galleryLink)
 	cfg := &wallpaper.Config{}
-	client := &http.Client{Timeout: 15 * time.Second}
-
-	time.Sleep(500 * time.Millisecond)
+	client := &http.Client{Timeout: 30 * time.Second}
 
 	var providers []provider.ImageProvider
 	for _, factory := range wallpaper.GetRegisteredProviders() {
@@ -92,8 +138,8 @@ func main() {
 	}
 
 	for _, prov := range providers {
-		thumbProv, ok := prov.(provider.ThumbnailProvider)
-		if !ok {
+		if _, ok := prov.(provider.ThumbnailProvider); !ok {
+			fmt.Printf("%s: Provider does not support thumbnails, skipping\n", prov.ID())
 			continue
 		}
 
@@ -112,10 +158,20 @@ func main() {
 		fmt.Printf("Generating galleries for %s...\n", prov.ID())
 
 		for _, entry := range col.Entries {
+			if len(entry.IDs) == 0 && len(entry.Items) == 0 {
+				continue
+			}
+
 			safeName := strings.ReplaceAll(strings.ToLower(entry.Key), " ", "_")
 			fileName := fmt.Sprintf("%s.html", safeName)
 			outPath := filepath.Join(destDir, fileName)
 			stateKey := fmt.Sprintf("%s/%s", prov.ID(), fileName)
+
+			link := galleryLink{
+				Name: entry.Name,
+				Path: fmt.Sprintf("%s/%s", strings.ToLower(prov.ID()), fileName),
+			}
+			museumGalleries[prov.ID()] = append(museumGalleries[prov.ID()], link)
 
 			entryHash := calculateHash(entry)
 			if existingHash, ok := hashState[stateKey]; ok && existingHash == entryHash {
@@ -125,97 +181,14 @@ func main() {
 				}
 			}
 
-			count := 8
-
-			var idsToFetch []string
-			if len(entry.IDs) > 0 {
-				if len(entry.IDs) < count {
-					count = len(entry.IDs)
-				}
-				idsToFetch = entry.IDs[:count]
-			} else if len(entry.Items) > 0 {
-				if len(entry.Items) < count {
-					count = len(entry.Items)
-				}
-				for _, item := range entry.Items[:count] {
-					b, _ := json.Marshal(item)
-					idsToFetch = append(idsToFetch, string(b))
-				}
+			limit := *limitFlag
+			if *fullFlag {
+				limit = 0
 			}
 
-			if len(idsToFetch) == 0 {
-				continue
-			}
-
-			thumbnails, err := thumbProv.FetchThumbnails(ctx, idsToFetch)
+			err := wallpaper.GenerateGalleryForProvider(ctx, prov, entry, cfg, &http.Client{}, destDir, limit)
 			if err != nil {
-				fmt.Printf("%s: Failed to fetch thumbnails for %s: %v\n", prov.ID(), entry.Name, err)
-				continue
-			}
-
-			var wg sync.WaitGroup
-			urls := make([]string, len(thumbnails))
-			for i, t := range thumbnails {
-				wg.Add(1)
-				go func(index int, thumb provider.Thumbnail) {
-					defer wg.Done()
-					req, err := http.NewRequestWithContext(ctx, "GET", thumb.URL, nil)
-					if err != nil {
-						urls[index] = thumb.URL
-						return
-					}
-
-					if hp, ok := prov.(provider.HeaderProvider); ok {
-						for k, v := range hp.GetDownloadHeaders() {
-							req.Header.Set(k, v)
-						}
-					}
-
-					resp, err := client.Do(req)
-					if err == nil && resp.StatusCode == 200 {
-						b, err := io.ReadAll(resp.Body)
-						if err == nil {
-							b64 := base64.StdEncoding.EncodeToString(b)
-							ct := resp.Header.Get("Content-Type")
-							if ct == "" {
-								ct = "image/jpeg"
-							}
-							urls[index] = fmt.Sprintf("data:%s;base64,%s", ct, b64)
-						} else {
-							urls[index] = thumb.URL
-						}
-					} else {
-						urls[index] = thumb.URL
-					}
-					if resp != nil && resp.Body != nil {
-						resp.Body.Close()
-					}
-				}(i, t)
-			}
-			wg.Wait()
-
-			var validUrls []string
-			for _, u := range urls {
-				if u != "" {
-					validUrls = append(validUrls, u)
-				}
-			}
-
-			if len(validUrls) == 0 {
-				continue
-			}
-
-			htmlContent, err := gallery.GenerateHTML(entry.Name, validUrls)
-			if err != nil {
-				fmt.Printf("%s: Failed to generate HTML for %s: %v\n", prov.ID(), entry.Name, err)
-				continue
-			}
-
-			if err := os.WriteFile(outPath, []byte(htmlContent), 0600); err != nil {
-				fmt.Printf("%s: Failed to write HTML for %s: %v\n", prov.ID(), entry.Name, err)
-			} else {
-				fmt.Printf("%s: Generated gallery %s\n", prov.ID(), fileName)
-				hashState[stateKey] = entryHash
+				fmt.Printf("%s: Failed to generate gallery for %s: %v\n", prov.ID(), entry.Name, err)
 			}
 		}
 	}
@@ -224,6 +197,11 @@ func main() {
 	stateBytes, _ := json.MarshalIndent(hashState, "", "  ")
 	if err := os.WriteFile(hashStatePath, stateBytes, 0600); err != nil {
 		fmt.Printf("Warning: failed to write hash state: %v\n", err)
+	}
+
+	if *fullFlag {
+		fmt.Println("Generating index.html...")
+		generateIndexHTML(baseDestDir, museumGalleries)
 	}
 
 	fmt.Println("Done!")

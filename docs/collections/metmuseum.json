@@ -4,13 +4,20 @@
     "collections": [
         {
             "key": "metmuseum_best_of",
-            "type": "curated",
-            "name": "Metropolitan Masterpieces",
+            "name": "⭐ Best of the Met",
             "name_translations": {
-                "en": "Metropolitan Masterpieces",
-                "fr": "Chefs-d'œuvre du Met",
-                "zh": "大都会名作"
+                "de": "⭐ Das Beste aus dem Met",
+                "es": "⭐ Lo Mejor del Met",
+                "fr": "⭐ Le Meilleur du Met",
+                "it": "⭐ Il Meglio del Met",
+                "ja": "⭐ メトロポリタン美術館のベスト",
+                "pt": "⭐ O Melhor do Met",
+                "ru": "⭐ Лучшее из Метрополитен",
+                "uk": "⭐ Найкраще з Метрополітен-музею",
+                "zh-CN": "⭐ 大都会精选",
+                "zh-TW": "⭐ 大都會精選"
             },
+            "type": "curated",
             "ids": [
                 "21698",
                 "50325",
@@ -40,18 +47,27 @@
                 "10819",
                 "436532",
                 "436838",
-                "436106"
+                "436106",
+                "436535",
+                "437430"
             ]
         },
         {
             "key": "metmuseum_european_paintings",
-            "type": "curated",
             "name": "European Paintings",
             "name_translations": {
-                "en": "European Paintings",
+                "de": "Europäische Gemälde",
+                "es": "Pinturas Europeas",
                 "fr": "Peintures Européennes",
-                "zh": "欧洲绘画"
+                "it": "Dipinti Europei",
+                "ja": "ヨーロッパ絵画",
+                "pt": "Pinturas Europeias",
+                "ru": "Европейские Картины",
+                "uk": "Європейські картини",
+                "zh-CN": "欧洲绘画",
+                "zh-TW": "歐洲繪畫"
             },
+            "type": "curated",
             "ids": [
                 "436532",
                 "436838",
@@ -74,13 +90,20 @@
         },
         {
             "key": "metmuseum_american_art",
-            "type": "curated",
             "name": "American Art",
             "name_translations": {
-                "en": "American Art",
+                "de": "Amerikanische Kunst",
+                "es": "Arte Americano",
                 "fr": "Art Américain",
-                "zh": "美国艺术"
+                "it": "Arte Americana",
+                "ja": "アメリカ美術",
+                "pt": "Arte Americana",
+                "ru": "Американское Искусство",
+                "uk": "Американське мистецтво",
+                "zh-CN": "美国艺术",
+                "zh-TW": "美國藝術"
             },
+            "type": "curated",
             "ids": [
                 "10065",
                 "10154",
@@ -103,13 +126,20 @@
         },
         {
             "key": "metmuseum_asian_art",
-            "type": "curated",
             "name": "Asian Art",
             "name_translations": {
-                "en": "Asian Art",
+                "de": "Asiatische Kunst",
+                "es": "Arte Asiático",
                 "fr": "Art Asiatique",
-                "zh": "亚洲艺术"
+                "it": "Arte Asiatica",
+                "ja": "アジア美術",
+                "pt": "Arte Asiática",
+                "ru": "Азиатское Искусство",
+                "uk": "Азіатське мистецтво",
+                "zh-CN": "亚洲艺术",
+                "zh-TW": "亚洲艺术"
             },
+            "type": "curated",
             "ids": [
                 "22521",
                 "50325",
@@ -129,13 +159,20 @@
         },
         {
             "key": "metmuseum_antiquities",
-            "type": "curated",
             "name": "Antiquities",
             "name_translations": {
-                "en": "Antiquities",
+                "de": "Antike",
+                "es": "Antigüedades",
                 "fr": "Antiquités",
-                "zh": "古物"
+                "it": "Antichità",
+                "ja": "古代美術",
+                "pt": "Antiguidades",
+                "ru": "Древности",
+                "uk": "Старожитності",
+                "zh-CN": "古代文物",
+                "zh-TW": "古代文物"
             },
+            "type": "curated",
             "ids": [
                 "253592",
                 "325688",
@@ -148,13 +185,20 @@
         },
         {
             "key": "metmuseum_arms_and_armor",
-            "type": "curated",
             "name": "Arms and Armor",
             "name_translations": {
-                "en": "Arms and Armor",
+                "de": "Waffen und Rüstungen",
+                "es": "Armas y Armaduras",
                 "fr": "Armes et Armures",
-                "zh": "武器与盔甲"
+                "it": "Armi e Armature",
+                "ja": "武器と甲冑",
+                "pt": "Armas e Armaduras",
+                "ru": "Оружие и Доспехи",
+                "uk": "Зброя та обладунки",
+                "zh-CN": "武器与盔甲",
+                "zh-TW": "武器與盔甲"
             },
+            "type": "curated",
             "ids": [
                 "22405",
                 "22521",
@@ -168,13 +212,20 @@
         },
         {
             "key": "metmuseum_artistic_nudes",
-            "type": "curated",
             "name": "Artistic Nudes",
             "name_translations": {
-                "en": "Artistic Nudes",
+                "de": "Künstlerische Akte",
+                "es": "Desnudos Artísticos",
                 "fr": "Nus Artistiques",
-                "zh": "艺术裸体"
+                "it": "Nudi Artistici",
+                "ja": "芸術的なヌード",
+                "pt": "Nus Artísticos",
+                "ru": "Художественные Ню",
+                "uk": "Художні ню",
+                "zh-CN": "艺术裸体",
+                "zh-TW": "藝術裸體"
             },
+            "type": "curated",
             "ids": [
                 "204758",
                 "437826",

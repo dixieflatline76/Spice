@@ -57,6 +57,7 @@ type apiArtwork struct {
 	ID              int          `json:"id"`
 	AccessionNumber string       `json:"accession_number"`
 	Title           string       `json:"title"`
+	CreationDate    string       `json:"creation_date"`
 	URL             string       `json:"url"`
 	Images          *apiImages   `json:"images"`
 	Creators        []apiCreator `json:"creators"`
@@ -403,6 +404,9 @@ func (p *Provider) artworkToImage(art *apiArtwork) *provider.Image {
 		Path:        imgSize.URL,
 		ViewURL:     viewURL,
 		Attribution: attribution,
+		Title:       art.Title,
+		Artist:      artist,
+		Year:        art.CreationDate,
 		Provider:    ProviderName,
 	}
 
@@ -441,9 +445,17 @@ func (p *Provider) FetchThumbnails(ctx context.Context, ids []string) ([]provide
 				return
 			}
 			if img != nil && img.Images != nil && img.Images.Web != nil && img.Images.Web.URL != "" {
+				artist := ""
+				if len(img.Creators) > 0 {
+					artist = img.Creators[0].Description
+				}
 				thumbnails[index] = provider.Thumbnail{
-					ID:  artworkID,
-					URL: img.Images.Web.URL,
+					ID:      artworkID,
+					URL:     img.Images.Web.URL,
+					ViewURL: img.URL,
+					Title:   img.Title,
+					Artist:  artist,
+					Year:    img.CreationDate,
 				}
 			}
 		}(i, idStr)

@@ -166,8 +166,12 @@ func (p *Provider) FetchThumbnails(ctx context.Context, ids []string) ([]provide
 			if img != nil && img.Path != "" {
 				// Use a smaller image size for gallery preview instead of full res to make it fast
 				thumbnails[index] = provider.Thumbnail{
-					ID:  artworkID,
-					URL: strings.ReplaceAll(img.Path, "/full/max/0/default.jpg", "/full/800,/0/default.jpg"),
+					ID:      artworkID,
+					URL:     strings.ReplaceAll(img.Path, "/full/max/0/default.jpg", "/full/800,/0/default.jpg"),
+					ViewURL: img.ViewURL,
+					Title:   img.Title,
+					Artist:  img.Artist,
+					Year:    img.Year,
 				}
 			}
 		}(i, id)
@@ -250,9 +254,21 @@ func (p *Provider) parseGettyJSONLD(doc map[string]interface{}) (*provider.Image
 		}
 	}
 
+	year := ""
+	if prodBy, ok := obj["produced_by"].(map[string]interface{}); ok {
+		if timespan, ok := prodBy["timespan"].(map[string]interface{}); ok {
+			if l, ok := timespan["_label"].(string); ok {
+				year = l
+			}
+		}
+	}
+
 	img := &provider.Image{
 		Path:        imageURL,
 		Attribution: fmt.Sprintf("%s - %s", author, title),
+		Title:       title,
+		Artist:      author,
+		Year:        year,
 		ViewURL:     viewURL,
 	}
 

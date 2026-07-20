@@ -1,6 +1,11 @@
 package curation
 
 import (
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -78,5 +83,66 @@ func TestGetCollection(t *testing.T) {
 	}
 	if col.Entries[0].Key != "test_1" {
 		t.Errorf("expected test_1, got %s", col.Entries[0].Key)
+	}
+}
+
+func TestManager_SyncAll(t *testing.T) {
+	// Create a temporary cache directory
+	tmpCacheDir, err := os.MkdirTemp("", "spice_test_cache_*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpCacheDir)
+
+	// Mock Remote Server
+	remoteJSON := `{
+		"version": "v9.9.9",
+		"description": "Mock Remote Collection",
+		"collections": []
+	}`
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(remoteJSON))
+	}))
+	defer ts.Close()
+
+	// Initialize Manager
+	m := NewManager()
+	m.RemoteBaseURL = ts.URL + "/"
+	m.CacheDir = tmpCacheDir
+
+	// Add a test provider
+	ProviderIDToFilename["testprov"] = "testprov.json"
+	m.embeddedData["testprov"] = []byte(`{"version": "v1.0.0"}`)
+
+	updated, err := m.SyncAll(context.Background())
+	if err != nil {
+		t.Fatalf("SyncAll failed: %v", err)
+	}
+
+	found := false
+	for _, u := range updated {
+		if u == "testprov" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("Expected testprov to be updated, got %v", updated)
+	}
+
+	// Verify Cache was written
+	cachePath := filepath.Join(tmpCacheDir, "testprov.json")
+	if _, err := os.Stat(cachePath); os.IsNotExist(err) {
+		t.Errorf("Expected cache file to be written at %s", cachePath)
+	}
+
+	// Verify GetCollection uses cache
+	col := m.GetCollection("testprov")
+	if col == nil {
+		t.Fatalf("GetCollection returned nil")
+	}
+	if col.Version != "v9.9.9" {
+		t.Errorf("Expected version v9.9.9 from cache, got %s", col.Version)
 	}
 }

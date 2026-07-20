@@ -249,20 +249,81 @@ func (p *Provider) WithResolution(apiURL string, width, height int) string {
 }
 
 // FetchThumbnails implements provider.ThumbnailProvider.
+// It fetches the IIIF thumbnail URLs directly rather than the unreliable download API.
 func (p *Provider) FetchThumbnails(ctx context.Context, ids []string) ([]provider.Thumbnail, error) {
 	var thumbnails []provider.Thumbnail
 	for _, id := range ids {
-		img, err := p.fetchArtworkDetails(ctx, id)
+		url := fmt.Sprintf("%s/?object_number=%s", APIBaseURL, id)
+		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+		if err != nil {
+			log.Printf("SMK: Failed to create request for %s: %v", id, err)
+			continue
+		}
+
+		resp, err := p.httpClient.Do(req)
 		if err != nil {
 			log.Printf("SMK: Failed to fetch %s for thumbnails: %v", id, err)
 			continue
 		}
-		if img != nil && img.Path != "" {
-			thumbnails = append(thumbnails, provider.Thumbnail{
-				ID:  id,
-				URL: p.WithResolution(img.Path, 800, 800),
-			})
+
+		var result struct {
+			Items []struct {
+				ImageThumbnail string `json:"image_thumbnail"`
+				FrontendURL    string `json:"frontend_url"`
+				Titles         []struct {
+					Title    string `json:"title"`
+					Language string `json:"language"`
+				} `json:"titles"`
+				Artist []string `json:"artist"`
+			} `json:"items"`
 		}
+		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+			resp.Body.Close()
+			log.Printf("SMK: Failed to decode %s: %v", id, err)
+			continue
+		}
+		resp.Body.Close()
+
+		if len(result.Items) == 0 {
+			continue
+		}
+
+		item := result.Items[0]
+		thumbURL := item.ImageThumbnail
+		if thumbURL == "" {
+			continue
+		}
+
+		// Use IIIF thumbnail URL with 800px max dimension for fast, reliable loading
+		thumbURL = p.WithResolution(thumbURL, 800, 800)
+
+		viewURL := item.FrontendURL
+		if viewURL == "" {
+			viewURL = fmt.Sprintf("https://open.smk.dk/artwork/image/%s", id)
+		}
+
+		title := "Unknown"
+		if len(item.Titles) > 0 {
+			title = item.Titles[0].Title
+			for _, t := range item.Titles {
+				if t.Language == "en" || t.Language == "engelsk" {
+					title = t.Title
+				}
+			}
+		}
+
+		artist := "Unknown"
+		if len(item.Artist) > 0 {
+			artist = item.Artist[0]
+		}
+
+		thumbnails = append(thumbnails, provider.Thumbnail{
+			ID:      id,
+			URL:     thumbURL,
+			ViewURL: viewURL,
+			Title:   title,
+			Artist:  artist,
+		})
 	}
 	return thumbnails, nil
 }

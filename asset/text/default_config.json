@@ -40,6 +40,30 @@
       "provider": "Rijksmuseum"
     },
     {
+      "desc": "⭐ Cleveland Masterpieces",
+      "url": "cma_masterpieces",
+      "active": true,
+      "provider": "ClevelandMuseum"
+    },
+    {
+      "desc": "⭐ Getty Masterpieces",
+      "url": "getty_masterpieces",
+      "active": true,
+      "provider": "Getty"
+    },
+    {
+      "desc": "⭐ NPM Masterpieces",
+      "url": "npm_masterpieces",
+      "active": true,
+      "provider": "NationalPalaceMuseum"
+    },
+    {
+      "desc": "⭐ SMK Highlights",
+      "url": "smk_highlights",
+      "active": true,
+      "provider": "StatensMuseumForKunst"
+    },
+    {
       "desc": "Wikimedia Featured Astronomy",
       "url": "page:Commons:Featured_pictures/Astronomy",
       "active": true,

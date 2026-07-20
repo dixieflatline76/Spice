@@ -344,11 +344,12 @@ Spice uses a **Chain of Responsibility** pattern to manage evolving configuratio
 - **MigrationChain**: A sequence of `MigrationStep` functions (e.g., `UnifyQueriesStep`, `EnsureFavoritesStep`)
 - On startup, `loadFromPrefs` executes the chain. If any step modifies the config, a save is triggered automatically
 
-## 10. The "Git-Driven" Content System
+## 10. The Curation Engine & Salon Math Gallery
 
-For verified providers (Museums), Spice treats `raw.githubusercontent.com` as a CDN:
-- **Fallback Chain**: Remote → Cache → Embed → Hardcoded
-- Allows instant curation updates (new artworks) without requiring app updates
+Spice features a robust **Curation Engine** (`pkg/curation/manager.go`) that manages thousands of hand-picked museum masterpieces without relying on brittle search APIs.
+
+- **The Git-Driven Content System**: Spice treats `raw.githubusercontent.com` as a CDN. The Curation Engine fetches remote JSON updates on a nightly OTA (Over-The-Air) schedule, falling back to local cache or embedded assets if offline. This allows curators to add new artworks instantly without requiring users to update the Spice binary.
+- **The Salon Math Gallery** (`pkg/gallery/salon.go`): To present these collections beautifully in the UI (e.g., in `docs/collections.html` or internal previews), Spice uses a custom mathematical packer. The `PackSalon` algorithm takes an array of images of various aspect ratios and uses a deterministic spiral-collision search to pack them tightly into an organic, "Salon-style" wall arrangement (inspired by 19th-century French academies), scaling secondary pieces around a primary centerpiece.
 
 ## 11. Key Files
 

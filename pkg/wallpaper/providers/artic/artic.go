@@ -306,6 +306,7 @@ func (p *Provider) fetchArtworkDetails(ctx context.Context, id int) (*provider.I
 			ID            int    `json:"id"`
 			Title         string `json:"title"`
 			ArtistDisplay string `json:"artist_display"`
+			DateDisplay   string `json:"date_display"`
 			ImageID       string `json:"image_id"`
 			Thumbnail     struct {
 				Width  int `json:"width"`
@@ -332,6 +333,9 @@ func (p *Provider) fetchArtworkDetails(ctx context.Context, id int) (*provider.I
 		Path:        imgURL,
 		ViewURL:     fmt.Sprintf("https://www.artic.edu/artworks/%d", result.Data.ID),
 		Attribution: result.Data.ArtistDisplay,
+		Title:       result.Data.Title,
+		Artist:      result.Data.ArtistDisplay,
+		Year:        result.Data.DateDisplay,
 		Provider:    p.ID(),
 		FileType:    "image/jpeg",
 	}, nil
@@ -421,8 +425,12 @@ func (p *Provider) FetchThumbnails(ctx context.Context, ids []string) ([]provide
 			}
 			if img != nil && img.Path != "" {
 				thumbnails[index] = provider.Thumbnail{
-					ID:  artworkID,
-					URL: p.WithResolution(img.Path, 800, 800),
+					ID:      artworkID,
+					URL:     p.WithResolution(img.Path, 800, 800),
+					ViewURL: img.ViewURL,
+					Title:   img.Title,
+					Artist:  img.Artist,
+					Year:    img.Year,
 				}
 			}
 		}(i, id)

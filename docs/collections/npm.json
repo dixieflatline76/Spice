@@ -1,6 +1,23 @@
 {
+    "description": "National Palace Museum (Taiwan): Curated Antiquities",
+    "version": "v2.6.0",
     "collections": [
         {
+            "key": "npm_masterpieces",
+            "name": "⭐ Best of NPM",
+            "name_translations": {
+                "de": "⭐ Das Beste des NPM",
+                "es": "⭐ Lo Mejor del NPM",
+                "fr": "⭐ Le Meilleur du NPM",
+                "it": "⭐ Il Meglio del NPM",
+                "ja": "⭐ NPMのベスト",
+                "pt": "⭐ O Melhor do NPM",
+                "ru": "⭐ Лучшее из NPM",
+                "uk": "⭐ Найкраще з NPM",
+                "zh-CN": "⭐ 故宫精选",
+                "zh-TW": "⭐ 故宮精選"
+            },
+            "type": "curated",
             "ids": [
                 "299",
                 "72",
@@ -29,23 +46,7 @@
                 "1145",
                 "53674",
                 "1166"
-            ],
-            "key": "npm_masterpieces",
-            "name": "⭐ Best of NPM",
-            "name_translations": {
-                "da": "⭐ Det Bedste fra NPM",
-                "de": "⭐ Das Beste aus dem NPM",
-                "es": "⭐ Lo Mejor del NPM",
-                "fr": "⭐ Le Meilleur du NPM",
-                "it": "⭐ Il Meglio del NPM",
-                "ja": "⭐ NPMの名作",
-                "ko": "⭐ NPM 베스트",
-                "nl": "⭐ Het Beste van NPM",
-                "ru": "⭐ Лучшее из NPM",
-                "zh-CN": "⭐ 故宫精选",
-                "zh-TW": "⭐ 故宮精選"
-            },
-            "type": "curated"
+            ]
         },
         {
             "key": "npm_ceramics",
@@ -161,7 +162,5 @@
             "search_params": "rblYear=1644~1911~Qing dynasty",
             "type": "search"
         }
-    ],
-    "description": "National Palace Museum (Taiwan): Curated Antiquities",
-    "version": "v2.6.0"
+    ]
 }

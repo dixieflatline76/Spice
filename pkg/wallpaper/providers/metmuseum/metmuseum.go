@@ -395,6 +395,9 @@ func (p *Provider) fetchObjectDetails(ctx context.Context, id int) (*provider.Im
 		Path:            obj.PrimaryImage,
 		ViewURL:         obj.ObjectURL,
 		Attribution:     fmt.Sprintf("%s - %s", obj.ArtistDisplay, obj.Title),
+		Title:           obj.Title,
+		Artist:          obj.ArtistDisplay,
+		Year:            obj.ObjectDate,
 		Provider:        p.ID(),
 		DerivativePaths: make(map[string]string),
 	}
@@ -424,11 +427,14 @@ func (p *Provider) EnrichImage(ctx context.Context, img provider.Image) (provide
 func (p *Provider) FetchThumbnails(ctx context.Context, ids []string) ([]provider.Thumbnail, error) {
 	thumbnails := make([]provider.Thumbnail, len(ids))
 	var wg sync.WaitGroup
+	sem := make(chan struct{}, 3) // Limit to 3 concurrent requests to avoid 403 Forbidden
 
 	for i, idStr := range ids {
 		wg.Add(1)
+		sem <- struct{}{} // Acquire token
 		go func(index int, artworkID string) {
 			defer wg.Done()
+			defer func() { <-sem }() // Release token
 			var artID int
 			if _, err := fmt.Sscanf(artworkID, "%d", &artID); err != nil {
 				log.Printf("MET: invalid id format %s", artworkID)
@@ -445,8 +451,12 @@ func (p *Provider) FetchThumbnails(ctx context.Context, ids []string) ([]provide
 					thumbURL = thumb // Use PrimarySmall
 				}
 				thumbnails[index] = provider.Thumbnail{
-					ID:  artworkID,
-					URL: thumbURL,
+					ID:      artworkID,
+					URL:     thumbURL,
+					ViewURL: img.ViewURL,
+					Title:   img.Title,
+					Artist:  img.Artist,
+					Year:    img.Year,
 				}
 			}
 		}(i, idStr)

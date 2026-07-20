@@ -26,6 +26,9 @@ func TestFetchThumbnails_TDD(t *testing.T) {
 	if thumbnails[0].URL == "" {
 		t.Error("Expected a valid URL, got empty string")
 	}
+	if thumbnails[0].ViewURL == "" {
+		t.Errorf("Expected ViewURL to be populated, got empty string")
+	}
 
 	// Invalid ID
 	_, err = p.FetchThumbnails(context.Background(), []string{"invalid"})

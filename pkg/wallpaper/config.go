@@ -565,6 +565,20 @@ func (c *Config) SetCacheSize(size CacheSize) {
 	c.SetInt(CacheSizePrefKey, int(size))
 }
 
+func (cfg *Config) GetMuseumCollectionOTA() bool {
+	return cfg.BoolWithFallback("museum_collection_ota", true) // Default to true
+}
+
+func (cfg *Config) SetMuseumCollectionOTA(enabled bool) {
+	cfg.SetBool("museum_collection_ota", enabled)
+}
+
+func (cfg *Config) GetHideStatusBar() bool {
+	cfg.mu.RLock()
+	defer cfg.mu.RUnlock()
+	return cfg.BoolWithFallback(SmartFitPrefKey, true) // Default to true
+}
+
 // GetSmartFit returns the smart fit preference from the config.
 func (c *Config) GetSmartFit() bool {
 	c.mu.RLock()

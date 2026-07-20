@@ -494,8 +494,12 @@ func (p *Provider) FetchThumbnails(ctx context.Context, ids []string) ([]provide
 			// Replace IIIF full resolution with an 800px width thumbnail for fast loading
 			thumbURL := strings.ReplaceAll(item.ImageURL, "/full/max/0/default.jpg", "/full/800,/0/default.jpg")
 			thumbnails = append(thumbnails, provider.Thumbnail{
-				ID:  item.ID,
-				URL: thumbURL,
+				ID:      item.ID,
+				URL:     thumbURL,
+				ViewURL: fmt.Sprintf("https://www.rijksmuseum.nl/en/collection/%s", item.AccessionID),
+				Title:   item.Title,
+				Artist:  item.Artist,
+				Year:    item.Year,
 			})
 		}
 	}
