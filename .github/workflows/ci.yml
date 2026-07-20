@@ -95,9 +95,6 @@ jobs:
           echo "${{ github.event.release.tag_name }}" | Out-File -Encoding UTF8 version.txt
         shell: pwsh
 
-      - name: Sync Museum Collections
-        run: go run cmd/util/sync_collections/main.go -provider all -release ${{ github.event.release.tag_name }}
-
       - name: Build Application
         run: make build-win-amd64
 
@@ -166,9 +163,6 @@ jobs:
 
       - name: Update version.txt
         run: echo "${{ github.event.release.tag_name }}" > version.txt
-
-      - name: Sync Museum Collections
-        run: go run cmd/util/sync_collections/main.go -provider all -release ${{ github.event.release.tag_name }}
         
       - name: Import Apple Certificates
         run: |
