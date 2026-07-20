@@ -51,6 +51,8 @@ type BoolItem struct {
 	Name         string
 	Label        string
 	Help         string
+	ActionText   string // Optional: Hyperlink text to display next to the checkbox
+	ActionFunc   func() // Optional: Function to execute when the hyperlink is clicked
 	InitialValue bool
 	OnChanged    func(bool)
 	ApplyFunc    func(bool)

@@ -144,6 +144,7 @@ The **Wallpaper** plugin tab appears immediately after the App tab. It contains 
 | **Enable Face Crop** | When Smart Fit is active, the cropper aggressively centers on the largest detected face. **Note**: This setting is automatically disabled if Smart Fit Mode is "Disabled". |
 | **Enable Face Boost** | When Smart Fit is active, the cropper *hints* toward faces but also considers overall composition. **Note**: This setting is automatically disabled if Smart Fit Mode is "Disabled". |
 | **Stagger monitor changes** | Adds a small random delay between wallpaper changes on each display during automatic rotation, preventing a distracting simultaneous flash across all screens. |
+| **Museum Collection OTA** | Over-the-Air updates for museum collections. If enabled, occasionally synchronizes curation files from the cloud to receive new curated collections without updating the app. |
 | **Change wallpaper on start** | When enabled, Spice immediately changes the wallpaper when the app launches. Disable this to show the last-seen wallpaper until the timer fires. |
 | **Refresh wallpapers nightly** | Spice quietly re-fetches images from all active sources once per night, keeping the cache fresh with new content without interrupting your day. |
 | **Display Configuration → Refresh Displays** | Manually tell Spice to re-detect all connected monitors. Use this if you plug in or unplug a display while Spice is running. |

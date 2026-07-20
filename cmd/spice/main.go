@@ -16,6 +16,7 @@ import (
 	"fyne.io/fyne/v2/app"
 
 	"github.com/dixieflatline76/Spice/v2/pkg/api"
+	"github.com/dixieflatline76/Spice/v2/pkg/gallery"
 	"github.com/dixieflatline76/Spice/v2/pkg/hotkey"
 	"github.com/dixieflatline76/Spice/v2/pkg/wallpaper"
 )
@@ -69,7 +70,16 @@ func main() {
 	breadcrumb("UI application initialized")
 
 	pm := ui.GetPluginManager() // Get the plugin manager
-	wallpaper.LoadPlugin(pm)    // Initialize the wallpaper plugin
+
+	// Unpack embedded virtual galleries into the working cache directory
+	// so the providers can link to them via file:// URLs in the UI.
+	cacheDir := filepath.Join(config.GetWorkingDir(), "cache")
+	if err := gallery.UnpackAll(cacheDir); err != nil {
+		breadcrumb(fmt.Sprintf("gallery.UnpackAll failed: %v", err))
+		log.Printf("Failed to unpack embedded galleries: %v", err)
+	}
+
+	wallpaper.LoadPlugin(pm) // Initialize the wallpaper plugin
 	breadcrumb("wallpaper plugin loaded")
 
 	// --- BROWSER INTEGRATION START ---

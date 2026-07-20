@@ -30,6 +30,7 @@ check-i18n:
 
 generate: gen-i18n
 	go generate ./...
+	go run cmd/gallerygen/main.go
 
 # --- Build targets ---
 build-extension:
@@ -325,8 +326,14 @@ ifeq ($(OS),Windows_NT)
 	if exist coverage* del /q coverage*
 	if exist *.out del /q *.out
 	if exist *.html del /q *.html
+	-del /s /q asset\galleries\*.html >nul 2>&1
+	-del /s /q asset\galleries\*.json >nul 2>&1
+	if not exist asset\galleries\dummy mkdir asset\galleries\dummy
+	type nul > asset\galleries\dummy\keep.html
 else
-	$(RM) -r bin coverage* *.out *.html
+	$(RM) -r bin coverage* *.out *.html asset/galleries/*/*.html asset/galleries/*/*.json asset/galleries/*.json
+	mkdir -p asset/galleries/dummy
+	touch asset/galleries/dummy/keep.html
 endif
 	go clean
 

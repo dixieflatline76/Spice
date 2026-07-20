@@ -12,6 +12,7 @@ import (
 
 	"github.com/piprate/json-gold/ld"
 
+	"github.com/dixieflatline76/Spice/v2/pkg/curation"
 	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/schema"
@@ -25,8 +26,6 @@ type Provider struct {
 	cfg    *wallpaper.Config
 	client *http.Client
 	mu     sync.RWMutex
-
-	collection *Collection
 
 	// JSON-LD Processor
 	proc    *ld.JsonLdProcessor
@@ -47,34 +46,8 @@ func NewProvider(cfg *wallpaper.Config, client *http.Client) *Provider {
 		proc:    ld.NewJsonLdProcessor(),
 		options: ld.NewJsonLdOptions(""),
 	}
-	go func() {
-		col, err := InitRemoteCollection(cfg)
-		if err != nil {
-			log.Printf("Getty: Failed to init remote collection: %v", err)
-		} else {
-			p.mu.Lock()
-			p.collection = col
-			p.mu.Unlock()
-		}
-	}()
 	return p
 }
-
-// SyncRemoteConfig fetches the latest curated collections from GitHub.
-func (p *Provider) SyncRemoteConfig() error {
-	col, err := RefreshRemoteCollection()
-	if err != nil {
-		return err
-	}
-	if col != nil {
-		p.mu.Lock()
-		p.collection = col
-		p.mu.Unlock()
-	}
-	return nil
-}
-
-var _ provider.RemoteConfigSyncer = (*Provider)(nil)
 
 func (p *Provider) ID() string      { return ProviderName }
 func (p *Provider) HomeURL() string { return "https://www.getty.edu/art/collection/" }
@@ -106,21 +79,11 @@ func (p *Provider) ParseURL(url string) (string, error) {
 
 // FetchImages fetches images sequentially based on the page number and curated UUIDs.
 func (p *Provider) FetchImages(ctx context.Context, query string, page int) ([]provider.Image, error) {
-	p.mu.RLock()
-	col := p.collection
-	p.mu.RUnlock()
-
-	if col == nil {
-		return nil, nil
-	}
-
-	entry := col.FindEntry(query)
+	entry := curation.GetManager().GetEntry(p.ID(), query)
 	if entry == nil || entry.Type != "curated" || len(entry.IDs) == 0 {
 		return nil, nil
 	}
-
-	ids := make([]string, len(entry.IDs))
-	copy(ids, entry.IDs)
+	ids := entry.IDs
 
 	const pageSize = 10
 	start := (page - 1) * pageSize
@@ -184,6 +147,44 @@ func (p *Provider) fetchObjectByUUID(ctx context.Context, uuid string) (*provide
 	img.Provider = ProviderName
 
 	return img, nil
+}
+
+// FetchThumbnails implements provider.ThumbnailProvider.
+func (p *Provider) FetchThumbnails(ctx context.Context, ids []string) ([]provider.Thumbnail, error) {
+	thumbnails := make([]provider.Thumbnail, len(ids))
+	var wg sync.WaitGroup
+
+	for i, id := range ids {
+		wg.Add(1)
+		go func(index int, artworkID string) {
+			defer wg.Done()
+			img, err := p.fetchObjectByUUID(ctx, artworkID)
+			if err != nil {
+				log.Printf("Getty: Failed to fetch %s for thumbnails: %v", artworkID, err)
+				return
+			}
+			if img != nil && img.Path != "" {
+				// Use a smaller image size for gallery preview instead of full res to make it fast
+				thumbnails[index] = provider.Thumbnail{
+					ID:      artworkID,
+					URL:     strings.ReplaceAll(img.Path, "/full/max/0/default.jpg", "/full/800,/0/default.jpg"),
+					ViewURL: img.ViewURL,
+					Title:   img.Title,
+					Artist:  img.Artist,
+					Year:    img.Year,
+				}
+			}
+		}(i, id)
+	}
+	wg.Wait()
+
+	var validThumbnails []provider.Thumbnail
+	for _, t := range thumbnails {
+		if t.URL != "" {
+			validThumbnails = append(validThumbnails, t)
+		}
+	}
+	return validThumbnails, nil
 }
 
 func (p *Provider) parseGettyJSONLD(doc map[string]interface{}) (*provider.Image, error) {
@@ -253,9 +254,21 @@ func (p *Provider) parseGettyJSONLD(doc map[string]interface{}) (*provider.Image
 		}
 	}
 
+	year := ""
+	if prodBy, ok := obj["produced_by"].(map[string]interface{}); ok {
+		if timespan, ok := prodBy["timespan"].(map[string]interface{}); ok {
+			if l, ok := timespan["_label"].(string); ok {
+				year = l
+			}
+		}
+	}
+
 	img := &provider.Image{
 		Path:        imageURL,
 		Attribution: fmt.Sprintf("%s - %s", author, title),
+		Title:       title,
+		Artist:      author,
+		Year:        year,
 		ViewURL:     viewURL,
 	}
 
@@ -285,67 +298,5 @@ func (p *Provider) CreateSettingsPanel(sm setting.SettingsManager) *schema.Panel
 }
 
 func (p *Provider) CreateQueryPanel(sm setting.SettingsManager, _ string) *schema.PanelSchema {
-	p.mu.RLock()
-	col := p.collection
-	p.mu.RUnlock()
-
-	if col == nil {
-		if c, err := InitRemoteCollection(p.cfg); err == nil {
-			p.mu.Lock()
-			p.collection = c
-			p.mu.Unlock()
-			col = c
-		}
-	}
-
-	var curatedItems []schema.ItemSchema
-	if col != nil {
-		for _, entry := range col.Entries {
-			curatedItems = append(curatedItems, p.makeCollectionItem(entry.Name, entry.NameTranslations, entry.Key))
-		}
-	}
-
-	return &schema.PanelSchema{
-		Sections: []schema.SectionSchema{
-			{
-				Title: i18n.T("Curated Collections"),
-				Items: curatedItems,
-			},
-		},
-	}
-}
-
-func (p *Provider) makeCollectionItem(label string, translations map[string]string, key string) schema.BoolItem {
-	// Helper to find existing query state
-	getQuery := func(key string) (bool, string) {
-		for _, q := range p.cfg.GetQueries() {
-			if q.Provider == p.ID() && q.URL == key {
-				return q.Active, q.ID
-			}
-		}
-		return false, ""
-	}
-
-	active, _ := getQuery(key)
-
-	return schema.BoolItem{
-		Name:         p.ID() + "_" + key,
-		Label:        i18n.TMap(label, translations),
-		InitialValue: active,
-		NeedsRefresh: true,
-		ApplyFunc: func(b bool) {
-			_, cid := getQuery(key)
-			if b {
-				if cid != "" {
-					_ = p.cfg.EnableImageQuery(cid)
-				} else {
-					_, _ = p.cfg.AddProviderQuery(label, key, p.ID(), true, false)
-				}
-			} else {
-				if cid != "" {
-					_ = p.cfg.DisableImageQuery(cid)
-				}
-			}
-		},
-	}
+	return wallpaper.CreateCuratedQueryPanel(p, sm, p.cfg)
 }

@@ -29,21 +29,21 @@ type ArtData struct {
 func getSourcePath() string {
 	_, filename, _, _ := runtime.Caller(0)
 	root := filepath.Join(filepath.Dir(filename), "../../..")
-	return filepath.Join(root, "pkg/wallpaper/providers/metmuseum/met.json")
+	return filepath.Join(root, "docs/collections/metmuseum.json")
 }
 
 func main() {
 	jsonPath := getSourcePath()
 	f, err := os.Open(jsonPath)
 	if err != nil {
-		fmt.Printf("Failed to open met.json at %s: %v\n", jsonPath, err)
+		fmt.Printf("Failed to open metmuseum.json at %s: %v\n", jsonPath, err)
 		os.Exit(1)
 	}
 	defer f.Close()
 
 	var coll MetCollection
 	if err := json.NewDecoder(f).Decode(&coll); err != nil {
-		fmt.Printf("Failed to decode met.json: %v\n", err)
+		fmt.Printf("Failed to decode metmuseum.json: %v\n", err)
 		os.Exit(1)
 	}
 

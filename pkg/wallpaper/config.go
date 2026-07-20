@@ -199,8 +199,12 @@ func (c *Config) loadFromPrefs() error {
 		return err
 	}
 
-	if c.VirtualFrameSize == 0 {
-		c.VirtualFrameSize = 0.8
+	if c.VirtualFrameSize == 0 || c.VirtualFrameSize == 0.8 {
+		// Enforce new defaults for new users (0) and upgrade existing users (0.8)
+		c.VirtualFrameSize = 0.85
+		c.VirtualFramingFallback = true
+		c.VirtualPaperMatting = true
+		c.VirtualWallColor = WallAlgorithmic
 	}
 
 	// Execute Migration Chain
@@ -559,6 +563,20 @@ func (c *Config) SetCacheSize(size CacheSize) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.SetInt(CacheSizePrefKey, int(size))
+}
+
+func (cfg *Config) GetMuseumCollectionOTA() bool {
+	return cfg.BoolWithFallback("museum_collection_ota", true) // Default to true
+}
+
+func (cfg *Config) SetMuseumCollectionOTA(enabled bool) {
+	cfg.SetBool("museum_collection_ota", enabled)
+}
+
+func (cfg *Config) GetHideStatusBar() bool {
+	cfg.mu.RLock()
+	defer cfg.mu.RUnlock()
+	return cfg.BoolWithFallback(SmartFitPrefKey, true) // Default to true
 }
 
 // GetSmartFit returns the smart fit preference from the config.

@@ -117,6 +117,17 @@ func TMap(english string, trans map[string]string) string {
 		if val, ok := trans[code]; ok {
 			return strings.TrimSpace(val)
 		}
+		// Fallbacks for Chinese locales from JSON files
+		if code == "zh" {
+			if val, ok := trans["zh-CN"]; ok {
+				return strings.TrimSpace(val)
+			}
+		}
+		if code == "zh-Hant" {
+			if val, ok := trans["zh-TW"]; ok {
+				return strings.TrimSpace(val)
+			}
+		}
 	}
 	return T(english)
 }
@@ -144,6 +155,26 @@ func N(english string, count int, data ...any) string {
 	// by passing the right data, but Fyne's LocalizePlural doesn't take a locale.
 	// Since Spice mostly uses T and Tf, and N is rare, we'll fall back to lang.LocalizePlural.
 	return strings.TrimSpace(lang.LocalizePlural(english, count, data...))
+}
+
+// GetTranslationsForKeys returns a map of all language codes to their translations for a subset of keys.
+func GetTranslationsForKeys(keys []string) map[string]map[string]string {
+	mu.RLock()
+	defer mu.RUnlock()
+
+	res := make(map[string]map[string]string)
+	for code, langMap := range translations {
+		langRes := make(map[string]string)
+		for _, k := range keys {
+			if val, ok := langMap[k]; ok {
+				langRes[k] = strings.TrimSpace(val)
+			}
+		}
+		if len(langRes) > 0 {
+			res[code] = langRes
+		}
+	}
+	return res
 }
 
 func applyTemplate(tmplStr string, data any) string {

@@ -309,6 +309,9 @@ func (v *VirtualFramer) renderGalleryWall(img image.Image, targetW, targetH int,
 	scaleW := maxAllowedW / totalW
 	scaleH := maxAllowedH / totalH
 	scale := math.Min(scaleW, scaleH)
+	if opts.TightCrop {
+		scale = 1.0
+	}
 
 	artW := int(imgW * scale)
 	artH := int(imgH * scale)
@@ -450,6 +453,16 @@ func (v *VirtualFramer) renderGalleryWall(img image.Image, targetW, targetH int,
 	shadowBlurred := imaging.Blur(shadow, shadowBlurRadius)
 
 	// Composite
+	if opts.TightCrop {
+		// Just composite the mat and art onto the frame and return it
+		var result image.Image = frame
+		if useMatting {
+			result = imaging.OverlayCenter(result, mat, 1.0)
+		}
+		result = imaging.OverlayCenter(result, artResized, 1.0)
+		return result, nil
+	}
+
 	canvas = imaging.Overlay(canvas, shadowBlurred, image.Pt((targetW-shadowW)/2+shadowOffset, (targetH-shadowH)/2+shadowOffset), 1.0)
 	canvas = imaging.OverlayCenter(canvas, frame, 1.0)
 	if useMatting {

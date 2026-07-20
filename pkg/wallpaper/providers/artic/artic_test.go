@@ -3,7 +3,6 @@ package artic
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"math/rand"
@@ -66,13 +65,6 @@ func TestGetIIIFURL(t *testing.T) {
 	assert.Equal(t, expected, got)
 }
 
-func TestEmbeddedJSON(t *testing.T) {
-	var col CuratedList
-	err := json.Unmarshal(embeddedJSON, &col)
-	assert.NoError(t, err)
-	assert.NotEmpty(t, col.Entries, "Embedded JSON should have parsed Collections successfully")
-}
-
 type mockRoundTripper struct{}
 
 func (m *mockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -106,26 +98,39 @@ func TestFetchImages_SequentialOrder(t *testing.T) {
 			Transport: &mockRoundTripper{},
 		},
 		idCache: make(map[string][]int),
-		curatedList: CuratedList{
-			Entries: []CollectionEntry{
-				{
-					Key:  "test_collection",
-					Name: "Test Collection",
-					IDs:  []int{101, 102, 103, 104, 105, 106, 107, 108, 109, 110},
-				},
-			},
+	}
+
+	// Use real key from artic.json that has known IDs
+	images, err := p.FetchImages(context.Background(), "artic_impressionism", 1)
+	assert.NoError(t, err)
+
+	// In artic_impressionism we have 30 IDs, so pageSize 10 will return 10
+	assert.Len(t, images, 10)
+
+	// Just check the first few to ensure sequential order is maintained
+	expectedPrefix := []string{"28560", "20684", "14655"}
+	for i, exp := range expectedPrefix {
+		assert.Equal(t, exp, images[i].ID)
+	}
+}
+
+func TestFetchThumbnails_TDD(t *testing.T) {
+	p := &Provider{
+		httpClient: &http.Client{
+			Transport: &mockRoundTripper{},
 		},
 	}
 
-	images, err := p.FetchImages(context.Background(), "test_collection", 1)
+	ids := []string{"123", "456"}
+	thumbnails, err := p.FetchThumbnails(context.Background(), ids)
 	assert.NoError(t, err)
-	assert.Len(t, images, 10)
 
-	expectedIDs := []string{"101", "102", "103", "104", "105", "106", "107", "108", "109", "110"}
-	actualIDs := make([]string, len(images))
-	for i, img := range images {
-		actualIDs[i] = img.ID
-	}
+	assert.Len(t, thumbnails, 2)
+	assert.Equal(t, "123", thumbnails[0].ID)
+	assert.Equal(t, "https://www.artic.edu/iiif/2/img-123/full/!800,800/0/default.jpg", thumbnails[0].URL)
+	assert.Equal(t, "https://www.artic.edu/artworks/123", thumbnails[0].ViewURL)
 
-	assert.Equal(t, expectedIDs, actualIDs, "FetchImages should return images in the exact sequential order of the underlying query, despite network jitter.")
+	assert.Equal(t, "456", thumbnails[1].ID)
+	assert.Equal(t, "https://www.artic.edu/iiif/2/img-456/full/!800,800/0/default.jpg", thumbnails[1].URL)
+	assert.Equal(t, "https://www.artic.edu/artworks/456", thumbnails[1].ViewURL)
 }

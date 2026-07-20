@@ -70,7 +70,7 @@ func (m *MockPreferences) QueryList(key string) []string { return nil } // Guess
 // Ideally usage of "testing.NewPreferences()" from Fyne is better, but visibility issues exist.
 // Let's rely on standard map.
 
-func TestSpiceMelangeCollection(t *testing.T) {
+func TestMetMuseumBestOfCollection(t *testing.T) {
 	// 1. Setup Mock Config & Client
 	cfg := &wallpaper.Config{
 		Preferences: NewMockPreferences(),
@@ -83,16 +83,16 @@ func TestSpiceMelangeCollection(t *testing.T) {
 	// Wait for async init to complete/fallback (embedded should load fast)
 	time.Sleep(500 * time.Millisecond)
 
-	// 3. Fetch Images (Spice Melange)
+	// 3. Fetch Images (Best of Met)
 	ctx := context.Background()
-	images, err := p.FetchImages(ctx, CollectionSpiceMelange, 1) // Page 1
+	images, err := p.FetchImages(ctx, "metmuseum_best_of", 1) // Page 1
 	if err != nil {
 		t.Fatalf("FetchImages failed: %v", err)
 	}
 
 	// 4. Assertions
 	if len(images) == 0 {
-		t.Error("Expected images from Spice Melange, got 0")
+		t.Error("Expected images from Best of Met, got 0")
 	}
 
 	if len(images) > 20 {
