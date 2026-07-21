@@ -201,12 +201,17 @@ func TestBulkhead_Deduplication(t *testing.T) {
 	mockStore.On("GetByID", "Wikimedia_id2").Return(provider.Image{}, false)
 
 	// 3. Mock Pipeline
+	var pipelineWg sync.WaitGroup
+	pipelineWg.Add(1)
+
 	mockPipeline := &MockPipeline{}
 	wp.jobSubmitter = mockPipeline
 	// Should only be called for id2
 	mockPipeline.On("Submit", mock.Anything, mock.MatchedBy(func(job DownloadJob) bool {
 		return job.Image.ID == "Wikimedia_id2"
-	})).Return(true).Once()
+	})).Return(true).Once().Run(func(args mock.Arguments) {
+		pipelineWg.Done()
+	})
 
 	// 4. Mock Provider to return both
 	var wg sync.WaitGroup
@@ -223,8 +228,8 @@ func TestBulkhead_Deduplication(t *testing.T) {
 	wg.Wait()
 
 	// Verification
-	// Short sleep to allow deduplication check and pipeline submission to finish
-	time.Sleep(20 * time.Millisecond)
+	// Wait for pipeline submission to finish
+	pipelineWg.Wait()
 	mockPipeline.AssertExpectations(t)
 	mockPipeline.AssertNotCalled(t, "Submit", mock.Anything, mock.MatchedBy(func(job DownloadJob) bool {
 		return job.Image.ID == "Wikimedia_id1"
