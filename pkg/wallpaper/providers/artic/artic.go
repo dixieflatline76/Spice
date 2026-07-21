@@ -13,6 +13,8 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/time/rate"
+
 	"github.com/dixieflatline76/Spice/v2/pkg/curation"
 	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
@@ -137,6 +139,16 @@ func (p *Provider) Name() string {
 
 func (p *Provider) Title() string {
 	return ProviderTitle
+}
+
+// GetAPIPacing implements the PacedProvider interface.
+func (p *Provider) GetAPIPacing() time.Duration {
+	return 1500 * time.Millisecond // Aligning with aicSerializedRoundTripper delay
+}
+
+// GetProcessPacing implements the PacedProvider interface.
+func (p *Provider) GetProcessPacing() time.Duration {
+	return 1500 * time.Millisecond
 }
 
 func (p *Provider) GetProviderIcon() interface{} {
@@ -409,11 +421,13 @@ func getIIIFURL(imageID string, width, height int) string {
 func (p *Provider) FetchThumbnails(ctx context.Context, ids []string) ([]provider.Thumbnail, error) {
 	thumbnails := make([]provider.Thumbnail, len(ids))
 	var wg sync.WaitGroup
+	limiter := rate.NewLimiter(rate.Every(p.GetAPIPacing()), 1)
 
 	for i, id := range ids {
 		wg.Add(1)
 		go func(index int, artworkID string) {
 			defer wg.Done()
+			_ = limiter.Wait(ctx)
 			var artID int
 			if _, err := fmt.Sscanf(artworkID, "%d", &artID); err != nil {
 				return

@@ -131,8 +131,10 @@ func buildCuratedUIItem(p provider.ImageProvider, sm setting.SettingsManager, cf
 			OnPressed:  actionFunc,
 		}
 		return schema.HorizontalRowItem{
-			ID:    p.ID() + "_" + entry.Key + "_row",
-			Items: []schema.ItemSchema{boolItem, btnItem},
+			ID:            p.ID() + "_" + entry.Key + "_row",
+			Items:         []schema.ItemSchema{boolItem, btnItem},
+			Layout:        schema.RowLayoutHBoxSpacer,
+			ShowSeparator: true,
 		}
 	}
 
