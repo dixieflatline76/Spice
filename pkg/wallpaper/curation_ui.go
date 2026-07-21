@@ -41,7 +41,7 @@ func CreateCuratedQueryPanel(p provider.ImageProvider, sm setting.SettingsManage
 	}
 }
 
-func buildCuratedUIItem(p provider.ImageProvider, sm setting.SettingsManager, cfg *Config, entry curation.CollectionEntry) schema.BoolItem {
+func buildCuratedUIItem(p provider.ImageProvider, sm setting.SettingsManager, cfg *Config, entry curation.CollectionEntry) schema.ItemSchema {
 	// Helper to find existing query state
 	getQuery := func(key string) (bool, string) {
 		for _, q := range cfg.GetQueries() {
@@ -56,9 +56,11 @@ func buildCuratedUIItem(p provider.ImageProvider, sm setting.SettingsManager, cf
 
 	actionText := ""
 	var actionFunc func()
+	label := i18n.TMap(entry.Name, entry.NameTranslations)
 
 	if entry.Type == "curated" && len(entry.IDs) > 0 {
-		actionText = fmt.Sprintf("%d Pieces", len(entry.IDs))
+		actionText = i18n.T("Preview")
+		label = fmt.Sprintf("%s (%d Pieces)", label, len(entry.IDs))
 
 		actionFunc = func() {
 			safeName := strings.ReplaceAll(strings.ToLower(entry.Key), " ", "_")
@@ -68,7 +70,7 @@ func buildCuratedUIItem(p provider.ImageProvider, sm setting.SettingsManager, cf
 
 			langParam := i18n.GetLanguage()
 			localeJSPath := filepath.Join(providerCacheDir, "current_locale.js")
-			_ = os.WriteFile(localeJSPath, []byte(fmt.Sprintf("window.spiceAppLocale = '%s';", langParam)), 0600)
+			_ = os.WriteFile(localeJSPath, fmt.Appendf(nil, "window.spiceAppLocale = '%s';", langParam), 0600)
 
 			fileURL := fmt.Sprintf("file:///%s", filepath.ToSlash(outPath))
 			if u, err := url.Parse(fileURL); err == nil {
@@ -78,7 +80,8 @@ func buildCuratedUIItem(p provider.ImageProvider, sm setting.SettingsManager, cf
 		}
 	} else if entry.Type == "curated" && len(entry.Items) > 0 {
 		// Pre-resolved items (e.g. Rijksmuseum)
-		actionText = fmt.Sprintf("%d Pieces", len(entry.Items))
+		actionText = i18n.T("Preview")
+		label = fmt.Sprintf("%s (%d Pieces)", label, len(entry.Items))
 
 		actionFunc = func() {
 			safeName := strings.ReplaceAll(strings.ToLower(entry.Key), " ", "_")
@@ -88,7 +91,7 @@ func buildCuratedUIItem(p provider.ImageProvider, sm setting.SettingsManager, cf
 
 			langParam := i18n.GetLanguage()
 			localeJSPath := filepath.Join(providerCacheDir, "current_locale.js")
-			_ = os.WriteFile(localeJSPath, []byte(fmt.Sprintf("window.spiceAppLocale = '%s';", langParam)), 0600)
+			_ = os.WriteFile(localeJSPath, fmt.Appendf(nil, "window.spiceAppLocale = '%s';", langParam), 0600)
 
 			fileURL := fmt.Sprintf("file:///%s", filepath.ToSlash(outPath))
 			if u, err := url.Parse(fileURL); err == nil {
@@ -98,11 +101,11 @@ func buildCuratedUIItem(p provider.ImageProvider, sm setting.SettingsManager, cf
 		}
 	}
 
-	return schema.BoolItem{
+	boolItem := schema.BoolItem{
 		Name:         p.ID() + "_" + entry.Key,
-		Label:        i18n.TMap(entry.Name, entry.NameTranslations),
-		ActionText:   actionText,
-		ActionFunc:   actionFunc,
+		Label:        label,
+		ActionText:   "",
+		ActionFunc:   nil,
 		InitialValue: active,
 		NeedsRefresh: true,
 		ApplyFunc: func(b bool) {
@@ -120,4 +123,20 @@ func buildCuratedUIItem(p provider.ImageProvider, sm setting.SettingsManager, cf
 			}
 		},
 	}
+
+	if actionFunc != nil {
+		btnItem := schema.ButtonItem{
+			Name:       p.ID() + "_" + entry.Key + "_preview",
+			ButtonText: actionText,
+			OnPressed:  actionFunc,
+		}
+		return schema.HorizontalRowItem{
+			ID:            p.ID() + "_" + entry.Key + "_row",
+			Items:         []schema.ItemSchema{boolItem, btnItem},
+			Layout:        schema.RowLayoutHBoxSpacer,
+			ShowSeparator: true,
+		}
+	}
+
+	return boolItem
 }

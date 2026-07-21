@@ -9,6 +9,9 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
+
+	"golang.org/x/time/rate"
 
 	"github.com/piprate/json-gold/ld"
 
@@ -75,6 +78,16 @@ func (p *Provider) SupportsUserQueries() bool { return false }
 
 func (p *Provider) ParseURL(url string) (string, error) {
 	return url, nil
+}
+
+// GetAPIPacing implements the PacedProvider interface.
+func (p *Provider) GetAPIPacing() time.Duration {
+	return 200 * time.Millisecond
+}
+
+// GetProcessPacing implements the PacedProvider interface.
+func (p *Provider) GetProcessPacing() time.Duration {
+	return 200 * time.Millisecond
 }
 
 // FetchImages fetches images sequentially based on the page number and curated UUIDs.
@@ -153,11 +166,13 @@ func (p *Provider) fetchObjectByUUID(ctx context.Context, uuid string) (*provide
 func (p *Provider) FetchThumbnails(ctx context.Context, ids []string) ([]provider.Thumbnail, error) {
 	thumbnails := make([]provider.Thumbnail, len(ids))
 	var wg sync.WaitGroup
+	limiter := rate.NewLimiter(rate.Every(p.GetAPIPacing()), 1)
 
 	for i, id := range ids {
 		wg.Add(1)
 		go func(index int, artworkID string) {
 			defer wg.Done()
+			_ = limiter.Wait(ctx)
 			img, err := p.fetchObjectByUUID(ctx, artworkID)
 			if err != nil {
 				log.Printf("Getty: Failed to fetch %s for thumbnails: %v", artworkID, err)

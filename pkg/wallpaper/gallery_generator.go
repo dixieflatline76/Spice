@@ -17,6 +17,8 @@ import (
 	"strings"
 	"sync"
 
+	"golang.org/x/time/rate"
+
 	"github.com/dixieflatline76/Spice/v2/pkg/curation"
 	"github.com/dixieflatline76/Spice/v2/pkg/gallery"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
@@ -74,10 +76,21 @@ func GenerateGalleryForProvider(ctx context.Context, prov provider.ImageProvider
 	items := make([]gallery.GalleryItem, len(thumbnails))
 	vFramer := NewVirtualFramer(nil, cfg)
 
+	var apiLimiter *rate.Limiter
+	if pp, ok := prov.(provider.PacedProvider); ok {
+		if d := pp.GetAPIPacing(); d > 0 {
+			apiLimiter = rate.NewLimiter(rate.Every(d), 1)
+		}
+	}
+
 	for i, t := range thumbnails {
 		wg.Add(1)
 		go func(index int, thumb provider.Thumbnail) {
 			defer wg.Done()
+
+			if apiLimiter != nil {
+				_ = apiLimiter.Wait(ctx)
+			}
 
 			items[index].ID = thumb.ID
 			items[index].ViewURL = thumb.ViewURL

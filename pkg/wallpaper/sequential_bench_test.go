@@ -152,7 +152,7 @@ func BenchmarkSequentialSwitch(b *testing.B) {
 
 	// 3. Benchmark Loop
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		// We simulate "Next" action
 		// In real app: wp.SetNextWallpaper()
 		// We need to make sure wp.currentIndex rotates

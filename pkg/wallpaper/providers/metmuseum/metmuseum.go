@@ -13,6 +13,8 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/time/rate"
+
 	"github.com/dixieflatline76/Spice/v2/pkg/curation"
 	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
@@ -427,14 +429,13 @@ func (p *Provider) EnrichImage(ctx context.Context, img provider.Image) (provide
 func (p *Provider) FetchThumbnails(ctx context.Context, ids []string) ([]provider.Thumbnail, error) {
 	thumbnails := make([]provider.Thumbnail, len(ids))
 	var wg sync.WaitGroup
-	sem := make(chan struct{}, 3) // Limit to 3 concurrent requests to avoid 403 Forbidden
+	limiter := rate.NewLimiter(rate.Every(p.GetAPIPacing()), 1)
 
 	for i, idStr := range ids {
 		wg.Add(1)
-		sem <- struct{}{} // Acquire token
 		go func(index int, artworkID string) {
 			defer wg.Done()
-			defer func() { <-sem }() // Release token
+			_ = limiter.Wait(ctx)
 			var artID int
 			if _, err := fmt.Sscanf(artworkID, "%d", &artID); err != nil {
 				log.Printf("MET: invalid id format %s", artworkID)

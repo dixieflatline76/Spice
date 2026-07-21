@@ -1749,13 +1749,10 @@ func (sm *SettingsManager) renderHorizontalRow(v schema.HorizontalRowItem) fyne.
 	if len(v.Items) == 0 {
 		return nil
 	}
-	row := container.NewAdaptiveGrid(len(v.Items))
-	for _, item := range v.Items {
-		// Create a temporary container for each item in the row
+
+	temps := make([]*fyne.Container, len(v.Items))
+	for i, item := range v.Items {
 		temp := container.NewVBox()
-		// Recursively render into temp, but we only expect simple items here
-		// Actually, we should probably extract the widget creation logic
-		// For simplicity, we just handle buttons/labels for now
 		switch item := item.(type) {
 		case schema.TextItem:
 			sm.renderTextEntrySetting(&textEntrySettingConfig{
@@ -1795,19 +1792,48 @@ func (sm *SettingsManager) renderHorizontalRow(v schema.HorizontalRowItem) fyne.
 				EnabledIf:      item.EnabledIf,
 				VisibleIf:      item.VisibleIf,
 			}, temp)
+		case schema.BoolItem:
+			var hlp fyne.CanvasObject
+			if item.Help != "" {
+				hlp = sm.CreateSettingDescriptionLabel(item.Help)
+			}
+			sm.renderBoolSetting(&boolConfig{
+				Name:         item.Name,
+				InitialValue: item.InitialValue,
+				LabelText:    item.Label,
+				Label:        nil, // Inline label for row items to prevent NewSplitRow squishing
+				HelpContent:  hlp,
+				OnChanged:    item.OnChanged,
+				ApplyFunc:    item.ApplyFunc,
+				NeedsRefresh: item.NeedsRefresh,
+				EnabledIf:    item.EnabledIf,
+				VisibleIf:    item.VisibleIf,
+			}, temp)
 		case schema.LabelItem:
 			if item.IsTitle {
 				temp.Add(sm.CreateSettingTitleLabel(item.Text))
 			} else {
-				temp.Add(widget.NewLabel(item.Text))
+				temp.Add(sm.CreateSettingDescriptionLabel(item.Text))
 			}
 		}
-		// Add all widgets from temp to row
-		for _, w := range temp.Objects {
-			row.Add(w)
-		}
+		temps[i] = temp
 	}
-	return row
+
+	var res fyne.CanvasObject
+	if v.Layout == schema.RowLayoutHBoxSpacer && len(temps) == 2 {
+		res = container.NewHBox(temps[0], layout.NewSpacer(), temps[1])
+	} else {
+		row := container.NewAdaptiveGrid(len(v.Items))
+		for _, t := range temps {
+			row.Add(t)
+		}
+		res = row
+	}
+
+	if v.ShowSeparator {
+		return container.NewVBox(res, widget.NewSeparator())
+	}
+	return res
 }
 
 func (sm *SettingsManager) mapImportance(i schema.Importance) widget.Importance {

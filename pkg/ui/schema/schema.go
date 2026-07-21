@@ -252,10 +252,20 @@ type QueryListItem struct {
 
 func (QueryListItem) isItemSchema() {}
 
+// RowLayout defines how items are arranged inside a HorizontalRowItem.
+type RowLayout string
+
+const (
+	RowLayoutAdaptiveGrid RowLayout = ""            // Default: Divides space equally among items
+	RowLayoutHBoxSpacer   RowLayout = "hbox_spacer" // Places a spacer between the first and second item, pushing them to opposite sides
+)
+
 // HorizontalRowItem groups multiple items horizontally.
 type HorizontalRowItem struct {
-	ID    string
-	Items []ItemSchema
+	ID            string
+	Items         []ItemSchema
+	Layout        RowLayout
+	ShowSeparator bool
 }
 
 func (HorizontalRowItem) isItemSchema() {}
