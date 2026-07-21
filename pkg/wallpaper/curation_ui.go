@@ -56,9 +56,11 @@ func buildCuratedUIItem(p provider.ImageProvider, sm setting.SettingsManager, cf
 
 	actionText := ""
 	var actionFunc func()
+	label := i18n.TMap(entry.Name, entry.NameTranslations)
 
 	if entry.Type == "curated" && len(entry.IDs) > 0 {
-		actionText = fmt.Sprintf("%d Pieces", len(entry.IDs))
+		actionText = i18n.T("Preview")
+		label = fmt.Sprintf("%s (%d Pieces)", label, len(entry.IDs))
 
 		actionFunc = func() {
 			safeName := strings.ReplaceAll(strings.ToLower(entry.Key), " ", "_")
@@ -78,7 +80,8 @@ func buildCuratedUIItem(p provider.ImageProvider, sm setting.SettingsManager, cf
 		}
 	} else if entry.Type == "curated" && len(entry.Items) > 0 {
 		// Pre-resolved items (e.g. Rijksmuseum)
-		actionText = fmt.Sprintf("%d Pieces", len(entry.Items))
+		actionText = i18n.T("Preview")
+		label = fmt.Sprintf("%s (%d Pieces)", label, len(entry.Items))
 
 		actionFunc = func() {
 			safeName := strings.ReplaceAll(strings.ToLower(entry.Key), " ", "_")
@@ -100,7 +103,7 @@ func buildCuratedUIItem(p provider.ImageProvider, sm setting.SettingsManager, cf
 
 	return schema.BoolItem{
 		Name:         p.ID() + "_" + entry.Key,
-		Label:        i18n.TMap(entry.Name, entry.NameTranslations),
+		Label:        label,
 		ActionText:   actionText,
 		ActionFunc:   actionFunc,
 		InitialValue: active,
