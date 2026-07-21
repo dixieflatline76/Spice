@@ -189,6 +189,8 @@ func main() {
 			err := wallpaper.GenerateGalleryForProvider(ctx, prov, entry, cfg, &http.Client{}, destDir, limit)
 			if err != nil {
 				fmt.Printf("%s: Failed to generate gallery for %s: %v\n", prov.ID(), entry.Name, err)
+			} else {
+				hashState[stateKey] = entryHash
 			}
 		}
 	}

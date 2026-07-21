@@ -41,7 +41,7 @@ func CreateCuratedQueryPanel(p provider.ImageProvider, sm setting.SettingsManage
 	}
 }
 
-func buildCuratedUIItem(p provider.ImageProvider, sm setting.SettingsManager, cfg *Config, entry curation.CollectionEntry) schema.BoolItem {
+func buildCuratedUIItem(p provider.ImageProvider, sm setting.SettingsManager, cfg *Config, entry curation.CollectionEntry) schema.ItemSchema {
 	// Helper to find existing query state
 	getQuery := func(key string) (bool, string) {
 		for _, q := range cfg.GetQueries() {
@@ -101,11 +101,11 @@ func buildCuratedUIItem(p provider.ImageProvider, sm setting.SettingsManager, cf
 		}
 	}
 
-	return schema.BoolItem{
+	boolItem := schema.BoolItem{
 		Name:         p.ID() + "_" + entry.Key,
 		Label:        label,
-		ActionText:   actionText,
-		ActionFunc:   actionFunc,
+		ActionText:   "",
+		ActionFunc:   nil,
 		InitialValue: active,
 		NeedsRefresh: true,
 		ApplyFunc: func(b bool) {
@@ -123,4 +123,18 @@ func buildCuratedUIItem(p provider.ImageProvider, sm setting.SettingsManager, cf
 			}
 		},
 	}
+
+	if actionFunc != nil {
+		btnItem := schema.ButtonItem{
+			Name:       p.ID() + "_" + entry.Key + "_preview",
+			ButtonText: actionText,
+			OnPressed:  actionFunc,
+		}
+		return schema.HorizontalRowItem{
+			ID:    p.ID() + "_" + entry.Key + "_row",
+			Items: []schema.ItemSchema{boolItem, btnItem},
+		}
+	}
+
+	return boolItem
 }

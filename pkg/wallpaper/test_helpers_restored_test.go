@@ -7,8 +7,6 @@ import (
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
 )
 
-
-
 func newHealthyImage(t *testing.T, fm *FileManager, id, queryID, resolution string, flags map[string]bool) provider.Image {
 	t.Helper()
 	createMasterFile(t, fm, id)
@@ -20,4 +18,3 @@ func newHealthyImage(t *testing.T, fm *FileManager, id, queryID, resolution stri
 		DerivativePaths: map[string]string{resolution: derivPath},
 	}
 }
-

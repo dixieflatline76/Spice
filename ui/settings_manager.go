@@ -1795,6 +1795,26 @@ func (sm *SettingsManager) renderHorizontalRow(v schema.HorizontalRowItem) fyne.
 				EnabledIf:      item.EnabledIf,
 				VisibleIf:      item.VisibleIf,
 			}, temp)
+		case schema.BoolItem:
+			var lbl, hlp fyne.CanvasObject
+			if item.Label != "" {
+				lbl = sm.CreateSettingTitleLabel(item.Label)
+			}
+			if item.Help != "" {
+				hlp = sm.CreateSettingDescriptionLabel(item.Help)
+			}
+			sm.renderBoolSetting(&boolConfig{
+				Name:         item.Name,
+				InitialValue: item.InitialValue,
+				LabelText:    item.Label,
+				Label:        lbl,
+				HelpContent:  hlp,
+				OnChanged:    item.OnChanged,
+				ApplyFunc:    item.ApplyFunc,
+				NeedsRefresh: item.NeedsRefresh,
+				EnabledIf:    item.EnabledIf,
+				VisibleIf:    item.VisibleIf,
+			}, temp)
 		case schema.LabelItem:
 			if item.IsTitle {
 				temp.Add(sm.CreateSettingTitleLabel(item.Text))
