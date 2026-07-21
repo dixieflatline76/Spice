@@ -79,7 +79,7 @@ func generateIndexHTML(dir string, galleries map[string][]galleryLink) {
 func main() {
 	debugFlag := flag.Bool("debug", false, "Enable debug logging")
 	fullFlag := flag.Bool("full", false, "Generate full galleries and index.html")
-	limitFlag := flag.Int("limit", 8, "Maximum number of items per gallery (ignored if --full is used)")
+	limitFlag := flag.Int("limit", 12, "Maximum number of items per gallery (ignored if --full is used)")
 	outFlag := flag.String("out", "", "Output directory (mandatory if --full is used)")
 	flag.Parse()
 

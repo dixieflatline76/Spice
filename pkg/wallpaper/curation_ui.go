@@ -58,7 +58,7 @@ func buildCuratedUIItem(p provider.ImageProvider, sm setting.SettingsManager, cf
 	var actionFunc func()
 
 	if entry.Type == "curated" && len(entry.IDs) > 0 {
-		actionText = fmt.Sprintf("%d Pieces", len(entry.IDs))
+		actionText = "Preview Gallery"
 
 		actionFunc = func() {
 			safeName := strings.ReplaceAll(strings.ToLower(entry.Key), " ", "_")
@@ -78,7 +78,7 @@ func buildCuratedUIItem(p provider.ImageProvider, sm setting.SettingsManager, cf
 		}
 	} else if entry.Type == "curated" && len(entry.Items) > 0 {
 		// Pre-resolved items (e.g. Rijksmuseum)
-		actionText = fmt.Sprintf("%d Pieces", len(entry.Items))
+		actionText = "Preview Gallery"
 
 		actionFunc = func() {
 			safeName := strings.ReplaceAll(strings.ToLower(entry.Key), " ", "_")
