@@ -1,6 +1,6 @@
 {
     "description": "Best of the J. Paul Getty Museum Open Content",
-    "version": "v2.6.0",
+    "version": "v2.6.1",
     "collections": [
         {
             "key": "getty_masterpieces",
@@ -95,9 +95,9 @@
         },
         {
             "key": "getty_antiquities",
-            "name": "Antiquities \u0026 Artifacts",
+            "name": "Antiquities & Artifacts",
             "name_translations": {
-                "de": "Antiken \u0026 Artefakte",
+                "de": "Antiken & Artefakte",
                 "es": "Antigüedades y Artefactos",
                 "fr": "Antiquités et Artéfacts",
                 "it": "Antichità e Manufatti",
@@ -130,7 +130,8 @@
                 "ffb7121d-1c16-489a-8be8-275b09df1cf2",
                 "fbe3ae29-d5fa-40f5-b3c9-e51969bafbb8",
                 "fb2e2b85-d2d3-4a26-94e1-e030083da631",
-                "fad1fcbd-fc80-4593-97f1-df559dddcbf9"
+                "fad1fcbd-fc80-4593-97f1-df559dddcbf9",
+                "6efb086e-b3f5-46b5-9005-59c6b8bfdcf1"
             ]
         },
         {
@@ -162,15 +163,17 @@
                 "c1e88275-b26f-49b7-a165-33b8c11c9dc4",
                 "ca9023dd-235f-4344-ac1e-73e5e5f44ceb",
                 "cca6ce55-2381-4a92-b572-bbc5def38ef2",
-                "965b3925-6c77-43c2-b73b-a744aad286a7",
-                "0732cea0-3ef1-4f0a-97fd-17cd54a9c5af"
+                "0732cea0-3ef1-4f0a-97fd-17cd54a9c5af",
+                "ebd647cb-c3a2-47d7-83fa-691d493916e2",
+                "fbe3ae29-d5fa-40f5-b3c9-e51969bafbb8",
+                "23fdde63-303a-42db-b64f-13a779a8add8"
             ]
         },
         {
             "key": "getty_nudes",
-            "name": "Artistic Nudes (Painting \u0026 Sculpture)",
+            "name": "Artistic Nudes (Painting & Sculpture)",
             "name_translations": {
-                "de": "Künstlerische Akte (Malerei \u0026 Skulptur)",
+                "de": "Künstlerische Akte (Malerei & Skulptur)",
                 "es": "Desnudos Artísticos (Pintura y Escultura)",
                 "fr": "Nus Artistiques (Peinture et Sculpture)",
                 "it": "Nudi Artistici (Pittura e Scultura)",
