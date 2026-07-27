@@ -1,6 +1,6 @@
 {
     "description": "Best of the J. Paul Getty Museum Open Content",
-    "version": "v2.6.0",
+    "version": "v2.6.2",
     "collections": [
         {
             "key": "getty_masterpieces",
@@ -64,14 +64,11 @@
                 "9aff8cb3-4911-4f1e-8499-2d77af71e0dd",
                 "fb3dce25-68d9-415a-b57f-6efdf963027f",
                 "fd07ab3f-9e45-4fbc-b74d-be1bab608e69",
-                "e8cf34a0-85f9-41c1-95e4-13e92b4d6586",
                 "246578f5-9981-4e0c-b905-79f4f67df5cb",
                 "63a14b9c-27fd-4405-95ad-415916011db5",
                 "161b4ada-eb19-4842-9b2c-8a9b060badcc",
                 "3eb47da8-67c8-4932-9308-eb16924067be",
-                "0c04f2e8-6eb9-455a-b55e-c5ec159c2fe4",
                 "7b11164e-ea13-4d46-8cf9-40c189aabd0a",
-                "33325cfb-e438-4b3d-9b62-b2712fd9efca",
                 "c88b3df0-de91-4f5b-a9ef-7b2b9a6d8abb",
                 "9f3d6258-9711-41a8-8d1c-640c39289691",
                 "047b740d-1454-4fbf-a935-8322755aee58",
@@ -85,19 +82,14 @@
                 "71d9c889-377c-4a18-8980-689825f339bf",
                 "fcb62fef-bf5b-4d14-92cc-4e63e06d416f",
                 "2b7acd6b-55d8-460f-8578-bb2789545c56",
-                "df580bfa-be4f-431e-a715-b2a9b176656c",
-                "47390ab4-fbf1-4249-add8-931691c943e8",
-                "28eab6b6-b670-49f2-b508-47b58ab1c763",
-                "d5265ca9-f3d4-48af-b3c1-ccd7993e2467",
-                "dc126a6e-8835-4b0b-88ed-302b9f47356c",
-                "abd6e879-945c-4ede-ad93-eb50d094ec01"
+                "df580bfa-be4f-431e-a715-b2a9b176656c"
             ]
         },
         {
             "key": "getty_antiquities",
-            "name": "Antiquities \u0026 Artifacts",
+            "name": "Antiquities & Artifacts",
             "name_translations": {
-                "de": "Antiken \u0026 Artefakte",
+                "de": "Antiken & Artefakte",
                 "es": "Antigüedades y Artefactos",
                 "fr": "Antiquités et Artéfacts",
                 "it": "Antichità e Manufatti",
@@ -116,21 +108,21 @@
                 "55ef0075-4ef8-4939-be24-43b7b73f88f3",
                 "85e1081f-4094-4e4b-96cf-70d83295d96f",
                 "89c78d89-8afc-4205-aae6-76e60295c22d",
-                "23fdde63-303a-42db-b64f-13a779a8add8",
                 "ae82b7de-e7f8-4ace-a2f4-1cb6984de448",
                 "d9bda2c0-59c6-4e02-98c9-d9bbcc966b91",
                 "ab128600-a71f-4012-845c-481fe4a36d80",
                 "c0a99717-d232-4996-a7a1-751cd2c41bdb",
                 "e69ac8a5-0b7b-4fe9-8e58-3e10799c2a51",
-                "e7a4081f-f62d-4c52-ade6-d1d753451e9a",
                 "ebd647cb-c3a2-47d7-83fa-691d493916e2",
-                "eb84b922-cfc7-45c5-8fc0-34707758e0d6",
                 "f3422786-454a-41f5-b6b7-725051859bdb",
                 "f8c5166f-9b02-47a6-b1c0-d65b78de3a81",
                 "ffb7121d-1c16-489a-8be8-275b09df1cf2",
                 "fbe3ae29-d5fa-40f5-b3c9-e51969bafbb8",
-                "fb2e2b85-d2d3-4a26-94e1-e030083da631",
-                "fad1fcbd-fc80-4593-97f1-df559dddcbf9"
+                "fad1fcbd-fc80-4593-97f1-df559dddcbf9",
+                "33325cfb-e438-4b3d-9b62-b2712fd9efca",
+                "e7a4081f-f62d-4c52-ade6-d1d753451e9a",
+                "eb84b922-cfc7-45c5-8fc0-34707758e0d6",
+                "fb2e2b85-d2d3-4a26-94e1-e030083da631"
             ]
         },
         {
@@ -160,17 +152,20 @@
                 "9e5d8fad-16db-4278-b80d-d2731bcc1afa",
                 "77a3fdab-d3e7-4fc4-bef8-7fe4a0091b79",
                 "c1e88275-b26f-49b7-a165-33b8c11c9dc4",
+                "0732cea0-3ef1-4f0a-97fd-17cd54a9c5af",
+                "47390ab4-fbf1-4249-add8-931691c943e8",
+                "28eab6b6-b670-49f2-b508-47b58ab1c763",
+                "d5265ca9-f3d4-48af-b3c1-ccd7993e2467",
+                "23fdde63-303a-42db-b64f-13a779a8add8",
                 "ca9023dd-235f-4344-ac1e-73e5e5f44ceb",
-                "cca6ce55-2381-4a92-b572-bbc5def38ef2",
-                "965b3925-6c77-43c2-b73b-a744aad286a7",
-                "0732cea0-3ef1-4f0a-97fd-17cd54a9c5af"
+                "cca6ce55-2381-4a92-b572-bbc5def38ef2"
             ]
         },
         {
             "key": "getty_nudes",
-            "name": "Artistic Nudes (Painting \u0026 Sculpture)",
+            "name": "Artistic Nudes (Painting & Sculpture)",
             "name_translations": {
-                "de": "Künstlerische Akte (Malerei \u0026 Skulptur)",
+                "de": "Künstlerische Akte (Malerei & Skulptur)",
                 "es": "Desnudos Artísticos (Pintura y Escultura)",
                 "fr": "Nus Artistiques (Peinture et Sculpture)",
                 "it": "Nudi Artistici (Pittura e Scultura)",
