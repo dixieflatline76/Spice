@@ -179,14 +179,16 @@ func (p *Provider) FetchThumbnails(ctx context.Context, ids []string) ([]provide
 				return
 			}
 			if img != nil && img.Path != "" {
-				// Use a smaller image size for gallery preview instead of full res to make it fast
+				// Prefer a smaller image for gallery preview; fall back to max if resize fails.
+				thumbURL := strings.ReplaceAll(img.Path, "/full/max/0/default.jpg", "/full/800,/0/default.jpg")
 				thumbnails[index] = provider.Thumbnail{
-					ID:      artworkID,
-					URL:     strings.ReplaceAll(img.Path, "/full/max/0/default.jpg", "/full/800,/0/default.jpg"),
-					ViewURL: img.ViewURL,
-					Title:   img.Title,
-					Artist:  img.Artist,
-					Year:    img.Year,
+					ID:          artworkID,
+					URL:         thumbURL,
+					FallbackURL: img.Path, // /full/max/ as fallback if /800,/ returns 400
+					ViewURL:     img.ViewURL,
+					Title:       img.Title,
+					Artist:      img.Artist,
+					Year:        img.Year,
 				}
 			}
 		}(i, id)
@@ -247,6 +249,18 @@ func (p *Provider) parseGettyJSONLD(doc map[string]interface{}) (*provider.Image
 			if id, ok := rObj["id"].(string); ok {
 				// Convert IIIF default to max resolution
 				imageURL = strings.ReplaceAll(id, "/full/full/0/default.jpg", "/full/max/0/default.jpg")
+			}
+		}
+	}
+
+	// Fallback: JSON-LD framing can drop the representation field for some objects.
+	// In that case, extract the IIIF URL directly from the raw (unframed) document.
+	if imageURL == "" {
+		if rep, ok := doc["representation"].([]interface{}); ok && len(rep) > 0 {
+			if rObj, ok := rep[0].(map[string]interface{}); ok {
+				if id, ok := rObj["id"].(string); ok {
+					imageURL = strings.ReplaceAll(id, "/full/full/0/default.jpg", "/full/max/0/default.jpg")
+				}
 			}
 		}
 	}

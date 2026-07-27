@@ -242,12 +242,13 @@ type Favoriter interface {
 
 // Thumbnail represents a small version of an artwork for gallery previews.
 type Thumbnail struct {
-	ID      string
-	URL     string
-	ViewURL string
-	Title   string
-	Artist  string
-	Year    string
+	ID          string
+	URL         string
+	FallbackURL string // Optional: used if URL returns an error (e.g., IIIF resize not supported)
+	ViewURL     string
+	Title       string
+	Artist      string
+	Year        string
 }
 
 // ThumbnailProvider defines the interface for providers that can resolve a batch of artwork IDs into thumbnail image URLs.

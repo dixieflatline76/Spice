@@ -113,6 +113,29 @@ func GenerateGalleryForProvider(ctx context.Context, prov provider.ImageProvider
 			}
 
 			resp, err := client.Do(req)
+			if resp != nil && resp.Body != nil {
+				defer resp.Body.Close()
+			}
+
+			// If the primary URL fails, retry with the fallback URL (e.g., /max/ instead of /800,/).
+			if (err != nil || resp.StatusCode != 200) && thumb.FallbackURL != "" && thumb.FallbackURL != thumb.URL {
+				if resp != nil && resp.Body != nil {
+					resp.Body.Close()
+				}
+				req2, err2 := http.NewRequestWithContext(ctx, "GET", thumb.FallbackURL, nil)
+				if err2 == nil {
+					if hp, ok := prov.(provider.HeaderProvider); ok {
+						for k, v := range hp.GetDownloadHeaders() {
+							req2.Header.Set(k, v)
+						}
+					}
+					resp, err = client.Do(req2)
+					if resp != nil && resp.Body != nil {
+						defer resp.Body.Close()
+					}
+				}
+			}
+
 			if err == nil && resp.StatusCode == 200 {
 				b, err := io.ReadAll(resp.Body)
 				if err == nil {
@@ -161,9 +184,6 @@ func GenerateGalleryForProvider(ctx context.Context, prov provider.ImageProvider
 				items[index].URL = thumb.URL
 				items[index].Width = 100
 				items[index].Height = 100
-			}
-			if resp != nil && resp.Body != nil {
-				resp.Body.Close()
 			}
 		}(i, t)
 	}
