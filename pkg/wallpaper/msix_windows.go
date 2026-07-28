@@ -85,17 +85,17 @@ func detectMSIXFamilyName() string {
 // resolveMSIXPicturePath ensures image/wallpaper files are accessible by explorer.exe or Windows APIs
 // outside the MSIX container by staging them into %USERPROFILE%\Pictures\SpiceWallpapers.
 func resolveMSIXPicturePath(imagePath string) string {
-	return resolveMSIXStagedPath(imagePath, msixPictureStaging)
+	return resolveMSIXStagedPath(imagePath, msixPictureStaging, true)
 }
 
 // resolveMSIXDocumentPath ensures HTML/document files are accessible by external applications (e.g. web browsers)
 // outside the MSIX container by staging them into %USERPROFILE%\Documents\Spice.
 func resolveMSIXDocumentPath(docPath string) string {
-	return resolveMSIXStagedPath(docPath, msixDocumentStaging)
+	return resolveMSIXStagedPath(docPath, msixDocumentStaging, false)
 }
 
 // resolveMSIXStagedPath performs the generic staging copy logic relative to baseStagingDir.
-func resolveMSIXStagedPath(srcPath, baseStagingDir string) string {
+func resolveMSIXStagedPath(srcPath, baseStagingDir string, flat bool) string {
 	if msixPackageFamilyName == "" || baseStagingDir == "" {
 		return srcPath // Not in MSIX, nothing to do
 	}
@@ -108,18 +108,22 @@ func resolveMSIXStagedPath(srcPath, baseStagingDir string) string {
 
 	// Preserve directory structure relative to WorkingDir if applicable
 	var stagedPath string
-	workingDir := config.GetWorkingDir()
-	cleanSrc := filepath.Clean(srcPath)
-	cleanWork := filepath.Clean(workingDir)
-	if strings.HasPrefix(cleanSrc, cleanWork) {
-		relPath, err := filepath.Rel(cleanWork, cleanSrc)
-		if err == nil {
-			stagedPath = filepath.Join(baseStagingDir, relPath)
+	if flat {
+		stagedPath = filepath.Join(baseStagingDir, filepath.Base(srcPath))
+	} else {
+		workingDir := config.GetWorkingDir()
+		cleanSrc := filepath.Clean(srcPath)
+		cleanWork := filepath.Clean(workingDir)
+		if strings.HasPrefix(cleanSrc, cleanWork) {
+			relPath, err := filepath.Rel(cleanWork, cleanSrc)
+			if err == nil {
+				stagedPath = filepath.Join(baseStagingDir, relPath)
+			} else {
+				stagedPath = filepath.Join(baseStagingDir, filepath.Base(srcPath))
+			}
 		} else {
 			stagedPath = filepath.Join(baseStagingDir, filepath.Base(srcPath))
 		}
-	} else {
-		stagedPath = filepath.Join(baseStagingDir, filepath.Base(srcPath))
 	}
 
 	// Ensure destination directory exists
