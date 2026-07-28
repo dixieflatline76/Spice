@@ -627,6 +627,8 @@ func (mc *MonitorController) reprocessWithTuning(opts provider.TuningOptions) {
 		log.Printf("[ERROR] [Monitor %d] Failed to save derivative: %v", mc.ID, err)
 		return
 	}
+	now := time.Now()
+	_ = os.Chtimes(derivPath, now, now)
 
 	// 6. Set wallpaper
 	mc.State.CurrentImage = img

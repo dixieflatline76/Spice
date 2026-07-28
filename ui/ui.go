@@ -1771,6 +1771,7 @@ func (sa *SpiceApp) ShowTuneImagePopup(monitorID int, currentOpts provider.Tunin
 		frameToggle.OnChanged = func(checked bool) {
 			if checked {
 				activeOpts.FrameOverride = provider.FrameOverrideForceOn
+				activeOpts.Anchor = provider.AnchorAuto
 			} else {
 				activeOpts.FrameOverride = provider.FrameOverrideForceOff
 			}
