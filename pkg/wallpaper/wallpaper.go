@@ -14,7 +14,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"sync"
 	"time"
 
@@ -23,7 +22,6 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"github.com/dixieflatline76/Spice/v2/asset"
-	"github.com/dixieflatline76/Spice/v2/config"
 	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui"
@@ -95,6 +93,11 @@ type Plugin struct {
 
 	// Internal State
 	enrichmentSignal chan int // Signal for lazy enrichment worker
+
+	// monitorState remembers which wallpaper each monitor is showing so it can
+	// be restored after a restart. macOS does not persist wallpapers set via
+	// NSWorkspace, so without this the desktop reverts to the system default.
+	monitorState *monitorStateStore
 
 	// Testable UI executor
 	runOnUI func(func())
@@ -302,7 +305,13 @@ func (wp *Plugin) Init(manager ui.PluginManager) {
 		}
 	}
 
-	downloadsPath := filepath.Join(config.GetWorkingDir(), strings.ToLower(pluginName)+"_downloads")
+	// Relocate the image tree out of the purgeable cache directory before the
+	// FileManager is built around a path. Activate rewrites the cached
+	// absolute paths afterwards, unconditionally, so a crash between the two
+	// cannot leave the cache pointing at the old location forever.
+	migrateDataDir(wp.cfg)
+
+	downloadsPath := currentDownloadsPath()
 	wp.fm = NewFileManager(downloadsPath)
 
 	cachePath := filepath.Join(downloadsPath, "image_cache_map.json")
@@ -317,6 +326,11 @@ func (wp *Plugin) Init(manager ui.PluginManager) {
 		activeQs := wp.cfg.GetActiveQueryIDs()
 		return activeQs[queryID]
 	})
+
+	wp.monitorState = newMonitorStateStore(filepath.Join(downloadsPath, monitorStateFileName))
+	wp.monitorState.Load()
+
+	wp.store.SetProtectedIDsFunc(wp.currentlyDisplayedIDs)
 
 	wp.loadQueryPages()
 
@@ -362,6 +376,68 @@ func (wp *Plugin) stopAllWorkers() {
 	}
 }
 
+// currentlyDisplayedIDs returns the image IDs that are on screen right now, or
+// that the next re-assert will put back on screen. Cleanup must never touch
+// them: deleting the file behind the live desktop breaks the wallpaper
+// immediately and leaves nothing to restore after the next reboot.
+//
+// The persisted half matters as much as the live half. A cleanup pass that
+// runs before the first applyImage of the session sees no live monitor state,
+// and would otherwise delete precisely the image Activate is about to
+// re-assert.
+//
+// Callers must not hold the image store lock: this takes the monitor locks,
+// and the monitor actors take the store lock while holding theirs.
+func (wp *Plugin) currentlyDisplayedIDs() map[string]bool {
+	ids := make(map[string]bool)
+
+	if wp.monitorState != nil {
+		for id := range wp.monitorState.CurrentIDs() {
+			ids[id] = true
+		}
+	}
+
+	wp.monMu.RLock()
+	controllers := make([]*MonitorController, 0, len(wp.Monitors))
+	for _, mc := range wp.Monitors {
+		controllers = append(controllers, mc)
+	}
+	wp.monMu.RUnlock()
+
+	for _, mc := range controllers {
+		mc.mu.RLock()
+		if mc.State != nil && mc.State.CurrentID != "" {
+			ids[mc.State.CurrentID] = true
+		}
+		mc.mu.RUnlock()
+	}
+
+	return ids
+}
+
+// reassertWallpapers asks every monitor to re-apply the image it is already
+// holding, restoring the desktop the user had before the restart.
+//
+// The command is queued rather than executed inline: applyImage runs inside the
+// actor loop under mc.mu, and calling it from here would both race that loop
+// and risk inverting the store/monitor lock order.
+func (wp *Plugin) reassertWallpapers() {
+	wp.monMu.RLock()
+	controllers := make([]*MonitorController, 0, len(wp.Monitors))
+	for _, mc := range wp.Monitors {
+		controllers = append(controllers, mc)
+	}
+	wp.monMu.RUnlock()
+
+	for _, mc := range controllers {
+		select {
+		case mc.Commands <- CmdReassert:
+		default:
+			log.Printf("[Monitor %d] Command queue full; skipping wallpaper re-assert.", mc.ID)
+		}
+	}
+}
+
 // Activate starts the wallpaper rotation.
 func (wp *Plugin) Activate() {
 	if wp.cancel != nil {
@@ -376,9 +452,25 @@ func (wp *Plugin) Activate() {
 		log.Printf("Warning: Error ensuring directories: %v. Some features may be limited.", err)
 	}
 
+	// The images are re-downloadable and can run to several gigabytes, so keep
+	// them out of the user's backups.
+	excludeDataDirFromBackup(wp.fm.GetDownloadDir())
+
 	if err := wp.store.LoadCache(); err != nil {
 		log.Printf("Failed to load cache: %v", err)
 	}
+
+	// Rewrite any cached path still pointing at the legacy image tree, before
+	// anything tries to stat a file — otherwise the whole library looks
+	// missing and gets re-downloaded.
+	//
+	// This runs unconditionally rather than only after a move this session.
+	// The move happens in Init and the rewrite here, so a crash between the
+	// two would otherwise strand every cached path at a location that no
+	// longer exists, with the one-shot flag already consumed. Rewriting on
+	// every activation is idempotent (MigrateRoot is a no-op when no path
+	// matches) and repairs that state on the next launch.
+	wp.store.MigrateRoot(legacyDownloadsPath(), wp.fm.GetDownloadDir())
 
 	// Reconcile favorite flags against live data to prevent ghost favorites
 	wp.reconcileFavorites()
@@ -386,7 +478,7 @@ func (wp *Plugin) Activate() {
 	// Perform an initial scan to catch and delete any stranded/orphaned files
 	// caused by file-locking errors or crashes during the previous session.
 	if wp.fm != nil {
-		go wp.fm.CleanupOrphans(wp.store.GetKnownIDs())
+		go wp.fm.CleanupOrphans(wp.store.GetKnownIDs(), wp.currentlyDisplayedIDs())
 	}
 
 	// Initialize Monitors (Actors)
@@ -415,6 +507,17 @@ func (wp *Plugin) Activate() {
 		mc.OnFetchRequest = func() {
 			wp.RequestFetch()
 		}
+		mc.OnStatePersist = func(ps PersistedMonitorState) {
+			wp.monitorState.Record(ps)
+		}
+
+		// Seed from the previous session before Start(): the actor loop reads
+		// State on paths that do not take mc.mu, so seeding a running actor
+		// would race.
+		if ps, ok := wp.monitorState.Lookup(m.DevicePath, m.ID); ok {
+			mc.RestoreState(ps)
+		}
+
 		mc.Start()
 		wp.Monitors[m.ID] = mc
 		log.Printf("Monitor Actor %d started: %s %v", m.ID, m.Name, m.Rect)
@@ -443,6 +546,17 @@ func (wp *Plugin) Activate() {
 
 	wp.syncStoreWithConfig()
 	wp.store.LoadAvoidSet(wp.cfg.GetAvoidSet())
+
+	// Put the previous session's wallpapers back.
+	//
+	// This runs after syncStoreWithConfig, so we never re-assert a file that
+	// Sync is about to delete, and before the ChgImgOnStart branch below, so
+	// the user sees their wallpaper within a few hundred milliseconds of login
+	// rather than the macOS default. It runs even when ChgImgOnStart is on:
+	// the random pulse can fail (offline at login, empty bucket, fetch
+	// timeout), and this is what keeps the desktop from falling back to the
+	// system default when it does.
+	wp.reassertWallpapers()
 
 	workers := runtime.NumCPU()
 	if wp.cfg != nil && wp.cfg.MaxConcurrentProcessors > 0 {
@@ -522,6 +636,12 @@ func (wp *Plugin) Deactivate() {
 		mc.Stop()
 	}
 	wp.monMu.Unlock()
+
+	// Commit any debounced state write so the last wallpaper change is not
+	// lost on shutdown — that is exactly the change we need at the next login.
+	if wp.monitorState != nil {
+		wp.monitorState.Flush()
+	}
 
 	log.Print("Wallpaper plugin deactivated.")
 }
@@ -1020,10 +1140,36 @@ func (wp *Plugin) SyncMonitors(force bool) {
 			mc.OnFetchRequest = func() {
 				wp.RequestFetch()
 			}
+			mc.OnStatePersist = func(ps PersistedMonitorState) {
+				wp.monitorState.Record(ps)
+			}
+
+			// A display that comes back from sleep or is reconnected should get
+			// its own wallpaper back, not a fresh random one. Seed before
+			// Start() so the actor never sees half-initialised state.
+			restored := false
+			if wp.monitorState != nil {
+				if ps, ok := wp.monitorState.Lookup(m.DevicePath, m.ID); ok {
+					mc.RestoreState(ps)
+					restored = mc.State.CurrentID != "" || mc.restoredPath != ""
+				}
+			}
+
 			mc.Start()
 			wp.Monitors[m.ID] = mc
 			changed = true
-			go wp.SetNextWallpaper(m.ID, force)
+
+			if restored {
+				// Queue directly: reassertWallpapers takes monMu, which this
+				// function already holds for writing.
+				select {
+				case mc.Commands <- CmdReassert:
+				default:
+					go wp.SetNextWallpaper(m.ID, force)
+				}
+			} else {
+				go wp.SetNextWallpaper(m.ID, force)
+			}
 
 		case SyncActionUpdate:
 			m := action.Monitor
@@ -1155,7 +1301,7 @@ func (wp *Plugin) updateTrayMenuUI(img provider.Image, monitorID int) {
 
 // loadQueryPages reads the persistent query pagination state from disk.
 func (wp *Plugin) loadQueryPages() {
-	pagesPath := filepath.Join(config.GetWorkingDir(), strings.ToLower(pluginName)+"_downloads", "query_pages.json")
+	pagesPath := filepath.Join(currentDownloadsPath(), "query_pages.json")
 	data, err := os.ReadFile(pagesPath)
 	if err != nil {
 		if !os.IsNotExist(err) {
@@ -1193,7 +1339,7 @@ func (wp *Plugin) saveQueryPages() {
 		return
 	}
 
-	pagesPath := filepath.Join(config.GetWorkingDir(), strings.ToLower(pluginName)+"_downloads", "query_pages.json")
+	pagesPath := filepath.Join(currentDownloadsPath(), "query_pages.json")
 	if err := os.WriteFile(pagesPath, data, 0600); err != nil {
 		log.Printf("[ERROR] Failed to write query_pages.json: %v", err)
 	}

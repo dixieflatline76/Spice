@@ -234,6 +234,15 @@ func (m *MockImageStore) SetQueryActiveFunc(fn func(string) bool) {
 	m.Called(fn)
 }
 
+func (m *MockImageStore) SetProtectedIDsFunc(fn func() map[string]bool) {
+	m.Called(fn)
+}
+
+func (m *MockImageStore) MigrateRoot(oldRoot, newRoot string) bool {
+	args := m.Called(oldRoot, newRoot)
+	return args.Bool(0)
+}
+
 func (m *MockImageStore) LoadCache() error {
 	args := m.Called()
 	return args.Error(0)

@@ -138,7 +138,7 @@ func TestCleanupOrphans(t *testing.T) {
 	known := map[string]bool{"valid": true}
 
 	// Run Cleanup
-	fm.CleanupOrphans(known)
+	fm.CleanupOrphans(known, nil)
 
 	// Verify Valid Remain
 	if _, err := os.Stat(validMaster); os.IsNotExist(err) {
@@ -190,7 +190,7 @@ func TestCleanupOrphans_DeepResolutionStructure(t *testing.T) {
 	known := map[string]bool{
 		validID: true,
 	}
-	fm.CleanupOrphans(known)
+	fm.CleanupOrphans(known, nil)
 
 	// 5. Verify Orphan is gone
 	if _, err := os.Stat(orphanPath); !os.IsNotExist(err) {

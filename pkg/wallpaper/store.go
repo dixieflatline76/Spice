@@ -43,6 +43,15 @@ type ImageStore struct {
 
 	// QueryActiveFunc checks if a given source query ID is still active in the configuration.
 	QueryActiveFunc func(string) bool
+
+	// protectedFunc returns the IDs of images currently displayed on a monitor.
+	// Those images are exempt from every form of cleanup: deleting the file
+	// backing the live desktop leaves a broken wallpaper now and an
+	// unrestorable one after the next reboot.
+	//
+	// The callback reaches back into the plugin and takes the monitor locks,
+	// so it must only ever be invoked with s.mu released. See Sync.
+	protectedFunc func() map[string]bool
 }
 
 func NewImageStore() *ImageStore {
@@ -70,6 +79,31 @@ func (s *ImageStore) SetQueryActiveFunc(fn func(string) bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.QueryActiveFunc = fn
+}
+
+// SetProtectedIDsFunc sets the callback that reports which image IDs are
+// currently on screen. Those images are never pruned or invalidated.
+func (s *ImageStore) SetProtectedIDsFunc(fn func() map[string]bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.protectedFunc = fn
+}
+
+// snapshotProtectedIDs resolves the protected-ID callback into a plain map.
+//
+// This must be called with s.mu released. The callback acquires the plugin's
+// monitor locks, while a monitor actor holds its own lock when calling into
+// the store (GetByID, MarkSeen), which takes s.mu. Invoking the callback under
+// s.mu is therefore a lock-order inversion and will deadlock.
+func (s *ImageStore) snapshotProtectedIDs() map[string]bool {
+	s.mu.RLock()
+	fn := s.protectedFunc
+	s.mu.RUnlock()
+
+	if fn == nil {
+		return nil
+	}
+	return fn()
 }
 
 // SetOS sets the OS interface for filesystem operations.
@@ -497,7 +531,9 @@ func (s *ImageStore) Wipe() {
 	s.avoidSet = make(map[string]bool)
 	s.mu.Unlock()
 	if s.fm != nil {
-		go s.fm.CleanupOrphans(map[string]bool{})
+		// Wipe is a deliberate "delete everything" request, so nothing is
+		// protected here — not even the image currently on screen.
+		go s.fm.CleanupOrphans(map[string]bool{}, nil)
 	}
 }
 
@@ -726,6 +762,11 @@ func (s *ImageStore) Sync(limit int, targetFlags map[string]bool, activeQueryIDs
 		limit = 50
 	}
 
+	// Snapshot the on-screen images once, before taking s.mu. The callback
+	// takes the monitor locks, so resolving it later (inside the prune loop,
+	// under s.mu) would invert the lock order and deadlock.
+	protected := s.snapshotProtectedIDs()
+
 	s.mu.RLock()
 	candidates := make([]provider.Image, len(s.images))
 	copy(candidates, s.images)
@@ -735,7 +776,7 @@ func (s *ImageStore) Sync(limit int, targetFlags map[string]bool, activeQueryIDs
 
 	// 1. Determine actions for all candidates
 	for _, img := range candidates {
-		action := s.determineSyncAction(img, activeQueryIDs, targetFlags)
+		action := s.determineSyncAction(img, activeQueryIDs, targetFlags, protected)
 		if action != ImageActionKeep {
 			badIDs[img.ID] = action
 		}
@@ -771,14 +812,24 @@ func (s *ImageStore) Sync(limit int, targetFlags map[string]bool, activeQueryIDs
 	}
 
 	// 3. Prune Limit
+	// Walk oldest-first and skip anything currently on screen. Protected
+	// images number at most one per display, so they can never starve the
+	// prune; the loop simply moves on to the next-oldest candidate.
 	if len(finalImages) > limit {
 		excess := len(finalImages) - limit
-		toPrune := finalImages[:excess]
-		finalImages = finalImages[excess:]
-		for _, img := range toPrune {
-			idsToDelete = append(idsToDelete, img.ID)
-			delete(s.idSet, img.ID)
+		kept := make([]provider.Image, 0, len(finalImages))
+		pruned := 0
+
+		for _, img := range finalImages {
+			if pruned < excess && !protected[img.ID] {
+				idsToDelete = append(idsToDelete, img.ID)
+				delete(s.idSet, img.ID)
+				pruned++
+				continue
+			}
+			kept = append(kept, img)
 		}
+		finalImages = kept
 	}
 
 	// 4. Update State
@@ -796,7 +847,15 @@ func (s *ImageStore) Sync(limit int, targetFlags map[string]bool, activeQueryIDs
 }
 
 // determineSyncAction decides what to do with an image during sync.
-func (s *ImageStore) determineSyncAction(img provider.Image, activeQueryIDs map[string]bool, targetFlags map[string]bool) ImageSyncAction {
+// protected holds the IDs currently displayed on a monitor; they are always kept.
+func (s *ImageStore) determineSyncAction(img provider.Image, activeQueryIDs map[string]bool, targetFlags map[string]bool, protected map[string]bool) ImageSyncAction {
+	// On-screen images are never touched. Invalidating one deletes the exact
+	// derivative the desktop is rendering, and deleting one makes the
+	// wallpaper unrestorable at the next launch.
+	if protected[img.ID] {
+		return ImageActionKeep
+	}
+
 	// Strict Mode Check
 	if activeQueryIDs != nil {
 		isActive := img.SourceQueryID != "" && activeQueryIDs[img.SourceQueryID]
@@ -974,4 +1033,45 @@ func (s *ImageStore) migrateLegacyIDsLocked() bool {
 		}
 	}
 	return migrationOccurred
+}
+
+// MigrateRoot rewrites every absolute path in the cache from oldRoot to
+// newRoot. It reports whether anything changed.
+//
+// The cache stores absolute FilePath and DerivativePaths values, so relocating
+// the image tree on disk leaves every one of them dangling. Without this, the
+// first applyImage after a move fails its os.Stat check, clears the image's
+// derivatives as stale, and the user watches the whole library get
+// re-downloaded.
+func (s *ImageStore) MigrateRoot(oldRoot, newRoot string) bool {
+	if oldRoot == "" || newRoot == "" || oldRoot == newRoot {
+		return false
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	changed := false
+	for i, img := range s.images {
+		if img.FilePath != "" && strings.HasPrefix(img.FilePath, oldRoot) {
+			s.images[i].FilePath = newRoot + strings.TrimPrefix(img.FilePath, oldRoot)
+			changed = true
+		}
+
+		for res, path := range img.DerivativePaths {
+			if strings.HasPrefix(path, oldRoot) {
+				s.images[i].DerivativePaths[res] = newRoot + strings.TrimPrefix(path, oldRoot)
+				changed = true
+			}
+		}
+	}
+
+	if changed {
+		log.Printf("Migration: Rewrote cached image paths from %s to %s", oldRoot, newRoot)
+		// pathSet is keyed by FilePath, so it is stale after the rewrite.
+		s.rebuildInternalStateLocked()
+		s.scheduleSaveLocked()
+	}
+
+	return changed
 }

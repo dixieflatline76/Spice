@@ -25,11 +25,13 @@ import (
 	"golang.org/x/image/math/fixed"
 
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/driver/desktop"
 	"github.com/disintegration/imaging"
 	"github.com/dixieflatline76/Spice/v2/asset"
 	"github.com/dixieflatline76/Spice/v2/config"
 	"github.com/dixieflatline76/Spice/v2/pkg/api"
+	"github.com/dixieflatline76/Spice/v2/pkg/autostart"
 	"github.com/dixieflatline76/Spice/v2/pkg/hotkey"
 	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
@@ -630,6 +632,30 @@ func (sa *SpiceApp) RebuildPreferencesContent(initialTab string) {
 			{
 				Title: i18n.T("General Application Settings"),
 				Items: []schema.ItemSchema{
+					schema.BoolItem{
+						Name:         "enableLaunchAtLogin",
+						InitialValue: sa.launchAtLoginInitialValue(),
+						Label:        i18n.T("Start Spice at Login:"),
+						Help:         i18n.T("Launch Spice automatically when you log in. This is also required for your wallpaper to be restored after a restart."),
+						ApplyFunc:    sa.applyLaunchAtLogin,
+						VisibleIf: func() bool {
+							return runtime.GOOS == "darwin" && autostart.Supported()
+						},
+					},
+					schema.ButtonItem{
+						Name:       "manageMacStartup",
+						Label:      i18n.T("Start Spice at Login:"),
+						Help:       i18n.T("Spice cannot register itself automatically on this system. Click to open System Settings and add Spice to your Login Items."),
+						ButtonText: i18n.T("Manage in System Settings"),
+						OnPressed: func() {
+							if err := autostart.OpenLoginItemsSettings(); err != nil {
+								utilLog.Printf("Failed to open Login Items settings: %v", err)
+							}
+						},
+						VisibleIf: func() bool {
+							return runtime.GOOS == "darwin" && !autostart.Supported()
+						},
+					},
 					schema.ButtonItem{
 						Name:       "manageWindowsStartup",
 						Label:      i18n.T("Start with Windows:"),
@@ -884,6 +910,73 @@ func (t *forcedVariantTheme) Color(name fyne.ThemeColorName, _ fyne.ThemeVariant
 	return t.Theme.Color(name, t.variant)
 }
 
+// launchAtLoginInitialValue reports the state the launch-at-login toggle
+// should show. The operating system is authoritative because the user can
+// disable the login item in System Settings without Spice knowing; the stored
+// preference is only a fallback for when the OS cannot be queried.
+func (sa *SpiceApp) launchAtLoginInitialValue() bool {
+	status, err := autostart.Get()
+	if err != nil {
+		return sa.appConfig.GetAutoStartEnabled()
+	}
+	return status == autostart.StatusEnabled
+}
+
+// applyLaunchAtLogin registers or removes the login item. On failure it shows
+// the operating system's own error text plus any environmental hints, because
+// a rejected registration is almost always an installation problem (unsigned
+// build, app outside /Applications) rather than a broken feature.
+func (sa *SpiceApp) applyLaunchAtLogin(enabled bool) {
+	var err error
+	if enabled {
+		err = autostart.Enable()
+	} else {
+		err = autostart.Disable()
+	}
+
+	if err == nil {
+		sa.appConfig.SetAutoStartEnabled(enabled)
+		return
+	}
+
+	utilLog.Printf("Failed to change launch-at-login to %v: %v", enabled, err)
+
+	message := err.Error()
+	for _, hint := range autostart.Diagnose().Hints() {
+		message += "\n\n" + hint
+	}
+	message += "\n\n" + i18n.T("You can add Spice manually in System Settings > General > Login Items.")
+
+	if sa.prefsWindow != nil {
+		dialog.ShowError(fmt.Errorf("%s", message), sa.prefsWindow)
+	}
+}
+
+// reconcileLaunchAtLogin re-registers the login item when the user asked for
+// it but the OS has no record of it, which happens when the app bundle is
+// replaced by an update. A StatusRequiresApproval item is left alone: that
+// state means the user deliberately turned it off in System Settings.
+func (sa *SpiceApp) reconcileLaunchAtLogin() {
+	if !autostart.Supported() || !sa.appConfig.GetAutoStartEnabled() {
+		return
+	}
+
+	status, err := autostart.Get()
+	if err != nil {
+		utilLog.Printf("Launch-at-login status check failed: %v", err)
+		return
+	}
+	if status != autostart.StatusNotRegistered && status != autostart.StatusNotFound {
+		return
+	}
+
+	if err := autostart.Enable(); err != nil {
+		utilLog.Printf("Failed to restore launch-at-login registration: %v", err)
+		return
+	}
+	utilLog.Print("Restored launch-at-login registration.")
+}
+
 // Start activates all plugins and runs the Fyne application
 func (sa *SpiceApp) Start() {
 
@@ -892,6 +985,8 @@ func (sa *SpiceApp) Start() {
 	if !config.IsStoreDistribution() {
 		go sa.StartStartupUpdateCheck()
 	}
+
+	go sa.reconcileLaunchAtLogin()
 
 	// Activate all plugins
 	go func() {

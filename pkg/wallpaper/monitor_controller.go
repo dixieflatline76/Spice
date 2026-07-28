@@ -29,6 +29,11 @@ const (
 	CmdPause
 	CmdNextAuto
 
+	// CmdReassert re-applies the wallpaper the monitor already believes it is
+	// showing, without advancing any cursor. Used at launch, and when a
+	// display comes back after sleep or reconnection.
+	CmdReassert
+
 	// Anchor commands — matches provider.CropAnchor values exactly
 	CmdAnchorAuto Command = 200
 	CmdAnchorTL   Command = 201
@@ -67,6 +72,8 @@ type StoreInterface interface {
 	SetAsyncSave(enabled bool)
 	SetDebounceDuration(d time.Duration)
 	SetQueryActiveFunc(fn func(string) bool)
+	SetProtectedIDsFunc(fn func() map[string]bool)
+	MigrateRoot(oldRoot, newRoot string) bool
 	LoadCache() error
 	LoadAvoidSet(avoidSet map[string]bool)
 	Wipe()
@@ -116,7 +123,17 @@ type MonitorController struct {
 	OnWallpaperChanged func(img provider.Image, monitorID int)
 	OnFavoriteRequest  func(img provider.Image)
 	OnFetchRequest     func()
-	pendingUpdate      bool // Flag to indicate Store content has changed
+
+	// OnStatePersist receives a snapshot after every successful wallpaper
+	// change so it can be written to disk and restored at the next launch.
+	OnStatePersist func(ps PersistedMonitorState)
+
+	// restoredPath is the file path this monitor last applied in a previous
+	// session. It backs the re-assert fallback when the image itself is gone
+	// from the store.
+	restoredPath string
+
+	pendingUpdate bool // Flag to indicate Store content has changed
 }
 
 // NewMonitorController creates a new actor for managing a specific monitor's state.
@@ -219,6 +236,8 @@ func (mc *MonitorController) handleCommand(cmd Command) {
 		mc.syncState()
 	case CmdPause:
 		mc.togglePause()
+	case CmdReassert:
+		mc.reassert()
 	}
 }
 
@@ -463,6 +482,114 @@ func (mc *MonitorController) toggleFavorite() {
 	}
 }
 
+// restoredPath carries the last applied file path across a restart, so a
+// re-assert can fall back to it when the image is no longer in the store.
+// It is only meaningful until the first successful applyImage of the session.
+
+// RestoreState seeds a freshly built controller from persisted state.
+//
+// Must be called before Start(): the actor loop reads State without taking
+// mc.mu on some paths, so seeding it after the goroutine is running would race.
+// Entries whose image is no longer in the store are dropped, so a stale file
+// cannot resurrect a deleted image.
+func (mc *MonitorController) RestoreState(ps PersistedMonitorState) {
+	if mc.State == nil {
+		return
+	}
+
+	if ps.CurrentID != "" {
+		if _, ok := mc.Store.GetByID(ps.CurrentID); ok {
+			mc.State.CurrentID = ps.CurrentID
+		} else {
+			log.Debugf("[Monitor %d] Not restoring %s: no longer in the store.", mc.ID, ps.CurrentID)
+		}
+	}
+
+	mc.restoredPath = ps.AppliedPath
+	mc.State.RandomPos = ps.RandomPos
+
+	for _, id := range ps.ShuffleIDs {
+		if _, ok := mc.Store.GetByID(id); ok {
+			mc.State.ShuffleIDs = append(mc.State.ShuffleIDs, id)
+		}
+	}
+	for _, id := range ps.History {
+		if _, ok := mc.Store.GetByID(id); ok {
+			mc.State.History = append(mc.State.History, id)
+		}
+	}
+
+	// RandomPos indexes into ShuffleIDs; dropped entries can push it out of range.
+	if mc.State.RandomPos > len(mc.State.ShuffleIDs) {
+		mc.State.RandomPos = 0
+	}
+
+	log.Debugf("[Monitor %d] Restored state: current=%s shuffle=%d history=%d",
+		mc.ID, mc.State.CurrentID, len(mc.State.ShuffleIDs), len(mc.State.History))
+}
+
+// reassert re-applies the wallpaper this monitor already believes it is
+// showing, without advancing any cursor.
+//
+// This is what actually fixes the "default wallpaper after a reboot" symptom:
+// macOS restores its own idea of the desktop at login and never learns about
+// the image Spice set through NSWorkspace, so Spice must set it again.
+func (mc *MonitorController) reassert() {
+	if mc.State.CurrentID != "" {
+		if img, ok := mc.Store.GetByID(mc.State.CurrentID); ok {
+			log.Debugf("[Monitor %d] Re-asserting wallpaper for %s", mc.ID, img.ID)
+			mc.applyImage(img)
+			return
+		}
+	}
+
+	// The image left the store, but the file we last applied may still be
+	// there. Setting it directly at least keeps the user's desktop intact
+	// until the next rotation.
+	if mc.restoredPath != "" {
+		if _, err := mc.os.Stat(mc.restoredPath); err == nil {
+			log.Printf("[Monitor %d] Re-asserting last wallpaper file: %s", mc.ID, mc.restoredPath)
+			if err := mc.os.SetWallpaper(mc.restoredPath, mc.ID); err != nil {
+				log.Printf("[ERROR] [Monitor %d] Failed to re-assert wallpaper: %v", mc.ID, err)
+			}
+			return
+		}
+	}
+
+	// Nothing to restore, and this monitor has never shown anything this
+	// session. Falling through to a normal rotation is what keeps the user
+	// from staring at the macOS default wallpaper.
+	//
+	// This matters on the very first launch after the feature ships (no state
+	// file yet), and whenever the pre-Activate foreground sync already burned
+	// its wallpaper request against an empty store. next(false) also parks the
+	// monitor in WaitingForImages, so it retries by itself once the fetch
+	// delivers something usable.
+	if mc.State.CurrentImage.ID == "" {
+		log.Debugf("[Monitor %d] Nothing to re-assert; falling back to the next wallpaper.", mc.ID)
+		mc.next(false)
+		return
+	}
+
+	log.Debugf("[Monitor %d] Nothing to re-assert; keeping the current wallpaper.", mc.ID)
+}
+
+// snapshotStateLocked builds the persistable view of this monitor.
+// CALLER MUST HOLD mc.mu.
+func (mc *MonitorController) snapshotStateLocked(appliedPath string) PersistedMonitorState {
+	return PersistedMonitorState{
+		DevicePath:  mc.Monitor.DevicePath,
+		Index:       mc.ID,
+		CurrentID:   mc.State.CurrentID,
+		AppliedPath: appliedPath,
+		ResKey:      fmt.Sprintf("%dx%d", mc.Monitor.Rect.Dx(), mc.Monitor.Rect.Dy()),
+		RandomPos:   mc.State.RandomPos,
+		ShuffleIDs:  append([]string(nil), mc.State.ShuffleIDs...),
+		History:     append([]string(nil), mc.State.History...),
+		UpdatedAt:   time.Now(),
+	}
+}
+
 func (mc *MonitorController) syncState() {
 	log.Debugf("[Monitor %d] Syncing state from store...", mc.ID)
 	if mc.State.CurrentID == "" {
@@ -514,6 +641,14 @@ func (mc *MonitorController) applyImage(img provider.Image) {
 		log.Printf("[ERROR] [Monitor %d] Failed to set wallpaper: %v", mc.ID, err)
 	}
 	mc.Store.MarkSeen(path)
+
+	// Record what we just applied so the next launch can put it back. The
+	// snapshot is taken here, under mc.mu, but handed off to a goroutine: the
+	// callback writes to disk and must never run under the actor lock.
+	if mc.OnStatePersist != nil {
+		snapshot := mc.snapshotStateLocked(path)
+		go mc.OnStatePersist(snapshot)
+	}
 
 	if mc.OnWallpaperChanged != nil {
 		log.Debugf("[Monitor %d] Triggering async UI refresh for %s", mc.ID, path)

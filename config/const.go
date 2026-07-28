@@ -35,6 +35,24 @@ func GetWorkingDir() string {
 	return filepath.Join(cacheDir, strings.ToLower(AppName))
 }
 
+// GetDataDir returns the directory for data that must survive a reboot.
+//
+// On macOS this deliberately avoids ~/Library/Caches: that directory is
+// purgeable, and the system reclaims it under disk pressure. Losing a
+// wallpaper image there means the desktop cannot be restored at the next
+// login and falls back to the macOS default. Application Support is the
+// correct home for data the app cannot regenerate on demand, and
+// os.UserConfigDir() maps to the sandbox container when one is in use.
+//
+// Other platforms keep using the cache directory: the purge behaviour is
+// macOS-specific, and moving gigabytes of images there buys nothing.
+func GetDataDir() string {
+	if runtime.GOOS == "darwin" {
+		return filepath.Join(GetAppDir(), "data")
+	}
+	return GetWorkingDir()
+}
+
 var appDir string
 
 func init() {

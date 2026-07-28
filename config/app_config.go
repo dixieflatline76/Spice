@@ -25,6 +25,24 @@ func (c *AppConfig) SetAppNotificationsEnabled(enabled bool) {
 	c.prefs.SetBool(AppNotificationsEnabledKey, enabled)
 }
 
+// AutoStartEnabledKey is the key for the launch-at-login preference (macOS).
+const AutoStartEnabledKey = "app_autostart_enabled"
+
+// GetAutoStartEnabled returns whether Spice should launch at login.
+//
+// This preference is a mirror of the operating system's login-item state, not
+// the source of truth: the user can flip the item in System Settings without
+// Spice knowing. Query the OS via pkg/autostart when the live state matters,
+// and use this value only to decide whether to re-register at startup.
+func (c *AppConfig) GetAutoStartEnabled() bool {
+	return c.prefs.BoolWithFallback(AutoStartEnabledKey, false)
+}
+
+// SetAutoStartEnabled records whether Spice should launch at login.
+func (c *AppConfig) SetAutoStartEnabled(enabled bool) {
+	c.prefs.SetBool(AutoStartEnabledKey, enabled)
+}
+
 // AppUpdateCheckEnabledKey is the key for the app update check enabled preference
 const AppUpdateCheckEnabledKey = "app_update_check_enabled"
 

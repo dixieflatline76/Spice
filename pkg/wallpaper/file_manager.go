@@ -13,6 +13,33 @@ import (
 	"github.com/dixieflatline76/Spice/v2/util/log"
 )
 
+// SpiceTmpSuffix marks the hardlink aliases created by the macOS wallpaper
+// setter to defeat WindowServer's URL-keyed render cache (see
+// wallpaper_native_darwin.m). They share an inode with the real derivative,
+// so leaving them behind pins the image data on disk even after the original
+// is deleted.
+const SpiceTmpSuffix = ".spice_tmp"
+
+// spiceTmpMaxAge bounds how long an unreferenced hardlink alias may survive.
+// The grace period avoids racing a wallpaper change that is still in flight:
+// nativeSetWallpaper creates the link asynchronously on the main thread.
+const spiceTmpMaxAge = 10 * time.Minute
+
+// baseIDFromFileName derives an image ID from a file name, transparently
+// unwrapping the ".spice_tmp" hardlink suffix.
+//
+// Every scanner in this file must agree on this mapping. Using filepath.Ext
+// directly on "Wikimedia_123.jpg.spice_tmp" yields ".spice_tmp", which is why
+// those aliases used to be invisible to both the orphan sweep and the batch
+// delete, and accumulated indefinitely.
+func baseIDFromFileName(name string) (id string, isTmp bool) {
+	if strings.HasSuffix(strings.ToLower(name), SpiceTmpSuffix) {
+		name = name[:len(name)-len(SpiceTmpSuffix)]
+		isTmp = true
+	}
+	return strings.TrimSuffix(name, filepath.Ext(name)), isTmp
+}
+
 // FileManager handles all file system operations for wallpaper images.
 // It enforces the directory structure for Source + Derivative architecture.
 type FileManager struct {
@@ -122,8 +149,7 @@ func (fm *FileManager) DeepDeleteBatch(ids []string) error {
 				continue
 			}
 			name := e.Name()
-			ext := filepath.Ext(name)
-			fileID := strings.TrimSuffix(name, ext)
+			fileID, _ := baseIDFromFileName(name)
 			if idMap[fileID] {
 				filesToDelete = append(filesToDelete, filepath.Join(fm.rootDir, name))
 				log.Debugf("DeepDeleteBatch: Found Master file %s", name)
@@ -144,8 +170,7 @@ func (fm *FileManager) DeepDeleteBatch(ids []string) error {
 		}
 		if !info.IsDir() {
 			name := info.Name()
-			ext := filepath.Ext(name)
-			fileID := strings.TrimSuffix(name, ext)
+			fileID, _ := baseIDFromFileName(name)
 			if idMap[fileID] {
 				filesToDelete = append(filesToDelete, path)
 				log.Debugf("DeepDeleteBatch: Found Derivative file %s", path)
@@ -179,9 +204,56 @@ func (fm *FileManager) DeepDelete(id string) error {
 	return fm.DeepDeleteBatch([]string{id})
 }
 
+// isImageOrTmp reports whether a file name is one this sweep owns: a real
+// image, or a ".spice_tmp" hardlink alias of one.
+func isImageOrTmp(name string) bool {
+	trimmed := name
+	if strings.HasSuffix(strings.ToLower(trimmed), SpiceTmpSuffix) {
+		trimmed = trimmed[:len(trimmed)-len(SpiceTmpSuffix)]
+	}
+	switch strings.ToLower(filepath.Ext(trimmed)) {
+	case ".jpg", ".jpeg", ".png":
+		return true
+	default:
+		return false
+	}
+}
+
+// shouldDeleteOrphan decides the fate of one file during the orphan sweep.
+//
+// Real images are removed when their ID is unknown. Hardlink aliases are
+// additionally removed once their ID is known but their base file is gone, or
+// once they age out — an alias with no owner keeps the underlying inode alive
+// forever. Aliases for a protected ID are always kept: the desktop may be
+// pointing at that very URL right now, and removing it blanks the wallpaper.
+func shouldDeleteOrphan(path, name string, isTmp bool, id string, knownIDs, protectedIDs map[string]bool, info os.FileInfo) bool {
+	if protectedIDs[id] {
+		return false
+	}
+	if !knownIDs[id] {
+		return true
+	}
+	if !isTmp {
+		return false
+	}
+
+	base := strings.TrimSuffix(path, SpiceTmpSuffix)
+	if _, err := os.Stat(base); os.IsNotExist(err) {
+		return true
+	}
+	if info != nil && time.Since(info.ModTime()) > spiceTmpMaxAge {
+		return true
+	}
+	return false
+}
+
 // CleanupOrphans removes files from the root directory and subdirectories
 // that are NOT present in the knownIDs map.
-func (fm *FileManager) CleanupOrphans(knownIDs map[string]bool) {
+//
+// protectedIDs lists images currently displayed on a monitor; they and their
+// hardlink aliases are never removed. Pass nil when no monitor is live (for
+// example on the Wipe path).
+func (fm *FileManager) CleanupOrphans(knownIDs map[string]bool, protectedIDs map[string]bool) {
 	log.Print("FileManager: Starting orphan cleanup...")
 	deletedCount := 0
 
@@ -193,17 +265,15 @@ func (fm *FileManager) CleanupOrphans(knownIDs map[string]bool) {
 				continue
 			}
 			name := entry.Name()
-			ext := filepath.Ext(name)
-			lowerExt := strings.ToLower(ext)
-
-			if lowerExt != ".jpg" && lowerExt != ".jpeg" && lowerExt != ".png" {
+			if !isImageOrTmp(name) {
 				continue
 			}
 
-			id := strings.TrimSuffix(name, ext)
+			id, isTmp := baseIDFromFileName(name)
+			fullPath := filepath.Join(fm.rootDir, name)
+			info, _ := entry.Info()
 
-			if !knownIDs[id] {
-				fullPath := filepath.Join(fm.rootDir, name)
+			if shouldDeleteOrphan(fullPath, name, isTmp, id, knownIDs, protectedIDs, info) {
 				time.Sleep(50 * time.Millisecond) // Pacer
 				if err := os.Remove(fullPath); err == nil {
 					deletedCount++
@@ -220,17 +290,13 @@ func (fm *FileManager) CleanupOrphans(knownIDs map[string]bool) {
 		}
 		if !info.IsDir() {
 			name := info.Name()
-			ext := filepath.Ext(name)
-			lowerExt := strings.ToLower(ext)
-
-			if lowerExt != ".jpg" && lowerExt != ".jpeg" && lowerExt != ".png" {
+			if !isImageOrTmp(name) {
 				return nil
 			}
 
-			id := strings.TrimSuffix(name, ext)
+			id, isTmp := baseIDFromFileName(name)
 
-			if !knownIDs[id] {
-				// Orphan
+			if shouldDeleteOrphan(path, name, isTmp, id, knownIDs, protectedIDs, info) {
 				time.Sleep(50 * time.Millisecond) // Pacer
 				if err := os.Remove(path); err == nil {
 					deletedCount++
@@ -260,9 +326,9 @@ func (fm *FileManager) DeleteDerivatives(id string) error {
 		}
 		if !info.IsDir() {
 			name := info.Name()
-			ext := filepath.Ext(name)
-			fileID := strings.TrimSuffix(name, ext)
-			if fileID == id {
+			// baseIDFromFileName also matches the ".spice_tmp" hardlink
+			// aliases, which are derivatives of this ID and must go with it.
+			if fileID, _ := baseIDFromFileName(name); fileID == id {
 				filesToDelete = append(filesToDelete, path)
 			}
 		}
@@ -299,8 +365,13 @@ func (fm *FileManager) RenameAllAssets(oldID, newID string) error {
 				continue
 			}
 			name := e.Name()
+			fileID, isTmp := baseIDFromFileName(name)
+			if isTmp {
+				// Hardlink aliases are disposable. Leaving one behind under the
+				// old ID makes it an orphan, which the cleanup sweep reclaims.
+				continue
+			}
 			ext := filepath.Ext(name)
-			fileID := strings.TrimSuffix(name, ext)
 			if fileID == oldID {
 				oldPath := filepath.Join(fm.rootDir, name)
 				newPath := filepath.Join(fm.rootDir, newID+ext)
@@ -320,8 +391,11 @@ func (fm *FileManager) RenameAllAssets(oldID, newID string) error {
 		}
 		if !info.IsDir() {
 			name := info.Name()
+			fileID, isTmp := baseIDFromFileName(name)
+			if isTmp {
+				return nil // Disposable alias; the cleanup sweep reclaims it.
+			}
 			ext := filepath.Ext(name)
-			fileID := strings.TrimSuffix(name, ext)
 			if fileID == oldID {
 				newPath := filepath.Join(filepath.Dir(path), newID+ext)
 				log.Debugf("FileManager: Renaming Derivative %s -> %s", path, newPath)
