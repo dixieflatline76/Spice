@@ -94,7 +94,6 @@ func resolveMSIXDocumentPath(docPath string) string {
 	return resolveMSIXStagedPath(docPath, msixDocumentStaging)
 }
 
-
 // resolveMSIXStagedPath performs the generic staging copy logic relative to baseStagingDir.
 func resolveMSIXStagedPath(srcPath, baseStagingDir string) string {
 	if msixPackageFamilyName == "" || baseStagingDir == "" {
