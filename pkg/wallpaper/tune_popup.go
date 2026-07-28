@@ -108,6 +108,7 @@ func (wp *Plugin) showTuneImagePopup(monitorID int) {
 					}
 				}
 
+				start := time.Now()
 				wp.SetTuningOptions(monitorID, opts)
 
 				// Wait for completion (with timeout to prevent hanging)
@@ -115,6 +116,13 @@ func (wp *Plugin) showTuneImagePopup(monitorID int) {
 				case <-done:
 				case <-time.After(10 * time.Second):
 					log.Printf("[WARN] Tuning reprocessing timed out for monitor %d", monitorID)
+				}
+
+				// Enforce a minimum delay to prevent macOS wallpaper daemon choke and UI spam
+				// macOS NSWorkspace can drop or queue transitions if called too rapidly.
+				elapsed := time.Since(start)
+				if elapsed < 500*time.Millisecond {
+					time.Sleep(500*time.Millisecond - elapsed)
 				}
 
 				if onDone != nil {
