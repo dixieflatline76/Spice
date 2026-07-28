@@ -94,10 +94,6 @@ func resolveMSIXDocumentPath(docPath string) string {
 	return resolveMSIXStagedPath(docPath, msixDocumentStaging)
 }
 
-// resolveMSIXPath is an alias for resolveMSIXPicturePath for backward compatibility.
-func resolveMSIXPath(path string) string {
-	return resolveMSIXPicturePath(path)
-}
 
 // resolveMSIXStagedPath performs the generic staging copy logic relative to baseStagingDir.
 func resolveMSIXStagedPath(srcPath, baseStagingDir string) string {

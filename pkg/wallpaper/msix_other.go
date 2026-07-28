@@ -14,4 +14,3 @@ var (
 
 func resolveMSIXPicturePath(p string) string  { return p }
 func resolveMSIXDocumentPath(p string) string { return p }
-func resolveMSIXPath(p string) string         { return p }
