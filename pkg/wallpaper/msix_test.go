@@ -1,3 +1,6 @@
+//go:build windows
+// +build windows
+
 package wallpaper
 
 import (
@@ -49,7 +52,7 @@ func TestMSIXStagingPaths(t *testing.T) {
 		// Create source file inside working dir
 		workingDir := config.GetWorkingDir()
 		require.NoError(t, os.MkdirAll(filepath.Join(workingDir, "cache", "metmuseum"), 0755))
-
+		
 		srcPic := filepath.Join(workingDir, "sample_wallpaper.jpg")
 		srcDoc := filepath.Join(workingDir, "cache", "metmuseum", "american_art.html")
 
