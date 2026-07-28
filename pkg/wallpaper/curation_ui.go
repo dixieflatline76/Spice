@@ -72,6 +72,10 @@ func buildCuratedUIItem(p provider.ImageProvider, sm setting.SettingsManager, cf
 			localeJSPath := filepath.Join(providerCacheDir, "current_locale.js")
 			_ = os.WriteFile(localeJSPath, fmt.Appendf(nil, "window.spiceAppLocale = '%s';", langParam), 0600)
 
+			// Stage files outside the MSIX sandbox so the browser can access them.
+			outPath = resolveMSIXDocumentPath(outPath)
+			_ = resolveMSIXDocumentPath(localeJSPath)
+
 			fileURL := fmt.Sprintf("file:///%s", filepath.ToSlash(outPath))
 			if u, err := url.Parse(fileURL); err == nil {
 				_ = u
@@ -92,6 +96,10 @@ func buildCuratedUIItem(p provider.ImageProvider, sm setting.SettingsManager, cf
 			langParam := i18n.GetLanguage()
 			localeJSPath := filepath.Join(providerCacheDir, "current_locale.js")
 			_ = os.WriteFile(localeJSPath, fmt.Appendf(nil, "window.spiceAppLocale = '%s';", langParam), 0600)
+
+			// Stage files outside the MSIX sandbox so the browser can access them.
+			outPath = resolveMSIXDocumentPath(outPath)
+			_ = resolveMSIXDocumentPath(localeJSPath)
 
 			fileURL := fmt.Sprintf("file:///%s", filepath.ToSlash(outPath))
 			if u, err := url.Parse(fileURL); err == nil {
