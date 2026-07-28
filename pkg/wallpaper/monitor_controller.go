@@ -6,6 +6,8 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -55,6 +57,7 @@ type StoreInterface interface {
 	Remove(id string) (provider.Image, bool)
 	SetFavorited(id string, favorited bool) bool
 	SetTuningOptions(id string, resKey string, opts provider.TuningOptions) bool
+	SetDerivativePath(id string, resKey string, path string) bool
 	ClearDerivatives(id string) bool
 	Add(img provider.Image) bool
 	Clear()
@@ -543,6 +546,27 @@ func (mc *MonitorController) applyImage(img provider.Image) {
 	}
 }
 
+// nextDerivativePath returns the next file path for the double buffering system on macOS.
+// For non-macOS systems, it returns the current path.
+func nextDerivativePath(currentPath string, targetOS string) string {
+	if targetOS != "darwin" {
+		return currentPath
+	}
+	dir := filepath.Dir(currentPath)
+	base := filepath.Base(currentPath)
+	ext := filepath.Ext(base)
+	nameWithoutExt := strings.TrimSuffix(base, ext)
+
+	if strings.HasSuffix(nameWithoutExt, "_A") {
+		nameWithoutExt = strings.TrimSuffix(nameWithoutExt, "_A") + "_B"
+	} else if strings.HasSuffix(nameWithoutExt, "_B") {
+		nameWithoutExt = strings.TrimSuffix(nameWithoutExt, "_B") + "_A"
+	} else {
+		nameWithoutExt = nameWithoutExt + "_A"
+	}
+	return filepath.Join(dir, nameWithoutExt+ext)
+}
+
 // reprocessWithTuning updates the tuning options on the current image, re-runs FitImage,
 // and sets the resulting derivative as the wallpaper.
 func (mc *MonitorController) reprocessWithTuning(opts provider.TuningOptions) {
@@ -621,18 +645,33 @@ func (mc *MonitorController) reprocessWithTuning(opts provider.TuningOptions) {
 	// inode. On macOS/APFS, imaging.Save → os.Create truncates in-place (same
 	// inode), and the OS serves stale cached image data. Deleting first ensures
 	// os.Create allocates a new inode, bypassing all file-level caching.
-	os.Remove(derivPath) // Ignore error — file may not exist yet
+	newDerivPath := nextDerivativePath(derivPath, runtime.GOOS)
 
-	if err := imaging.Save(processedImg, derivPath); err != nil {
+	if err := imaging.Save(processedImg, newDerivPath); err != nil {
 		log.Printf("[ERROR] [Monitor %d] Failed to save derivative: %v", mc.ID, err)
 		return
 	}
-	now := time.Now()
-	_ = os.Chtimes(derivPath, now, now)
+
+	if newDerivPath != derivPath {
+		// Safely clean up the old buffer file after successful save
+		os.Remove(derivPath)
+
+		// Update in-memory state and persistent store with new path
+		if img.DerivativePaths == nil {
+			img.DerivativePaths = make(map[string]string)
+		}
+		img.DerivativePaths[resKey] = newDerivPath
+		mc.State.CurrentImage = img
+		mc.Store.SetDerivativePath(img.ID, resKey, newDerivPath)
+	} else {
+		// Standard modification time bump for other OSes (if needed by their cache)
+		now := time.Now()
+		_ = os.Chtimes(newDerivPath, now, now)
+	}
 
 	// 6. Set wallpaper
 	mc.State.CurrentImage = img
-	if err := mc.os.SetWallpaper(derivPath, mc.ID); err != nil {
+	if err := mc.os.SetWallpaper(newDerivPath, mc.ID); err != nil {
 		log.Printf("[ERROR] [Monitor %d] Failed to set wallpaper: %v", mc.ID, err)
 	}
 

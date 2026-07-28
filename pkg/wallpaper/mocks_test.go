@@ -145,6 +145,14 @@ func (m *MockImageStore) Remove(id string) (provider.Image, bool) {
 	return args.Get(0).(provider.Image), args.Bool(1)
 }
 
+func (m *MockImageStore) SetDerivativePath(id string, resKey string, path string) bool {
+	args := m.Called(id, resKey, path)
+	if len(args) == 0 {
+		return true
+	}
+	return args.Bool(0)
+}
+
 func (m *MockImageStore) Exists(id string) bool {
 	args := m.Called(id)
 	return args.Bool(0)

@@ -178,6 +178,24 @@ func (s *ImageStore) SetTuningOptions(id string, resKey string, opts provider.Tu
 	return false
 }
 
+// SetDerivativePath updates the derivative path for a specific resolution.
+func (s *ImageStore) SetDerivativePath(id string, resKey string, path string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.images {
+		if s.images[i].ID == id {
+			if s.images[i].DerivativePaths == nil {
+				s.images[i].DerivativePaths = make(map[string]string)
+			}
+			s.images[i].DerivativePaths[resKey] = path
+			s.addToBucketsLocked(id, map[string]string{resKey: path})
+			s.scheduleSaveLocked()
+			return true
+		}
+	}
+	return false
+}
+
 // ClearDerivatives resets an image's DerivativePaths and ProcessingFlags.
 // Used by monitor_controller when a derivative file is missing from disk.
 func (s *ImageStore) ClearDerivatives(id string) bool {
