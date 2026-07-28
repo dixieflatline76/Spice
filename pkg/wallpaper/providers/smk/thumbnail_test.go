@@ -3,10 +3,15 @@ package smk
 import (
 	"context"
 	"net/http"
+	"os"
 	"testing"
 )
 
 func TestFetchThumbnails_TDD(t *testing.T) {
+	if os.Getenv("SPICE_LIVE_TESTS") == "" {
+		t.Skip("Skipping live network test in CI. Run with SPICE_LIVE_TESTS=1 to execute.")
+	}
+
 	p := NewProvider(nil, http.DefaultClient)
 
 	// Valid ID from SMK
