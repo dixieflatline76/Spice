@@ -146,11 +146,9 @@ func (m *MockImageStore) Remove(id string) (provider.Image, bool) {
 }
 
 func (m *MockImageStore) SetDerivativePath(id string, resKey string, path string) bool {
-	args := m.Called(id, resKey, path)
-	if len(args) == 0 {
-		return true
-	}
-	return args.Bool(0)
+	// We don't use m.Called() here to prevent panicking in tests that don't explicitly 
+	// expect this method to be called, since it's an OS-specific internal detail.
+	return true
 }
 
 func (m *MockImageStore) Exists(id string) bool {
