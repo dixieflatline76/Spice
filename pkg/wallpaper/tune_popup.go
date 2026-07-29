@@ -9,7 +9,7 @@ import (
 	"github.com/dixieflatline76/Spice/v2/util/log"
 )
 
-const tuningUIThrottle = 2500 * time.Millisecond
+const tuningUIThrottle = 3000 * time.Millisecond
 
 // anchorLabels maps each grid position to its display label.
 var anchorLabels = [9]string{"↖", "↑", "↗", "←", "●", "→", "↙", "↓", "↘"}
