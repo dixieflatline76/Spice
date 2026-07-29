@@ -8,6 +8,8 @@ import (
 	"github.com/dixieflatline76/Spice/v2/util/log"
 )
 
+const tuningUIThrottle = 1500 * time.Millisecond
+
 // anchorLabels maps each grid position to its display label.
 var anchorLabels = [9]string{"↖", "↑", "↗", "←", "●", "→", "↙", "↓", "↘"}
 
@@ -121,8 +123,8 @@ func (wp *Plugin) showTuneImagePopup(monitorID int) {
 				// Enforce a minimum delay to prevent macOS wallpaper daemon choke and UI spam
 				// macOS NSWorkspace can drop or queue transitions if called too rapidly.
 				elapsed := time.Since(start)
-				if elapsed < 1500*time.Millisecond {
-					time.Sleep(1500*time.Millisecond - elapsed)
+				if elapsed < tuningUIThrottle {
+					time.Sleep(tuningUIThrottle - elapsed)
 				}
 
 				if onDone != nil {
