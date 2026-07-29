@@ -2,13 +2,14 @@ package wallpaper
 
 import (
 	"fmt"
+	"runtime"
 	"time"
 
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
 	"github.com/dixieflatline76/Spice/v2/util/log"
 )
 
-const tuningUIThrottle = 1500 * time.Millisecond
+const tuningUIThrottle = 3000 * time.Millisecond
 
 // anchorLabels maps each grid position to its display label.
 var anchorLabels = [9]string{"↖", "↑", "↗", "←", "●", "→", "↙", "↓", "↘"}
@@ -122,9 +123,11 @@ func (wp *Plugin) showTuneImagePopup(monitorID int) {
 
 				// Enforce a minimum delay to prevent macOS wallpaper daemon choke and UI spam
 				// macOS NSWorkspace can drop or queue transitions if called too rapidly.
-				elapsed := time.Since(start)
-				if elapsed < tuningUIThrottle {
-					time.Sleep(tuningUIThrottle - elapsed)
+				if runtime.GOOS == "darwin" {
+					elapsed := time.Since(start)
+					if elapsed < tuningUIThrottle {
+						time.Sleep(tuningUIThrottle - elapsed)
+					}
 				}
 
 				if onDone != nil {
