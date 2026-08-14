@@ -12,12 +12,31 @@ import (
 
 	"github.com/dixieflatline76/Spice/v2/util/log"
 
-	"fyne.io/fyne/v2"
 	"github.com/dixieflatline76/Spice/v2/asset"
 	"github.com/dixieflatline76/Spice/v2/config"
 	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 	"github.com/zalando/go-keyring"
 )
+
+// Preferences represents the key-value configuration storage contract.
+type Preferences interface {
+	Bool(key string) bool
+	BoolWithFallback(key string, fallback bool) bool
+	SetBool(key string, value bool)
+	Float(key string) float64
+	FloatWithFallback(key string, fallback float64) float64
+	SetFloat(key string, value float64)
+	Int(key string) int
+	IntWithFallback(key string, fallback int) int
+	SetInt(key string, value int)
+	String(key string) string
+	StringWithFallback(key string, fallback string) string
+	SetString(key string, value string)
+	StringList(key string) []string
+	StringListWithFallback(key string, fallback []string) []string
+	SetStringList(key string, value []string)
+	RemoveValue(key string)
+}
 
 // Package config provides configuration management for the Wallpaper Downloader service
 // TODO: Explore moving all preferences Set/Get into this file
@@ -25,7 +44,7 @@ import (
 
 // Config struct to hold all configuration data
 type Config struct {
-	fyne.Preferences  `json:"-"`      // DO NOT serialize the Fyne interface to JSON (prevents "null" unmarshal panics)
+	Preferences       `json:"-"`      // DO NOT serialize the interface to JSON (prevents "null" unmarshal panics)
 	WallhavenAPIKey   string          `json:"-"`
 	Queries           []ImageQuery    `json:"queries"`        // Unified list of image queries
 	ImageQueries      []ImageQuery    `json:"query_urls"`     // Legacy: List of image queries (Wallhaven)
@@ -133,7 +152,7 @@ func ParseSmartFitMode(s string) SmartFitMode {
 }
 
 // GetConfig returns the singleton instance of Config.
-func GetConfig(p fyne.Preferences) *Config {
+func GetConfig(p Preferences) *Config {
 	cfgOnce.Do(func() {
 		u, e := user.Current()
 		if e != nil {

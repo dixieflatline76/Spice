@@ -302,3 +302,63 @@ type SecretItem struct {
 }
 
 func (SecretItem) isItemSchema() {}
+
+// TabLocation defines where tabs are positioned.
+type TabLocation string
+
+const (
+	TabLocationTop      TabLocation = "top"
+	TabLocationLeading  TabLocation = "leading"
+	TabLocationBottom   TabLocation = "bottom"
+	TabLocationTrailing TabLocation = "trailing"
+)
+
+// TabsSchema represents a tabbed navigation container (e.g. Preferences window tabs).
+type TabsSchema struct {
+	Items    []TabItemSchema
+	Selected int
+	Location TabLocation
+}
+
+// TabItemSchema represents an individual tab.
+type TabItemSchema struct {
+	Title     string
+	IconName  string
+	IconBytes []byte
+	Panel     *PanelSchema
+	Accordion *AccordionSchema
+}
+
+// AccordionSchema represents a set of collapsible accordion items.
+type AccordionSchema struct {
+	Items        []AccordionItemSchema
+	EmptyMessage string
+}
+
+// AccordionItemSchema represents a collapsible section with dynamic headers.
+type AccordionItemSchema struct {
+	Title     string
+	TitleFunc func() string // Optional dynamic title evaluator (e.g. for reactive item counts)
+	IconName  string
+	IconBytes []byte
+	Open      bool
+	Content   *PanelSchema
+}
+
+// MenuSchema represents a context or tray menu.
+type MenuSchema struct {
+	Label string
+	Items []MenuItemSchema
+}
+
+// MenuItemSchema represents an individual entry in a menu.
+type MenuItemSchema struct {
+	Label       string
+	IconName    string
+	IconBytes   []byte
+	Action      func()
+	IsSeparator bool
+	IsChecked   bool
+	IsDisabled  bool
+	SubMenu     *MenuSchema
+}

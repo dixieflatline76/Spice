@@ -251,6 +251,29 @@ func (m *MockSettingsManager) RenderSchema(panel schema.PanelSchema) fyne.Canvas
 	return box
 }
 
+func (m *MockSettingsManager) RenderTabs(tabs schema.TabsSchema) fyne.CanvasObject {
+	box := container.NewVBox()
+	for _, item := range tabs.Items {
+		if item.Accordion != nil {
+			box.Add(m.RenderAccordion(*item.Accordion))
+		}
+		if item.Panel != nil {
+			box.Add(m.RenderSchema(*item.Panel))
+		}
+	}
+	return box
+}
+
+func (m *MockSettingsManager) RenderAccordion(acc schema.AccordionSchema) fyne.CanvasObject {
+	box := container.NewVBox()
+	for _, item := range acc.Items {
+		if item.Content != nil {
+			box.Add(m.RenderSchema(*item.Content))
+		}
+	}
+	return box
+}
+
 func (m *MockSettingsManager) refreshWidgetStates() {
 	for _, mw := range m.managedWidgets {
 		if mw.visibleIf != nil {
@@ -291,7 +314,8 @@ func TestSmartFitEnablesFaceOptions(t *testing.T) {
 	sm := NewMockSettingsManager()
 
 	// Execute: Create Panel (this builds the UI and wires the logic)
-	wp.CreatePrefsPanel(sm)
+	tabsSchema := wp.CreatePrefsSchema(sm)
+	sm.RenderTabs(*tabsSchema)
 
 	// Verify Check Widgets exist
 	faceCrop := sm.allWidgets["faceCrop"].(*widget.Check)

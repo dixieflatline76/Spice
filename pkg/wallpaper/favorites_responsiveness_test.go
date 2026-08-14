@@ -75,11 +75,9 @@ func (m *mockManager) OpenPreferences(name string) {
 }
 
 func (m *mockManager) RebuildTrayMenu() {
-	m.Called()
 }
 
 func (m *mockManager) RefreshTrayMenu() {
-	m.Called()
 }
 
 func (m *mockManager) GetPreferences() fyne.Preferences {

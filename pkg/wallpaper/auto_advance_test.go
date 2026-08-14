@@ -19,7 +19,6 @@ func TestToggleFavorite_AutoAdvance(t *testing.T) {
 		cfg:                GetConfig(NewMockPreferences()),
 		providers:          make(map[string]provider.ImageProvider),
 		Monitors:           make(map[int]*MonitorController),
-		monitorMenu:        make(map[int]*MonitorMenuItems),
 		fetchingInProgress: util.NewSafeBool(),
 		runOnUI:            func(f func()) { f() },
 	}
@@ -38,6 +37,7 @@ func TestToggleFavorite_AutoAdvance(t *testing.T) {
 	mf.On("RemoveFavorite", img).Return(nil)
 	ms.On("Remove", img.ID).Return(img, true)
 	mm.On("NotifyUser", mock.Anything, mock.Anything).Return()
+	mm.On("RefreshTrayMenu").Return().Maybe()
 
 	// Mock background telemetry
 	ms.On("SeenCount").Return(0).Maybe()

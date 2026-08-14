@@ -242,12 +242,16 @@ func (sa *SpiceApp) CreateTrayMenu() {
 	items := []*fyne.MenuItem{}
 	for i, plugin := range sa.plugins {
 		utilLog.Debugf("CreateTrayMenu: Processing plugin %s...", plugin.Name())
-		if i == 0 {
-			items = append(items, plugin.CreateTrayMenuItems()...)
-		} else {
-			pluginSubmenu := fyne.NewMenuItem(plugin.Name(), nil)
-			pluginSubmenu.ChildMenu = fyne.NewMenu(plugin.Name(), plugin.CreateTrayMenuItems()...)
-			items = append(items, pluginSubmenu)
+		menuSchema := plugin.CreateTrayMenu()
+		if menuSchema != nil {
+			pluginItems := sa.renderMenuSchema(menuSchema)
+			if i == 0 {
+				items = append(items, pluginItems...)
+			} else {
+				pluginSubmenu := fyne.NewMenuItem(plugin.Name(), nil)
+				pluginSubmenu.ChildMenu = fyne.NewMenu(plugin.Name(), pluginItems...)
+				items = append(items, pluginSubmenu)
+			}
 		}
 	}
 
@@ -298,6 +302,41 @@ func (sa *SpiceApp) CreateTrayMenu() {
 		utilLog.Debug("Skipping desk.SetSystemTrayIcon (icon is nil)")
 	}
 	utilLog.Debug("System Tray Menu and Icon setup process completed.")
+}
+
+func (sa *SpiceApp) renderMenuSchema(m *schema.MenuSchema) []*fyne.MenuItem {
+	if m == nil {
+		return nil
+	}
+	var items []*fyne.MenuItem
+	for _, item := range m.Items {
+		if item.IsSeparator {
+			items = append(items, fyne.NewMenuItemSeparator())
+			continue
+		}
+		var mi *fyne.MenuItem
+		if item.SubMenu != nil {
+			subItems := sa.renderMenuSchema(item.SubMenu)
+			mi = sa.CreateMenuItem(item.Label, item.Action, item.IconName)
+			if len(item.IconBytes) > 0 {
+				mi.Icon = fyne.NewStaticResource(item.IconName, item.IconBytes)
+			}
+			mi.ChildMenu = fyne.NewMenu(item.Label, subItems...)
+		} else {
+			mi = sa.CreateMenuItem(item.Label, item.Action, item.IconName)
+			if len(item.IconBytes) > 0 {
+				mi.Icon = fyne.NewStaticResource(item.IconName, item.IconBytes)
+			}
+			if item.IsChecked {
+				mi.Checked = true
+			}
+			if item.IsDisabled {
+				mi.Disabled = true
+			}
+		}
+		items = append(items, mi)
+	}
+	return items
 }
 
 // LockTrayMenu replaces the system tray with a minimal locked menu during tuning
@@ -825,10 +864,13 @@ func (sa *SpiceApp) RebuildPreferencesContent(initialTab string) {
 	var pluginTabItems []*container.TabItem
 	for _, plugin := range sa.plugins {
 		// Create a tab for each plugin
-		pluginContainer := plugin.CreatePrefsPanel(sm)
-		item := container.NewTabItem(plugin.Name(), pluginContainer)
-		sa.tabItems[plugin.ID()] = item
-		pluginTabItems = append(pluginTabItems, item)
+		prefsSchema := plugin.CreatePrefsSchema(sm)
+		if prefsSchema != nil {
+			pluginContainer := sm.RenderTabs(*prefsSchema)
+			item := container.NewTabItem(plugin.Name(), pluginContainer)
+			sa.tabItems[plugin.ID()] = item
+			pluginTabItems = append(pluginTabItems, item)
+		}
 	}
 
 	// Combine all tabs

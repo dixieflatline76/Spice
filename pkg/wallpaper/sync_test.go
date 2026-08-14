@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"fyne.io/fyne/v2"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -32,6 +31,7 @@ func TestSyncMonitors_RefreshUI(t *testing.T) {
 
 	mc := NewMonitorController(0, Monitor{ID: 0}, wp.store, wp.fm, wp.os, wp.cfg, wp.imgProcessor)
 	mc.State.CurrentImage = img
+	mc.State.CurrentID = img.ID
 	wp.Monitors[0] = mc
 
 	// Expectation: updateTrayMenuUI calls RefreshTrayMenu
@@ -49,16 +49,7 @@ func TestSyncMonitors_RefreshUI(t *testing.T) {
 	}).Return()
 
 	// also allow GetAssetManager which is called by updateTrayMenuUI
-	mockPM.On("GetAssetManager").Return(nil).Maybe() // mock asset manager return is checked for nil in code?
-	// The code calls wp.manager.GetAssetManager().GetIcon("favorite.png") if favorite menu item exists
-	// But in this test, monitorMenu map is empty, so updateTrayMenuUI returns early!
-
-	// Crucial: We need to populate wp.monitorMenu so updateTrayMenuUI proceeds
-	wp.monitorMenu = make(map[int]*MonitorMenuItems)
-	wp.monitorMenu[0] = &MonitorMenuItems{
-		ProviderMenuItem: &fyne.MenuItem{},
-		ArtistMenuItem:   &fyne.MenuItem{},
-	}
+	mockPM.On("GetAssetManager").Return(nil).Maybe()
 
 	// Stub OS.GetMonitors to return the SAME monitor
 	mockOS.ExpectedCalls = nil // Clear setup calls
@@ -75,5 +66,13 @@ func TestSyncMonitors_RefreshUI(t *testing.T) {
 		t.Fatal("Timeout waiting for RefreshTrayMenu to be called")
 	}
 
-	assert.Equal(t, "By: Artist", wp.monitorMenu[0].ArtistMenuItem.Label)
+	menu := wp.CreateTrayMenu()
+	found := false
+	for _, item := range menu.Items {
+		if item.Label == "By: Artist" {
+			found = true
+			break
+		}
+	}
+	assert.True(t, found, "Expected 'By: Artist' in tray menu items")
 }

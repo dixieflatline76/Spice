@@ -15,6 +15,7 @@ import (
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	"github.com/dixieflatline76/Spice/v2/asset"
 	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/schema"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
@@ -37,6 +38,7 @@ type SettingsManager struct {
 	statusLabels        map[string]*widget.Label     // NEW: Maps setting names to their status labels
 	applyFuncs          map[string]func(interface{}) // Type-safe wrappers for native apply functions
 	isRenderingCompact  bool                         // Tracks if the current section being rendered is compact
+	assetMgr            *asset.Manager
 }
 
 type managedWidget struct {
@@ -151,6 +153,7 @@ func NewSettingsManager(window fyne.Window) setting.SettingsManager {
 		allWidgets:          make(map[string]fyne.CanvasObject),
 		statusLabels:        make(map[string]*widget.Label),
 		applyFuncs:          make(map[string]func(interface{})),
+		assetMgr:            asset.NewManager(),
 	}
 
 	sm.applyButton = createApplyButton(sm)
@@ -2162,4 +2165,191 @@ func (sm *SettingsManager) renderQueryList(v schema.QueryListItem) *widget.List 
 		},
 	)
 	return queryList
+}
+
+// RenderTabs takes a declarative tabs schema and renders it into a Fyne container.
+func (sm *SettingsManager) RenderTabs(t schema.TabsSchema) fyne.CanvasObject {
+	var tabItems []*container.TabItem
+	for _, item := range t.Items {
+		var content fyne.CanvasObject
+		if item.Accordion != nil {
+			content = sm.RenderAccordion(*item.Accordion)
+		} else if item.Panel != nil {
+			content = sm.RenderSchema(*item.Panel)
+		}
+		if content == nil {
+			content = container.NewVBox()
+		}
+
+		var icon fyne.Resource
+		if len(item.IconBytes) > 0 {
+			icon = fyne.NewStaticResource(item.IconName, item.IconBytes)
+		} else if item.IconName != "" {
+			icon = sm.resolveIcon(item.IconName)
+		}
+		if icon != nil {
+			tabItems = append(tabItems, container.NewTabItemWithIcon(item.Title, icon, content))
+		} else {
+			tabItems = append(tabItems, container.NewTabItem(item.Title, content))
+		}
+	}
+
+	tabs := container.NewAppTabs(tabItems...)
+	switch t.Location {
+	case schema.TabLocationLeading:
+		tabs.SetTabLocation(container.TabLocationLeading)
+	case schema.TabLocationBottom:
+		tabs.SetTabLocation(container.TabLocationBottom)
+	case schema.TabLocationTrailing:
+		tabs.SetTabLocation(container.TabLocationTrailing)
+	default:
+		tabs.SetTabLocation(container.TabLocationTop)
+	}
+
+	if t.Selected >= 0 && t.Selected < len(tabs.Items) {
+		tabs.SelectIndex(t.Selected)
+	}
+
+	return container.NewStack(tabs)
+}
+
+// RenderAccordion takes a declarative accordion schema and renders an interactive collapsing container.
+func (sm *SettingsManager) RenderAccordion(a schema.AccordionSchema) fyne.CanvasObject {
+	accordionContainer := container.NewStack()
+
+	items := a.Items
+
+	var refreshAccordion func()
+	refreshAccordion = func() {
+		fyne.Do(func() {
+			if len(items) == 0 {
+				msg := a.EmptyMessage
+				if msg == "" {
+					msg = i18n.T("No items available.")
+				}
+				accordionContainer.Objects = []fyne.CanvasObject{widget.NewLabel(msg)}
+				accordionContainer.Refresh()
+				return
+			}
+
+			topHeaders := container.NewVBox()
+			bottomHeaders := container.NewVBox()
+			var centerContent fyne.CanvasObject
+			foundOpen := false
+
+			for i := range items {
+				index := i
+				item := &items[index]
+
+				var arrowIcon fyne.Resource
+				if item.Open {
+					arrowIcon = theme.MoveDownIcon()
+				} else {
+					arrowIcon = theme.NavigateNextIcon()
+				}
+
+				onTapped := func() {
+					if item.Open {
+						item.Open = false
+						nextIndex := (index + 1) % len(items)
+						items[nextIndex].Open = true
+					} else {
+						for j := range items {
+							items[j].Open = (j == index)
+						}
+					}
+					refreshAccordion()
+				}
+
+				bgBtn := widget.NewButton("", onTapped)
+				bgBtn.Alignment = widget.ButtonAlignLeading
+
+				title := item.Title
+				if item.TitleFunc != nil {
+					title = item.TitleFunc()
+				}
+
+				titleLabel := widget.NewLabel(title)
+				titleLabel.TextStyle = fyne.TextStyle{Bold: item.Open}
+
+				headerContent := container.NewHBox(
+					widget.NewIcon(arrowIcon),
+				)
+				var headerIcon fyne.Resource
+				if len(item.IconBytes) > 0 {
+					headerIcon = fyne.NewStaticResource(item.IconName, item.IconBytes)
+				} else if item.IconName != "" {
+					headerIcon = sm.resolveIcon(item.IconName)
+				}
+				if headerIcon != nil {
+					headerContent.Add(widget.NewIcon(headerIcon))
+				}
+				headerContent.Add(titleLabel)
+
+				headerStack := container.NewStack(bgBtn, container.NewPadded(headerContent))
+
+				if item.Open {
+					topHeaders.Add(headerStack)
+					if item.Content != nil {
+						centerContent = sm.RenderSchema(*item.Content)
+					}
+					foundOpen = true
+				} else {
+					if foundOpen {
+						bottomHeaders.Add(headerStack)
+					} else {
+						topHeaders.Add(headerStack)
+					}
+				}
+			}
+
+			content := container.NewBorder(topHeaders, bottomHeaders, nil, nil, centerContent)
+			accordionContainer.Objects = []fyne.CanvasObject{content}
+			accordionContainer.Refresh()
+		})
+	}
+
+	sm.RegisterOnSettingsSaved(func() {
+		refreshAccordion()
+	})
+	sm.RegisterRefreshFunc(func() {
+		refreshAccordion()
+	})
+
+	refreshAccordion()
+	return accordionContainer
+}
+
+func (sm *SettingsManager) resolveIcon(name string) fyne.Resource {
+	if name == "" {
+		return nil
+	}
+	switch name {
+	case "settings":
+		return theme.SettingsIcon()
+	case "color_palette":
+		return theme.ColorPaletteIcon()
+	case "grid":
+		return theme.GridIcon()
+	case "folder":
+		return theme.FolderIcon()
+	case "history":
+		return theme.HistoryIcon()
+	case "fullscreen":
+		return theme.ViewFullScreenIcon()
+	case "image":
+		return theme.FileImageIcon()
+	case "check":
+		return theme.CheckButtonCheckedIcon()
+	case "computer":
+		return theme.ComputerIcon()
+	case "refresh":
+		return theme.ViewRefreshIcon()
+	}
+	if sm.assetMgr != nil {
+		if res, err := sm.assetMgr.GetIcon(name); err == nil && res != nil {
+			return res
+		}
+	}
+	return nil
 }

@@ -17,8 +17,6 @@ import (
 	"testing"
 	"time"
 
-	"fyne.io/fyne/v2"
-	"github.com/dixieflatline76/Spice/v2/asset"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
 	"github.com/dixieflatline76/Spice/v2/util"
 	"github.com/stretchr/testify/assert"
@@ -318,15 +316,6 @@ func TestNavigation(t *testing.T) {
 	// Mock PM
 	mockPM.On("NotifyUser", mock.Anything, mock.Anything).Return()
 	mockPM.On("RefreshTrayMenu").Return()
-	mockPM.On("GetAssetManager").Return(&asset.Manager{})
-
-	// Init UI
-	wp.monitorMenu = make(map[int]*MonitorMenuItems)
-	wp.monitorMenu[0] = &MonitorMenuItems{
-		ProviderMenuItem: &fyne.MenuItem{},
-		ArtistMenuItem:   &fyne.MenuItem{},
-	}
-
 	// Create Monitor Controller
 	mockIP := new(MockImageProcessor)
 	mc := NewMonitorController(0, Monitor{ID: 0, Rect: image.Rect(0, 0, 1920, 1080)}, wp.store, wp.fm, mockOS, cfg, mockIP)

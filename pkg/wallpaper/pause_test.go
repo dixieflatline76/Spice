@@ -1,11 +1,9 @@
 package wallpaper
 
 import (
-	"sync"
 	"testing"
 	"time"
 
-	"fyne.io/fyne/v2"
 	"github.com/dixieflatline76/Spice/v2/asset"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
 	"github.com/stretchr/testify/assert"
@@ -13,17 +11,12 @@ import (
 )
 
 func TestPauseLogic(t *testing.T) {
-	// Setup — use a mutex to serialize runOnUI like fyne.Do does on the main thread
-	var uiMu sync.Mutex
 	wp := &Plugin{
-		store:       &MockImageStore{},
-		manager:     &MockPluginManager{},
-		cfg:         GetConfig(NewMockPreferences()),
-		Monitors:    make(map[int]*MonitorController),
-		monitorMenu: make(map[int]*MonitorMenuItems),
+		store:    &MockImageStore{},
+		manager:  &MockPluginManager{},
+		cfg:      GetConfig(NewMockPreferences()),
+		Monitors: make(map[int]*MonitorController),
 		runOnUI: func(f func()) {
-			uiMu.Lock()
-			defer uiMu.Unlock()
 			f()
 		},
 	}
@@ -57,15 +50,6 @@ func TestPauseLogic(t *testing.T) {
 		wp.updateTrayMenuUI(img, monitorID)
 	}
 
-	// Set mock items for UI refresh
-	mItems := &MonitorMenuItems{
-		PauseMenuItem:    &fyne.MenuItem{Label: "Initial"},
-		ProviderMenuItem: &fyne.MenuItem{Label: "Initial"},
-		ArtistMenuItem:   &fyne.MenuItem{Label: "Initial"},
-		FavoriteMenuItem: &fyne.MenuItem{Label: "Initial"},
-	}
-	wp.monitorMenu[0] = mItems
-
 	// Start the actor
 	mc.Start()
 	defer mc.Stop()
@@ -89,7 +73,13 @@ func TestPauseLogic(t *testing.T) {
 	}, time.Second, 50*time.Millisecond, "Monitor should be paused after toggle")
 	mm.AssertCalled(t, "NotifyUser", "Wallpaper Rotation", "Display 1: Pausing Play")
 	assert.Eventually(t, func() bool {
-		return mItems.PauseMenuItem.Label == "Resume Play"
+		menu := wp.CreateTrayMenu()
+		for _, item := range menu.Items {
+			if item.IconName == "play.png" {
+				return item.Label == "Resume Play"
+			}
+		}
+		return false
 	}, time.Second, 50*time.Millisecond, "Pause menu label should update to Resume Play")
 
 	// 3. Test Automatic Transition skipping
@@ -125,7 +115,13 @@ func TestPauseLogic(t *testing.T) {
 	}, time.Second, 50*time.Millisecond, "Monitor should be unpaused after second toggle")
 	mm.AssertCalled(t, "NotifyUser", "Wallpaper Rotation", "Display 1: Resuming Play")
 	assert.Eventually(t, func() bool {
-		return mItems.PauseMenuItem.Label == "Pause Play"
+		menu := wp.CreateTrayMenu()
+		for _, item := range menu.Items {
+			if item.IconName == "pause.png" {
+				return item.Label == "Pause Play"
+			}
+		}
+		return false
 	}, time.Second, 50*time.Millisecond, "Pause menu label should update to Pause Play")
 }
 
