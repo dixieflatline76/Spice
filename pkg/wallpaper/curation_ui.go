@@ -117,17 +117,19 @@ func buildCuratedUIItem(p provider.ImageProvider, sm setting.SettingsManager, cf
 		InitialValue: active,
 		NeedsRefresh: true,
 		ApplyFunc: func(b bool) {
-			_, cid := getQuery(entry.Key)
-			if b {
-				if cid != "" {
-					_ = cfg.EnableImageQuery(cid)
-				} else {
-					_, _ = cfg.AddProviderQuery(entry.Name, entry.Key, p.ID(), true, false)
+			found := false
+			for _, q := range cfg.GetQueries() {
+				if q.Provider == p.ID() && q.URL == entry.Key {
+					found = true
+					if b {
+						_ = cfg.EnableImageQuery(q.ID)
+					} else {
+						_ = cfg.DisableImageQuery(q.ID)
+					}
 				}
-			} else {
-				if cid != "" {
-					_ = cfg.DisableImageQuery(cid)
-				}
+			}
+			if !found && b {
+				_, _ = cfg.AddProviderQuery(entry.Name, entry.Key, p.ID(), true, false)
 			}
 		},
 	}

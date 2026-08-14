@@ -2219,6 +2219,14 @@ func (sm *SettingsManager) RenderAccordion(a schema.AccordionSchema) fyne.Canvas
 
 	items := a.Items
 
+	// Pre-render content objects once to preserve widget state and bindings across header refreshes
+	renderedContents := make([]fyne.CanvasObject, len(items))
+	for i, item := range items {
+		if item.Content != nil {
+			renderedContents[i] = sm.RenderSchema(*item.Content)
+		}
+	}
+
 	var refreshAccordion func()
 	refreshAccordion = func() {
 		fyne.Do(func() {
@@ -2290,8 +2298,8 @@ func (sm *SettingsManager) RenderAccordion(a schema.AccordionSchema) fyne.Canvas
 
 				if item.Open {
 					topHeaders.Add(headerStack)
-					if item.Content != nil {
-						centerContent = sm.RenderSchema(*item.Content)
+					if index < len(renderedContents) {
+						centerContent = renderedContents[index]
 					}
 					foundOpen = true
 				} else {

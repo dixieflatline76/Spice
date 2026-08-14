@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strconv"
 
+	"github.com/dixieflatline76/Spice/v2/pkg/curation"
 	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/schema"
@@ -508,19 +509,44 @@ func (b *PrefsPanelBuilder) createTitleFunc(p provider.ImageProvider) func() str
 			title = i18n.Tf("Image Sources ({{.Name}})", map[string]any{"Name": p.Name()}) + "..."
 		}
 		activeCount := 0
-		for _, q := range b.plugin.cfg.GetQueries() {
-			if q.Provider == p.ID() {
-				// Reactive: Check pending state in SM first, then fallback to persisted config
-				isActive := q.Active
-				if b.sm.HasPendingChange(q.ID) {
-					isActive = !q.Active // If it has a pending change, the state is flipped from baseline
-				}
 
+		col := curation.GetManager().GetCollection(p.ID())
+		if col != nil {
+			// Curated museum provider: count active curated collection entries
+			queries := b.plugin.cfg.GetQueries()
+			for _, entry := range col.Entries {
+				settingKey := p.ID() + "_" + entry.Key
+				isActive := false
+				for _, q := range queries {
+					if q.Provider == p.ID() && q.URL == entry.Key {
+						if q.Active {
+							isActive = true
+							break
+						}
+					}
+				}
+				if b.sm.HasPendingChange(settingKey) {
+					isActive = !isActive
+				}
 				if isActive {
 					activeCount++
 				}
 			}
+		} else {
+			// General query list provider (Wallhaven, Pexels, etc.)
+			for _, q := range b.plugin.cfg.GetQueries() {
+				if q.Provider == p.ID() {
+					isActive := q.Active
+					if b.sm.HasPendingChange(q.ID) {
+						isActive = !q.Active
+					}
+					if isActive {
+						activeCount++
+					}
+				}
+			}
 		}
+
 		if activeCount > 0 {
 			if activeCount == 1 {
 				return i18n.Tf("{{.Title}} (1 active)", map[string]any{"Title": title})
