@@ -394,7 +394,7 @@ func (wp *Plugin) Activate() {
 	// Perform an initial scan to catch and delete any stranded/orphaned files
 	// caused by file-locking errors or crashes during the previous session.
 	if wp.fm != nil {
-		go wp.fm.CleanupOrphans(wp.store.GetKnownIDs())
+		wp.fm.AsyncCleanupOrphans(wp.store.GetKnownIDs())
 	}
 
 	// Initialize Monitors (Actors)
@@ -536,6 +536,11 @@ func (wp *Plugin) Deactivate() {
 		mc.Stop()
 	}
 	wp.monMu.Unlock()
+
+	// Safely drain background file operations with bounded timeout
+	if wp.fm != nil {
+		wp.fm.Close()
+	}
 
 	log.Print("Wallpaper plugin deactivated.")
 }

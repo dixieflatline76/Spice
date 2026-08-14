@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -237,4 +238,51 @@ func TestDeepDeleteBatch(t *testing.T) {
 			t.Errorf("File %s should have been deleted", p)
 		}
 	}
+}
+
+func TestFileManager_AsyncAndDrain(t *testing.T) {
+	tmpDir := t.TempDir()
+	fm := NewFileManager(tmpDir)
+	if err := fm.EnsureDirs(); err != nil {
+		t.Fatalf("EnsureDirs failed: %v", err)
+	}
+
+	id := "async_test_img"
+	master, _ := fm.GetMasterPath(id, ".jpg")
+	if err := os.WriteFile(master, []byte("data"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	deriv, _ := fm.GetDerivativePath(id, ".jpg", filepath.Join(FittedRootDir, QualityDir, StandardDir))
+	if err := os.WriteFile(deriv, []byte("data"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Launch async deletion
+	fm.AsyncDeepDelete(id)
+
+	// Drain
+	drained := fm.WaitTimeout(2 * time.Second)
+	assert.True(t, drained, "WaitTimeout should return true when operations complete")
+
+	// Verify deleted
+	_, err := os.Stat(master)
+	assert.True(t, os.IsNotExist(err), "Master should be deleted")
+	_, err = os.Stat(deriv)
+	assert.True(t, os.IsNotExist(err), "Derivative should be deleted")
+}
+
+func TestFileManager_Close(t *testing.T) {
+	tmpDir := t.TempDir()
+	fm := NewFileManager(tmpDir)
+	if err := fm.EnsureDirs(); err != nil {
+		t.Fatalf("EnsureDirs failed: %v", err)
+	}
+
+	fm.Close()
+	assert.True(t, fm.closing.Load())
+
+	// Async calls after close should be no-ops
+	fm.AsyncDeepDelete("some_id")
+	fm.AsyncCleanupOrphans(map[string]bool{})
 }
