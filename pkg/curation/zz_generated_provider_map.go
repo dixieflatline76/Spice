@@ -5,11 +5,11 @@ package curation
 // ProviderIDToFilename maps the unique Provider ID strings (e.g. "MetMuseum")
 // to their corresponding curated JSON filenames in docs/collections/ (e.g. "metmuseum.json")
 var ProviderIDToFilename = map[string]string{
-	"ArtInstituteChicago": "artic.json",
-	"ClevelandMuseum": "cleveland.json",
-	"Getty": "getty.json",
-	"MetMuseum": "metmuseum.json",
-	"NationalPalaceMuseum": "npm.json",
-	"Rijksmuseum": "rijksmuseum.json",
+	"ArtInstituteChicago":   "artic.json",
+	"ClevelandMuseum":       "cleveland.json",
+	"Getty":                 "getty.json",
+	"MetMuseum":             "metmuseum.json",
+	"NationalPalaceMuseum":  "npm.json",
+	"Rijksmuseum":           "rijksmuseum.json",
 	"StatensMuseumForKunst": "smk.json",
 }

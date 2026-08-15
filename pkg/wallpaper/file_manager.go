@@ -7,7 +7,10 @@ import (
 	_ "image/png"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/dixieflatline76/Spice/v2/util/log"
@@ -17,6 +20,8 @@ import (
 // It enforces the directory structure for Source + Derivative architecture.
 type FileManager struct {
 	rootDir string
+	wg      sync.WaitGroup
+	closing atomic.Bool
 }
 
 // NewFileManager creates a new FileManager with the given root directory.
@@ -53,6 +58,16 @@ func (fm *FileManager) EnsureDirs() error {
 			}
 		}
 	}
+
+	// On macOS, sweep orphaned .spice_tmp hardlinks left behind by previous runs
+	if runtime.GOOS == "darwin" {
+		if tmps, err := filepath.Glob(filepath.Join(fittedRoot, "*", "*", "*.spice_tmp")); err == nil {
+			for _, f := range tmps {
+				_ = os.Remove(f)
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -144,8 +159,9 @@ func (fm *FileManager) DeepDeleteBatch(ids []string) error {
 		}
 		if !info.IsDir() {
 			name := info.Name()
-			ext := filepath.Ext(name)
-			fileID := strings.TrimSuffix(name, ext)
+			trimmed := strings.TrimSuffix(name, ".spice_tmp")
+			ext := filepath.Ext(trimmed)
+			fileID := strings.TrimSuffix(trimmed, ext)
 			if idMap[fileID] {
 				filesToDelete = append(filesToDelete, path)
 				log.Debugf("DeepDeleteBatch: Found Derivative file %s", path)
@@ -160,6 +176,10 @@ func (fm *FileManager) DeepDeleteBatch(ids []string) error {
 	log.Debugf("DeepDeleteBatch: Total files to delete: %d", len(filesToDelete))
 
 	for _, f := range filesToDelete {
+		if fm.closing.Load() {
+			log.Debug("DeepDeleteBatch: Aborted remaining deletions due to shutdown.")
+			return nil
+		}
 		if err := os.Remove(f); err != nil {
 			if !os.IsNotExist(err) {
 				log.Printf("DeepDeleteBatch: Failed to delete %s: %v", f, err)
@@ -189,6 +209,10 @@ func (fm *FileManager) CleanupOrphans(knownIDs map[string]bool) {
 	entries, err := os.ReadDir(fm.rootDir)
 	if err == nil {
 		for _, entry := range entries {
+			if fm.closing.Load() {
+				log.Debug("CleanupOrphans: Aborted orphan cleanup due to shutdown.")
+				return
+			}
 			if entry.IsDir() {
 				continue
 			}
@@ -215,19 +239,23 @@ func (fm *FileManager) CleanupOrphans(knownIDs map[string]bool) {
 	// 2. Clean Derivatives (Recursive in FittedRoot)
 	fittedRoot := filepath.Join(fm.rootDir, FittedRootDir)
 	err = filepath.Walk(fittedRoot, func(path string, info os.FileInfo, err error) error {
+		if fm.closing.Load() {
+			return filepath.SkipAll
+		}
 		if err != nil {
 			return nil
 		}
 		if !info.IsDir() {
 			name := info.Name()
-			ext := filepath.Ext(name)
+			trimmed := strings.TrimSuffix(name, ".spice_tmp")
+			ext := filepath.Ext(trimmed)
 			lowerExt := strings.ToLower(ext)
 
 			if lowerExt != ".jpg" && lowerExt != ".jpeg" && lowerExt != ".png" {
 				return nil
 			}
 
-			id := strings.TrimSuffix(name, ext)
+			id := strings.TrimSuffix(trimmed, ext)
 
 			if !knownIDs[id] {
 				// Orphan
@@ -255,13 +283,17 @@ func (fm *FileManager) DeleteDerivatives(id string) error {
 	// Recursive walk in fitted directory
 	fittedRoot := filepath.Join(fm.rootDir, FittedRootDir)
 	err := filepath.Walk(fittedRoot, func(path string, info os.FileInfo, err error) error {
+		if fm.closing.Load() {
+			return filepath.SkipAll
+		}
 		if err != nil {
 			return nil // Skip access errors
 		}
 		if !info.IsDir() {
 			name := info.Name()
-			ext := filepath.Ext(name)
-			fileID := strings.TrimSuffix(name, ext)
+			trimmed := strings.TrimSuffix(name, ".spice_tmp")
+			ext := filepath.Ext(trimmed)
+			fileID := strings.TrimSuffix(trimmed, ext)
 			if fileID == id {
 				filesToDelete = append(filesToDelete, path)
 			}
@@ -273,6 +305,9 @@ func (fm *FileManager) DeleteDerivatives(id string) error {
 	}
 
 	for _, f := range filesToDelete {
+		if fm.closing.Load() {
+			return nil
+		}
 		if err := os.Remove(f); err != nil {
 			// Suppress benign errors
 			if strings.Contains(err.Error(), "used by another process") || strings.Contains(err.Error(), "access is denied") {
@@ -284,6 +319,94 @@ func (fm *FileManager) DeleteDerivatives(id string) error {
 	}
 
 	return nil
+}
+
+// AsyncDeepDelete launches DeepDelete in a tracked background goroutine.
+func (fm *FileManager) AsyncDeepDelete(id string) {
+	if fm.closing.Load() {
+		return
+	}
+	fm.wg.Add(1)
+	go func() {
+		defer fm.wg.Done()
+		_ = fm.DeepDelete(id)
+	}()
+}
+
+// AsyncDeepDeleteBatch launches DeepDeleteBatch in a tracked background goroutine.
+func (fm *FileManager) AsyncDeepDeleteBatch(ids []string) {
+	if fm.closing.Load() || len(ids) == 0 {
+		return
+	}
+	fm.wg.Add(1)
+	go func() {
+		defer fm.wg.Done()
+		_ = fm.DeepDeleteBatch(ids)
+	}()
+}
+
+// AsyncCleanupOrphans launches CleanupOrphans in a tracked background goroutine.
+func (fm *FileManager) AsyncCleanupOrphans(knownIDs map[string]bool) {
+	if fm.closing.Load() {
+		return
+	}
+	fm.wg.Add(1)
+	go func() {
+		defer fm.wg.Done()
+		fm.CleanupOrphans(knownIDs)
+	}()
+}
+
+// AsyncDeleteDerivatives launches DeleteDerivatives in a tracked background goroutine.
+func (fm *FileManager) AsyncDeleteDerivatives(id string) {
+	if fm.closing.Load() {
+		return
+	}
+	fm.wg.Add(1)
+	go func() {
+		defer fm.wg.Done()
+		_ = fm.DeleteDerivatives(id)
+	}()
+}
+
+// AsyncDeleteDerivativesBatch launches DeleteDerivatives for a slice of IDs.
+func (fm *FileManager) AsyncDeleteDerivativesBatch(ids []string) {
+	if fm.closing.Load() || len(ids) == 0 {
+		return
+	}
+	fm.wg.Add(1)
+	go func() {
+		defer fm.wg.Done()
+		for _, id := range ids {
+			if fm.closing.Load() {
+				return
+			}
+			_ = fm.DeleteDerivatives(id)
+		}
+	}()
+}
+
+// WaitTimeout waits for all in-flight asynchronous operations to finish up to timeout.
+// Returns true if all finished cleanly, false if timed out.
+func (fm *FileManager) WaitTimeout(timeout time.Duration) bool {
+	done := make(chan struct{})
+	go func() {
+		fm.wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		return true
+	case <-time.After(timeout):
+		log.Printf("FileManager: in-flight operations timed out after %v during shutdown", timeout)
+		return false
+	}
+}
+
+// Close marks the FileManager as closing and drains in-flight operations with a bounded timeout.
+func (fm *FileManager) Close() {
+	fm.closing.Store(true)
+	fm.WaitTimeout(500 * time.Millisecond)
 }
 
 // RenameAllAssets renames the Master image and ALL its derivatives to a new ID.

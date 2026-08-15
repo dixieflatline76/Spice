@@ -6,9 +6,7 @@ import (
 	"sort"
 	"strconv"
 
-	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/theme"
+	"github.com/dixieflatline76/Spice/v2/pkg/curation"
 	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/schema"
@@ -316,51 +314,81 @@ func (b *PrefsPanelBuilder) BuildGeneralTabSchema() *schema.PanelSchema {
 	}
 }
 
-// BuildGeneralTabAccordion splits the general settings schema into accordion items,
-// one per section. The first section is open by default.
-func (b *PrefsPanelBuilder) BuildGeneralTabAccordion(sm setting.SettingsManager) []accordionItem {
+// BuildGeneralTabAccordion splits the general settings schema into accordion items.
+func (b *PrefsPanelBuilder) BuildGeneralTabAccordion() schema.AccordionSchema {
 	generalSchema := b.BuildGeneralTabSchema()
-	var items []accordionItem
+	var items []schema.AccordionItemSchema
 
-	// Icons for each General section, in order:
-	// Wallpaper Cycle & Cache, Smart Fit & Face Detection, Toggles, Actions
-	sectionIcons := []fyne.Resource{
-		theme.HistoryIcon(),
-		theme.ViewFullScreenIcon(),
-		theme.CheckButtonCheckedIcon(),
-		theme.ComputerIcon(),
+	sectionIcons := []string{
+		"history",
+		"fullscreen",
+		"color_palette",
+		"computer",
+		"refresh",
 	}
 
 	for i, section := range generalSchema.Sections {
-		// Strip title/description — the accordion header already shows these.
 		title := section.Title
-		section.Title = ""
-		section.Description = ""
+		sectionCopy := section
+		sectionCopy.Title = ""
+		sectionCopy.Description = ""
 
-		sectionPanel := schema.PanelSchema{Sections: []schema.SectionSchema{section}}
-		sectionContent := sm.RenderSchema(sectionPanel)
+		sectionPanel := &schema.PanelSchema{Sections: []schema.SectionSchema{sectionCopy}}
 
-		var icon fyne.Resource
+		var icon string
 		if i < len(sectionIcons) {
 			icon = sectionIcons[i]
 		}
 
-		items = append(items, accordionItem{
-			Title:   title,
-			Content: sectionContent,
-			Open:    i == 0,
-			Icon:    icon,
+		items = append(items, schema.AccordionItemSchema{
+			Title:    title,
+			Content:  sectionPanel,
+			Open:     i == 0,
+			IconName: icon,
 		})
 	}
 
-	return items
+	return schema.AccordionSchema{Items: items}
+}
+
+// BuildPrefsTabsSchema constructs the full preferences navigation schema.
+func (b *PrefsPanelBuilder) BuildPrefsTabsSchema() *schema.TabsSchema {
+	generalAccordion := b.BuildGeneralTabAccordion()
+	onlineAccordion, localAccordion, museumAccordion, targetTabIndex := b.BuildProviderTabs()
+
+	return &schema.TabsSchema{
+		Location: schema.TabLocationLeading,
+		Selected: targetTabIndex,
+		Items: []schema.TabItemSchema{
+			{
+				Title:     i18n.T("General"),
+				IconName:  "settings",
+				Accordion: &generalAccordion,
+			},
+			{
+				Title:     i18n.T("Museums"),
+				IconName:  "color_palette",
+				Accordion: &museumAccordion,
+			},
+			{
+				Title:     i18n.T("Community"),
+				IconName:  "grid",
+				Accordion: &onlineAccordion,
+			},
+			{
+				Title:     i18n.T("Personal"),
+				IconName:  "folder",
+				Accordion: &localAccordion,
+			},
+		},
+	}
 }
 
 // BuildProviderTabs creates the provider accordions (Community, Personal, Museums).
-func (b *PrefsPanelBuilder) BuildProviderTabs() (fyne.CanvasObject, fyne.CanvasObject, fyne.CanvasObject, int) {
-	var onlineItems []accordionItem
-	var localItems []accordionItem
-	var museumItems []accordionItem
+func (b *PrefsPanelBuilder) BuildProviderTabs() (schema.AccordionSchema, schema.AccordionSchema, schema.AccordionSchema, int) {
+	var onlineItems []schema.AccordionItemSchema
+	var localItems []schema.AccordionItemSchema
+	var museumItems []schema.AccordionItemSchema
 	targetTabIndex := 0
 
 	names := b.getSortedProviderIDs()
@@ -389,36 +417,10 @@ func (b *PrefsPanelBuilder) BuildProviderTabs() (fyne.CanvasObject, fyne.CanvasO
 		}
 	}
 
-	onlineTab, refreshOnline := createAccordion(onlineItems)
-	localTab, refreshLocal := createAccordion(localItems)
-	museumTab, refreshMuseum := createAccordion(museumItems)
-
-	b.sm.RegisterOnSettingsSaved(func() {
-		if refreshOnline != nil {
-			refreshOnline()
-		}
-		if refreshLocal != nil {
-			refreshLocal()
-		}
-		if refreshMuseum != nil {
-			refreshMuseum()
-		}
-	})
-
-	// Register with SM to refresh on ANY settings change (Reactive Titles)
-	b.sm.RegisterRefreshFunc(func() {
-		if refreshOnline != nil {
-			refreshOnline()
-		}
-		if refreshLocal != nil {
-			refreshLocal()
-		}
-		if refreshMuseum != nil {
-			refreshMuseum()
-		}
-	})
-
-	return onlineTab, localTab, museumTab, targetTabIndex
+	return schema.AccordionSchema{Items: onlineItems, EmptyMessage: i18n.T("No providers in this category.")},
+		schema.AccordionSchema{Items: localItems, EmptyMessage: i18n.T("No providers in this category.")},
+		schema.AccordionSchema{Items: museumItems, EmptyMessage: i18n.T("No providers in this category.")},
+		targetTabIndex
 }
 
 func (b *PrefsPanelBuilder) getSortedProviderIDs() []string {
@@ -430,7 +432,7 @@ func (b *PrefsPanelBuilder) getSortedProviderIDs() []string {
 	return names
 }
 
-func (b *PrefsPanelBuilder) createProviderAccordionItem(p provider.ImageProvider) (*accordionItem, int) {
+func (b *PrefsPanelBuilder) createProviderAccordionItem(p provider.ImageProvider) (*schema.AccordionItemSchema, int) {
 	tabIndex := 0
 	isPending := false
 	pendingURL := ""
@@ -466,28 +468,32 @@ func (b *PrefsPanelBuilder) createProviderAccordionItem(p provider.ImageProvider
 
 	titleFunc := b.createTitleFunc(p)
 
-	return &accordionItem{
+	iconName := p.ID()
+	var iconBytes []byte
+	if iconStr, ok := p.GetProviderIcon().(string); ok {
+		iconName = iconStr
+	} else if b, ok := p.GetProviderIcon().([]byte); ok {
+		iconBytes = b
+	}
+
+	return &schema.AccordionItemSchema{
 		Title:     titleFunc(),
 		TitleFunc: titleFunc,
 		Content:   content,
 		Open:      isPending,
-		Icon:      asResource(p.GetProviderIcon(), p.ID()),
+		IconName:  iconName,
+		IconBytes: iconBytes,
 	}, tabIndex
 }
 
-func (b *PrefsPanelBuilder) buildProviderContent(p provider.ImageProvider, pendingURL string) fyne.CanvasObject {
-	var settingsPanel fyne.CanvasObject
-	if panelSchema := p.CreateSettingsPanel(b.sm); panelSchema != nil {
-		settingsPanel = b.sm.RenderSchema(*panelSchema)
-	}
-
-	var queryPanel fyne.CanvasObject
-	if querySchema := p.CreateQueryPanel(b.sm, pendingURL); querySchema != nil {
-		queryPanel = b.sm.RenderSchema(*querySchema)
-	}
+func (b *PrefsPanelBuilder) buildProviderContent(p provider.ImageProvider, pendingURL string) *schema.PanelSchema {
+	settingsPanel := p.CreateSettingsPanel(b.sm)
+	queryPanel := p.CreateQueryPanel(b.sm, pendingURL)
 
 	if settingsPanel != nil && queryPanel != nil {
-		return container.NewBorder(settingsPanel, nil, nil, nil, queryPanel)
+		return &schema.PanelSchema{
+			Sections: append(append([]schema.SectionSchema{}, settingsPanel.Sections...), queryPanel.Sections...),
+		}
 	} else if settingsPanel != nil {
 		return settingsPanel
 	} else if queryPanel != nil {
@@ -503,19 +509,44 @@ func (b *PrefsPanelBuilder) createTitleFunc(p provider.ImageProvider) func() str
 			title = i18n.Tf("Image Sources ({{.Name}})", map[string]any{"Name": p.Name()}) + "..."
 		}
 		activeCount := 0
-		for _, q := range b.plugin.cfg.GetQueries() {
-			if q.Provider == p.ID() {
-				// Reactive: Check pending state in SM first, then fallback to persisted config
-				isActive := q.Active
-				if b.sm.HasPendingChange(q.ID) {
-					isActive = !q.Active // If it has a pending change, the state is flipped from baseline
-				}
 
+		col := curation.GetManager().GetCollection(p.ID())
+		if col != nil {
+			// Curated museum provider: count active curated collection entries
+			queries := b.plugin.cfg.GetQueries()
+			for _, entry := range col.Entries {
+				settingKey := p.ID() + "_" + entry.Key
+				isActive := false
+				for _, q := range queries {
+					if q.Provider == p.ID() && q.URL == entry.Key {
+						if q.Active {
+							isActive = true
+							break
+						}
+					}
+				}
+				if b.sm.HasPendingChange(settingKey) {
+					isActive = !isActive
+				}
 				if isActive {
 					activeCount++
 				}
 			}
+		} else {
+			// General query list provider (Wallhaven, Pexels, etc.)
+			for _, q := range b.plugin.cfg.GetQueries() {
+				if q.Provider == p.ID() {
+					isActive := q.Active
+					if b.sm.HasPendingChange(q.ID) {
+						isActive = !q.Active
+					}
+					if isActive {
+						activeCount++
+					}
+				}
+			}
 		}
+
 		if activeCount > 0 {
 			if activeCount == 1 {
 				return i18n.Tf("{{.Title}} (1 active)", map[string]any{"Title": title})

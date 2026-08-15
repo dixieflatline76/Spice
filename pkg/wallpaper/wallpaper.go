@@ -20,8 +20,6 @@ import (
 
 	"golang.org/x/time/rate"
 
-	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/container"
 	"github.com/dixieflatline76/Spice/v2/asset"
 	"github.com/dixieflatline76/Spice/v2/config"
 	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
@@ -89,9 +87,8 @@ type Plugin struct {
 	lastTriggerTime         time.Time // Anti-loop cooldown state
 
 	// Monitors (Actor Model)
-	Monitors    map[int]*MonitorController
-	monMu       sync.RWMutex // Protects the Monitors map itself
-	monitorMenu map[int]*MonitorMenuItems
+	Monitors map[int]*MonitorController
+	monMu    sync.RWMutex // Protects the Monitors map itself
 
 	// Internal State
 	enrichmentSignal chan int // Signal for lazy enrichment worker
@@ -100,8 +97,7 @@ type Plugin struct {
 	runOnUI func(func())
 
 	pendingAddUrl     string
-	focusProviderName string             // State to focus specific provider settings
-	settingsTabs      *container.AppTabs // Reference to the settings tabs for dynamic switching
+	focusProviderName string // State to focus specific provider settings
 
 	// Context tracking for active queries
 	queryContexts    map[string]context.Context
@@ -197,7 +193,6 @@ func getPlugin() *Plugin {
 			actionChan:         make(chan func(), 5),
 			store:              store,
 			fetchingInProgress: util.NewSafeBool(),
-			runOnUI:            fyne.Do,
 			focusProviderName:  "",
 		}
 
@@ -399,7 +394,7 @@ func (wp *Plugin) Activate() {
 	// Perform an initial scan to catch and delete any stranded/orphaned files
 	// caused by file-locking errors or crashes during the previous session.
 	if wp.fm != nil {
-		go wp.fm.CleanupOrphans(wp.store.GetKnownIDs())
+		wp.fm.AsyncCleanupOrphans(wp.store.GetKnownIDs())
 	}
 
 	// Initialize Monitors (Actors)
@@ -541,6 +536,11 @@ func (wp *Plugin) Deactivate() {
 		mc.Stop()
 	}
 	wp.monMu.Unlock()
+
+	// Safely drain background file operations with bounded timeout
+	if wp.fm != nil {
+		wp.fm.Close()
+	}
 
 	log.Print("Wallpaper plugin deactivated.")
 }
@@ -813,8 +813,8 @@ func (wp *Plugin) ViewCurrentImageOnWeb(monitorID int) {
 	defer wp.monMu.RUnlock()
 	if mc, ok := wp.Monitors[monitorID]; ok {
 		if mc.State.CurrentImage.ViewURL != "" {
-			if u, err := url.Parse(mc.State.CurrentImage.ViewURL); err == nil {
-				_ = fyne.CurrentApp().OpenURL(u)
+			if u, err := url.Parse(mc.State.CurrentImage.ViewURL); err == nil && wp.manager != nil {
+				_ = wp.manager.OpenURL(u)
 			}
 		}
 	}
@@ -883,7 +883,7 @@ func (wp *Plugin) ToggleFavorite(img provider.Image) {
 
 	// Update UI for all monitors that might have this image
 	// DEADLOCK FIX: Collect IDs under lock, then update UI outside the lock.
-	// updateTrayMenuUI uses fyne.Do which could cross-deadlock with monitor locks.
+	// updateTrayMenuUI dispatches menu refresh asynchronously to avoid deadlocks.
 	var syncIDs []int
 	wp.monMu.RLock()
 	for id, mc := range wp.Monitors {
@@ -1104,77 +1104,9 @@ func (wp *Plugin) startMonitorWatcher() {
 }
 
 func (wp *Plugin) updateTrayMenuUI(img provider.Image, monitorID int) {
-	if wp.runOnUI == nil {
-		return
-	}
-	wp.runOnUI(func() {
-		// No lock needed — monitorMenu is only accessed on the Fyne main thread
-		mItems, ok := wp.monitorMenu[monitorID]
-		if !ok {
-			return
-		}
-
-		attribution := SanitizeMenuString(img.Attribution)
-		runes := []rune(attribution)
-		if len(runes) > 20 {
-			attribution = string(runes[:17]) + "..."
-		}
-		mItems.ProviderMenuItem.Label = i18n.Tf("Source: {{.Provider}}", map[string]any{"Provider": wp.GetProviderTitle(img.Provider)})
-		mItems.ProviderMenuItem.Action = func() {
-			wp.focusProviderName = img.Provider
-			wp.manager.OpenPreferences("Wallpaper")
-		}
-
-		// Restore Icons using the provider abstraction
-		if p, exists := wp.providers[img.Provider]; exists {
-			mItems.ProviderMenuItem.Icon = asResource(p.GetProviderIcon(), img.Provider)
-		} else {
-			mItems.ProviderMenuItem.Icon = nil
-		}
-
-		attrType := provider.AttributionBy
-		if p, exists := wp.providers[img.Provider]; exists {
-			attrType = p.GetAttributionType()
-		}
-
-		if attribution == "" {
-			mItems.ArtistMenuItem.Label = i18n.T("By: Unknown")
-		} else {
-			key := "attribution_by"
-			if attrType == provider.AttributionIn {
-				key = "attribution_in"
-			}
-			mItems.ArtistMenuItem.Label = i18n.Tf(key, map[string]any{"Attribution": attribution})
-		}
-		mItems.ArtistMenuItem.Action = func() {
-			wp.ViewCurrentImageOnWeb(monitorID)
-		}
-
-		// Update Favorite State
-		if mItems.FavoriteMenuItem != nil {
-			if img.IsFavorited || img.Provider == "Favorites" {
-				mItems.FavoriteMenuItem.Label = i18n.T("Remove from Favorites")
-				mItems.FavoriteMenuItem.Icon, _ = wp.manager.GetAssetManager().GetIcon("unfavorite.png")
-			} else {
-				mItems.FavoriteMenuItem.Label = i18n.T("Add to Favorites")
-				mItems.FavoriteMenuItem.Icon, _ = wp.manager.GetAssetManager().GetIcon("favorite.png")
-			}
-		}
-
-		// Update Pause State
-		if mItems.PauseMenuItem != nil {
-			paused := wp.IsMonitorPaused(monitorID)
-			if paused {
-				mItems.PauseMenuItem.Label = i18n.T("Resume Play")
-				mItems.PauseMenuItem.Icon, _ = wp.manager.GetAssetManager().GetIcon("play.png")
-			} else {
-				mItems.PauseMenuItem.Label = i18n.T("Pause Play")
-				mItems.PauseMenuItem.Icon, _ = wp.manager.GetAssetManager().GetIcon("pause.png")
-			}
-		}
-
+	if wp.manager != nil {
 		wp.manager.RefreshTrayMenu()
-	})
+	}
 }
 
 // loadQueryPages reads the persistent query pagination state from disk.

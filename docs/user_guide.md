@@ -117,10 +117,13 @@ Open via **Tray → Preferences** or `Ctrl` + `Alt` (Windows) / `Cmd` + `Control
 
 The **App** tab controls application-wide behaviour, independent of any wallpaper source.
 
-> **Note on Starting with Windows (MSIX Version):** Spice will automatically register to start with Windows when installed. Because it runs as a secure packaged app, you manage this directly in your operating system rather than within Spice itself. To disable Spice from starting automatically, go to **Windows Settings → Apps → Startup** (or use the Task Manager's Startup tab) and toggle Spice to "Off".
+> **Managing Startup (Windows & macOS):**
+> * **Windows**: Click **Manage in Windows Settings** to open Windows Startup Apps (`ms-settings:startupapps`) and toggle Spice on or off.
+> * **macOS**: Click **Manage in macOS Settings** to open System Settings Login Items (`LoginItems-Settings.extension`) to add or remove Spice.
 
 | Setting | Description |
 | :--- | :--- |
+| **Start with Windows / Start at Login** | Quick button opening your operating system's native startup settings. |
 | **Enable System Notifications** | Toggle desktop toast notifications (e.g., "Paused Play", "Next Wallpaper"). Useful to turn off if they become distracting. |
 | **Enable New Version Check** | Spice checks for updates once on startup and once per day. A tray indicator appears when a newer version is available. |
 | **Enable global shortcuts** | Master switch for all keyboard hotkeys. Disable if the shortcuts conflict with another application. |

@@ -5,7 +5,7 @@ title: Architecture
 
 # Spice Architecture Documentation
 
-> **Status**: Current as of v2.6.0
+> **Status**: Current as of v2.6.3+
 > **Scope**: System design, data flow, and component roles
 
 ## 1. Executive Summary
@@ -15,9 +15,9 @@ Spice is a cross-platform wallpaper rotation engine built as a modular plugin ap
 Key design principles:
 - **Actor Model**: Each monitor is an independent actor with its own state, shuffle deck, and command loop
 - **Pipeline Serialization**: Image ingestion from workers flows through a single goroutine, eliminating lock contention on the hot path
-- **Hexagonal Architecture**: All providers are framework-agnostic — they declare UI via pure Go structs, not Fyne widgets
+- **Hexagonal Architecture**: All engine components (`pkg/wallpaper`, `pkg/api`, `pkg/i18n`, `util`, `pkg/curation`, providers) are 100% pure Go standard library with zero GUI dependencies, communicating via declarative UI schemas
 - **Resolution Buckets**: Images are indexed by resolution, enabling O(1) per-monitor image selection
-- **I18n Localization**: Decoupled translation system delivering native UI strings across 12 languages via embedded JSON.
+- **I18n Localization**: Pure Go OS locale detection (`go-locale`) delivering native UI strings across 12 languages via embedded JSON
 
 ## 2. System Architecture (Plugin System)
 

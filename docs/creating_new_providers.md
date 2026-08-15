@@ -97,7 +97,7 @@ Spice uses a **Hexagonal Architecture** for settings UI. Providers never import 
 **The "Why" (Hexagonal Architecture)**: Spice's UI is built on Fyne, but Fyne is heavily tied to the host OS graphics layer. If providers imported Fyne directly to draw their settings tabs, the entire provider layer would become untestable without a running X11/Wayland/Windows graphics context. 
 To solve this, Spice uses a **Hexagonal Architecture**. Providers are 100% UI-framework agnostic. They define what their settings should look like using pure Go structs (`schema.PanelSchema`), and a central rendering engine (`ui/settings_manager.go`) translates that schema into actual Fyne widgets. This makes provider code entirely unit-testable and decouples our core logic from our chosen GUI toolkit.
 
-Do **NOT** modify the global `Config` struct. Use `fyne.Preferences` for storage and `schema.*` types for UI declaration.
+Do **NOT** modify the global `Config` struct. Use the `wallpaper.Preferences` / `config.Preferences` interface for storage and `schema.*` types for UI declaration.
 
 ### 3.1 Settings Panel (`CreateSettingsPanel`)
 

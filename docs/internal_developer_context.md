@@ -16,6 +16,8 @@ Spice uses a **hybrid concurrency model**. The hot path (image ingestion from do
 | Pipeline workers | `runtime.NumCPU()` (configurable via `MaxConcurrentProcessors`) | None (channel-only) | `Activate()` → `Deactivate()` |
 | Pipeline Dispatcher pumps | 1 per active provider (created lazily on first `Submit`) | None (channel-only) | First job → context cancel |
 | Pipeline stateManager | 1 | `store.mu` via Store API | `Activate()` → `Deactivate()` |
+| FileManager workers | Tracked via `fm.wg` (`AsyncDeepDeleteBatch`, `AsyncCleanupOrphans`) | None / `fm.closing` atomic | Background tasks with graceful drain on `Close()` |
+| ImageStore save worker | 1 debounced (`scheduleSaveLocked`) | `saveMu` | Debounce duration → write complete |
 | Nightly scheduler | 1 | `downloadMutex` | `Activate()` → `Deactivate()` |
 | Ticker goroutine | 1 per frequency change | None | Until replaced |
 | Fetch goroutines | Up to 5 (semaphore) | `downloadMutex`, `sourcesMutex` | Per fetch cycle |
@@ -264,7 +266,11 @@ Providers never import or create Fyne widgets directly. They declare their UI ne
 ┌─────────────────────────────────────────────────────────────────┐
 │  INNER RING (Pure Go — zero framework imports)                  │
 │                                                                 │
+│  pkg/wallpaper/               → Wallpaper rotation engine       │
 │  pkg/provider/provider.go     → Domain interfaces               │
+│  pkg/api/                     → Local REST API HTTP server      │
+│  pkg/i18n/                    → Pure Go locale & translations   │
+│  util/eula.go                 → Decoupled PreferenceStore       │
 │  pkg/ui/schema/schema.go      → PORT: UI contract (ItemSchema)  │
 │  pkg/ui/schema/museum.go      → Schema helpers (museum template)│
 │  pkg/ui/setting/setting_mgr   → PORT: SettingsManager interface │

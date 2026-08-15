@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"fyne.io/fyne/v2"
 	"github.com/disintegration/imaging"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
 	"github.com/dixieflatline76/Spice/v2/util/log"
@@ -79,15 +78,6 @@ type StoreInterface interface {
 	ResetFavorites()
 	List() []provider.Image
 	WaitForImages(ctx context.Context) error
-}
-
-// MonitorMenuItems holds the tray menu items for a specific monitor.
-type MonitorMenuItems struct {
-	ProviderMenuItem *fyne.MenuItem
-	ArtistMenuItem   *fyne.MenuItem
-	FavoriteMenuItem *fyne.MenuItem
-	PauseMenuItem    *fyne.MenuItem
-	ShuffleMenuItem  *fyne.MenuItem
 }
 
 // MonitorState holds the persistence/cursor state for a single monitor.

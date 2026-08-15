@@ -81,11 +81,21 @@ func (m *MockPluginManager) GetAssetManager() *asset.Manager {
 }
 
 func (m *MockPluginManager) RefreshTrayMenu() {
-	m.Called()
+	for _, call := range m.ExpectedCalls {
+		if call.Method == "RefreshTrayMenu" {
+			m.Called()
+			return
+		}
+	}
 }
 
 func (m *MockPluginManager) RebuildTrayMenu() {
-	m.Called()
+	for _, call := range m.ExpectedCalls {
+		if call.Method == "RebuildTrayMenu" {
+			m.Called()
+			return
+		}
+	}
 }
 
 func (m *MockPluginManager) ShowTuneImagePopup(_ int, _ provider.TuningOptions, _ provider.TuningOptions, _ [9]string, _ [9]provider.CropAnchor, _ bool, _ func(provider.TuningOptions, func()), _ func()) {
@@ -146,7 +156,7 @@ func (m *MockImageStore) Remove(id string) (provider.Image, bool) {
 }
 
 func (m *MockImageStore) SetDerivativePath(id string, resKey string, path string) bool {
-	// We don't use m.Called() here to prevent panicking in tests that don't explicitly 
+	// We don't use m.Called() here to prevent panicking in tests that don't explicitly
 	// expect this method to be called, since it's an OS-specific internal detail.
 	return true
 }

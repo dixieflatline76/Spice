@@ -55,3 +55,33 @@ func TestGetTranslationsForKeys(t *testing.T) {
 		t.Errorf("Expected 'fr' translation for 'Active', got %v", frLang)
 	}
 }
+
+func TestTf(t *testing.T) {
+	SetLanguage("en")
+	msg := Tf("Are you sure you want to delete {{.Description}}?", map[string]any{"Description": "test"})
+	if msg != "Are you sure you want to delete test?" {
+		t.Errorf("Unexpected Tf output: %s", msg)
+	}
+}
+
+func TestMapLocaleToCode(t *testing.T) {
+	tests := []struct {
+		locale   string
+		expected string
+	}{
+		{"en-US", "en"},
+		{"de_DE", "de"},
+		{"zh-TW", "zh-Hant"},
+		{"zh_HK", "zh-Hant"},
+		{"zh_CN", "zh"},
+		{"fr-FR", "fr"},
+		{"unknown-locale", "en"},
+	}
+
+	for _, tt := range tests {
+		got := mapLocaleToCode(tt.locale)
+		if got != tt.expected {
+			t.Errorf("mapLocaleToCode(%q) = %q; want %q", tt.locale, got, tt.expected)
+		}
+	}
+}

@@ -4,34 +4,16 @@ import (
 	"sort"
 	"strings"
 
-	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/theme"
-	"fyne.io/fyne/v2/widget"
 	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
+	"github.com/dixieflatline76/Spice/v2/pkg/ui/schema"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/setting"
 	utilLog "github.com/dixieflatline76/Spice/v2/util/log"
 )
 
-// asResource converts a provider's abstract icon (bytes or resource) back to a Fyne resource.
-func asResource(icon interface{}, name string) fyne.Resource {
-	if icon == nil {
-		return nil
-	}
-	switch v := icon.(type) {
-	case fyne.Resource:
-		return v
-	case []byte:
-		return fyne.NewStaticResource(name, v)
-	}
-	return nil
-}
-
-// CreateTrayMenuItems creates the menu items for the tray menu.
-// THREADING: This function runs exclusively on the Fyne main thread (via fyne.Do).
+// CreateTrayMenu creates the declarative schema for the tray menu.
 // All monMu usage is confined to a fast snapshot at the top; the rest is lock-free.
-func (wp *Plugin) CreateTrayMenuItems() []*fyne.MenuItem {
+func (wp *Plugin) CreateTrayMenu() *schema.MenuSchema {
 	// ── Snapshot phase: read all needed monitor data under monMu ──
 	type monSnap struct {
 		id          int
@@ -50,7 +32,7 @@ func (wp *Plugin) CreateTrayMenuItems() []*fyne.MenuItem {
 			id:          id,
 			mc:          mc,
 			image:       mc.State.CurrentImage,
-			initialized: mc.State.CurrentID != "",
+			initialized: mc.State.CurrentID != "" || mc.State.CurrentImage.ID != "",
 			paused:      mc.State.Paused,
 		}
 		mc.mu.RUnlock()
@@ -68,21 +50,26 @@ func (wp *Plugin) CreateTrayMenuItems() []*fyne.MenuItem {
 
 	sort.Slice(snaps, func(i, j int) bool { return snaps[i].id < snaps[j].id })
 
-	// Reset menu map — no lock needed (main thread affinity)
-	wp.monitorMenu = make(map[int]*MonitorMenuItems)
-
-	items := []*fyne.MenuItem{}
+	var items []schema.MenuItemSchema
 
 	// --- HELPER: Create Monitor Section Items ---
-	createMonitorItems := func(snap monSnap) []*fyne.MenuItem {
+	createMonitorItems := func(snap monSnap) []schema.MenuItemSchema {
 		mID := snap.id
 		currentImage := snap.image
 		isInitialized := snap.initialized
 		isPaused := snap.paused
 
 		// Actions
-		nextItem := wp.manager.CreateMenuItem(i18n.T("Next Wallpaper"), func() { go wp.SetNextWallpaper(mID, true) }, "next.png")
-		prevItem := wp.manager.CreateMenuItem(i18n.T("Prev Wallpaper"), func() { go wp.SetPreviousWallpaper(mID, true) }, "prev.png")
+		nextItem := schema.MenuItemSchema{
+			Label:    i18n.T("Next Wallpaper"),
+			IconName: "next.png",
+			Action:   func() { go wp.SetNextWallpaper(mID, true) },
+		}
+		prevItem := schema.MenuItemSchema{
+			Label:    i18n.T("Prev Wallpaper"),
+			IconName: "prev.png",
+			Action:   func() { go wp.SetPreviousWallpaper(mID, true) },
+		}
 
 		// Initial Labels with state awareness
 		providerLabel := i18n.T("Source: Initializing...")
@@ -92,6 +79,8 @@ func (wp *Plugin) CreateTrayMenuItems() []*fyne.MenuItem {
 		pauseLabel := i18n.T("Pause Play")
 		pauseIcon := "pause.png"
 
+		providerIcon := ""
+		var providerIconBytes []byte
 		if isInitialized {
 			attribution := SanitizeMenuString(currentImage.Attribution)
 			runes := []rune(attribution)
@@ -103,6 +92,14 @@ func (wp *Plugin) CreateTrayMenuItems() []*fyne.MenuItem {
 			attrType := provider.AttributionBy
 			if p, exists := wp.providers[currentImage.Provider]; exists {
 				attrType = p.GetAttributionType()
+				if iconStr, ok := p.GetProviderIcon().(string); ok {
+					providerIcon = iconStr
+				} else if b, ok := p.GetProviderIcon().([]byte); ok {
+					providerIconBytes = b
+					providerIcon = currentImage.Provider
+				} else {
+					providerIcon = currentImage.Provider
+				}
 			}
 
 			if currentImage.Attribution == "" {
@@ -125,9 +122,13 @@ func (wp *Plugin) CreateTrayMenuItems() []*fyne.MenuItem {
 			pauseIcon = "play.png"
 		}
 
-		pauseItem := wp.manager.CreateMenuItem(pauseLabel, func() {
-			wp.TogglePauseMonitorAction(mID)
-		}, pauseIcon)
+		pauseItem := schema.MenuItemSchema{
+			Label:    pauseLabel,
+			IconName: pauseIcon,
+			Action: func() {
+				wp.TogglePauseMonitorAction(mID)
+			},
+		}
 
 		var providerAction func()
 		if isInitialized {
@@ -137,41 +138,38 @@ func (wp *Plugin) CreateTrayMenuItems() []*fyne.MenuItem {
 			}
 		}
 
-		// Info Items (Store in monitorMenu for updates)
-		mItems := &MonitorMenuItems{
-			ProviderMenuItem: wp.manager.CreateMenuItem(providerLabel, providerAction, ""),
-			ArtistMenuItem: wp.manager.CreateMenuItem(artistLabel, func() {
+		providerMenuItem := schema.MenuItemSchema{
+			Label:     providerLabel,
+			IconName:  providerIcon,
+			IconBytes: providerIconBytes,
+			Action:    providerAction,
+		}
+
+		artistMenuItem := schema.MenuItemSchema{
+			Label:    artistLabel,
+			IconName: "view.png",
+			Action: func() {
 				go wp.ViewCurrentImageOnWeb(mID)
-			}, "view.png"),
-			PauseMenuItem: pauseItem,
+			},
 		}
 
-		// Provider Icon
-		if isInitialized {
-			if p, exists := wp.providers[currentImage.Provider]; exists {
-				mItems.ProviderMenuItem.Icon = asResource(p.GetProviderIcon(), currentImage.Provider)
-			}
+		deleteItem := schema.MenuItemSchema{
+			Label:    i18n.T("Delete And Block"),
+			IconName: "delete.png",
+			Action: func() {
+				go wp.DeleteCurrentImage(mID)
+			},
 		}
 
-		if q, exists := wp.cfg.GetQuery(FavoritesQueryID); exists && q.Active {
-			mItems.FavoriteMenuItem = wp.manager.CreateMenuItem(favoriteLabel, func() {
-				go wp.TriggerFavorite(mID)
-			}, favoriteIcon)
+		shuffleItem := schema.MenuItemSchema{
+			Label:    i18n.T("Shuffle"),
+			IconName: "shuffle.png",
+			Action: func() {
+				go wp.TriggerShuffle(mID)
+			},
 		}
 
-		deleteItem := wp.manager.CreateMenuItem(i18n.T("Delete And Block"), func() {
-			go wp.DeleteCurrentImage(mID)
-		}, "delete.png")
-
-		shuffleItem := wp.manager.CreateMenuItem(i18n.T("Shuffle"), func() {
-			go wp.TriggerShuffle(mID)
-		}, "shuffle.png")
-		mItems.ShuffleMenuItem = shuffleItem
-
-		// No lock needed — main thread affinity
-		wp.monitorMenu[mID] = mItems
-
-		res := []*fyne.MenuItem{
+		res := []schema.MenuItemSchema{
 			nextItem,
 			prevItem,
 		}
@@ -179,16 +177,26 @@ func (wp *Plugin) CreateTrayMenuItems() []*fyne.MenuItem {
 			res = append(res, pauseItem)
 		}
 		res = append(res, shuffleItem)
-		res = append(res, fyne.NewMenuItemSeparator())
-		res = append(res, mItems.ProviderMenuItem)
-		res = append(res, mItems.ArtistMenuItem)
-		if mItems.FavoriteMenuItem != nil {
-			res = append(res, mItems.FavoriteMenuItem)
+		res = append(res, schema.MenuItemSchema{IsSeparator: true})
+		res = append(res, providerMenuItem)
+		res = append(res, artistMenuItem)
+		if q, exists := wp.cfg.GetQuery(FavoritesQueryID); exists && q.Active {
+			res = append(res, schema.MenuItemSchema{
+				Label:    favoriteLabel,
+				IconName: favoriteIcon,
+				Action: func() {
+					go wp.TriggerFavorite(mID)
+				},
+			})
 		}
 		if wp.cfg.GetSmartFitMode() != SmartFitOff {
-			anchorItem := wp.manager.CreateMenuItem(i18n.T("Tune Image"), func() {
-				wp.showTuneImagePopup(mID)
-			}, "anchor.png")
+			anchorItem := schema.MenuItemSchema{
+				Label:    i18n.T("Tune Image"),
+				IconName: "anchor.png",
+				Action: func() {
+					wp.showTuneImagePopup(mID)
+				},
+			}
 			res = append(res, anchorItem)
 		}
 		res = append(res, deleteItem)
@@ -197,7 +205,6 @@ func (wp *Plugin) CreateTrayMenuItems() []*fyne.MenuItem {
 	}
 
 	// --- 1. Primary Monitor (Monitor 0) ---
-	// Find the primary monitor snapshot
 	for _, snap := range snaps {
 		if snap.id == 0 {
 			items = append(items, createMonitorItems(snap)...)
@@ -207,178 +214,36 @@ func (wp *Plugin) CreateTrayMenuItems() []*fyne.MenuItem {
 
 	// --- 2. Other Monitors (Submenus) ---
 	if len(snaps) > 1 {
-		items = append(items, fyne.NewMenuItemSeparator())
+		items = append(items, schema.MenuItemSchema{IsSeparator: true})
 		for _, snap := range snaps {
 			if snap.id == 0 {
 				continue // Skip primary
 			}
 
-			subMenu := wp.manager.CreateMenuItem(snap.displayName, nil, "display.png")
-			subMenu.ChildMenu = fyne.NewMenu(snap.displayName, createMonitorItems(snap)...)
-			items = append(items, subMenu)
+			subMenuItems := createMonitorItems(snap)
+			items = append(items, schema.MenuItemSchema{
+				Label:    snap.displayName,
+				IconName: "display.png",
+				SubMenu: &schema.MenuSchema{
+					Label: snap.displayName,
+					Items: subMenuItems,
+				},
+			})
 		}
 	}
 
-	utilLog.Debugf("Finished Generating Tray Menu Items for %d monitors.", len(snaps))
-	return items
+	utilLog.Debugf("Finished Generating Tray Menu Schema for %d monitors.", len(snaps))
+	return &schema.MenuSchema{
+		Items: items,
+	}
 }
 
-// CreatePrefsPanel creates a preferences widget for wallpaper settings
-func (wp *Plugin) CreatePrefsPanel(sm setting.SettingsManager) *fyne.Container {
+// CreatePrefsSchema creates a declarative preferences tabs schema for wallpaper settings.
+func (wp *Plugin) CreatePrefsSchema(sm setting.SettingsManager) *schema.TabsSchema {
 	builder := NewPrefsPanelBuilder(wp, sm)
 
 	// Register the wallpaper refresh function
 	sm.RegisterRefreshFunc(wp.RefreshImagesAndPulse)
 
-	// 1. Build General Settings as accordion (one section per accordion item)
-	generalItems := builder.BuildGeneralTabAccordion(sm)
-	generalTab, refreshGeneral := createAccordion(generalItems)
-	sm.RegisterOnSettingsSaved(func() {
-		if refreshGeneral != nil {
-			refreshGeneral()
-		}
-	})
-
-	// 2. Build Provider Tabs
-	onlineTab, localTab, museumTab, targetTabIndex := builder.BuildProviderTabs()
-
-	// 3. Assemble Tabs
-	tabs := container.NewAppTabs(
-		container.NewTabItemWithIcon(i18n.T("General"), theme.SettingsIcon(), generalTab),
-		container.NewTabItemWithIcon(i18n.T("Museums"), theme.ColorPaletteIcon(), museumTab),
-		container.NewTabItemWithIcon(i18n.T("Community"), theme.GridIcon(), onlineTab),
-		container.NewTabItemWithIcon(i18n.T("Personal"), theme.FolderIcon(), localTab),
-	)
-	wp.settingsTabs = tabs
-	tabs.SetTabLocation(container.TabLocationLeading)
-
-	if targetTabIndex > 0 && targetTabIndex < len(tabs.Items) {
-		tabs.SelectIndex(targetTabIndex)
-	}
-
-	return container.NewStack(tabs)
-}
-
-// Helper struct for accordion items
-type accordionItem struct {
-	Title     string
-	TitleFunc func() string // Optional: Function to generate title dynamically
-
-	Content fyne.CanvasObject
-	Open    bool
-	Icon    fyne.Resource
-}
-
-func createAccordion(items []accordionItem) (fyne.CanvasObject, func()) {
-	// Container to hold the accordion
-	accordionContainer := container.NewStack()
-
-	// Function to refresh the accordion UI
-	var refreshAccordion func()
-
-	refreshAccordion = func() {
-		// Use fyne.Do to ensure this runs on the main thread
-		fyne.Do(func() {
-			topHeaders := container.NewVBox()
-			bottomHeaders := container.NewVBox()
-			var centerContent fyne.CanvasObject
-
-			foundOpen := false
-
-			// If no items, show a placeholder or empty
-			if len(items) == 0 {
-				accordionContainer.Objects = []fyne.CanvasObject{widget.NewLabel("No providers in this category.")}
-				accordionContainer.Refresh()
-				return
-			}
-
-			for i := range items {
-				index := i // Capture loop variable
-				item := &items[index]
-
-				// State Icon (Arrow)
-				var arrowIcon fyne.Resource
-				if item.Open {
-					arrowIcon = theme.MoveDownIcon()
-				} else {
-					arrowIcon = theme.NavigateNextIcon()
-				}
-
-				// Header Action
-				onTapped := func() {
-					if item.Open {
-						// If closing, open the next one (wrapping around)
-						item.Open = false
-						nextIndex := (index + 1) % len(items)
-						items[nextIndex].Open = true
-					} else {
-						// If opening, close all others
-						for j := range items {
-							items[j].Open = (j == index)
-						}
-					}
-					refreshAccordion()
-				}
-
-				// --- Complex Header Layout ---
-				bgBtn := widget.NewButton("", onTapped)
-				bgBtn.Alignment = widget.ButtonAlignLeading
-
-				// Dynamic Title Support
-				// If TitleFunc is provided, use it to fetch the latest title (e.g. updated counts)
-				title := item.Title
-				if item.TitleFunc != nil {
-					title = item.TitleFunc()
-				}
-
-				titleLabel := widget.NewLabel(title)
-				titleLabel.TextStyle = fyne.TextStyle{Bold: item.Open}
-
-				headerContent := container.NewHBox(
-					widget.NewIcon(arrowIcon),
-				)
-				if item.Icon != nil {
-					providerIcon := widget.NewIcon(item.Icon)
-					headerContent.Add(providerIcon)
-				}
-				headerContent.Add(titleLabel)
-
-				headerStack := container.NewStack(bgBtn, container.NewPadded(headerContent))
-
-				if item.Open {
-					topHeaders.Add(headerStack)
-					centerContent = item.Content
-					foundOpen = true
-				} else {
-					if foundOpen {
-						bottomHeaders.Add(headerStack)
-					} else {
-						topHeaders.Add(headerStack)
-					}
-				}
-			}
-
-			// Use Border Layout: Top headers | Bottom headers | Center Content
-			// This ensures the Center Content (Provider UI) expands to fill available space.
-			content := container.NewBorder(topHeaders, bottomHeaders, nil, nil, centerContent)
-			accordionContainer.Objects = []fyne.CanvasObject{content}
-			accordionContainer.Refresh()
-		})
-	}
-
-	// EXPORTED via return closure? No, we simply register this closure if we had access to SM.
-	// But createAccordion is generic.
-	// HACK: We attach a "Refresh" method to the container? No.
-	// Better: We return the refreshFunc as a second return value, OR we inject it into the items?
-	// Actually, we need to call refreshAccordion from OUTSIDE when settings change.
-
-	// Since we can't easily change the signature of createAccordion locally without refactoring,
-	// checking if we can attach a callback to the returned container or rely on the caller to rebuild?
-	// Caller (CreatePrefsPanel) builds it once.
-
-	// Let's modify createAccordion signature to return (CanvasObject, func())
-	// and update the caller.
-
-	refreshAccordion()
-	return accordionContainer, refreshAccordion
+	return builder.BuildPrefsTabsSchema()
 }

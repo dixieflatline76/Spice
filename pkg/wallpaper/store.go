@@ -475,7 +475,7 @@ func (s *ImageStore) Remove(id string) (provider.Image, bool) {
 	s.scheduleSaveLocked()
 
 	if s.fm != nil {
-		go func() { _ = s.fm.DeepDelete(id) }()
+		s.fm.AsyncDeepDelete(id)
 	}
 
 	return img, true
@@ -517,7 +517,7 @@ func (s *ImageStore) Wipe() {
 	s.avoidSet = make(map[string]bool)
 	s.mu.Unlock()
 	if s.fm != nil {
-		go s.fm.CleanupOrphans(map[string]bool{})
+		s.fm.AsyncCleanupOrphans(map[string]bool{})
 	}
 }
 
@@ -572,7 +572,7 @@ func (s *ImageStore) RemoveByQueryID(queryID string) {
 		for i, img := range toDelete {
 			ids[i] = img.ID
 		}
-		go func(targetIDs []string) { _ = s.fm.DeepDeleteBatch(targetIDs) }(ids)
+		s.fm.AsyncDeepDeleteBatch(ids)
 	}
 }
 
@@ -936,15 +936,29 @@ func (s *ImageStore) rebuildInternalStateLocked() {
 }
 
 func (s *ImageStore) performAsyncCleanup(idsToDelete, idsToInvalidate []string) {
+	if s.fm == nil {
+		return
+	}
 	if len(idsToDelete) > 0 {
-		go func(targetIDs []string) { _ = s.fm.DeepDeleteBatch(targetIDs) }(idsToDelete)
+		s.fm.AsyncDeepDeleteBatch(idsToDelete)
 	}
 	if len(idsToInvalidate) > 0 {
-		go func(ids []string) {
-			for _, id := range ids {
-				_ = s.fm.DeleteDerivatives(id)
-			}
-		}(idsToInvalidate)
+		s.fm.AsyncDeleteDerivativesBatch(idsToInvalidate)
+	}
+}
+
+// WaitTimeout waits for in-flight store file operations to drain up to timeout.
+func (s *ImageStore) WaitTimeout(timeout time.Duration) bool {
+	if s.fm != nil {
+		return s.fm.WaitTimeout(timeout)
+	}
+	return true
+}
+
+// Close closes the underlying FileManager if present.
+func (s *ImageStore) Close() {
+	if s.fm != nil {
+		s.fm.Close()
 	}
 }
 

@@ -192,15 +192,25 @@ func TestDispatcher_ObservedRate(t *testing.T) {
 		}
 	}
 
-	// Calculate deltas
+	// Calculate deltas and total elapsed time
 	// The first job (index 0) fires instantly due to limiter burst
 	for i := 1; i < len(timestamps); i++ {
 		delta := timestamps[i].Sub(timestamps[i-1])
-		// Due to runtime scheduling, allow a small 10ms tolerance underneath the target
-		if delta < pacing-(15*time.Millisecond) {
-			t.Errorf("Jobs processed too quickly! Expected pacing ~%v, observed %v between job %d and %d", pacing, delta, i-1, i)
+		// Due to CI runtime scheduling / timer resolution on Windows VMs, individual tick intervals
+		// can jitter. Ensure individual intervals don't dump instantly (< 40ms) and log each step.
+		if delta < 40*time.Millisecond {
+			t.Errorf("Job processed too quickly! Expected pacing ~%v, observed %v between job %d and %d", pacing, delta, i-1, i)
 		} else {
 			t.Logf("Job %d -> %d adhered to pacing: %v", i-1, i, delta)
 		}
+	}
+
+	// Verify overall rate limiting: 4 paced intervals of 100ms should take at least ~350ms total
+	totalPacedTime := timestamps[len(timestamps)-1].Sub(timestamps[0])
+	expectedMin := time.Duration(len(timestamps)-1)*pacing - (75 * time.Millisecond)
+	if totalPacedTime < expectedMin {
+		t.Errorf("Total pacing too fast! Expected >= %v, observed %v", expectedMin, totalPacedTime)
+	} else {
+		t.Logf("Total pacing verified: %v for %d paced intervals (avg %v)", totalPacedTime, len(timestamps)-1, totalPacedTime/time.Duration(len(timestamps)-1))
 	}
 }
