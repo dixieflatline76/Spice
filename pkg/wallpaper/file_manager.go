@@ -7,6 +7,7 @@ import (
 	_ "image/png"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -57,6 +58,16 @@ func (fm *FileManager) EnsureDirs() error {
 			}
 		}
 	}
+
+	// On macOS, sweep orphaned .spice_tmp hardlinks left behind by previous runs
+	if runtime.GOOS == "darwin" {
+		if tmps, err := filepath.Glob(filepath.Join(fittedRoot, "*", "*", "*.spice_tmp")); err == nil {
+			for _, f := range tmps {
+				_ = os.Remove(f)
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -148,8 +159,9 @@ func (fm *FileManager) DeepDeleteBatch(ids []string) error {
 		}
 		if !info.IsDir() {
 			name := info.Name()
-			ext := filepath.Ext(name)
-			fileID := strings.TrimSuffix(name, ext)
+			trimmed := strings.TrimSuffix(name, ".spice_tmp")
+			ext := filepath.Ext(trimmed)
+			fileID := strings.TrimSuffix(trimmed, ext)
 			if idMap[fileID] {
 				filesToDelete = append(filesToDelete, path)
 				log.Debugf("DeepDeleteBatch: Found Derivative file %s", path)
@@ -235,14 +247,15 @@ func (fm *FileManager) CleanupOrphans(knownIDs map[string]bool) {
 		}
 		if !info.IsDir() {
 			name := info.Name()
-			ext := filepath.Ext(name)
+			trimmed := strings.TrimSuffix(name, ".spice_tmp")
+			ext := filepath.Ext(trimmed)
 			lowerExt := strings.ToLower(ext)
 
 			if lowerExt != ".jpg" && lowerExt != ".jpeg" && lowerExt != ".png" {
 				return nil
 			}
 
-			id := strings.TrimSuffix(name, ext)
+			id := strings.TrimSuffix(trimmed, ext)
 
 			if !knownIDs[id] {
 				// Orphan
@@ -278,8 +291,9 @@ func (fm *FileManager) DeleteDerivatives(id string) error {
 		}
 		if !info.IsDir() {
 			name := info.Name()
-			ext := filepath.Ext(name)
-			fileID := strings.TrimSuffix(name, ext)
+			trimmed := strings.TrimSuffix(name, ".spice_tmp")
+			ext := filepath.Ext(trimmed)
+			fileID := strings.TrimSuffix(trimmed, ext)
 			if fileID == id {
 				filesToDelete = append(filesToDelete, path)
 			}

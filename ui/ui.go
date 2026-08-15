@@ -9,6 +9,7 @@ import (
 	"image/gif"
 	"net/url"
 	"os"
+	"os/exec"
 	"runtime"
 	"strings"
 	"sync"
@@ -726,6 +727,18 @@ func (sa *SpiceApp) RebuildPreferencesContent(initialTab string) {
 						},
 						VisibleIf: func() bool {
 							return runtime.GOOS == "windows"
+						},
+					},
+					schema.ButtonItem{
+						Name:       "manageMacStartup",
+						Label:      i18n.T("Start at Login:"),
+						Help:       i18n.T("Click to open macOS System Settings to add or remove Spice from your Login Items."),
+						ButtonText: i18n.T("Manage in macOS Settings"),
+						OnPressed: func() {
+							_ = exec.Command("open", "x-apple.systempreferences:com.apple.LoginItems-Settings.extension").Start()
+						},
+						VisibleIf: func() bool {
+							return runtime.GOOS == "darwin"
 						},
 					},
 					schema.BoolItem{
