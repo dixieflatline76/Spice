@@ -12,7 +12,7 @@
   <a href="https://addons.mozilla.org/en-US/firefox/addon/spice-wallpaper-manager/"><img src="https://img.shields.io/amo/v/spice-wallpaper-manager?style=flat&color=orange&label=Firefox%20Add-ons" alt="Firefox Add-ons"></a>
 </p>
 
-Spice is a premium wallpaper manager that automatically cycles high-quality wallpapers from Wallhaven, Pexels, curated museum collections, your personal Google Photos, and Wikimedia Commons. It is available on the **Mac App Store** and **Microsoft Store** and runs quietly in the background, keeping your workspace fresh without interrupting your flow.
+Spice is a premium wallpaper manager that automatically cycles high-quality wallpapers from 13 sources: Wallhaven, Pexels, curated world museum collections (The Met, Art Institute of Chicago, Cleveland Museum of Art, Rijksmuseum, National Palace Museum, Statens Museum for Kunst, Getty Images), your personal Google Photos, Wikimedia Commons, local folders, and favorites. It is available on the **Mac App Store** and **Microsoft Store** and runs quietly in the background, keeping your workspace fresh without interrupting your flow.
 
 **Note:** Spice lives in your **Windows system tray** or **macOS menu bar**, giving you instant control over your desktop environment.
 
@@ -25,7 +25,8 @@ Spice is a premium wallpaper manager that automatically cycles high-quality wall
 Spice isn't just a basic script; it's a high-performance, multi-threaded desktop engine written in Go.
 
 *   **Zero UI Lag:** Heavy 4K image processing is completely separated from the user interface, meaning the app stays lightning-fast even under heavy loads.
-*   **True Multi-Monitor:** Each of your displays is managed independently in the background, meaning rotation on one screen will never block or freeze another.
+*   **Decoupled Hexagonal Architecture:** Engine core, REST server, localization engine, and image providers are 100% pure Go standard library with zero GUI dependencies, communicating via declarative UI schemas.
+*   **True Multi-Monitor:** Each of your displays is managed independently in the background via autonomous Actor controllers, meaning rotation on one screen will never block or freeze another.
 *   **Plugin-Ready:** Built with a modular architecture that allows new museum integrations, custom preference panels, and tray menus to be safely plugged into the core engine.
 
 ## ✨ Key Features
