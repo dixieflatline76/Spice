@@ -8,7 +8,7 @@ import (
 	"sync"
 	"text/template"
 
-	"fyne.io/fyne/v2/lang"
+	golocale "github.com/jeandeaual/go-locale"
 )
 
 //go:generate go run ../../cmd/util/gen_i18n/main.go
@@ -22,12 +22,6 @@ var (
 )
 
 func init() {
-	// 1. Register with Fyne for standard system-default behavior
-	if err := lang.AddTranslationsFS(translationFS, "translations"); err != nil {
-		_ = err
-	}
-
-	// 2. Load into our local maps for manual override support
 	loadLocalTranslations()
 }
 
@@ -60,6 +54,44 @@ func loadLocalTranslations() {
 			mu.Unlock()
 		}
 	}
+}
+
+func detectOSLocale() string {
+	loc, err := golocale.GetLocale()
+	if err != nil || loc == "" {
+		return "en"
+	}
+	return loc
+}
+
+// mapLocaleToCode matches raw OS locale codes (e.g. "en_US", "zh-TW", "de-DE") to supported app language codes.
+func mapLocaleToCode(raw string) string {
+	raw = strings.ToLower(strings.TrimSpace(raw))
+	if strings.HasPrefix(raw, "zh-hant") || strings.HasPrefix(raw, "zh_hant") ||
+		strings.HasPrefix(raw, "zh-tw") || strings.HasPrefix(raw, "zh_tw") ||
+		strings.HasPrefix(raw, "zh-hk") || strings.HasPrefix(raw, "zh_hk") {
+		return "zh-Hant"
+	}
+	if strings.HasPrefix(raw, "zh") {
+		return "zh"
+	}
+	for _, sl := range SupportedLanguages {
+		if strings.HasPrefix(raw, strings.ToLower(sl.Code)) {
+			return sl.Code
+		}
+	}
+	return "en"
+}
+
+func getEffectiveLanguage() string {
+	mu.RLock()
+	code := currentLanguage
+	mu.RUnlock()
+
+	if code == "" {
+		code = mapLocaleToCode(detectOSLocale())
+	}
+	return code
 }
 
 // SetLanguage sets the application-wide language.
@@ -95,10 +127,7 @@ func GetLanguage() string {
 
 // T returns the localized version of the given English string.
 func T(english string) string {
-	mu.RLock()
-	code := currentLanguage
-	mu.RUnlock()
-
+	code := getEffectiveLanguage()
 	if code != "" {
 		if m, ok := translations[code]; ok {
 			if val, ok := m[english]; ok {
@@ -106,13 +135,13 @@ func T(english string) string {
 			}
 		}
 	}
-	return strings.TrimSpace(lang.Localize(english))
+	return strings.TrimSpace(english)
 }
 
 // TMap returns the localized version from the provided translation map,
 // falling back to standard T() if not found.
 func TMap(english string, trans map[string]string) string {
-	code := GetLanguage()
+	code := getEffectiveLanguage()
 	if code != "" && trans != nil {
 		if val, ok := trans[code]; ok {
 			return strings.TrimSpace(val)
@@ -134,27 +163,24 @@ func TMap(english string, trans map[string]string) string {
 
 // Tf returns the localized version of the given English template string.
 func Tf(english string, data any) string {
-	mu.RLock()
-	code := currentLanguage
-	mu.RUnlock()
-
+	code := getEffectiveLanguage()
+	tmplStr := english
 	if code != "" {
 		if m, ok := translations[code]; ok {
 			if val, ok := m[english]; ok {
-				return strings.TrimSpace(applyTemplate(val, data))
+				tmplStr = val
 			}
 		}
 	}
-	return strings.TrimSpace(lang.Localize(english, data))
+	return strings.TrimSpace(applyTemplate(tmplStr, data))
 }
 
 // N returns the localized plural form of the given English string.
 func N(english string, count int, data ...any) string {
-	// Fyne's lang package handles plural rules.
-	// For now, if we have a manual override, we'll try to use Fyne's plural logic
-	// by passing the right data, but Fyne's LocalizePlural doesn't take a locale.
-	// Since Spice mostly uses T and Tf, and N is rare, we'll fall back to lang.LocalizePlural.
-	return strings.TrimSpace(lang.LocalizePlural(english, count, data...))
+	if len(data) > 0 {
+		return Tf(english, data[0])
+	}
+	return T(english)
 }
 
 // GetTranslationsForKeys returns a map of all language codes to their translations for a subset of keys.

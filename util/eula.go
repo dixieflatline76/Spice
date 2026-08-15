@@ -8,11 +8,16 @@ import (
 	"os"
 	"time"
 
-	"fyne.io/fyne/v2"
 	"github.com/dixieflatline76/Spice/v2/asset"
 	"github.com/dixieflatline76/Spice/v2/config"
 	"github.com/dixieflatline76/Spice/v2/util/log"
 )
+
+// PreferenceStore represents a key-value preference storage.
+type PreferenceStore interface {
+	String(key string) string
+	SetString(key, value string)
+}
 
 var assetMgr = asset.NewManager()
 
@@ -45,7 +50,7 @@ func getMachineID() string {
 }
 
 // HasAcceptedEULA checks if the EULA has been accepted
-func HasAcceptedEULA(prefs fyne.Preferences) bool {
+func HasAcceptedEULA(prefs PreferenceStore) bool {
 	eulaData := prefs.String(EULAPreferenceKey)
 
 	if eulaData == "" {
@@ -73,7 +78,7 @@ func HasAcceptedEULA(prefs fyne.Preferences) bool {
 }
 
 // MarkEULAAccepted marks the EULA as accepted
-func MarkEULAAccepted(prefs fyne.Preferences) {
+func MarkEULAAccepted(prefs PreferenceStore) {
 	eulaText, _ := assetMgr.GetText("eula.txt")
 	hash := generateEULAHash(eulaText, config.AppVersion)
 

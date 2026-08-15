@@ -3,14 +3,23 @@ package util
 import (
 	"testing"
 
-	"fyne.io/fyne/v2/test"
 	"github.com/dixieflatline76/Spice/v2/config"
 	"github.com/stretchr/testify/assert"
 )
 
+type mapPreferences map[string]string
+
+func (m mapPreferences) String(key string) string {
+	return m[key]
+}
+
+func (m mapPreferences) SetString(key, value string) {
+	m[key] = value
+}
+
 func TestEULA(t *testing.T) {
 	// Setup
-	prefs := test.NewApp().Preferences()
+	prefs := make(mapPreferences)
 	// Ensure clean state
 	prefs.SetString(EULAPreferenceKey, "")
 

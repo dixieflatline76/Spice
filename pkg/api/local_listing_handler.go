@@ -9,8 +9,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-
-	"fyne.io/fyne/v2/storage"
 )
 
 // LocalListingHandler encapsulates the logic for listing local images.
@@ -212,7 +210,7 @@ func (h *LocalListingHandler) sendResponse() {
 		// This makes the attribution clickable and opens the local file.
 		if pUrl == "" && (h.namespace == "local_folders" || h.namespace == "favorites") {
 			absPath := filepath.Join(h.collectionPath, name)
-			pUrl = storage.NewFileURI(absPath).String()
+			pUrl = fmt.Sprintf("file:///%s", filepath.ToSlash(absPath))
 		}
 
 		result = append(result, LocalImage{
