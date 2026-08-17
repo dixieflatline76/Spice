@@ -274,7 +274,7 @@ Art has no borders. Spice integrates with the world’s leading cultural institu
 - **Rijksmuseum** (Amsterdam, Netherlands)
 - **Statens Museum for Kunst** (Copenhagen, Denmark)
 - **National Palace Museum** (Taipei, Taiwan)
-- **Getty Images** (Los Angeles, CA, USA)
+- **J. Paul Getty Museum** (Los Angeles, CA, USA)
 
 **The "Director's Cut" Collections:**
 Each museum provides curated collections designed to showcase institutional highlights:

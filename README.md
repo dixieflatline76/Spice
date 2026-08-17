@@ -12,7 +12,7 @@
   <a href="https://addons.mozilla.org/en-US/firefox/addon/spice-wallpaper-manager/"><img src="https://img.shields.io/amo/v/spice-wallpaper-manager?style=flat&color=orange&label=Firefox%20Add-ons" alt="Firefox Add-ons"></a>
 </p>
 
-Spice is a premium wallpaper manager that automatically cycles high-quality wallpapers from 13 sources: Wallhaven, Pexels, curated world museum collections (The Met, Art Institute of Chicago, Cleveland Museum of Art, Rijksmuseum, National Palace Museum, Statens Museum for Kunst, Getty Images), your personal Google Photos, Wikimedia Commons, local folders, and favorites. It is available on the **Mac App Store** and **Microsoft Store** and runs quietly in the background, keeping your workspace fresh without interrupting your flow.
+Spice is a premium wallpaper manager that automatically cycles high-quality wallpapers from 13 sources: Wallhaven, Pexels, curated world museum collections (The Met, Art Institute of Chicago, Cleveland Museum of Art, Rijksmuseum, National Palace Museum, Statens Museum for Kunst, J. Paul Getty Museum), your personal Google Photos, Wikimedia Commons, local folders, and favorites. It is available on the **Mac App Store** and **Microsoft Store** and runs quietly in the background, keeping your workspace fresh without interrupting your flow.
 
 **Note:** Spice lives in your **Windows system tray** or **macOS menu bar**, giving you instant control over your desktop environment.
 
@@ -33,7 +33,7 @@ Spice isn't just a basic script; it's a high-performance, multi-threaded desktop
 
 ### 🌎 Infinite Sources
 *   **🔗 Browser Companion:** Use our [**Chrome Extension**](https://chromewebstore.google.com/detail/ekodikedjmhnganfcfleabcfohdjkoeb) or [**Firefox Add-on**](https://addons.mozilla.org/en-US/firefox/addon/spice-wallpaper-manager/) to seamlessly send any image from the web to your desktop.
-*   **🏛️ The Museum Experience:** Turn your desk into a gallery with 4K+ Open Access masterpieces from **The Met**, **Art Institute of Chicago**, **Cleveland Museum of Art**, the **Rijksmuseum** (Amsterdam), the **National Palace Museum** (Taiwan), **Statens Museum for Kunst** (Denmark), and **Getty Images**.
+*   **🏛️ The Museum Experience:** Turn your desk into a gallery with 4K+ Open Access masterpieces from **The Met**, **Art Institute of Chicago**, **Cleveland Museum of Art**, the **Rijksmuseum** (Amsterdam), the **National Palace Museum** (Taiwan), **Statens Museum for Kunst** (Denmark), and the **J. Paul Getty Museum**.
     *   **Offline Salon Galleries:** Browse curated collections directly in your browser with our stunning, locally-generated masonry preview galleries—available offline with a single click from the preferences panel.
 *   **📸 Curated Sources:** Native support for **Wallhaven**, **Pexels**, and **Wikimedia Commons**.
 *   **☁️ Personal Collections:** Seamlessly cycle your own memories with **Google Photos** integration.
