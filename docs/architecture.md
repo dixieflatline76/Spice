@@ -365,6 +365,8 @@ Spice features a robust **Curation Engine** (`pkg/curation/manager.go`) that man
 | **Fetch Logic** | `pkg/wallpaper/fetch_logic.go` | Provider queries, pagination, dedup |
 | **Dispatcher** | `pkg/wallpaper/dispatcher.go` | Fair queue, per-provider rate limiting |
 | **Scheduler** | `pkg/wallpaper/scheduler.go` | Nightly maintenance, refresh cycles |
+| **ActivityGate** | `pkg/wallpaper/activity_gate.go` | Automatic game/fullscreen/battery suppression engine |
+| **Activity** | `pkg/activity/activity.go` | Pure OS fullscreen, process allowlist, battery & GPU 3D load detection |
 | **Schema** | `pkg/ui/schema/schema.go` | PORT: Framework-agnostic UI contract |
 | **Settings** | `pkg/ui/setting/setting_manager.go` | PORT: SettingsManager interface |
 | **Engine** | `ui/settings_manager.go` | ADAPTER: Fyne rendering engine |

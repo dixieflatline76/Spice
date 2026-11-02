@@ -113,6 +113,7 @@ type MonitorController struct {
 	OnWallpaperChanged func(img provider.Image, monitorID int)
 	OnFavoriteRequest  func(img provider.Image)
 	OnFetchRequest     func()
+	IsGateSuppressed   func() bool
 	pendingUpdate      bool // Flag to indicate Store content has changed
 }
 
@@ -247,8 +248,8 @@ func (mc *MonitorController) togglePause() {
 }
 
 func (mc *MonitorController) next(manual bool) {
-	if !manual && (mc.State.Paused || mc.State.TuningInProgress) {
-		log.Debugf("[Monitor %d] Skipping automatic Next (Monitor is paused or tuning)", mc.ID)
+	if !manual && (mc.State.Paused || mc.State.TuningInProgress || (mc.IsGateSuppressed != nil && mc.IsGateSuppressed())) {
+		log.Debugf("[Monitor %d] Skipping automatic Next (Monitor is paused, tuning, or gate-suppressed)", mc.ID)
 		return
 	}
 	width, height := mc.Monitor.Rect.Dx(), mc.Monitor.Rect.Dy()

@@ -26,8 +26,8 @@ Before commencing work on the v3.0 features, the following technical debt and co
 
 The first major update focuses on making Spice completely invisible when you need your computer's full power.
 
-- **Pause During Games & Presentations**: Stop rotating wallpapers or downloading images when you are running a full-screen game or giving a presentation.
-- **Battery Saver**: Automatically pause rotation when your laptop drops below 20% battery.
+- [x] **Pause During Games & Presentations**: Stop rotating wallpapers or downloading images when you are running a full-screen game or giving a presentation.
+- [x] **Battery Saver**: Automatically pause rotation when your laptop drops below 20% battery.
 - **Multi-Monitor Fingerprinting**: Let users set different wallpaper sources for different monitors (e.g., photos on the laptop screen, museums on the ultrawide), and remember those screens even if they get unplugged.
 - **Dark Mode (Solar Filtering)**: Automatically stop showing bright, white wallpapers late at night to prevent eye strain.
 

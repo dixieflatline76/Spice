@@ -135,7 +135,21 @@ The **App** tab controls application-wide behaviour, independent of any wallpape
 
 ## Preferences: Wallpaper Tab
 
-The **Wallpaper** plugin tab appears immediately after the App tab. It contains four sub-sections accessed via a side navigation bar: **General**, **Online**, **Local**, and **AI**.
+The **Wallpaper** plugin tab appears immediately after the App tab. It contains four sub-sections accessed via a side navigation bar: **General**, **Museums**, **Community**, and **Personal**.
+
+### Activity & Power (Automatic Pausing)
+
+Spice includes an intelligent **Activity Gate** that pauses wallpaper rotation and background downloads to save battery, preserve performance during games, and prevent distractions during presentations:
+
+| Setting | Description | Default |
+| :--- | :--- | :--- |
+| **Pause when busy** | Automatically pauses rotation and downloads when a fullscreen application, borderless fullscreen window, game, video, or presentation is active (and on Windows, when the foreground app drives sustained 3D GPU load). | On |
+| **Battery saver** | Pauses rotation and background processing when running on battery below the chosen threshold. Automatically resumes once connected to AC or charged 10% above the threshold. | On |
+| **Battery threshold** | The charge percentage (10%, 15%, 20%, or 25%) that triggers battery saver mode. | 20% |
+| **Pause for specific apps & games** | Click **Add App or Game...** to pick any `.exe` or `.app` via the native file dialog. Added entries appear in a list with individual **Delete** buttons and immediately pause rotation whenever that app is in the foreground (even in windowed mode), automatically resuming once you switch away or close it. | *(empty)* |
+| **Manual resume grace period (mins)** | Minutes to keep wallpaper rotation active after you manually click **Resume Play** while a fullscreen app or game is active. | 2 |
+
+> **Ownership Guarantee**: If you manually pause a display before or during a game, the Activity Gate will **never** unpause that display when your game ends. It only resumes displays that it paused itself.
 
 ### General Settings
 

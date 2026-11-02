@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 
 	"github.com/dixieflatline76/Spice/v2/asset"
 	"github.com/dixieflatline76/Spice/v2/config"
+	"github.com/dixieflatline76/Spice/v2/pkg/activity"
 	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 	"github.com/zalando/go-keyring"
 )
@@ -74,6 +76,7 @@ type Config struct {
 	TargetedShortcutsDisabled bool                 `json:"-"`
 	WallhavenSyncEnabled      bool                 `json:"-"`
 	MonitorPauseStates        map[string]bool      `json:"monitor_pause_states"`
+	GameProcesses             []string             `json:"game_processes,omitempty"`
 }
 
 type VirtualFramingMode int
@@ -177,6 +180,7 @@ func GetConfig(p Preferences) *Config {
 			assetMgr:           asset.NewManager(),
 			AvoidSet:           make(map[string]bool),
 			MonitorPauseStates: make(map[string]bool),
+			GameProcesses:      make([]string, 0),
 			userid:             u.Uid,
 			Tuning:             DefaultTuningConfig(),
 		}
@@ -236,6 +240,14 @@ func (c *Config) loadFromPrefs() error {
 	// Sync AvoidSet from JSON into the thread-safe avoidMap (Post-Migration)
 	for id := range c.AvoidSet {
 		c.avoidMap.Store(id, true)
+	}
+
+	// Sync GameProcesses between JSON config and preference key
+	if len(c.GameProcesses) > 0 {
+		c.GameProcesses = normalizeGameProcesses(c.GameProcesses)
+		c.SetString(GateGameProcessesPrefKey, strings.Join(c.GameProcesses, ", "))
+	} else if raw := c.StringWithFallback(GateGameProcessesPrefKey, ""); raw != "" {
+		c.GameProcesses = normalizeGameProcesses(strings.Split(raw, ","))
 	}
 
 	return nil
@@ -1180,6 +1192,12 @@ func (c *Config) save() {
 		}
 	}
 
+	// Deep copy GameProcesses slice
+	if c.GameProcesses != nil {
+		clone.GameProcesses = make([]string, len(c.GameProcesses))
+		copy(clone.GameProcesses, c.GameProcesses)
+	}
+
 	// Fast-path: spin off the actual marshaling/saving to a goroutine so the
 	// caller's defer c.mu.Unlock() executes instantly and Fyne isn't blocked!
 	// UPDATE: Removing goroutine to prevent "Stale Overwrite" race conditions where
@@ -1518,4 +1536,206 @@ func (c *Config) cloneMuseumFraming() map[string]bool {
 		m[k] = v
 	}
 	return m
+}
+
+// -------------------------------------------------------------------------
+//  Activity Gate Preferences (Milestone 3.0 Engine Intelligence)
+// -------------------------------------------------------------------------
+
+// GetPauseWhenBusy returns whether rotation should pause during fullscreen apps/games.
+func (c *Config) GetPauseWhenBusy() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.BoolWithFallback(PauseWhenBusyPrefKey, true)
+}
+
+// SetPauseWhenBusy sets the pause when busy preference.
+func (c *Config) SetPauseWhenBusy(v bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.SetBool(PauseWhenBusyPrefKey, v)
+}
+
+// GetBatterySaver returns whether rotation should pause on low battery.
+func (c *Config) GetBatterySaver() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.BoolWithFallback(BatterySaverPrefKey, true)
+}
+
+// SetBatterySaver sets the battery saver preference.
+func (c *Config) SetBatterySaver(v bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.SetBool(BatterySaverPrefKey, v)
+}
+
+// GetBatterySaverLevel returns the dropdown index (0=10%, 1=15%, 2=20%, 3=25%).
+func (c *Config) GetBatterySaverLevel() int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.IntWithFallback(BatterySaverLevelPrefKey, 2)
+}
+
+// SetBatterySaverLevel sets the battery saver level index.
+func (c *Config) SetBatterySaverLevel(idx int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.SetInt(BatterySaverLevelPrefKey, idx)
+}
+
+// BatterySaverThresholdPct converts the level index to an integer percentage.
+func (c *Config) BatterySaverThresholdPct() int {
+	switch c.GetBatterySaverLevel() {
+	case 0:
+		return 10
+	case 1:
+		return 15
+	case 2:
+		return 20
+	case 3:
+		return 25
+	default:
+		return 20
+	}
+}
+
+// GetGameMode returns whether manual Game Mode is forced on.
+func (c *Config) GetGameMode() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.BoolWithFallback(GameModePrefKey, false)
+}
+
+// SetGameMode sets manual Game Mode.
+func (c *Config) SetGameMode(v bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.SetBool(GameModePrefKey, v)
+}
+
+// normalizeGameProcesses trims, extracts basenames, removes blanks, and deduplicates
+// executable names case-insensitively while preserving order.
+func normalizeGameProcesses(items []string) []string {
+	out := make([]string, 0, len(items))
+	for _, raw := range items {
+		p := strings.TrimSpace(raw)
+		if p == "" {
+			continue
+		}
+		p = filepath.Base(p)
+		if p == "" || p == "." || p == "/" || p == `\` {
+			continue
+		}
+		if activity.MatchesProcessList(p, strings.Join(out, ", ")) {
+			continue
+		}
+		out = append(out, p)
+	}
+	return out
+}
+
+// GetGameProcesses returns a thread-safe copy of the configured game/app executable list.
+func (c *Config) GetGameProcesses() []string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if len(c.GameProcesses) > 0 {
+		cp := make([]string, len(c.GameProcesses))
+		copy(cp, c.GameProcesses)
+		return cp
+	}
+	raw := c.StringWithFallback(GateGameProcessesPrefKey, "")
+	if raw == "" {
+		return []string{}
+	}
+	return normalizeGameProcesses(strings.Split(raw, ","))
+}
+
+// SetGameProcesses replaces and persists the configured game/app executable list.
+func (c *Config) SetGameProcesses(procs []string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.GameProcesses = normalizeGameProcesses(procs)
+	c.SetString(GateGameProcessesPrefKey, strings.Join(c.GameProcesses, ", "))
+	c.save()
+}
+
+// AddGameProcess adds an executable name to the game allowlist and persists it.
+func (c *Config) AddGameProcess(exe string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	cleaned := normalizeGameProcesses([]string{exe})
+	if len(cleaned) == 0 {
+		return fmt.Errorf("invalid executable name")
+	}
+	target := cleaned[0]
+	current := c.GameProcesses
+	if len(current) == 0 {
+		if raw := c.StringWithFallback(GateGameProcessesPrefKey, ""); raw != "" {
+			current = normalizeGameProcesses(strings.Split(raw, ","))
+		}
+	}
+	if activity.MatchesProcessList(target, strings.Join(current, ", ")) {
+		return nil
+	}
+	c.GameProcesses = append(append([]string{}, current...), target)
+	c.SetString(GateGameProcessesPrefKey, strings.Join(c.GameProcesses, ", "))
+	c.save()
+	return nil
+}
+
+// RemoveGameProcess removes an executable name from the game allowlist and persists it.
+func (c *Config) RemoveGameProcess(exe string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	current := c.GameProcesses
+	if len(current) == 0 {
+		if raw := c.StringWithFallback(GateGameProcessesPrefKey, ""); raw != "" {
+			current = normalizeGameProcesses(strings.Split(raw, ","))
+		}
+	}
+	kept := make([]string, 0, len(current))
+	for _, item := range current {
+		if activity.MatchesProcessList(item, exe) {
+			continue
+		}
+		kept = append(kept, item)
+	}
+	c.GameProcesses = kept
+	c.SetString(GateGameProcessesPrefKey, strings.Join(c.GameProcesses, ", "))
+	c.save()
+	return nil
+}
+
+// GetGateGameProcesses returns the comma-separated process allowlist.
+func (c *Config) GetGateGameProcesses() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if len(c.GameProcesses) > 0 {
+		return strings.Join(c.GameProcesses, ", ")
+	}
+	return c.StringWithFallback(GateGameProcessesPrefKey, "")
+}
+
+// SetGateGameProcesses sets the process allowlist.
+func (c *Config) SetGateGameProcesses(v string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.GameProcesses = normalizeGameProcesses(strings.Split(v, ","))
+	c.SetString(GateGameProcessesPrefKey, strings.Join(c.GameProcesses, ", "))
+	c.save()
+}
+
+// GetGateGraceMinutes returns minutes to ignore busy after a manual unpause.
+func (c *Config) GetGateGraceMinutes() int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.IntWithFallback(GateGraceMinutesPrefKey, 2)
+}
+
+// SetGateGraceMinutes sets the grace period.
+func (c *Config) SetGateGraceMinutes(mins int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.SetInt(GateGraceMinutesPrefKey, mins)
 }

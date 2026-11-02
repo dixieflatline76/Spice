@@ -23,6 +23,7 @@ Spice uses a **hybrid concurrency model**. The hot path (image ingestion from do
 | Fetch goroutines | Up to 5 (semaphore) | `downloadMutex`, `sourcesMutex` | Per fetch cycle |
 | Favorites worker | 1 | `favProvider.mu` via favMap | Provider lifetime |
 | Enrichment worker | 1 | None (channel-driven) | `Activate()` → `Deactivate()` |
+| ActivityGate worker | 1 (15s ticker + `wakeCh`) | `gate.mu`; sets atomic `wp.gateSuppressed` (`*util.SafeFlag`) | `Activate()` → `Deactivate()` |
 
 > **Note**: The Pipeline stateManager is the serialized writer for the hot path (`Add`, `MarkSeen`, `Remove`, `Clear`). The Plugin itself also writes to the store directly for admin operations (`Update`, `RemoveByQueryID`, `ResetFavorites`, `Wipe`, `Sync`) under the store's `RWMutex`.
 
@@ -303,6 +304,7 @@ Providers never import or create Fyne widgets directly. They declare their UI ne
 | `QueryListItem` | Full query management list (toggle, delete, display) |
 | `OAuthPickerItem` | OAuth + Picker workflow (Google Photos) |
 | `FolderPickerItem` | Native directory selector (Local Folders) |
+| `AppPickerItem` | Native executable/application selector with per-entry list and individual `Delete` buttons |
 | `HorizontalRowItem` | Groups items side-by-side |
 
 ### 6.3 The Registry Pattern (Deferred Save)
@@ -545,3 +547,20 @@ When a user opens the Tune Image dialog, they may change global settings (like s
 If the image was originally downloaded under Quality Mode and mathematically rejected (e.g., tagged with `incompatible:3440x1440` in Gate 2), the system cannot blindly trust that stale tag. To solve this, the pipeline implements a **3rd Compatibility Gate** immediately before generating derivatives (`Step 3: Ensure Derivatives`).
 
 This 3rd gate dynamically re-evaluates the math using the *current* global settings. If the user switched to Flexibility Mode, the image may now pass the math check. The 3rd gate ignores the stale `incompatible` tag, allows the crop to proceed, and overwrites the metadata. This guarantees the UI lock state correctly syncs with the underlying pipeline logic.
+
+## 15. Activity Gate & OS Activity Detection (`pkg/activity` & `pkg/wallpaper/activity_gate.go`)
+
+The `ActivityGate` automatically suppresses automatic wallpaper rotation (`CmdNextAuto`) and background fetches (`RequestFetch` / nightly refresh) during games, fullscreen apps, presentations, or low battery.
+
+### 15.1 Suppression vs. User Pause Invariant
+- `ActivityGate` sets an atomic flag `wp.gateSuppressed` (`*util.SafeFlag`) and **never** mutates `mc.State.Paused` or `cfg.MonitorPauseStates`.
+- This guarantees that user-paused monitors remain paused after a game exits, and crash/restart cannot persist temporary gate suppression as a permanent user pause.
+- Manual `CmdNext` and `CmdPrev` bypass `IsSuppressed()`; manual unpausing via the tray menu calls `gate.NotifyUserUnpaused()` to immediately release suppression and start the configurable grace period (`GateGraceMinutesPrefKey`).
+
+### 15.2 Detection Signals (15-Second Polling + Out-of-Band `Wakeup()`)
+1. **Foreground Allowlist (`GameProcesses` in `Config`)**: Immediate engagement when `ForegroundProcess()` matches an executable in `cfg.GetGameProcesses()`. On Windows, falls back to `CreateToolhelp32Snapshot` (`processExeNameBySnapshot`) when `OpenProcess` is denied by elevated or anti-cheat game processes.
+2. **OS Shell & Window Geometry**:
+   - **Windows**: Combines `SHQueryUserNotificationState` (`QUNS_BUSY`, `QUNS_RUNNING_D3D_FULL_SCREEN`, `QUNS_PRESENTATION_MODE`) with foreground borderless-fullscreen geometry (`(style & wsCaption) == wsCaption`).
+   - **macOS**: Evaluates `CGWindowListCopyWindowInfo` with >=50% display/window overlap attribution and `pmset -g batt`.
+3. **3D GPU Load (Windows S5)**: Samples PDH `\GPU Engine(*engtype_3D*)\Utilization Percentage` (`PdhGetFormattedCounterArrayW`) and engages when the foreground PID sustains >=30% 3D utilization across 2 consecutive ticks.
+4. **Battery Saver**: Engages when discharging at or below threshold (10/15/20/25%) and latches until AC power is connected or charge recovers by +10%.

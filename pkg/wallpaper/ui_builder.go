@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/dixieflatline76/Spice/v2/pkg/curation"
 	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
@@ -20,9 +21,11 @@ type PrefsPanelBuilder struct {
 }
 
 func NewPrefsPanelBuilder(p *Plugin, sm setting.SettingsManager) *PrefsPanelBuilder {
-	sm.RegisterOnSettingsSaved(func() {
-		p.cfg.save()
-	})
+	if sm != nil {
+		sm.RegisterOnSettingsSaved(func() {
+			p.cfg.save()
+		})
+	}
 	return &PrefsPanelBuilder{
 		plugin: p,
 		sm:     sm,
@@ -276,6 +279,86 @@ func (b *PrefsPanelBuilder) BuildGeneralTabSchema() *schema.PanelSchema {
 				},
 			},
 			{
+				Title:       i18n.T("Activity & Power"),
+				Description: i18n.T("Automatically pause wallpaper rotation and downloads during games, presentations, or low battery."),
+				Items: []schema.ItemSchema{
+					schema.BoolItem{
+						Name:         "pauseWhenBusy",
+						Label:        i18n.T("Pause when busy:"),
+						Help:         i18n.T("Pauses rotation and downloads when a fullscreen game, video, or presentation is detected."),
+						InitialValue: b.plugin.cfg.GetPauseWhenBusy(),
+						ApplyFunc: func(val bool) {
+							b.plugin.cfg.SetPauseWhenBusy(val)
+							if b.plugin.gate != nil {
+								b.plugin.gate.Wakeup()
+							}
+						},
+					},
+					schema.BoolItem{
+						Name:         "batterySaver",
+						Label:        i18n.T("Battery saver:"),
+						Help:         i18n.T("Pauses rotation and background activity when running on battery below the chosen threshold."),
+						InitialValue: b.plugin.cfg.GetBatterySaver(),
+						ApplyFunc: func(val bool) {
+							b.plugin.cfg.SetBatterySaver(val)
+							if b.plugin.gate != nil {
+								b.plugin.gate.Wakeup()
+							}
+						},
+					},
+					schema.SelectItem{
+						Name:         "batterySaverLevel",
+						Label:        i18n.T("Battery threshold:"),
+						Help:         i18n.T("Engage battery saver when charge drops to or below this percentage."),
+						Options:      []string{"10%", "15%", "20%", "25%"},
+						InitialValue: b.plugin.cfg.GetBatterySaverLevel(),
+						ApplyFunc: func(val interface{}) {
+							b.plugin.cfg.SetBatterySaverLevel(val.(int))
+							if b.plugin.gate != nil {
+								b.plugin.gate.Wakeup()
+							}
+						},
+					},
+					schema.AppPickerItem{
+						Name:         "gateGameProcesses",
+						Label:        i18n.T("Pause for specific apps & games:"),
+						Help:         i18n.T("Automatically pause wallpaper changes whenever one of these apps or games is running in the foreground."),
+						ButtonText:   i18n.T("Add App or Game..."),
+						InitialValue: b.plugin.cfg.GetGameProcesses(),
+						OnAdd:        b.plugin.cfg.AddGameProcess,
+						OnRemove:     b.plugin.cfg.RemoveGameProcess,
+						ApplyFunc: func(val []string) {
+							b.plugin.cfg.SetGameProcesses(val)
+							if b.plugin.gate != nil {
+								b.plugin.gate.Wakeup()
+							}
+						},
+					},
+					schema.TextItem{
+						Name:         "gateGraceMinutes",
+						Label:        i18n.T("Manual resume grace period (mins):"),
+						Help:         i18n.T("Minutes to keep rotation active after you manually resume play while busy."),
+						InitialValue: strconv.Itoa(b.plugin.cfg.GetGateGraceMinutes()),
+						IsNumeric:    true,
+						Validator: func(s string) error {
+							val, err := strconv.Atoi(strings.TrimSpace(s))
+							if err != nil || val < 0 {
+								return errors.New(i18n.T("Must be a positive integer or 0"))
+							}
+							return nil
+						},
+						ApplyFunc: func(val string) {
+							if mins, err := strconv.Atoi(strings.TrimSpace(val)); err == nil && mins >= 0 {
+								b.plugin.cfg.SetGateGraceMinutes(mins)
+								if b.plugin.gate != nil {
+									b.plugin.gate.Wakeup()
+								}
+							}
+						},
+					},
+				},
+			},
+			{
 				Title:       i18n.T("Actions"),
 				Description: i18n.T("Manual maintenance and display synchronization."),
 				Items: []schema.ItemSchema{
@@ -324,6 +407,7 @@ func (b *PrefsPanelBuilder) BuildGeneralTabAccordion() schema.AccordionSchema {
 		"fullscreen",
 		"color_palette",
 		"computer",
+		"pause",
 		"refresh",
 	}
 

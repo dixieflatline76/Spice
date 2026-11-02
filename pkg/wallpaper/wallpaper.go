@@ -80,6 +80,8 @@ type Plugin struct {
 
 	// Configuration and State
 	fetchingInProgress *util.SafeFlag
+	gateSuppressed     *util.SafeFlag // Set while ActivityGate holds rotation/downloads in pause
+	gate               *ActivityGate  // Decision engine for gaming/battery pausing
 
 	// Session State (Local Navigation)
 	lastTriggeredSeenCount  int // Anti-loop state
@@ -193,12 +195,19 @@ func getPlugin() *Plugin {
 			actionChan:         make(chan func(), 5),
 			store:              store,
 			fetchingInProgress: util.NewSafeBool(),
+			gateSuppressed:     util.NewSafeBoolWithValue(false),
 			focusProviderName:  "",
 		}
 
 		wpInstance.imgPulseOp = func() { wpInstance.SetNextWallpaper(-1, true) }
 	})
 	return wpInstance
+}
+
+// IsGateSuppressed reports whether the Activity Gate is currently inhibiting
+// automatic rotation and background fetches.
+func (wp *Plugin) IsGateSuppressed() bool {
+	return wp.gateSuppressed != nil && wp.gateSuppressed.Value()
 }
 
 // RequestFetch safely triggers a background fetch if conditions are met.
@@ -210,6 +219,12 @@ func (wp *Plugin) RequestFetch(providerID ...string) {
 	targetProvider := ""
 	if len(providerID) > 0 {
 		targetProvider = providerID[0]
+	}
+
+	// 0. Activity Gate suppression (paused for games/presentations/battery)
+	if wp.gateSuppressed != nil && wp.gateSuppressed.Value() {
+		log.Debugf("Fetch skipped: ActivityGate suppression active")
+		return
 	}
 
 	// 1. Basic Debounce (Avoid spamming from UI or multiple monitors)
@@ -423,6 +438,7 @@ func (wp *Plugin) Activate() {
 		mc.OnFetchRequest = func() {
 			wp.RequestFetch()
 		}
+		mc.IsGateSuppressed = wp.IsGateSuppressed
 		mc.Start()
 		wp.Monitors[m.ID] = mc
 		log.Printf("Monitor Actor %d started: %s %v", m.ID, m.Name, m.Rect)
@@ -483,6 +499,10 @@ func (wp *Plugin) Activate() {
 	}
 	wp.ChangeWallpaperFrequency(wp.cfg.GetWallpaperChangeFrequency(), false)
 
+	// Start Activity Gate
+	wp.gate = NewActivityGate(wp, nil)
+	wp.gate.Start()
+
 	// Start monitor watcher
 	go wp.startMonitorWatcher()
 
@@ -530,6 +550,12 @@ func (wp *Plugin) Deactivate() {
 	}
 	// Note: CancelFetchContext() already called at top of Deactivate().
 
+	// Stop Activity Gate
+	if wp.gate != nil {
+		wp.gate.Stop()
+		wp.gate = nil
+	}
+
 	// Stop Monitors
 	wp.monMu.Lock() // Write lock needed for map modification if we were to delete, but here just stopping
 	for _, mc := range wp.Monitors {
@@ -555,6 +581,11 @@ func (wp *Plugin) SetNextWallpaper(monitorID int, forceImmediate bool) {
 
 	if forceImmediate {
 		wp.resetTimer()
+	}
+
+	if !forceImmediate && wp.IsGateSuppressed() {
+		log.Debugf("SetNextWallpaper skipped: ActivityGate suppression active")
+		return
 	}
 
 	if monitorID != -1 {
@@ -625,14 +656,50 @@ func (wp *Plugin) TogglePauseMonitorAction(monitorID int) {
 		return
 	}
 
+	// If the Activity Gate is currently engaged, clicking Resume Play in the
+	// tray releases the gate and starts the grace period.
+	if wp.gate != nil && wp.gate.IsEngaged() {
+		wp.gate.NotifyUserUnpaused()
+		if monitorID == -1 {
+			allManuallyPaused := true
+			wp.monMu.RLock()
+			if len(wp.Monitors) == 0 {
+				allManuallyPaused = false
+			}
+			for _, mc := range wp.Monitors {
+				mc.mu.RLock()
+				paused := mc.State.Paused
+				mc.mu.RUnlock()
+				if !paused {
+					allManuallyPaused = false
+					break
+				}
+			}
+			wp.monMu.RUnlock()
+			if !allManuallyPaused {
+				return
+			}
+		} else if !wp.IsMonitorPaused(monitorID) {
+			return
+		}
+	}
+
 	// Case 1: Global Toggle
 	if monitorID == -1 {
 		wp.monMu.RLock()
 		// Determine target state based on monitor 0's status (or first available)
 		targetPaused := true
-		for id := range wp.Monitors {
-			targetPaused = !wp.IsMonitorPaused(id)
-			break
+		if mc, ok := wp.Monitors[0]; ok {
+			mc.mu.RLock()
+			targetPaused = !mc.State.Paused
+			mc.mu.RUnlock()
+		} else {
+			for _, mc := range wp.Monitors {
+				mc.mu.RLock()
+				targetPaused = !mc.State.Paused
+				mc.mu.RUnlock()
+				break
+			}
 		}
 		wp.monMu.RUnlock()
 
@@ -1044,6 +1111,7 @@ func (wp *Plugin) SyncMonitors(force bool) {
 			mc.OnFetchRequest = func() {
 				wp.RequestFetch()
 			}
+			mc.IsGateSuppressed = wp.IsGateSuppressed
 			mc.Start()
 			wp.Monitors[m.ID] = mc
 			changed = true

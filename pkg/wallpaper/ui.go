@@ -117,7 +117,7 @@ func (wp *Plugin) CreateTrayMenu() *schema.MenuSchema {
 			}
 		}
 
-		if isPaused {
+		if isPaused || wp.IsGateSuppressed() {
 			pauseLabel = i18n.T("Resume Play")
 			pauseIcon = "play.png"
 		}

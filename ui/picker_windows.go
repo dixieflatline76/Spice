@@ -57,3 +57,33 @@ func showOSFolderPicker(_ fyne.Window, callback func(string, error)) {
 		callback(folder, nil)
 	}()
 }
+
+func showOSAppPicker(_ fyne.Window, callback func(string, error)) {
+	go func() {
+		runtime.LockOSThread()
+		defer runtime.UnlockOSThread()
+
+		config := cfd.DialogConfig{
+			Title: i18n.T("Select Application or Game"),
+			FileFilters: []cfd.FileFilter{
+				{
+					DisplayName: i18n.T("Applications (*.exe)"),
+					Pattern:     "*.exe",
+				},
+			},
+		}
+		dialog, err := cfd.NewOpenFileDialog(config)
+		if err != nil {
+			callback("", err)
+			return
+		}
+		defer func() { _ = dialog.Release() }()
+
+		file, err := dialog.ShowAndGetResult()
+		if err != nil || file == "" {
+			callback("", err)
+			return
+		}
+		callback(filepath.Base(file), nil)
+	}()
+}

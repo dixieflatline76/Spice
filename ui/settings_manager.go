@@ -1412,6 +1412,10 @@ func (sm *SettingsManager) RenderSchema(p schema.PanelSchema) fyne.CanvasObject 
 				sm.allWidgets[v.Name] = btn
 				sectionHasItems = true
 
+			case schema.AppPickerItem:
+				sm.renderAppPickerSetting(v, sectionContainer, createLabel, createHelp)
+				sectionHasItems = true
+
 			case *schema.HorizontalRowItem:
 				val := *v
 				row := sm.renderHorizontalRow(val)
@@ -1451,6 +1455,155 @@ func (sm *SettingsManager) RenderSchema(p schema.PanelSchema) fyne.CanvasObject 
 	// For Museums (Met, ArtIC) and others without lists:
 	// Return the VBox directly. Do NOT wrap in VScroll. Do NOT wrap in Border.
 	return topContainer
+}
+
+func stringSlicesEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if !strings.EqualFold(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// renderAppPickerSetting renders a declarative executable/application picker and per-item list
+// fully integrated with SettingsManager's baseline registry and Apply Changes workflow.
+func (sm *SettingsManager) renderAppPickerSetting(
+	v schema.AppPickerItem,
+	sectionContainer *fyne.Container,
+	createLabel func(string) fyne.CanvasObject,
+	createHelp func(string) fyne.CanvasObject,
+) {
+	items := append([]string{}, v.InitialValue...)
+	sm.registry[v.Name] = append([]string{}, items...)
+	sm.valueGetters[v.Name] = func() interface{} {
+		return append([]string{}, items...)
+	}
+	if v.ApplyFunc != nil {
+		sm.applyFuncs[v.Name] = func(val interface{}) {
+			if s, ok := val.([]string); ok {
+				v.ApplyFunc(s)
+			}
+		}
+	}
+
+	syncDirtyState := func() {
+		baseline, _ := sm.registry[v.Name].([]string)
+		if !stringSlicesEqual(items, baseline) {
+			sm.SetSettingChangedCallback(v.Name, func() {
+				if v.ApplyFunc != nil {
+					cp := append([]string{}, items...)
+					v.ApplyFunc(cp)
+				}
+			})
+		} else {
+			sm.RemoveSettingChangedCallback(v.Name)
+		}
+		if sm.checkAndEnableApply != nil {
+			sm.checkAndEnableApply()
+		}
+	}
+
+	listContainer := container.NewVBox()
+	var rebuildList func()
+	rebuildList = func() {
+		listContainer.RemoveAll()
+		for _, appName := range items {
+			currentApp := appName
+			lbl := widget.NewLabel(currentApp)
+			delBtn := widget.NewButton(i18n.T("Delete"), func() {
+				if v.OnRemove != nil {
+					_ = v.OnRemove(currentApp)
+				}
+				kept := make([]string, 0, len(items))
+				for _, existing := range items {
+					if !strings.EqualFold(existing, currentApp) {
+						kept = append(kept, existing)
+					}
+				}
+				items = kept
+				rebuildList()
+				syncDirtyState()
+			})
+			row := container.NewHBox(lbl, layout.NewSpacer(), delBtn)
+			listContainer.Add(row)
+		}
+		listContainer.Refresh()
+	}
+	rebuildList()
+
+	btn := widget.NewButtonWithIcon(v.ButtonText, theme.FolderOpenIcon(), func() {
+		showOSAppPicker(sm.GetSettingsWindow(), func(appName string, err error) {
+			if err != nil || appName == "" {
+				return
+			}
+			appName = strings.TrimSpace(appName)
+			if appName == "" {
+				return
+			}
+			for _, existing := range items {
+				if strings.EqualFold(existing, appName) {
+					return
+				}
+			}
+			if v.OnAdd != nil {
+				if err := v.OnAdd(appName); err != nil {
+					return
+				}
+			}
+			items = append(items, appName)
+			fyne.Do(func() {
+				rebuildList()
+				syncDirtyState()
+			})
+		})
+	})
+
+	var labelRow fyne.CanvasObject
+	if v.Label != "" {
+		labelRow = NewSplitRow(createLabel(v.Label), btn, SplitProportion.OneThird)
+		sectionContainer.Add(labelRow)
+	} else {
+		sectionContainer.Add(btn)
+	}
+	var helpObj fyne.CanvasObject
+	if v.Help != "" {
+		helpObj = createHelp(v.Help)
+		sectionContainer.Add(helpObj)
+	}
+	listRow := NewSplitRow(widget.NewLabel(""), listContainer, SplitProportion.OneThird)
+	sectionContainer.Add(listRow)
+
+	if v.EnabledIf != nil || v.VisibleIf != nil {
+		sm.managedWidgets = append(sm.managedWidgets, managedWidget{
+			widget:    btn,
+			enabledIf: v.EnabledIf,
+			visibleIf: v.VisibleIf,
+		})
+		if v.VisibleIf != nil {
+			if labelRow != nil {
+				sm.managedWidgets = append(sm.managedWidgets, managedWidget{
+					widget:    labelRow,
+					visibleIf: v.VisibleIf,
+				})
+			}
+			if helpObj != nil {
+				sm.managedWidgets = append(sm.managedWidgets, managedWidget{
+					widget:    helpObj,
+					visibleIf: v.VisibleIf,
+				})
+			}
+			sm.managedWidgets = append(sm.managedWidgets, managedWidget{
+				widget:    listRow,
+				visibleIf: v.VisibleIf,
+			})
+		}
+	}
+
+	sm.allWidgets[v.Name] = btn
 }
 
 // renderSecretItem renders a high-density API key/credential item.
@@ -2353,6 +2506,8 @@ func (sm *SettingsManager) resolveIcon(name string) fyne.Resource {
 		return theme.ComputerIcon()
 	case "refresh":
 		return theme.ViewRefreshIcon()
+	case "pause":
+		return theme.MediaPauseIcon()
 	}
 	if sm.assetMgr != nil {
 		if res, err := sm.assetMgr.GetIcon(name); err == nil && res != nil {
