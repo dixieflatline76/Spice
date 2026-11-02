@@ -1,11 +1,18 @@
 # --- Extract version needed for EULA hash ---
-VERSION := $(shell sh -c "cat version.txt" 2> /dev/null || cmd /c "type version.txt")
+# Windows: GNU Make >= 4.2 (choco/winget) supports $(file <).
+# macOS ships GNU Make 3.81, which does NOT support $(file <), so use cat there.
+ifeq ($(OS),Windows_NT)
+VERSION := $(strip $(file < version.txt))
+WIN_SDK_VERSION := $(shell pwsh -NoProfile -Command "try { (Get-ChildItem 'C:/Program Files (x86)/Windows Kits/10/bin/10.*' -Directory | Sort-Object Name -Descending | Select-Object -First 1).Name } catch { '10.0.28000.0' }")
+else
+VERSION := $(strip $(shell cat version.txt))
+WIN_SDK_VERSION := 10.0.28000.0
+endif
 
 # --- Build flags ---
 LDFLAGS_SECRETS := $(shell go run cmd/util/load_secrets/main.go)
 LDFLAGS_COMMON := -X main.version=$(VERSION) $(LDFLAGS_SECRETS)
 BUILD_NUMBER ?= 1
-WIN_SDK_VERSION := $(shell pwsh -NoProfile -Command "try { (Get-ChildItem 'C:/Program Files (x86)/Windows Kits/10/bin/10.*' -Directory | Sort-Object Name -Descending | Select-Object -First 1).Name } catch { '10.0.28000.0' }" 2>/dev/null || echo 10.0.28000.0)
 MAKEAPPX := "C:\Program Files (x86)\Windows Kits\10\bin\$(WIN_SDK_VERSION)\x64\makeappx.exe"
 SIGNTOOL := "C:\Program Files (x86)\Windows Kits\10\bin\$(WIN_SDK_VERSION)\x64\signtool.exe"
 PFX_PATH ?= 
