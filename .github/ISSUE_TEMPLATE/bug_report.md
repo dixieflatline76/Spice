@@ -24,9 +24,13 @@ A clear and concise description of what you expected to happen.
 If applicable, add screenshots to help explain your problem.
 
 **Environment (please complete the following information):**
-- macOS Version: [e.g. 14.2.1]
-- Hardware: [e.g. M1 MacBook Air, Intel iMac]
+- Operating System: [e.g. macOS, Windows, Linux]
+- OS Version: [e.g. macOS 14.2.1, Windows 11 22H2, Ubuntu 22.04]
+- Hardware: [e.g. M1 MacBook Air, Intel iMac, Dell XPS 13] (optional)
 - Spice Version: [e.g. 1.0.0]
+
+**Logs/Errors**
+If applicable, please attach any relevant logs or error messages.
 
 **Additional context**
 Add any other context about the problem here.
