@@ -10,6 +10,8 @@ const (
 	SyncActionCreate
 	SyncActionUpdate
 	SyncActionRemove
+	SyncActionRefresh // Metadata-only change (Bounds/Primary/Name); no wallpaper change.
+	SyncActionReplace // Different physical device behind the same ID; stop old controller, create new.
 )
 
 // SyncAction represents a decision made by the policy for a specific monitor ID.
@@ -44,13 +46,13 @@ func (p *DefaultSyncPolicy) Evaluate(current []Monitor, existing map[int]*Monito
 		currentIDs[m.ID] = true
 
 		if mc, exists := existing[m.ID]; exists {
-			// Check for resolution change
-			if mc.Monitor.Rect != m.Rect {
-				actions = append(actions, SyncAction{
-					Type:      SyncActionUpdate,
-					MonitorID: m.ID,
-					Monitor:   m,
-				})
+			switch {
+			case deviceChanged(mc.Monitor, m):
+				actions = append(actions, SyncAction{Type: SyncActionReplace, MonitorID: m.ID, Monitor: m})
+			case mc.Monitor.Rect != m.Rect:
+				actions = append(actions, SyncAction{Type: SyncActionUpdate, MonitorID: m.ID, Monitor: m})
+			case metadataChanged(mc.Monitor, m):
+				actions = append(actions, SyncAction{Type: SyncActionRefresh, MonitorID: m.ID, Monitor: m})
 			}
 		} else {
 			// New Monitor
@@ -85,4 +87,16 @@ func (p *DefaultSyncPolicy) Evaluate(current []Monitor, existing map[int]*Monito
 	})
 
 	return actions
+}
+
+// deviceChanged reports whether a different physical display now sits behind
+// the same ID. Empty DevicePaths (fallback monitors) never count as a change.
+func deviceChanged(old, cur Monitor) bool {
+	return old.DevicePath != "" && cur.DevicePath != "" && old.DevicePath != cur.DevicePath
+}
+
+// metadataChanged reports non-resolution changes that must be reflected in
+// mc.Monitor (cursor hit-testing, window placement, tray labels).
+func metadataChanged(old, cur Monitor) bool {
+	return old.Bounds != cur.Bounds || old.Primary != cur.Primary || old.Name != cur.Name
 }

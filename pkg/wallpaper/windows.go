@@ -7,10 +7,9 @@ import (
 	"fmt"
 	"image"
 	"os"
+	"strings"
 	"syscall"
 	"unsafe"
-
-	"math"
 
 	"github.com/dixieflatline76/Spice/v2/pkg/sysinfo"
 	"golang.org/x/sys/windows"
@@ -22,6 +21,11 @@ var (
 	procCoCreateInstance = modOle32.NewProc("CoCreateInstance")
 	procCoUninitialize   = modOle32.NewProc("CoUninitialize")
 	procCoTaskMemFree    = modOle32.NewProc("CoTaskMemFree")
+
+	modUser32                       = windows.NewLazySystemDLL("user32.dll")
+	procGetDisplayConfigBufferSizes = modUser32.NewProc("GetDisplayConfigBufferSizes")
+	procQueryDisplayConfig          = modUser32.NewProc("QueryDisplayConfig")
+	procDisplayConfigGetDeviceInfo  = modUser32.NewProc("DisplayConfigGetDeviceInfo")
 )
 
 const (
@@ -29,6 +33,10 @@ const (
 	COINIT_MULTITHREADED     = 0x0
 	CLSCTX_LOCAL_SERVER      = 0x4
 	CLSCTX_INPROC_SERVER     = 0x1
+
+	qdcOnlyActivePaths                = 0x00000002
+	displayConfigDeviceInfoTargetName = 2
+	errorInsufficientBuffer           = 122
 )
 
 var (
@@ -60,38 +68,133 @@ type IDesktopWallpaperVtbl struct {
 	GetMonitorRECT            uintptr
 }
 
+type displayConfigLUID struct {
+	LowPart  uint32
+	HighPart int32
+}
+
+type displayConfigRational struct {
+	Numerator   uint32
+	Denominator uint32
+}
+
+type displayConfigPathSourceInfo struct {
+	AdapterID   displayConfigLUID
+	ID          uint32
+	ModeInfoIdx uint32
+	StatusFlags uint32
+}
+
+type displayConfigPathTargetInfo struct {
+	AdapterID        displayConfigLUID
+	ID               uint32
+	ModeInfoIdx      uint32
+	OutputTechnology uint32
+	Rotation         uint32
+	Scaling          uint32
+	RefreshRate      displayConfigRational
+	ScanLineOrdering uint32
+	TargetAvailable  int32
+	StatusFlags      uint32
+}
+
+type displayConfigPathInfo struct { // 72 bytes
+	SourceInfo displayConfigPathSourceInfo
+	TargetInfo displayConfigPathTargetInfo
+	Flags      uint32
+}
+
+type displayConfigModeInfo struct { // 64 bytes
+	InfoType  uint32
+	ID        uint32
+	AdapterID displayConfigLUID
+	Mode      [48]byte
+}
+
+type displayConfigDeviceInfoHeader struct {
+	Type      uint32
+	Size      uint32
+	AdapterID displayConfigLUID
+	ID        uint32
+}
+
+type displayConfigTargetDeviceName struct { // 420 bytes
+	Header                    displayConfigDeviceInfoHeader
+	Flags                     uint32
+	OutputTechnology          uint32
+	EdidManufactureID         uint16
+	EdidProductCodeID         uint16
+	ConnectorInstance         uint32
+	MonitorFriendlyDeviceName [64]uint16
+	MonitorDevicePath         [128]uint16
+}
+
+// queryMonitorFriendlyNames maps lower-cased monitor device interface paths
+// (same format as IDesktopWallpaper::GetMonitorDevicePathAt) to EDID friendly names.
+// Returns an empty map on any failure; callers fall back to "Display N".
+func queryMonitorFriendlyNames() map[string]string {
+	result := make(map[string]string)
+	for attempt := 0; attempt < 3; attempt++ {
+		var numPath, numMode uint32
+		ret, _, _ := procGetDisplayConfigBufferSizes.Call(
+			uintptr(qdcOnlyActivePaths),
+			uintptr(unsafe.Pointer(&numPath)),
+			uintptr(unsafe.Pointer(&numMode)),
+		)
+		if ret != 0 || numPath == 0 {
+			return result
+		}
+		paths := make([]displayConfigPathInfo, numPath)
+		modes := make([]displayConfigModeInfo, max(numMode, 1))
+		ret, _, _ = procQueryDisplayConfig.Call(
+			uintptr(qdcOnlyActivePaths),
+			uintptr(unsafe.Pointer(&numPath)),
+			uintptr(unsafe.Pointer(&paths[0])),
+			uintptr(unsafe.Pointer(&numMode)),
+			uintptr(unsafe.Pointer(&modes[0])),
+			0,
+		)
+		if ret == errorInsufficientBuffer {
+			continue // topology changed between calls; retry
+		}
+		if ret != 0 {
+			return result
+		}
+		for i := uint32(0); i < numPath; i++ {
+			var tn displayConfigTargetDeviceName
+			tn.Header.Type = displayConfigDeviceInfoTargetName
+			tn.Header.Size = uint32(unsafe.Sizeof(tn))
+			tn.Header.AdapterID = paths[i].TargetInfo.AdapterID
+			tn.Header.ID = paths[i].TargetInfo.ID
+			r, _, _ := procDisplayConfigGetDeviceInfo.Call(uintptr(unsafe.Pointer(&tn)))
+			if r != 0 {
+				continue
+			}
+			devPath := strings.ToLower(windows.UTF16ToString(tn.MonitorDevicePath[:]))
+			friendly := strings.TrimSpace(windows.UTF16ToString(tn.MonitorFriendlyDeviceName[:]))
+			if devPath != "" && friendly != "" {
+				result[devPath] = friendly
+			}
+		}
+		return result
+	}
+	return result
+}
+
 type windowsOS struct{}
 
-// GetMonitors returns all connected monitors using IDesktopWallpaper
-func (w *windowsOS) GetMonitors() ([]Monitor, error) {
-	// Initialize COM
-	_ = modOle32.Load() // Ensure loaded
-	_, _, _ = procCoInitializeEx.Call(0, COINIT_MULTITHREADED)
-	defer func() { _, _, _ = procCoUninitialize.Call() }()
-
-	var wallpaper *IDesktopWallpaper
-	hr, _, _ := procCoCreateInstance.Call(
-		uintptr(unsafe.Pointer(&CLSID_DesktopWallpaper)),
-		0,
-		uintptr(CLSCTX_LOCAL_SERVER|CLSCTX_INPROC_SERVER),
-		uintptr(unsafe.Pointer(&IID_IDesktopWallpaper)),
-		uintptr(unsafe.Pointer(&wallpaper)),
-	)
-	if hr != 0 {
-		// Fallback to primary if COM fails (e.g. server SKU)
-		return w.getPrimaryMonitorFallback()
-	}
-	defer w.release(wallpaper)
-
+// enumerateMonitors lists monitors via an existing IDesktopWallpaper instance.
+// Returned slice is unsorted; IDs are the raw COM indices.
+func (w *windowsOS) enumerateMonitors(wallpaper *IDesktopWallpaper) []Monitor {
 	var count uint32
 	// Call GetMonitorDevicePathCount (Index 6)
-	hr, _, _ = syscall.SyscallN(
+	hr, _, _ := syscall.SyscallN(
 		wallpaper.LpVtbl.GetMonitorDevicePathCount,
 		uintptr(unsafe.Pointer(wallpaper)),
 		uintptr(unsafe.Pointer(&count)),
 	)
 	if hr != 0 {
-		return w.getPrimaryMonitorFallback()
+		return nil
 	}
 
 	var monitors []Monitor
@@ -101,14 +204,9 @@ func (w *windowsOS) GetMonitors() ([]Monitor, error) {
 			Left, Top, Right, Bottom int32
 		}
 
-		// Call GetMonitorRECT (Index 7)
-		// Signature: HRESULT GetMonitorRECT([in] LPCWSTR monitorID, [out] RECT *displayRect)
-		// Note usage: We first need the MonitorID (String) to get the RECT.
-		// So we call GetMonitorDevicePathAt(i) -> String -> GetMonitorRECT(String)
-
-		var monitorIDPtr unsafe.Pointer
 		// Call GetMonitorDevicePathAt (Index 5)
 		// Signature: HRESULT GetMonitorDevicePathAt([in] UINT monitorIndex, [out] LPWSTR *monitorID)
+		var monitorIDPtr unsafe.Pointer
 		hr, _, _ = syscall.SyscallN(
 			wallpaper.LpVtbl.GetMonitorDevicePathAt,
 			uintptr(unsafe.Pointer(wallpaper)),
@@ -120,6 +218,7 @@ func (w *windowsOS) GetMonitors() ([]Monitor, error) {
 		}
 
 		// Call GetMonitorRECT (Index 7)
+		// Signature: HRESULT GetMonitorRECT([in] LPCWSTR monitorID, [out] RECT *displayRect)
 		hr, _, _ = syscall.SyscallN(
 			wallpaper.LpVtbl.GetMonitorRECT,
 			uintptr(unsafe.Pointer(wallpaper)),
@@ -142,19 +241,50 @@ func (w *windowsOS) GetMonitors() ([]Monitor, error) {
 			if rect.Dx() > 0 && rect.Dy() > 0 {
 				monitors = append(monitors, Monitor{
 					ID:         int(i),
-					Name:       "",
 					DevicePath: devicePath,
 					Rect:       rect,
+					Bounds:     rect,
+					Primary:    rect.Min.X == 0 && rect.Min.Y == 0, // Windows primary is always at virtual-desktop origin
 				})
 			}
 		}
 	}
 
+	return monitors
+}
+
+// GetMonitors returns all connected monitors using IDesktopWallpaper
+func (w *windowsOS) GetMonitors() ([]Monitor, error) {
+	// Initialize COM
+	_ = modOle32.Load() // Ensure loaded
+	_, _, _ = procCoInitializeEx.Call(0, COINIT_MULTITHREADED)
+	defer func() { _, _, _ = procCoUninitialize.Call() }()
+
+	var wallpaper *IDesktopWallpaper
+	hr, _, _ := procCoCreateInstance.Call(
+		uintptr(unsafe.Pointer(&CLSID_DesktopWallpaper)),
+		0,
+		uintptr(CLSCTX_LOCAL_SERVER|CLSCTX_INPROC_SERVER),
+		uintptr(unsafe.Pointer(&IID_IDesktopWallpaper)),
+		uintptr(unsafe.Pointer(&wallpaper)),
+	)
+	if hr != 0 {
+		// Fallback to primary if COM fails (e.g. server SKU)
+		return w.getPrimaryMonitorFallback()
+	}
+	defer w.release(wallpaper)
+
+	monitors := w.enumerateMonitors(wallpaper)
 	if len(monitors) == 0 {
 		return w.getPrimaryMonitorFallback()
 	}
+	ensurePrimary(monitors)
 
-	return monitors, nil
+	names := queryMonitorFriendlyNames()
+	for i := range monitors {
+		monitors[i].Name = names[strings.ToLower(monitors[i].DevicePath)]
+	}
+	return sortAndIndexMonitors(monitors), nil
 }
 
 func (w *windowsOS) getPrimaryMonitorFallback() ([]Monitor, error) {
@@ -162,12 +292,15 @@ func (w *windowsOS) getPrimaryMonitorFallback() ([]Monitor, error) {
 	if err != nil {
 		return nil, err
 	}
-	return []Monitor{{ID: 0, Name: "Primary", Rect: image.Rect(0, 0, width, height)}}, nil
+	return []Monitor{{ID: 0, Name: "Primary", Primary: true, Rect: image.Rect(0, 0, width, height), Bounds: image.Rect(0, 0, width, height)}}, nil
 }
 
-// SetWallpaper sets the desktop wallpaper
-// TODO(Stage 6): Use IDesktopWallpaper for per-monitor support (monitorID)
+// SetWallpaper sets the desktop wallpaper for the given sorted monitorID.
 func (w *windowsOS) SetWallpaper(imagePath string, monitorID int) error {
+	if monitorID < 0 {
+		return fmt.Errorf("invalid monitor ID: %d", monitorID)
+	}
+
 	// Resolve MSIX-virtualized path so explorer.exe (outside the container)
 	// can find the file when setting it via IDesktopWallpaper COM API.
 	imagePath = resolveMSIXPicturePath(imagePath)
@@ -194,30 +327,23 @@ func (w *windowsOS) SetWallpaper(imagePath string, monitorID int) error {
 	}
 	defer w.release(wallpaper)
 
-	if monitorID < 0 || uint64(monitorID) > math.MaxUint32 {
-		return fmt.Errorf("invalid monitor ID: %d", monitorID)
+	monitors := w.enumerateMonitors(wallpaper)
+	ensurePrimary(monitors)
+	monitors = sortAndIndexMonitors(monitors)
+	if monitorID >= len(monitors) {
+		return fmt.Errorf("monitor index %d out of range (%d monitors)", monitorID, len(monitors))
 	}
-	mID := uint32(monitorID) // #nosec G115 - check above ensures no overflow
-
-	// Fetch the specific monitor ID string using the index
-	var monitorIDPtr uintptr
-	hr, _, _ = syscall.SyscallN(
-		wallpaper.LpVtbl.GetMonitorDevicePathAt,
-		uintptr(unsafe.Pointer(wallpaper)),
-		uintptr(mID),
-		uintptr(unsafe.Pointer(&monitorIDPtr)),
-	)
-	if hr != 0 {
-		return fmt.Errorf("GetMonitorDevicePathAt failed for index %d: 0x%X", monitorID, hr)
+	devPathUTF16, err := syscall.UTF16PtrFromString(monitors[monitorID].DevicePath)
+	if err != nil {
+		return err
 	}
-	defer func() { _, _, _ = procCoTaskMemFree.Call(monitorIDPtr) }() // Ensure we free the string
 
 	// SetWallpaper (Index 3)
 	// Signature: HRESULT SetWallpaper([in] LPCWSTR monitorID, [in] LPCWSTR wallpaper)
 	hr, _, _ = syscall.SyscallN(
 		wallpaper.LpVtbl.SetWallpaper,
 		uintptr(unsafe.Pointer(wallpaper)),
-		monitorIDPtr,
+		uintptr(unsafe.Pointer(devPathUTF16)),
 		uintptr(unsafe.Pointer(imagePathUTF16)),
 	)
 	if hr != 0 {

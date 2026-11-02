@@ -105,11 +105,14 @@ func (m *macOSOS) GetMonitors() ([]Monitor, error) {
 			log.Printf("[macOS] Failed to get info for screen index %d, skipping", i)
 			continue
 		}
+		bx, by := int(info.boundsX), int(info.boundsY)
 		monitors = append(monitors, Monitor{
 			ID:         i,
 			Name:       C.GoString(&info.name[0]),
 			DevicePath: C.GoString(&info.name[0]),
 			Rect:       image.Rect(0, 0, int(info.width), int(info.height)),
+			Bounds:     image.Rect(bx, by, bx+int(info.boundsW), by+int(info.boundsH)),
+			Primary:    i == 0, // [NSScreen screens][0] is always the menu-bar (primary) display
 		})
 	}
 

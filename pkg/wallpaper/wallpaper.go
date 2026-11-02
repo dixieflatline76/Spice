@@ -1099,32 +1099,39 @@ func (wp *Plugin) SyncMonitors(force bool) {
 	for _, action := range actions {
 		switch action.Type {
 		case SyncActionCreate:
-			m := action.Monitor
-			log.Printf("[Sync] New Monitor detected: %d (%s) at %v", m.ID, m.Name, m.Rect)
-			mc := NewMonitorController(m.ID, m, wp.store, wp.fm, wp.os, wp.cfg, wp.imgProcessor)
-			mc.OnWallpaperChanged = func(img provider.Image, monitorID int) {
-				go wp.updateTrayMenuUI(img, monitorID)
-			}
-			mc.OnFavoriteRequest = func(img provider.Image) {
-				go wp.ToggleFavorite(img) // Defensive: ensure never called under mc.mu
-			}
-			mc.OnFetchRequest = func() {
-				wp.RequestFetch()
-			}
-			mc.IsGateSuppressed = wp.IsGateSuppressed
-			mc.Start()
-			wp.Monitors[m.ID] = mc
+			wp.createMonitorControllerLocked(action.Monitor, force)
 			changed = true
-			go wp.SetNextWallpaper(m.ID, force)
 
 		case SyncActionUpdate:
 			m := action.Monitor
 			if mc, ok := wp.Monitors[action.MonitorID]; ok {
 				log.Printf("[Sync] Resolution change for Monitor %d: %v -> %v", m.ID, mc.Monitor.Rect, m.Rect)
+				mc.mu.Lock() // lock order: monMu -> mc.mu
 				mc.Monitor = m
+				mc.mu.Unlock()
 				changed = true
 				go wp.SetNextWallpaper(m.ID, force)
 			}
+
+		case SyncActionRefresh:
+			m := action.Monitor
+			if mc, ok := wp.Monitors[action.MonitorID]; ok {
+				log.Printf("[Sync] Metadata change for Monitor %d: bounds %v primary %v name %q", m.ID, m.Bounds, m.Primary, m.Name)
+				mc.mu.Lock()
+				mc.Monitor = m
+				mc.mu.Unlock()
+				changed = true // rebuild tray labels; no wallpaper change
+			}
+
+		case SyncActionReplace:
+			m := action.Monitor
+			if mc, ok := wp.Monitors[action.MonitorID]; ok {
+				log.Printf("[Sync] Device behind Monitor %d changed (%s -> %s). Replacing actor.", m.ID, mc.Monitor.DevicePath, m.DevicePath)
+				mc.Stop()
+				delete(wp.Monitors, action.MonitorID)
+			}
+			wp.createMonitorControllerLocked(m, force)
+			changed = true
 
 		case SyncActionRemove:
 			id := action.MonitorID
@@ -1150,8 +1157,30 @@ func (wp *Plugin) SyncMonitors(force bool) {
 
 	if changed {
 		log.Print("[Sync] Display setup synchronized. Triggering Tray Rebuild.")
-		wp.manager.RebuildTrayMenu()
+		if wp.manager != nil {
+			wp.manager.RebuildTrayMenu()
+		}
 	}
+}
+
+// createMonitorControllerLocked creates, wires, and starts a controller.
+// Caller must hold wp.monMu (write).
+func (wp *Plugin) createMonitorControllerLocked(m Monitor, force bool) {
+	log.Printf("[Sync] New Monitor detected: %d (%s) at %v", m.ID, m.Name, m.Rect)
+	mc := NewMonitorController(m.ID, m, wp.store, wp.fm, wp.os, wp.cfg, wp.imgProcessor)
+	mc.OnWallpaperChanged = func(img provider.Image, monitorID int) {
+		go wp.updateTrayMenuUI(img, monitorID)
+	}
+	mc.OnFavoriteRequest = func(img provider.Image) {
+		go wp.ToggleFavorite(img) // Defensive: ensure never called under mc.mu
+	}
+	mc.OnFetchRequest = func() {
+		wp.RequestFetch()
+	}
+	mc.IsGateSuppressed = wp.IsGateSuppressed
+	mc.Start()
+	wp.Monitors[m.ID] = mc
+	go wp.SetNextWallpaper(m.ID, force)
 }
 
 // syncMonitorsLocked is removed as it is now integrated into SyncMonitors with Policy.
