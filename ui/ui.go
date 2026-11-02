@@ -1548,7 +1548,7 @@ func drawCrosshair(size int, col color.NRGBA) image.Image {
 // The window stays open after selection, showing a processing overlay and redrawing
 // with the updated active anchor when reprocessing completes.
 // ShowTuneImagePopup displays the popup for tuning images.
-func (sa *SpiceApp) ShowTuneImagePopup(monitorID int, currentOpts provider.TuningOptions, effectiveOpts provider.TuningOptions, labels [9]string, values [9]provider.CropAnchor, lockFrame bool, onSelect func(opts provider.TuningOptions, onDone func()), onClose func()) {
+func (sa *SpiceApp) ShowTuneImagePopup(monitorID int, monitorBounds image.Rectangle, currentOpts provider.TuningOptions, effectiveOpts provider.TuningOptions, labels [9]string, values [9]provider.CropAnchor, lockFrame bool, onSelect func(opts provider.TuningOptions, onDone func()), onClose func()) {
 	// Guard: skip if OpenGL is unavailable.
 	if !sysinfo.CanCreateWindows() {
 		utilLog.Println("OpenGL unavailable — anchor popup cannot be created")
@@ -1891,7 +1891,7 @@ func (sa *SpiceApp) ShowTuneImagePopup(monitorID int, currentOpts provider.Tunin
 	// Size to content — no dead space
 	minSize := contentStack.MinSize()
 	w.Resize(fyne.NewSize(minSize.Width+32, minSize.Height+24))
-	w.CenterOnScreen()
+	centerWindowOnMonitor(w, monitorBounds)
 
 	w.SetOnClosed(func() {
 		sa.os.TransformToBackground()
@@ -1902,4 +1902,22 @@ func (sa *SpiceApp) ShowTuneImagePopup(monitorID int, currentOpts provider.Tunin
 	})
 
 	w.Show()
+}
+
+// centerWindowOnMonitor seeds the window's native position inside the target
+// monitor before calling CenterOnScreen.
+//
+// Why +64,+64:
+//  1. Fyne 2.8's GLFW driver (window_desktop.go:854-866) treats xpos==0 && ypos==0
+//     as "unpositioned". The offset guarantees non-zero coords even for a monitor at (0,0).
+//  2. getMonitorForWindow (window_desktop.go:332-354) picks the monitor containing
+//     (xpos+width/2, ypos+height/2); doCenterOnScreen then centers on that monitor
+//     and detectScale uses that monitor's DPI.
+//
+// monitorBounds must be in native window units (Monitor.Bounds). Ignored on Wayland.
+func centerWindowOnMonitor(w fyne.Window, monitorBounds image.Rectangle) {
+	if dw, ok := w.(desktop.Window); ok && !monitorBounds.Empty() {
+		dw.RequestPosition(monitorBounds.Min.X+64, monitorBounds.Min.Y+64)
+	}
+	w.CenterOnScreen()
 }

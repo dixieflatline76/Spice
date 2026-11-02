@@ -2,12 +2,14 @@ package ui
 
 import (
 	"fmt"
+	"image"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/widget"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/schema"
@@ -485,4 +487,33 @@ func TestSecretItemStateTransitions(t *testing.T) {
 	// Since RenderSchema is declarative, calling sm.RefreshUI() and re-rendering would show the Save UI again.
 	sm.ResetSettings(setting.SettingReset{Name: "myKey", Value: ""})
 	assert.Equal(t, "", sm.GetBaseline("myKey"), "Baseline should be empty after reset")
+}
+
+// spyDesktopWindow wraps a test window and records RequestPosition calls.
+// desktop.Window requires all three methods below.
+type spyDesktopWindow struct {
+	fyne.Window
+	posCalled  bool
+	posX, posY int
+}
+
+func (s *spyDesktopWindow) RequestPosition(x, y int)    { s.posCalled, s.posX, s.posY = true, x, y }
+func (s *spyDesktopWindow) RequestFullScreenSecondary() {}
+func (s *spyDesktopWindow) RequestAlwaysOnTop()         {}
+
+var _ desktop.Window = (*spyDesktopWindow)(nil)
+
+func TestCenterWindowOnMonitor(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+
+	spy := &spyDesktopWindow{Window: app.NewWindow("t")}
+	centerWindowOnMonitor(spy, image.Rect(1920, 0, 4480, 1440))
+	assert.True(t, spy.posCalled)
+	assert.Equal(t, 1984, spy.posX)
+	assert.Equal(t, 64, spy.posY)
+
+	spy2 := &spyDesktopWindow{Window: app.NewWindow("t2")}
+	centerWindowOnMonitor(spy2, image.Rectangle{})
+	assert.False(t, spy2.posCalled)
 }

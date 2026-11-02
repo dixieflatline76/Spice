@@ -38,6 +38,7 @@ func (wp *Plugin) showTuneImagePopup(monitorID int) {
 	mc.mu.RLock()
 	resKey := fmt.Sprintf("%dx%d", mc.Monitor.Rect.Dx(), mc.Monitor.Rect.Dy())
 	currentOpts := mc.State.CurrentImage.GetTuning(resKey)
+	monBounds := mc.Monitor.Bounds
 	mc.mu.RUnlock()
 
 	if wp.manager == nil {
@@ -84,7 +85,7 @@ func (wp *Plugin) showTuneImagePopup(monitorID int) {
 	// Send CmdTuningStart to pause the controller
 	mc.Commands <- CmdTuningStart
 
-	wp.manager.ShowTuneImagePopup(monitorID, currentOpts, effectiveOpts, anchorLabels, anchorValues, lockFrame,
+	wp.manager.ShowTuneImagePopup(monitorID, monBounds, currentOpts, effectiveOpts, anchorLabels, anchorValues, lockFrame,
 		func(opts provider.TuningOptions, onDone func()) {
 			log.Debugf("showTuneImagePopup: User selected options %v for monitor %d", opts, monitorID)
 			go func() {

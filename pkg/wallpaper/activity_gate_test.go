@@ -2,6 +2,7 @@ package wallpaper
 
 import (
 	"fmt"
+	"image"
 	"net/url"
 	"sync"
 	"testing"
@@ -186,7 +187,7 @@ func (m *mockGatePluginManager) GetPreferences() fyne.Preferences  { return nil 
 func (m *mockGatePluginManager) GetAssetManager() *asset.Manager   { return nil }
 func (m *mockGatePluginManager) RefreshTrayMenu()                  {}
 func (m *mockGatePluginManager) RebuildTrayMenu()                  {}
-func (m *mockGatePluginManager) ShowTuneImagePopup(int, provider.TuningOptions, provider.TuningOptions, [9]string, [9]provider.CropAnchor, bool, func(provider.TuningOptions, func()), func()) {
+func (m *mockGatePluginManager) ShowTuneImagePopup(int, image.Rectangle, provider.TuningOptions, provider.TuningOptions, [9]string, [9]provider.CropAnchor, bool, func(provider.TuningOptions, func()), func()) {
 }
 
 // ---------------------------------------------------------------------------
