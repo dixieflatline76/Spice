@@ -23,6 +23,7 @@ type PluginManager interface {
 	GetAssetManager() *asset.Manager                                      // Returns the asset manager.
 	RefreshTrayMenu()                                                     // Refreshes the tray menu.
 	RebuildTrayMenu()                                                     // Rebuilds the tray menu from scratch.
+	RebuildTrayMenuImmediate()                                            // Rebuilds the tray menu now, bypassing the debounce (cursor crossed screens).
 
 	// ShowTuneImagePopup displays the popup for tuning images (crop anchor, framing overrides).
 	// The outer ring (UI layer) owns window lifecycle and OpenGL error recovery.

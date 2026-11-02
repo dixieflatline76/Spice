@@ -78,6 +78,9 @@ func (m *mockManager) OpenPreferences(name string) {
 func (m *mockManager) RebuildTrayMenu() {
 }
 
+func (m *mockManager) RebuildTrayMenuImmediate() {
+}
+
 func (m *mockManager) RefreshTrayMenu() {
 }
 

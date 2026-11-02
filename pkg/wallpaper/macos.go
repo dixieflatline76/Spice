@@ -17,6 +17,7 @@ import (
 	"os"
 	"regexp"
 	"strconv"
+	"sync"
 	"unsafe"
 
 	"github.com/dixieflatline76/Spice/v2/pkg/sysinfo"
@@ -24,7 +25,33 @@ import (
 )
 
 // macOSOS implements the OS interface for macOS.
-type macOSOS struct{}
+type macOSOS struct {
+	perScreenOnce sync.Once
+	perScreen     bool
+}
+
+// HasPerScreenTray is cached for the process lifetime: toggling
+// "Displays have separate Spaces" only takes effect after logout.
+func (m *macOSOS) HasPerScreenTray() bool {
+	if os.Getenv("MOCK_MACOS_OUTPUT") != "" {
+		return false
+	}
+	m.perScreenOnce.Do(func() {
+		m.perScreen = C.nativeScreensHaveSeparateSpaces() != 0
+	})
+	return m.perScreen
+}
+
+func (m *macOSOS) GetCursorPosition() (image.Point, bool) {
+	if os.Getenv("MOCK_MACOS_OUTPUT") != "" {
+		return image.Point{}, false
+	}
+	var x, y C.int
+	if C.nativeGetCursorPos(&x, &y) != 0 {
+		return image.Point{}, false
+	}
+	return image.Pt(int(x), int(y)), true
+}
 
 // ---- JSON types for system_profiler (kept for test mock support) ----
 

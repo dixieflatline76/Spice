@@ -41,10 +41,26 @@ favProvider.mu (independent — accessed via Favoriter interface)
 
 **Key invariants:**
 - `mc.mu.RLock()` is safe from any goroutine **except** the MC's own actor goroutine (which holds `mc.mu.Lock()` in `handleCommand`).
+- **Dual-Lock Invariant on `mc.Monitor`**: All writers of `mc.Monitor` (`SyncActionUpdate`, `SyncActionRefresh` in `SyncMonitors`) acquire **both** `wp.monMu.Lock()` and `mc.mu.Lock()` (in that order). Readers of `mc.Monitor` may safely hold either `wp.monMu.RLock()` or `mc.mu.RLock()`.
 - `store.mu` is always the innermost lock — no code holds `store.mu` while acquiring another lock.
 - `downloadMutex` protects `queryPages`, `stopNightlyRefresh`, and fetch state. Never nested with `monMu`.
 - **`monMu` must never be held when calling into Fyne's main thread** (via `fyne.Do`, menu updates, or widget operations). The Fyne main thread may itself need `monMu` to read monitor state, creating a deadlock. `CreateTrayMenuItems` snapshots all monitor state under `monMu` at the top, releases it, then builds menu items lock-free. `updateTrayMenuUI`'s `fyne.Do` callback must not acquire `monMu`.
 - **`OpenPreferences` must use `fyne.Do`** to marshal window creation onto Fyne's main thread. This is called from the local API HTTP server (browser extension), which runs on a background goroutine. macOS forbids window creation from background threads.
+
+### 1.7 Multi-Monitor Coordinate Spaces, Sync Actions & Per-Screen Tray (`resolution.go`, `sync_policy.go`, `ui.go`)
+
+- **`Monitor.Rect` vs. `Monitor.Bounds`**:
+  - `Monitor.Rect` holds **physical pixel dimensions** (`(0, 0, physW, physH)` on macOS/Linux; virtual desktop pixel rect on Windows) and is used strictly for image fitting and resolution-change detection (`mc.Monitor.Rect != m.Rect`).
+  - `Monitor.Bounds` holds **desktop coordinates in native OS window/cursor units** (Quartz points on macOS via `CGDisplayBounds`, virtual desktop pixels on Windows/X11) and is used for target-monitor window placement (`desktop.Window.RequestPosition` + `CenterOnScreen` in `ShowTuneImagePopup`) and cursor hit-testing (`MonitorAtPoint`).
+  - `Monitor.Primary` marks the OS primary display, and `ID: 0` (`Display 1`) is guaranteed to be the primary display on every OS (`sortAndIndexMonitors` on Windows; `[NSScreen screens][0]` on macOS).
+- **Sync Policy Actions (`sync_policy.go`)**:
+  - `SyncActionUpdate`: `Rect` changed (resolution change) → updates `mc.Monitor` and triggers `SetNextWallpaper`.
+  - `SyncActionRefresh`: Only `Bounds`, `Primary`, or `Name` changed (e.g. displays rearranged without resolution change) → updates `mc.Monitor` under `monMu + mc.mu` and rebuilds tray labels without rotating wallpapers.
+  - `SyncActionReplace`: Non-empty `DevicePath` changed behind the same monitor `ID` (e.g. Windows primary monitor switched) → stops old `MonitorController` and creates a new one so pause state and history follow the physical display.
+- **Per-Screen Tray (`TrayCapableOS`) & `actionBinder` (`follow` / `guard`)**:
+  - Platforms with a menu bar on every display (macOS with *"Displays have separate Spaces"*, cached via `sync.Once`) implement `TrayCapableOS`. `PlanTrayMonitors` renders a flat menu for the active cursor display with zero `Display N ▸` submenus.
+  - Because AppKit runs open menus in `NSEventTrackingRunLoopMode` (which blocks `systray` main-thread calls), tray menu rebuilds happen on screen-crossing edges while the menu is closed via `RebuildTrayMenuImmediate()` (polled at 100ms only when `len(monitors) >= 2`).
+  - As defense-in-depth at click time, `actionBinder.follow` retargets stateless actions (`Next`, `Prev`, `Shuffle`, `Tune Image`, `View on Web`) to the live cursor display, while `actionBinder.guard` fails closed and triggers `RebuildTrayMenuImmediate()` for state-labelled actions (`Pause/Resume`, `Add/Remove Favorite`, `Delete And Block`) if the cursor monitor differs from the snapshot monitor.
 
 ### 1.6 OpenGL Safety Guard (Windows)
 

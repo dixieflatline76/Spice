@@ -1137,6 +1137,19 @@ func (sa *SpiceApp) RebuildTrayMenu() {
 	})
 }
 
+// RebuildTrayMenuImmediate cancels any pending debounced rebuild and rebuilds now.
+// Used on macOS when the cursor crosses displays, so the menu is already correct
+// before the user clicks the tray icon on the new display.
+func (sa *SpiceApp) RebuildTrayMenuImmediate() {
+	sa.trayMu.Lock()
+	if sa.trayDebounce != nil {
+		sa.trayDebounce.Stop()
+		sa.trayDebounce = nil
+	}
+	sa.trayMu.Unlock()
+	fyne.Do(sa.CreateTrayMenu)
+}
+
 // decodeGifToFrames decodes a GIF and pre-renders each frame onto a canvas
 // handling disposal methods to prevent artifacts.
 func decodeGifToFrames(data []byte) ([]image.Image, []time.Duration, error) {

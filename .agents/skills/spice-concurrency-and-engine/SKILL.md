@@ -27,8 +27,10 @@ Independent locks (never nest with `wp.monMu` or `mc.mu`):
 - `gate.mu`
 
 ### Fyne Main-Thread Deadlock Rule
-- **Never** hold `wp.monMu` while calling `fyne.Do`, updating Fyne widgets, or rebuilding the system tray menu (`CreateTrayMenuItems` / `RebuildTrayMenu`).
+- **Never** hold `wp.monMu` while calling `fyne.Do`, updating Fyne widgets, or rebuilding the system tray menu (`CreateTrayMenuItems` / `RebuildTrayMenu` / `RebuildTrayMenuImmediate`).
 - Always snapshot monitor/engine state under `wp.monMu.RLock()`, release `wp.monMu`, and then call into Fyne or build menu schemas lock-free.
+- **Dual-Lock Invariant on `mc.Monitor`**: All writers of `mc.Monitor` (`SyncActionUpdate`, `SyncActionRefresh`) must hold **both** `wp.monMu.Lock()` and `mc.mu.Lock()`; readers may hold either `wp.monMu.RLock()` or `mc.mu.RLock()`.
+- **Per-Screen Tray (`TrayCapableOS`)**: `HasPerScreenTray()` must be cached/cheap (`sync.Once`), `GetCursorPosition()` must be thread-safe and never dispatch to the main thread (`CGEventCreate`), and tray rebuilds triggered by cursor crossing must happen while the menu is closed (AppKit tracking mode blocks `systray` main-thread calls).
 
 ---
 

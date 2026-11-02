@@ -16,6 +16,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -89,8 +90,10 @@ type Plugin struct {
 	lastTriggerTime         time.Time // Anti-loop cooldown state
 
 	// Monitors (Actor Model)
-	Monitors map[int]*MonitorController
-	monMu    sync.RWMutex // Protects the Monitors map itself
+	Monitors            map[int]*MonitorController
+	monMu               sync.RWMutex // Protects the Monitors map itself
+	activeTrayMonitorID atomic.Int32 // Monitor under the cursor (per-screen tray platforms only)
+	lastMissResync      atomic.Int64 // UnixNano of the last cursor-miss-triggered SyncMonitors
 
 	// Internal State
 	enrichmentSignal chan int // Signal for lazy enrichment worker
@@ -1185,9 +1188,87 @@ func (wp *Plugin) createMonitorControllerLocked(m Monitor, force bool) {
 
 // syncMonitorsLocked is removed as it is now integrated into SyncMonitors with Policy.
 
+func (wp *Plugin) trayOS() (TrayCapableOS, bool) {
+	tc, ok := wp.os.(TrayCapableOS)
+	if !ok || !tc.HasPerScreenTray() {
+		return nil, false
+	}
+	return tc, true
+}
+
+func (wp *Plugin) hasPerScreenTray() bool {
+	_, ok := wp.trayOS()
+	return ok
+}
+
+// cursorMonitorID returns the monitor under the cursor on per-screen tray
+// platforms. Returns ok=false on single-tray platforms or with < 2 monitors
+// (nothing to disambiguate, so no cursor query at all).
+func (wp *Plugin) cursorMonitorID() (int, bool) {
+	tc, ok := wp.trayOS()
+	if !ok {
+		return 0, false
+	}
+	wp.monMu.RLock()
+	monitors := make([]Monitor, 0, len(wp.Monitors))
+	for _, mc := range wp.Monitors {
+		monitors = append(monitors, mc.Monitor) // safe: writers hold monMu
+	}
+	wp.monMu.RUnlock()
+	if len(monitors) < 2 {
+		return 0, false
+	}
+	pt, ok := tc.GetCursorPosition()
+	if !ok {
+		return 0, false
+	}
+	id, hit := MonitorAtPoint(pt, monitors)
+	if !hit {
+		wp.requestMissResync()
+	}
+	return id, true
+}
+
+// requestMissResync triggers SyncMonitors (at most every 5s) when the cursor is
+// outside every known monitor, i.e. the display arrangement changed.
+func (wp *Plugin) requestMissResync() {
+	now := time.Now().UnixNano()
+	last := wp.lastMissResync.Load()
+	if now-last < int64(5*time.Second) || !wp.lastMissResync.CompareAndSwap(last, now) {
+		return
+	}
+	go wp.SyncMonitors(false)
+}
+
+// syncActiveTrayMonitor updates activeTrayMonitorID and rebuilds the tray menu
+// immediately if the cursor moved to a different monitor. Returns true on change.
+func (wp *Plugin) syncActiveTrayMonitor() bool {
+	cur, ok := wp.cursorMonitorID()
+	if !ok {
+		return false
+	}
+	if wp.activeTrayMonitorID.Swap(int32(cur)) == int32(cur) {
+		return false
+	}
+	if wp.manager != nil {
+		wp.manager.RebuildTrayMenuImmediate()
+	}
+	return true
+}
+
 func (wp *Plugin) startMonitorWatcher() {
 	ticker := time.NewTicker(90 * time.Second)
 	defer ticker.Stop()
+
+	// Cursor polling only on per-screen tray platforms. A nil channel blocks
+	// forever, so Windows/Linux pay nothing. cursorMonitorID itself returns
+	// early with < 2 monitors, so single-display Macs only pay a map length check.
+	var cursorC <-chan time.Time
+	if wp.hasPerScreenTray() {
+		ct := time.NewTicker(100 * time.Millisecond)
+		defer ct.Stop()
+		cursorC = ct.C
+	}
 
 	for {
 		select {
@@ -1196,6 +1277,8 @@ func (wp *Plugin) startMonitorWatcher() {
 			return
 		case <-ticker.C:
 			wp.SyncMonitors(false)
+		case <-cursorC:
+			wp.syncActiveTrayMonitor()
 		}
 	}
 }

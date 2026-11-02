@@ -4,6 +4,7 @@ package wallpaper
 
 import (
 	"context"
+	"image"
 	"testing"
 
 	"fyne.io/fyne/v2"
@@ -409,3 +410,100 @@ func (m *MockProvider) EnrichImage(ctx context.Context, img provider.Image) (pro
 }
 func (m *MockProvider) SupportsUserQueries() bool { return true }
 func (m *MockProvider) HomeURL() string           { return "" }
+
+func newTrayTestPlugin(t *testing.T, perScreen bool, cursor image.Point) (*Plugin, *mockTrayOS, *MockPluginManager) {
+	wp := newTestPlugin(t)
+	tos := &mockTrayOS{MockOS: &MockOS{}, perScreen: perScreen, cursor: cursor, cursorOK: true}
+	mgr := &MockPluginManager{}
+	wp.os = tos
+	wp.manager = mgr
+	wp.Monitors = map[int]*MonitorController{
+		0: {Monitor: Monitor{ID: 0, Name: "Built-in", Primary: true, Rect: image.Rect(0, 0, 3456, 2234), Bounds: image.Rect(0, 0, 1728, 1117)}, State: &MonitorState{}},
+		1: {Monitor: Monitor{ID: 1, Name: "Studio", Rect: image.Rect(0, 0, 5120, 2880), Bounds: image.Rect(1728, 0, 4288, 1440)}, State: &MonitorState{}},
+	}
+	return wp, tos, mgr
+}
+
+func TestCreateTrayMenu_EmptyMonitors_DoesNotPanic(t *testing.T) {
+	wp := newTestPlugin(t)
+	wp.Monitors = map[int]*MonitorController{}
+	var s *schema.MenuSchema
+	assert.NotPanics(t, func() { s = wp.CreateTrayMenu() })
+	assert.Empty(t, s.Items)
+}
+
+func TestCreateTrayMenu_SingleTray_PrimaryRootOthersSubmenus(t *testing.T) {
+	wp, _, _ := newTrayTestPlugin(t, false, image.Point{})
+	s := wp.CreateTrayMenu()
+	subs := 0
+	for _, it := range s.Items {
+		if it.SubMenu != nil {
+			subs++
+		}
+	}
+	assert.Equal(t, 1, subs)
+}
+
+func TestCreateTrayMenu_PerScreenTray_FlatMenu(t *testing.T) {
+	wp, _, mgr := newTrayTestPlugin(t, true, image.Pt(2000, 10)) // cursor on Monitor 1
+	mgr.On("RebuildTrayMenuImmediate").Return()
+	assert.True(t, wp.syncActiveTrayMonitor())
+	assert.Equal(t, int32(1), wp.activeTrayMonitorID.Load())
+
+	s := wp.CreateTrayMenu()
+	for _, it := range s.Items {
+		assert.Nil(t, it.SubMenu, "per-screen tray must not render Display submenus")
+	}
+	mgr.AssertCalled(t, "RebuildTrayMenuImmediate")
+}
+
+func TestSyncActiveTrayMonitor_NoChange_NoRebuild(t *testing.T) {
+	wp, _, mgr := newTrayTestPlugin(t, true, image.Pt(500, 10)) // Monitor 0 == initial value
+	assert.False(t, wp.syncActiveTrayMonitor())
+	mgr.AssertNotCalled(t, "RebuildTrayMenuImmediate")
+}
+
+func TestCursorMonitorID_SingleMonitor_SkipsPolling(t *testing.T) {
+	wp, _, _ := newTrayTestPlugin(t, true, image.Pt(2000, 10))
+	delete(wp.Monitors, 1)
+	_, ok := wp.cursorMonitorID()
+	assert.False(t, ok)
+}
+
+func TestActionBinder_Follow_RetargetsToLiveCursor(t *testing.T) {
+	wp, tos, _ := newTrayTestPlugin(t, true, image.Pt(2000, 10))
+	got := -1
+	act := wp.newActionBinder(1, true).follow(func(id int) { got = id })
+	tos.cursor = image.Pt(500, 10) // fast move to Monitor 0 before click
+	act()
+	assert.Equal(t, 0, got)
+}
+
+func TestActionBinder_Guard_FailsClosedOnMismatch(t *testing.T) {
+	wp, tos, mgr := newTrayTestPlugin(t, true, image.Pt(2000, 10))
+	mgr.On("RebuildTrayMenuImmediate").Return()
+	called := false
+	act := wp.newActionBinder(1, true).guard(func(int) { called = true })
+	tos.cursor = image.Pt(500, 10)
+	act()
+	assert.False(t, called, "state-labelled action must not run on a different monitor")
+	mgr.AssertCalled(t, "RebuildTrayMenuImmediate")
+}
+
+func TestActionBinder_Guard_RunsOnMatch(t *testing.T) {
+	wp, _, _ := newTrayTestPlugin(t, true, image.Pt(2000, 10))
+	got := -1
+	wp.newActionBinder(1, true).guard(func(id int) { got = id })()
+	assert.Equal(t, 1, got)
+}
+
+func TestActionBinder_NotLive_UsesSnapshotID(t *testing.T) {
+	wp, tos, _ := newTrayTestPlugin(t, false, image.Pt(500, 10))
+	tos.cursor = image.Pt(500, 10)
+	got := -1
+	wp.newActionBinder(1, false).follow(func(id int) { got = id })()
+	assert.Equal(t, 1, got)
+	got = -1
+	wp.newActionBinder(1, false).guard(func(id int) { got = id })()
+	assert.Equal(t, 1, got)
+}
