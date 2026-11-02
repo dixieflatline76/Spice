@@ -448,7 +448,7 @@ func TestCreateTrayMenu_PerScreenTray_FlatMenu(t *testing.T) {
 	wp, _, mgr := newTrayTestPlugin(t, true, image.Pt(2000, 10)) // cursor on Monitor 1
 	mgr.On("RebuildTrayMenuImmediate").Return()
 	assert.True(t, wp.syncActiveTrayMonitor())
-	assert.Equal(t, int32(1), wp.activeTrayMonitorID.Load())
+	assert.Equal(t, int64(1), wp.activeTrayMonitorID.Load())
 
 	s := wp.CreateTrayMenu()
 	for _, it := range s.Items {

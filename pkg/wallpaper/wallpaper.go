@@ -92,7 +92,7 @@ type Plugin struct {
 	// Monitors (Actor Model)
 	Monitors            map[int]*MonitorController
 	monMu               sync.RWMutex // Protects the Monitors map itself
-	activeTrayMonitorID atomic.Int32 // Monitor under the cursor (per-screen tray platforms only)
+	activeTrayMonitorID atomic.Int64 // Monitor under the cursor (per-screen tray platforms only)
 	lastMissResync      atomic.Int64 // UnixNano of the last cursor-miss-triggered SyncMonitors
 
 	// Internal State
@@ -1247,7 +1247,7 @@ func (wp *Plugin) syncActiveTrayMonitor() bool {
 	if !ok {
 		return false
 	}
-	if wp.activeTrayMonitorID.Swap(int32(cur)) == int32(cur) {
+	if wp.activeTrayMonitorID.Swap(int64(cur)) == int64(cur) {
 		return false
 	}
 	if wp.manager != nil {

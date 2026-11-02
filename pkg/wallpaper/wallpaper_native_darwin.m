@@ -1,5 +1,6 @@
 #import "wallpaper_native.h"
 #import <AppKit/AppKit.h>
+#import <CoreGraphics/CoreGraphics.h>
 #import <Foundation/Foundation.h>
 
 // ensureMainThread runs a block on the main thread synchronously.

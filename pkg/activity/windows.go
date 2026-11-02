@@ -104,31 +104,39 @@ func foregroundWindowRectAndStyle() (win Rect, style uint32, ok bool) {
 			W: int(r.Right - r.Left),
 			H: int(r.Bottom - r.Top),
 		},
-		uint32(st), true
+		uint32(st), true // #nosec G115 //nolint:gosec // G115: Win32 GWL_STYLE is a 32-bit bitmask
 }
 
-func foregroundPID() (int, bool) {
+func foregroundPIDRaw() (uint32, bool) {
 	hwnd, _, _ := getForegroundFP.Call()
 	if hwnd == 0 {
 		return 0, false
 	}
 	var pid uint32
-	getWindowThread.Call(hwnd, uintptr(unsafe.Pointer(&pid)))
+	_, _, _ = getWindowThread.Call(hwnd, uintptr(unsafe.Pointer(&pid)))
 	if pid == 0 {
+		return 0, false
+	}
+	return pid, true
+}
+
+func foregroundPID() (int, bool) {
+	pid, ok := foregroundPIDRaw()
+	if !ok {
 		return 0, false
 	}
 	return int(pid), true
 }
 
 func foregroundProcessName() (string, bool) {
-	pid, ok := foregroundPID()
+	pid, ok := foregroundPIDRaw()
 	if !ok {
 		return "", false
 	}
-	if name, ok := processImageNameByOpen(uint32(pid)); ok {
+	if name, ok := processImageNameByOpen(pid); ok {
 		return name, true
 	}
-	return processExeNameBySnapshot(uint32(pid))
+	return processExeNameBySnapshot(pid)
 }
 
 func processImageNameByOpen(pid uint32) (string, bool) {
@@ -136,10 +144,10 @@ func processImageNameByOpen(pid uint32) (string, bool) {
 	if err != nil {
 		return "", false
 	}
-	defer windows.CloseHandle(h)
+	defer func() { _ = windows.CloseHandle(h) }()
 
-	buf := make([]uint16, 512)
-	size := uint32(len(buf))
+	var size uint32 = 512
+	buf := make([]uint16, size)
 	ret, _, _ := queryFullProcImageName.Call(
 		uintptr(h), 0,
 		uintptr(unsafe.Pointer(&buf[0])),
@@ -163,7 +171,7 @@ func processExeNameBySnapshot(pid uint32) (string, bool) {
 	if err != nil {
 		return "", false
 	}
-	defer windows.CloseHandle(snap)
+	defer func() { _ = windows.CloseHandle(snap) }()
 
 	var pe windows.ProcessEntry32
 	pe.Size = uint32(unsafe.Sizeof(pe))
@@ -219,7 +227,7 @@ func monitorRects() []Rect {
 	})
 
 	enumMonBuf = enumMonBuf[:0]
-	enumDisplayMonitors.Call(0, 0, enumMonCB, 0)
+	_, _, _ = enumDisplayMonitors.Call(0, 0, enumMonCB, 0)
 	if len(enumMonBuf) == 0 {
 		return []Rect{virtualScreenRect()}
 	}
@@ -233,7 +241,7 @@ func virtualScreenRect() Rect {
 	y, _, _ := getSysMetrics.Call(smYVirtualScreen)
 	w, _, _ := getSysMetrics.Call(smCXVirtualScreen)
 	h, _, _ := getSysMetrics.Call(smCYVirtualScreen)
-	return Rect{X: int(int32(x)), Y: int(int32(y)), W: int(w), H: int(h)}
+	return Rect{X: int(int32(x)), Y: int(int32(y)), W: int(w), H: int(h)} // #nosec G115 //nolint:gosec // G115: GetSystemMetrics returns signed 32-bit int
 }
 
 func queryPowerStatus() powerStatusStruct {
@@ -378,7 +386,7 @@ func readGpuCounterRows(counter syscall.Handle) []GpuEngineRow {
 	bufferSize := uint32(64 * 1024)
 	for attempts := 0; attempts < 4; attempts++ {
 		buf := make([]byte, bufferSize)
-		var size uint32 = uint32(len(buf))
+		size := bufferSize
 		var itemCount uint32
 		ret, _, _ := pdhGetFormatted.Call(
 			uintptr(counter),
@@ -393,7 +401,7 @@ func readGpuCounterRows(counter syscall.Handle) []GpuEngineRow {
 			}
 			return parseGpuItems(buf, itemCount)
 		}
-		if uintptr(uint32(ret)) != pdhMoreData {
+		if (ret & 0xFFFFFFFF) != pdhMoreData {
 			return nil
 		}
 		if size > bufferSize {

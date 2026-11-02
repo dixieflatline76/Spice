@@ -46,7 +46,8 @@ jobs:
           args: --out-format=colored-line-number --timeout=10m ./...
           install-mode: goinstall # Build from source using Go 1.25 to prevent version panic
         env:
-           GOGC: 100
+           GOGC: 50
+           GOMEMLIMIT: 5GiB
            CGO_ENABLED: 1
 
       - name: Run tests

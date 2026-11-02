@@ -4,7 +4,7 @@
 package wallpaper
 
 /*
-#cgo LDFLAGS: -framework AppKit -framework Foundation
+#cgo LDFLAGS: -framework AppKit -framework CoreGraphics -framework Foundation
 #include "wallpaper_native.h"
 #include <stdlib.h>
 */

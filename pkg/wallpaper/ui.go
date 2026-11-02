@@ -53,7 +53,7 @@ func (b actionBinder) guard(fn func(id int)) func() {
 		if b.live {
 			if cur, ok := b.wp.cursorMonitorID(); ok && cur != b.id {
 				utilLog.Printf("[Tray] Ignoring action for monitor %d: cursor is on monitor %d. Rebuilding menu.", b.id, cur)
-				b.wp.activeTrayMonitorID.Store(int32(cur))
+				b.wp.activeTrayMonitorID.Store(int64(cur))
 				if b.wp.manager != nil {
 					b.wp.manager.RebuildTrayMenuImmediate()
 				}
