@@ -1452,9 +1452,10 @@ func (sm *SettingsManager) RenderSchema(p schema.PanelSchema) fyne.CanvasObject 
 		return container.NewVScroll(content)
 	}
 
-	// For Museums (Met, ArtIC) and others without lists:
-	// Return the VBox directly. Do NOT wrap in VScroll. Do NOT wrap in Border.
-	return topContainer
+	// Wrap non-list panels (App tab, General accordion sections, Museums) in VScroll
+	// so content clips cleanly to its viewport and shows a vertical scrollbar when the
+	// window is shorter than the section's natural height (e.g. at 200% HiDPI scaling).
+	return container.NewVScroll(topContainer)
 }
 
 func stringSlicesEqual(a, b []string) bool {

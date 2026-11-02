@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/widget"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/schema"
@@ -405,9 +406,12 @@ func TestSchemaRendering(t *testing.T) {
 	// 3. Verify the generated tree
 	assert.NotNil(t, rendered)
 
-	// For panels without an expanding list (like museums), we expect a direct VBox
-	mainBox, ok := rendered.(*fyne.Container)
-	assert.True(t, ok, "Rendered output should be a VBox container")
+	// For panels without an expanding list (App tab, General sections, Museums),
+	// we expect a VScroll wrapping the VBox so short/HiDPI windows scroll cleanly.
+	scroll, ok := rendered.(*container.Scroll)
+	assert.True(t, ok, "Rendered output should be a VScroll container")
+	mainBox, ok := scroll.Content.(*fyne.Container)
+	assert.True(t, ok, "VScroll content should be a VBox container")
 	assert.Equal(t, 2, len(mainBox.Objects), "VBox should have 2 sections")
 
 	// Check registry: The RenderSchema should have registered the widgets
