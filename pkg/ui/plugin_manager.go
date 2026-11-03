@@ -28,7 +28,7 @@ type PluginManager interface {
 	// ShowTuneImagePopup displays the popup for tuning images (crop anchor, framing overrides).
 	// The outer ring (UI layer) owns window lifecycle and OpenGL error recovery.
 	// onSelect receives the chosen tuning options and a done callback to invoke after processing.
-	ShowTuneImagePopup(monitorID int, monitorBounds image.Rectangle, currentOpts provider.TuningOptions, effectiveOpts provider.TuningOptions, labels [9]string, values [9]provider.CropAnchor, lockFrame bool, onSelect func(opts provider.TuningOptions, onDone func()), onClose func())
+	ShowTuneImagePopup(monitorID int, displayLabel string, monitorBounds image.Rectangle, currentOpts provider.TuningOptions, effectiveOpts provider.TuningOptions, labels [9]string, values [9]provider.CropAnchor, lockFrame bool, onSelect func(opts provider.TuningOptions, onDone func()), onClose func())
 }
 
 // App is the interface that must be implemented by all applications.

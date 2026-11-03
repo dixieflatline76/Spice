@@ -38,7 +38,7 @@ All configuration state, validation/normalization, and persistence belong in `pk
 - `pkg/ui/schema/schema.go` must remain **100% pure Go** (zero Fyne imports).
 - Reuse existing schema types whenever possible:
   - `BoolItem`, `TextItem`, `SelectItem`, `SliderItem` — standard scalar settings with `InitialValue` and `ApplyFunc`.
-  - `AppPickerItem` — native OS application/executable picker with a per-entry list and individual `Delete` buttons (`InitialValue []string`, `OnAdd`, `OnRemove`, `ApplyFunc`).
+  - `AppPickerItem` — native OS application/executable picker with a per-entry list and individual `Delete` buttons (`InitialValue []string`, `ApplyFunc`). Additions and removals are staged in UI memory and persisted only when `ApplyFunc` runs via **Apply Changes**.
   - `FolderPickerItem` + `QueryListItem` — native directory picker and scrollable query table with per-row `Active` toggle and `Delete` button.
   - `SecretItem` — transactional credential input with `OnVerify` and `OnClear`.
   - `ButtonItem`, `ConfirmButtonItem`, `AsyncButtonItem` — action buttons.
@@ -56,8 +56,6 @@ All configuration state, validation/normalization, and persistence belong in `pk
       Help:         i18n.T("Automatically pause wallpaper changes whenever one of these apps or games is running in the foreground."),
       ButtonText:   i18n.T("Add App or Game..."),
       InitialValue: b.plugin.cfg.GetGameProcesses(),
-      OnAdd:        b.plugin.cfg.AddGameProcess,
-      OnRemove:     b.plugin.cfg.RemoveGameProcess,
       ApplyFunc: func(val []string) {
           b.plugin.cfg.SetGameProcesses(val)
           if b.plugin.gate != nil {
@@ -77,11 +75,16 @@ All configuration state, validation/normalization, and persistence belong in `pk
 2. **Register Getters & Apply Wrappers**:
    - `sm.valueGetters[v.Name]` returns the current live widget value.
    - `sm.applyFuncs[v.Name]` invokes `v.ApplyFunc`.
-3. **Dirty Tracking**:
-   - When the user interacts with the widget, compare the live value with `sm.registry[v.Name]`.
+3. **Dirty Tracking (Staged vs. Immediate — Never Mix)**:
+   - Any widget that participates in the **Apply Changes** workflow (`BoolItem`, `SelectItem`, `TextItem`, `SliderItem`, `AppPickerItem`) **must stage changes in UI memory** and **only** persist to `Config` when `v.ApplyFunc` runs on **Apply Changes**.
+   - **Never** call `Config` persistence methods on intermediate widget clicks if the widget also marks the form dirty for **Apply Changes**.
+   - When the user interacts with the widget, compare the live staged value with `sm.registry[v.Name]`.
    - If different from baseline: call `sm.SetSettingChangedCallback(v.Name, func() { ... })`.
    - If equal to baseline: call `sm.RemoveSettingChangedCallback(v.Name)`.
    - Call `sm.checkAndEnableApply()` to update the **Apply Changes** button state and evaluate `EnabledIf` / `VisibleIf` rules.
+4. **One-Way Port Data Flow (`PluginManager` in `pkg/ui/plugin_manager.go` & `ui/ui.go`)**:
+   - When the domain (`pkg/wallpaper/`) calls a `PluginManager` method (e.g. `ShowTuneImagePopup`), snapshot all required state (`displayLabel`, `monitorBounds`, `currentOpts`, `effectiveOpts`) under `mc.mu.RLock()` and pass it across the port.
+   - Never have `ui/ui.go` reach back into `wallpaper.GetInstance()` to re-query state that the domain caller already held.
 4. **Critical Gotchas**:
    - `sm.SetValue(name, val)` updates widget display state programmatically and **does not** trigger `OnChanged` or register a dirty callback. Do not use `sm.SetValue` expecting it to persist a setting.
    - Native OS file/folder pickers (`ui/picker_windows.go`, `ui/picker_darwin.go`, `ui/picker_others.go`) run on background goroutines; any Fyne widget updates in their callbacks **must** be wrapped in `fyne.Do(func() { ... })`.

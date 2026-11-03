@@ -37,12 +37,14 @@ Independent locks (never nest with `wp.monMu` or `mc.mu`):
 ## 2. MonitorController Actor Model (`pkg/wallpaper/monitor_controller.go`)
 
 Each physical display is managed by its own `MonitorController` actor goroutine:
-- State mutations happen via commands sent to `mc.Commands` (`CmdNext`, `CmdNextAuto`, `CmdPrev`, `CmdPause`) or under `mc.mu`.
+- **Single-Writer Actor Invariant**: `mc.Run()` is the **sole writer** of `mc.State` and the **sole caller** of `mc.os.SetWallpaper(..., mc.ID)`.
+- **Strict Channel Command Discipline**: Never call `mc.os.SetWallpaper` or mutate `mc.State` directly from `Plugin` (`pkg/wallpaper/wallpaper.go`) outside the actor channel. All monitor transitions (`CmdNext`, `CmdNextAuto`, `CmdPrev`, `CmdPause`, `CmdDelete`, `CmdFavorite`, `CmdUpdateShuffle`, `CmdSyncState`, `CmdTuningStart`, `CmdTuningEnd`, etc.) **must** be dispatched via `wp.dispatch(monitorID, Cmd*)` → `mc.Commands` (or `mc.TuningChan`) and executed sequentially inside `mc.Run()` under `mc.mu.Lock()`.
+- **Complete Snapshot Under `mc.mu.RLock()`**: Whenever reading `mc.State` or `mc.Monitor` from outside the actor (e.g., `CreateTrayMenu` or `showTuneImagePopup`), copy the value structs (`img := mc.State.CurrentImage`, `mon := mc.Monitor`) while holding `mc.mu.RLock()`, release `mc.mu.RUnlock()`, and only read from the local copies afterward.
 - **User Pause vs. System Suppression**:
   - `mc.State.Paused` (persisted in `cfg.MonitorPauseStates`) represents the **user's explicit pause intent** for that monitor.
   - Automatic suppression (`ActivityGate` during fullscreen games, presentations, or low battery) sets `wp.gateSuppressed` (`*util.SafeFlag`) and **must never mutate `mc.State.Paused`**.
-  - `CmdNextAuto` checks `mc.IsSuppressed()` and skips auto-rotation while suppressed, whereas manual `CmdNext` / `CmdPrev` always execute.
-  - When a user manually unpauses via the tray menu (`PauseAllMonitors` / `ToggleMonitorPause`), notify `wp.gate.NotifyUserUnpaused()` so the grace period starts and any active gate suppression releases immediately.
+  - `CmdNextAuto` checks `mc.IsGateSuppressed()` and skips auto-rotation while suppressed, whereas manual `CmdNext` / `CmdPrev` always execute.
+  - When a user manually unpauses via the tray menu (`TogglePauseMonitorAction`), notify `wp.gate.NotifyUserUnpaused()` so the grace period starts and any active gate suppression releases immediately.
 
 ---
 

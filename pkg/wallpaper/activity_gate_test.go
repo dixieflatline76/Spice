@@ -180,7 +180,7 @@ func (m *mockGatePluginManager) GetAssetManager() *asset.Manager   { return nil 
 func (m *mockGatePluginManager) RefreshTrayMenu()                  {}
 func (m *mockGatePluginManager) RebuildTrayMenu()                  {}
 func (m *mockGatePluginManager) RebuildTrayMenuImmediate()         {}
-func (m *mockGatePluginManager) ShowTuneImagePopup(int, image.Rectangle, provider.TuningOptions, provider.TuningOptions, [9]string, [9]provider.CropAnchor, bool, func(provider.TuningOptions, func()), func()) {
+func (m *mockGatePluginManager) ShowTuneImagePopup(int, string, image.Rectangle, provider.TuningOptions, provider.TuningOptions, [9]string, [9]provider.CropAnchor, bool, func(provider.TuningOptions, func()), func()) {
 }
 
 // ---------------------------------------------------------------------------
@@ -706,7 +706,7 @@ func TestUI_ActivityGateTrayAndAccordionIcons(t *testing.T) {
 		t.Error("validator accepted non-numeric 'abc'")
 	}
 
-	// 4. gateGameProcesses AppPickerItem add/remove/persistence check
+	// 4. gateGameProcesses AppPickerItem deferred ApplyFunc persistence check
 	var pickerItem schema.AppPickerItem
 	foundPicker := false
 	for _, section := range generalSchema.Sections {
@@ -718,28 +718,13 @@ func TestUI_ActivityGateTrayAndAccordionIcons(t *testing.T) {
 			}
 		}
 	}
-	if !foundPicker || pickerItem.OnAdd == nil || pickerItem.OnRemove == nil || pickerItem.ApplyFunc == nil {
-		t.Fatal("expected gateGameProcesses AppPickerItem with OnAdd, OnRemove, ApplyFunc")
+	if !foundPicker || pickerItem.ApplyFunc == nil {
+		t.Fatal("expected gateGameProcesses AppPickerItem with ApplyFunc")
 	}
-	if err := pickerItem.OnAdd("cs2.exe"); err != nil {
-		t.Fatalf("OnAdd cs2.exe failed: %v", err)
-	}
-	if err := pickerItem.OnAdd("eldenring.exe"); err != nil {
-		t.Fatalf("OnAdd eldenring.exe failed: %v", err)
-	}
-	if err := pickerItem.OnAdd("CS2.EXE"); err != nil {
-		t.Fatalf("OnAdd duplicate CS2.EXE failed: %v", err)
-	}
+	pickerItem.ApplyFunc([]string{"cs2.exe", "eldenring.exe", "CS2.EXE"})
 	apps := wp.cfg.GetGameProcesses()
 	if len(apps) != 2 || apps[0] != "cs2.exe" || apps[1] != "eldenring.exe" {
-		t.Fatalf("GetGameProcesses() after add = %v, want [cs2.exe eldenring.exe]", apps)
-	}
-	if err := pickerItem.OnRemove("cs2.exe"); err != nil {
-		t.Fatalf("OnRemove cs2.exe failed: %v", err)
-	}
-	apps = wp.cfg.GetGameProcesses()
-	if len(apps) != 1 || apps[0] != "eldenring.exe" {
-		t.Fatalf("GetGameProcesses() after remove = %v, want [eldenring.exe]", apps)
+		t.Fatalf("GetGameProcesses() after ApplyFunc = %v, want [cs2.exe eldenring.exe]", apps)
 	}
 	pickerItem.ApplyFunc([]string{"Hades.exe"})
 	apps = wp.cfg.GetGameProcesses()

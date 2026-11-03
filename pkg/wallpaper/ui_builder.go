@@ -325,8 +325,6 @@ func (b *PrefsPanelBuilder) BuildGeneralTabSchema() *schema.PanelSchema {
 						Help:         i18n.T("Automatically pause wallpaper changes whenever one of these apps or games is running in the foreground."),
 						ButtonText:   i18n.T("Add App or Game..."),
 						InitialValue: b.plugin.cfg.GetGameProcesses(),
-						OnAdd:        b.plugin.cfg.AddGameProcess,
-						OnRemove:     b.plugin.cfg.RemoveGameProcess,
 						ApplyFunc: func(val []string) {
 							b.plugin.cfg.SetGameProcesses(val)
 							if b.plugin.gate != nil {

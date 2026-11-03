@@ -1567,7 +1567,7 @@ func drawCrosshair(size int, col color.NRGBA) image.Image {
 // The window stays open after selection, showing a processing overlay and redrawing
 // with the updated active anchor when reprocessing completes.
 // ShowTuneImagePopup displays the popup for tuning images.
-func (sa *SpiceApp) ShowTuneImagePopup(monitorID int, monitorBounds image.Rectangle, currentOpts provider.TuningOptions, effectiveOpts provider.TuningOptions, labels [9]string, values [9]provider.CropAnchor, lockFrame bool, onSelect func(opts provider.TuningOptions, onDone func()), onClose func()) {
+func (sa *SpiceApp) ShowTuneImagePopup(monitorID int, displayLabel string, monitorBounds image.Rectangle, currentOpts provider.TuningOptions, effectiveOpts provider.TuningOptions, labels [9]string, values [9]provider.CropAnchor, lockFrame bool, onSelect func(opts provider.TuningOptions, onDone func()), onClose func()) {
 	// Guard: skip if OpenGL is unavailable.
 	if !sysinfo.CanCreateWindows() {
 		utilLog.Println("OpenGL unavailable — anchor popup cannot be created")
@@ -1577,9 +1577,8 @@ func (sa *SpiceApp) ShowTuneImagePopup(monitorID int, monitorBounds image.Rectan
 
 	sa.os.TransformToForeground()
 
-	displayLabel := fmt.Sprintf("%s %d", i18n.T("Display"), monitorID+1)
-	if wp := wallpaper.GetInstance(); wp != nil {
-		displayLabel = wp.MonitorDisplayLabel(monitorID)
+	if displayLabel == "" {
+		displayLabel = fmt.Sprintf("%s %d", i18n.T("Display"), monitorID+1)
 	}
 	title := fmt.Sprintf("%s — %s", i18n.T("Tune Image"), displayLabel)
 

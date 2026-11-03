@@ -19,15 +19,17 @@ Spice strictly separates its Pure-Go Domain Core (Inner Ring) from its Fyne UI A
    - **Zero Fyne imports** are permitted in `pkg/ui/schema/`, `pkg/wallpaper/`, or `pkg/wallpaper/providers/`.
 
 3. **Declarative Builders (`pkg/wallpaper/ui_builder.go` & `pkg/wallpaper/providers/*`)**:
-   - Builders must be **100% declarative**. They only map `b.plugin.cfg` getters and domain methods (`InitialValue`, `ApplyFunc`, `OnAdd`, `OnRemove`, `GetQueries`, etc.) onto `schema.*` structs.
+   - Builders must be **100% declarative**. They only map `b.plugin.cfg` getters and domain methods (`InitialValue`, `ApplyFunc`, `GetQueries`, etc.) onto `schema.*` structs.
    - **Never** put string-splitting, parsing, deduplication, or business logic inside `ui_builder.go` or provider UI methods.
 
-4. **Isolated Fyne Adapter (`ui/settings_manager.go`)**:
+4. **Isolated Fyne Adapter (`ui/settings_manager.go` & `ui/ui.go`)**:
    - `ui/settings_manager.go` is the **only** place that translates `schema.*` structs into Fyne widgets and OS dialogs (`ui/picker_*.go`).
    - All settings widgets must participate in `SettingsManager`'s **Registry Pattern**:
      - Seed initial baseline into `sm.registry[name]`.
      - Register live getter in `sm.valueGetters[name]` and apply wrapper in `sm.applyFuncs[name]`.
      - Compare live value against baseline on user interaction; call `sm.SetSettingChangedCallback(name, ...)` when dirty or `sm.RemoveSettingChangedCallback(name)` when reverted, followed by `sm.checkAndEnableApply()`.
+   - **No Double-Persistence (Staged vs. Immediate)**: Any widget that participates in the **"Apply Changes"** workflow (`BoolItem`, `SelectItem`, `TextItem`, `SliderItem`, `AppPickerItem`) **must stage changes in UI memory** and **only** write to `Config` when `ApplyFunc` is invoked by clicking **"Apply Changes"**. Never mutate `Config` on intermediate add/delete button clicks while also lighting up **"Apply Changes"**.
+   - **One-Way Port Data Flow (`PluginManager`)**: When the inner ring (`pkg/wallpaper/`) calls a `PluginManager` port method (e.g., `ShowTuneImagePopup`), it must snapshot all needed monitor/image state (`displayLabel`, `monitorBounds`, `currentOpts`, `effectiveOpts`) under `mc.mu.RLock()` and pass it as arguments across the port. The outer UI adapter (`ui/ui.go`) must **never** reach back into `wallpaper.GetInstance()` to re-query state the caller already had.
    - **Gotcha**: `sm.SetValue(name, val)` is strictly for programmatic UI synchronization and **does not** trigger `OnChanged` or mark a setting dirty for the "Apply Changes" button.
 
 ---
@@ -41,7 +43,10 @@ wp.monMu -> mc.mu -> store.mu -> saveMu
 - `wp.downloadMutex`, `wp.globalFetchMu`, `wp.queryCancelMu`, `favProvider.mu`, and `gate.mu` are independent and must **never** be nested with `wp.monMu` or `mc.mu`.
 - **Never hold `wp.monMu` when calling into Fyne (`fyne.Do`, widget updates, or tray menu updates)**. Snapshot state under `monMu`, release the lock, and then invoke Fyne.
 - Window creation or UI mutation from background goroutines (e.g., HTTP API handlers or OS file picker goroutines) **must** use `fyne.Do(...)`.
-- Each monitor is an independent Actor (`MonitorController` in `pkg/wallpaper/monitor_controller.go`). Temporary system suppression (`ActivityGate`) uses `wp.gateSuppressed` (`*util.SafeFlag`) and must **never** overwrite per-monitor user pause state (`mc.State.Paused` / `c.MonitorPauseStates`).
+- **Strict Actor Channel Discipline (`MonitorController` in `pkg/wallpaper/monitor_controller.go`)**:
+  - Each monitor is an independent Actor whose `mc.Run()` loop is the **sole writer** of `mc.State` and the **sole caller** of `mc.os.SetWallpaper(..., mc.ID)`.
+  - **Never** call `mc.os.SetWallpaper` or mutate `mc.State` directly from `Plugin` (`pkg/wallpaper/wallpaper.go`) outside the actor channel. All monitor transitions (`CmdNext`, `CmdNextAuto`, `CmdPrev`, `CmdPause`, `CmdDelete`, `CmdFavorite`, `CmdUpdateShuffle`, `CmdSyncState`, `CmdTuningStart`, `CmdTuningEnd`, etc.) **must** be dispatched via `wp.dispatch(monitorID, Cmd*)` → `mc.Commands` (or `mc.TuningChan`) and executed sequentially under `mc.mu.Lock()`.
+  - Temporary system suppression (`ActivityGate`) uses `wp.gateSuppressed` (`*util.SafeFlag`) and must **never** overwrite per-monitor user pause state (`mc.State.Paused` / `c.MonitorPauseStates`).
 
 ---
 

@@ -1516,9 +1516,6 @@ func (sm *SettingsManager) renderAppPickerSetting(
 			currentApp := appName
 			lbl := widget.NewLabel(currentApp)
 			delBtn := widget.NewButton(i18n.T("Delete"), func() {
-				if v.OnRemove != nil {
-					_ = v.OnRemove(currentApp)
-				}
 				kept := make([]string, 0, len(items))
 				for _, existing := range items {
 					if !strings.EqualFold(existing, currentApp) {
@@ -1545,18 +1542,13 @@ func (sm *SettingsManager) renderAppPickerSetting(
 			if appName == "" {
 				return
 			}
-			for _, existing := range items {
-				if strings.EqualFold(existing, appName) {
-					return
-				}
-			}
-			if v.OnAdd != nil {
-				if err := v.OnAdd(appName); err != nil {
-					return
-				}
-			}
-			items = append(items, appName)
 			fyne.Do(func() {
+				for _, existing := range items {
+					if strings.EqualFold(existing, appName) {
+						return
+					}
+				}
+				items = append(items, appName)
 				rebuildList()
 				syncDirtyState()
 			})
