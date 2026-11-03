@@ -38,23 +38,26 @@ jobs:
           choco install mingw -y --no-progress
           choco install make -y --no-progress
 
+      - name: Warm Go Build Cache & Run Tests
+        run: |
+          go build ./...
+          go test ./...
+
+      - name: Check i18n integrity
+        run: make check-i18n
+
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v6
         timeout-minutes: 10
         with:
           version: v1.64.6
-          args: --out-format=colored-line-number --timeout=10m ./...
+          args: --verbose --out-format=colored-line-number --timeout=10m ./...
           install-mode: goinstall # Build from source using Go 1.25 to prevent version panic
+          cache-invalidation-interval: 1
         env:
-           GOGC: 50
-           GOMEMLIMIT: 5GiB
+           GOGC: 80
+           GOMEMLIMIT: 1500MiB
            CGO_ENABLED: 1
-
-      - name: Run tests
-        run: go test ./...
-
-      - name: Check i18n integrity
-        run: make check-i18n
 
       - name: Dry Run Build (No Secrets)
         if: runner.os == 'Windows'
