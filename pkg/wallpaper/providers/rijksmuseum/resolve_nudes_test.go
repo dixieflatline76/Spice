@@ -5,10 +5,15 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"testing"
 )
 
 func TestResolveNudesScript(t *testing.T) {
+	if os.Getenv("SPICE_LIVE_TESTS") == "" {
+		t.Skip("Skipping live network test in CI. Run with SPICE_LIVE_TESTS=1 to execute.")
+	}
+
 	accessions := []string{"SK-A-3841", "SK-C-1351", "SK-A-26"}
 
 	for _, acc := range accessions {

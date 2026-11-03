@@ -3,6 +3,7 @@ package metmuseum
 import (
 	"context"
 	"net/http"
+	"os"
 	"testing"
 	"time"
 
@@ -71,6 +72,10 @@ func (m *MockPreferences) QueryList(key string) []string { return nil } // Guess
 // Let's rely on standard map.
 
 func TestMetMuseumBestOfCollection(t *testing.T) {
+	if os.Getenv("SPICE_LIVE_TESTS") == "" {
+		t.Skip("Skipping live network test in CI. Run with SPICE_LIVE_TESTS=1 to execute.")
+	}
+
 	// 1. Setup Mock Config & Client
 	cfg := &wallpaper.Config{
 		Preferences: NewMockPreferences(),
