@@ -4,6 +4,7 @@
 package activity
 
 /*
+#cgo CFLAGS: -x objective-c
 #cgo LDFLAGS: -framework AppKit -framework CoreGraphics -framework Foundation
 #import <AppKit/AppKit.h>
 #import <CoreGraphics/CoreGraphics.h>
@@ -60,16 +61,16 @@ static int getOnScreenWindows(NativeWindowInfo *out, int maxCount) {
         if (!list) return 0;
         CFIndex total = CFArrayGetCount(list);
         for (CFIndex i = 0; i < total && written < maxCount; i++) {
-            NSDictionary *entry = (__bridge NSDictionary *)CFArrayGetValueAtIndex(list, i);
+            NSDictionary *entry = (NSDictionary *)CFArrayGetValueAtIndex(list, i);
             if (!entry) continue;
 
-            NSNumber *layerNum = entry[(__bridge NSString *)kCGWindowLayer];
-            NSString *ownerStr = entry[(__bridge NSString *)kCGWindowOwnerName];
-            NSDictionary *boundsDict = entry[(__bridge NSString *)kCGWindowBounds];
+            NSNumber *layerNum = [entry objectForKey:(NSString *)kCGWindowLayer];
+            NSString *ownerStr = [entry objectForKey:(NSString *)kCGWindowOwnerName];
+            NSDictionary *boundsDict = [entry objectForKey:(NSString *)kCGWindowBounds];
             if (!layerNum || !ownerStr || !boundsDict) continue;
 
             CGRect rect = CGRectZero;
-            if (!CGRectMakeWithDictionaryRepresentation((__bridge CFDictionaryRef)boundsDict, &rect)) {
+            if (!CGRectMakeWithDictionaryRepresentation((CFDictionaryRef)boundsDict, &rect)) {
                 continue;
             }
 
