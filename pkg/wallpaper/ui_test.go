@@ -435,13 +435,26 @@ func TestCreateTrayMenu_EmptyMonitors_DoesNotPanic(t *testing.T) {
 func TestCreateTrayMenu_SingleTray_PrimaryRootOthersSubmenus(t *testing.T) {
 	wp, _, _ := newTrayTestPlugin(t, false, image.Point{})
 	s := wp.CreateTrayMenu()
+	assert.NotEmpty(t, s.Items)
+	assert.Equal(t, "Display 1 (Built-in)", s.Items[0].Label)
+	assert.True(t, s.Items[0].IsDisabled)
 	subs := 0
 	for _, it := range s.Items {
 		if it.SubMenu != nil {
 			subs++
+			assert.Equal(t, "Display 2 (Studio)", it.Label)
 		}
 	}
 	assert.Equal(t, 1, subs)
+}
+
+func TestCreateTrayMenu_SingleMonitor_NoHeaderRow(t *testing.T) {
+	wp, _, _ := newTrayTestPlugin(t, false, image.Point{})
+	delete(wp.Monitors, 1)
+	s := wp.CreateTrayMenu()
+	assert.NotEmpty(t, s.Items)
+	assert.Equal(t, "Next Wallpaper", s.Items[0].Label)
+	assert.False(t, s.Items[0].IsDisabled)
 }
 
 func TestCreateTrayMenu_PerScreenTray_FlatMenu(t *testing.T) {
@@ -451,10 +464,31 @@ func TestCreateTrayMenu_PerScreenTray_FlatMenu(t *testing.T) {
 	assert.Equal(t, int64(1), wp.activeTrayMonitorID.Load())
 
 	s := wp.CreateTrayMenu()
+	assert.NotEmpty(t, s.Items)
+	assert.Equal(t, "Display 2 (Studio)", s.Items[0].Label)
+	assert.True(t, s.Items[0].IsDisabled)
 	for _, it := range s.Items {
 		assert.Nil(t, it.SubMenu, "per-screen tray must not render Display submenus")
 	}
 	mgr.AssertCalled(t, "RebuildTrayMenuImmediate")
+}
+
+func TestMonitorDisplayLabel_And_ActiveMonitorBounds(t *testing.T) {
+	wp, tos, _ := newTrayTestPlugin(t, true, image.Pt(2000, 10))
+	assert.Equal(t, "Display 1 (Built-in)", wp.MonitorDisplayLabel(0))
+	assert.Equal(t, "Display 2 (Studio)", wp.MonitorDisplayLabel(1))
+	assert.Equal(t, "Display 3", wp.MonitorDisplayLabel(2))
+
+	assert.Equal(t, "Display 1", (Monitor{ID: 0, Name: "Primary"}).DisplayLabel())
+	assert.Equal(t, "Display 1", (Monitor{ID: 0, Name: "Display"}).DisplayLabel())
+	assert.Equal(t, "Display 2", (Monitor{ID: 1, Name: "Monitor 2"}).DisplayLabel())
+
+	// Cursor on Monitor 1 -> returns Monitor 1 bounds
+	assert.Equal(t, image.Rect(1728, 0, 4288, 1440), wp.ActiveMonitorBounds())
+
+	// Cursor on Monitor 0 -> returns Monitor 0 bounds
+	tos.cursor = image.Pt(500, 10)
+	assert.Equal(t, image.Rect(0, 0, 1728, 1117), wp.ActiveMonitorBounds())
 }
 
 func TestSyncActiveTrayMonitor_NoChange_NoRebuild(t *testing.T) {

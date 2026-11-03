@@ -8,6 +8,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 )
 
 // Monitor represents a connected display
@@ -18,6 +20,16 @@ type Monitor struct {
 	Rect       image.Rectangle // Physical pixel dimensions (image fitting & resolution-change detection)
 	Bounds     image.Rectangle // Desktop bounds in native window/cursor units (window placement & cursor hit-testing)
 	Primary    bool            // True if this is the OS primary display
+}
+
+// DisplayLabel returns the canonical user-facing label for this monitor,
+// including the hardware/localized name when available (e.g. "Display 1 (U34G2G1)").
+func (m Monitor) DisplayLabel() string {
+	name := strings.TrimSpace(m.Name)
+	if name != "" && name != "Primary" && name != "Display" && !strings.HasPrefix(name, "Monitor ") {
+		return i18n.Tf("Display {{.ID}} ({{.Name}})", map[string]any{"ID": m.ID + 1, "Name": name})
+	}
+	return i18n.Tf("Display {{.ID}}", map[string]any{"ID": m.ID + 1})
 }
 
 // MonitorContext is a transient object passed through the pipeline

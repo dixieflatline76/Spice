@@ -2,7 +2,6 @@ package wallpaper
 
 import (
 	"sort"
-	"strings"
 
 	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
@@ -93,10 +92,8 @@ func (wp *Plugin) CreateTrayMenu() *schema.MenuSchema {
 		mc.mu.RUnlock()
 
 		// Build display name while we have the monitor reference
-		s.displayName = i18n.Tf("Display {{.ID}}", map[string]any{"ID": id + 1})
-		if s.mon.Name != "" && s.mon.Name != "Primary" && !strings.HasPrefix(s.mon.Name, "Monitor ") {
-			s.displayName = i18n.Tf("Display {{.ID}} ({{.Name}})", map[string]any{"ID": id + 1, "Name": s.mon.Name})
-		}
+		s.mon.ID = id
+		s.displayName = s.mon.DisplayLabel()
 
 		snaps = append(snaps, s)
 	}
@@ -274,6 +271,13 @@ func (wp *Plugin) CreateTrayMenu() *schema.MenuSchema {
 	rootID, submenuMonitors := PlanTrayMonitors(monitors, perScreen, int(wp.activeTrayMonitorID.Load()))
 
 	if root, ok := byID[rootID]; ok {
+		if len(snaps) > 1 {
+			items = append(items, schema.MenuItemSchema{
+				Label:      root.displayName,
+				IconName:   "display.png",
+				IsDisabled: true,
+			})
+		}
 		items = append(items, createMonitorItems(root, perScreen)...)
 	}
 

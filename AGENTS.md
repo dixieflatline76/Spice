@@ -62,3 +62,27 @@ wp.monMu -> mc.mu -> store.mu -> saveMu
 2. **Resolution Probing (`pkg/wallpaper/downloader.go`)**: Decoded image `Width` and `Height` must be persisted back to the `Store`.
 3. **Backlog Healing (`pkg/wallpaper/fetch_logic.go`)**: Do not skip an existing store image if it is missing fitted derivatives for currently connected monitors.
 
+---
+
+## 5. CI/CD, Testing & Cross-Platform Guardrails
+
+1. **Never Modify `.github/workflows/` or Build Infrastructure Without Asking**:
+   - Do **not** edit `.github/workflows/*.yml` or `makefile` to diagnose or work around a failing CI build, linter error, or test failure. Always ask the user first before touching CI/CD or release configuration.
+   - Note that `golangci/golangci-lint-action` runs `golangci-lint` under Node's `child_process.exec` with a 1 MB output buffer: if `golangci-lint` fails with `exit with code null` on `macos-latest` or `windows-latest`, it means the compiler (`clang`/`gcc`/`go build`) dumped >1 MB of compile errors to `stderr` (not an OOM). Audit the branch's platform-specific files (`git diff origin/main...HEAD`) directly instead of changing CI flags.
+
+2. **Diagnose Locally First — Never Use CI as a Trial-and-Error Loop**:
+   - Do not blindly rerun failed CI jobs (`gh run rerun`) without first reproducing or probing the failure locally.
+   - **Darwin CGO Rules**: Any `.go` file with inline Objective-C in its CGO preamble (`#import <AppKit/AppKit.h>`, `@autoreleasepool`, `NSWorkspace`, etc.) **must** specify `#cgo CFLAGS: -x objective-c` (or place Objective-C in a separate `.m` file like `pkg/wallpaper/wallpaper_native_darwin.m`) and use standard C / Toll-Free Bridging casts (`(NSDictionary *)`, `(NSString *)`, `(CFDictionaryRef)`).
+   - **Cross-Platform Path Normalization**: When extracting executable or file basenames from user strings that may originate on either Windows or macOS (e.g., `normalizeGameProcesses` in `pkg/wallpaper/config.go` or `normalizeProcessName` in `pkg/activity/activity.go`), split across **both** `/` and `\` (`strings.LastIndexAny(s, `/\`)`) instead of `filepath.Base`, which does not split on `\` when tests run on macOS/Linux.
+
+3. **Hermetic Tests (Zero Un-Gated Live Network Calls in CI)**:
+   - Unit tests must be deterministic and offline-safe using `httptest.NewServer` or a mock `http.RoundTripper` (see `pkg/wallpaper/providers/artic/artic_test.go`).
+   - Any integration test that contacts a live external server **must** be gated at the start of the test:
+     ```go
+     if os.Getenv("SPICE_LIVE_TESTS") == "" {
+         t.Skip("Skipping live network test in CI. Run with SPICE_LIVE_TESTS=1 to execute.")
+     }
+     ```
+   - To verify locally that no test leaks live network calls, run with a dead proxy (`HTTP_PROXY=http://127.0.0.1:1 HTTPS_PROXY=http://127.0.0.1:1 NO_PROXY=127.0.0.1,localhost go test ./...`).
+
+

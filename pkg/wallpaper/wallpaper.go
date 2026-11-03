@@ -1229,6 +1229,45 @@ func (wp *Plugin) cursorMonitorID() (int, bool) {
 	return id, true
 }
 
+// ActiveMonitorBounds returns the desktop bounds of the currently active monitor
+// (the monitor under the cursor on per-screen tray platforms, or the primary monitor).
+func (wp *Plugin) ActiveMonitorBounds() image.Rectangle {
+	targetID := int(wp.activeTrayMonitorID.Load())
+	if id, ok := wp.cursorMonitorID(); ok {
+		targetID = id
+	}
+
+	wp.monMu.RLock()
+	defer wp.monMu.RUnlock()
+
+	if mc, ok := wp.Monitors[targetID]; ok && !mc.Monitor.Bounds.Empty() {
+		return mc.Monitor.Bounds
+	}
+	if mc, ok := wp.Monitors[0]; ok && !mc.Monitor.Bounds.Empty() {
+		return mc.Monitor.Bounds
+	}
+	for _, mc := range wp.Monitors {
+		if !mc.Monitor.Bounds.Empty() {
+			return mc.Monitor.Bounds
+		}
+	}
+	return image.Rectangle{}
+}
+
+// MonitorDisplayLabel returns the canonical user-facing display label for monitorID
+// (e.g. "Display 1 (U34G2G1)"), falling back to "Display N" if the monitor is not found.
+func (wp *Plugin) MonitorDisplayLabel(monitorID int) string {
+	wp.monMu.RLock()
+	mc, ok := wp.Monitors[monitorID]
+	var mon Monitor
+	if ok {
+		mon = mc.Monitor
+	}
+	wp.monMu.RUnlock()
+	mon.ID = monitorID
+	return mon.DisplayLabel()
+}
+
 // requestMissResync triggers SyncMonitors (at most every 5s) when the cursor is
 // outside every known monitor, i.e. the display arrangement changed.
 func (wp *Plugin) requestMissResync() {

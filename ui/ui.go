@@ -202,8 +202,8 @@ func getInstance() *SpiceApp {
 				utilLog.Debug("App entered foreground - synchronizing monitors...")
 				wp := wallpaper.GetInstance()
 				if wp != nil {
-					// Low-CPU check
-					wp.SyncMonitors(false)
+					// Run off the UI thread so foreground transitions never stall window creation
+					go wp.SyncMonitors(false)
 				}
 			})
 			fmt.Fprintln(os.Stderr, "[Spice] getInstance: lifecycle hooks set")
@@ -566,6 +566,7 @@ func (sa *SpiceApp) CreatePreferencesWindow(initialTab string) {
 		return
 	}
 
+	monBounds := activeMonitorBounds()
 	sa.os.TransformToForeground()
 
 	// If window already exists, just show it and switch tab if requested
@@ -576,6 +577,7 @@ func (sa *SpiceApp) CreatePreferencesWindow(initialTab string) {
 				sa.prefsTabs.Select(item)
 			}
 		}
+		centerWindowOnMonitor(sa.prefsWindow, monBounds)
 		sa.prefsWindow.Show()
 		sa.prefsWindow.RequestFocus()
 		return
@@ -644,11 +646,15 @@ func (sa *SpiceApp) CreatePreferencesWindow(initialTab string) {
 
 		// Derive height from actual screen height so it's always proportional to the display,
 		// regardless of scaling factor. Target 85% of logical screen height.
-		_, physHeight, err := sysinfo.GetScreenDimensions()
-		logicalScreenHeight := float32(physHeight) / osScale
+		var logicalScreenHeight float32
+		if !monBounds.Empty() && runtime.GOOS == "darwin" {
+			logicalScreenHeight = float32(monBounds.Dy())
+		} else if _, physHeight, err := sysinfo.GetScreenDimensions(); err == nil {
+			logicalScreenHeight = float32(physHeight) / osScale
+		}
 		targetHeight := targetWidth * 1.0 // Default: square (fallback if screen detection fails)
 
-		if err == nil && logicalScreenHeight > 0 {
+		if logicalScreenHeight > 0 {
 			targetHeight = logicalScreenHeight * 0.85
 
 			// Don't let the window be taller than it is wide
@@ -667,7 +673,7 @@ func (sa *SpiceApp) CreatePreferencesWindow(initialTab string) {
 		// allocate the correct framebuffer size before the first paint, preventing
 		// viewport clipping and the need for manual resizing/refresh hacks.
 		prefsWindow.Resize(fyne.NewSize(targetWidth, targetHeight))
-		prefsWindow.CenterOnScreen()
+		centerWindowOnMonitor(prefsWindow, monBounds)
 		prefsWindow.Show()
 	}()
 }
@@ -1259,7 +1265,7 @@ func (sa *SpiceApp) CreateAboutSplash() {
 
 	splashWindow.SetContent(content)
 	splashWindow.Resize(fyne.NewSize(300, 300)) // Scaled to 300px (Original)
-	splashWindow.CenterOnScreen()
+	centerWindowOnMonitor(splashWindow, activeMonitorBounds())
 	sa.splash = splashWindow
 	sa.splash.Show()
 
@@ -1571,7 +1577,11 @@ func (sa *SpiceApp) ShowTuneImagePopup(monitorID int, monitorBounds image.Rectan
 
 	sa.os.TransformToForeground()
 
-	title := fmt.Sprintf("%s — %s %d", i18n.T("Tune Image"), i18n.T("Display"), monitorID+1)
+	displayLabel := fmt.Sprintf("%s %d", i18n.T("Display"), monitorID+1)
+	if wp := wallpaper.GetInstance(); wp != nil {
+		displayLabel = wp.MonitorDisplayLabel(monitorID)
+	}
+	title := fmt.Sprintf("%s — %s", i18n.T("Tune Image"), displayLabel)
 
 	// Create window with OpenGL panic recovery (matches CreatePreferencesWindow pattern)
 	var w fyne.Window
@@ -1622,7 +1632,7 @@ func (sa *SpiceApp) ShowTuneImagePopup(monitorID int, monitorBounds image.Rectan
 
 		// -- Monitor label --
 		monitorText := canvas.NewText(
-			fmt.Sprintf("%s %d", i18n.T("Display"), monitorID+1),
+			displayLabel,
 			anchorMonitorColor(),
 		)
 		monitorText.TextSize = 11
@@ -1915,6 +1925,15 @@ func (sa *SpiceApp) ShowTuneImagePopup(monitorID int, monitorBounds image.Rectan
 	})
 
 	w.Show()
+}
+
+// activeMonitorBounds returns the desktop bounds of the currently active display
+// (the display under the cursor on macOS, or the primary display).
+func activeMonitorBounds() image.Rectangle {
+	if wp := wallpaper.GetInstance(); wp != nil {
+		return wp.ActiveMonitorBounds()
+	}
+	return image.Rectangle{}
 }
 
 // centerWindowOnMonitor seeds the window's native position inside the target
