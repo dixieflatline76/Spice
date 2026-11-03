@@ -1619,12 +1619,14 @@ func (c *Config) SetGameMode(v bool) {
 func normalizeGameProcesses(items []string) []string {
 	out := make([]string, 0, len(items))
 	for _, raw := range items {
-		p := strings.TrimSpace(raw)
+		p := strings.TrimRight(strings.TrimSpace(raw), `/\`)
 		if p == "" {
 			continue
 		}
-		p = filepath.Base(p)
-		if p == "" || p == "." || p == "/" || p == `\` {
+		if i := strings.LastIndexAny(p, `/\`); i >= 0 {
+			p = strings.TrimSpace(p[i+1:])
+		}
+		if p == "" || p == "." {
 			continue
 		}
 		if activity.MatchesProcessList(p, strings.Join(out, ", ")) {
