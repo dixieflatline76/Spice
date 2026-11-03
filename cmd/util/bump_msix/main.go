@@ -40,7 +40,7 @@ func main() {
 
 	// Replace the Version string safely using RegEx (matching space before Version to prevent matching MinVersion)
 	re := regexp.MustCompile(`\sVersion="[0-9.]+"`)
-	newContent := re.ReplaceAll(content, []byte(fmt.Sprintf(` Version="%s"`, fullVersion)))
+	newContent := re.ReplaceAll(content, fmt.Appendf(nil, ` Version="%s"`, fullVersion))
 
 	err = os.WriteFile(manifestPath, newContent, 0600)
 	if err != nil {
