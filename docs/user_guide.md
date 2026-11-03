@@ -46,9 +46,11 @@ When one display is connected, the tray menu shows actions directly:
 
 ### Multiple Displays
 
-When more than one display is connected, Display 1 (the primary) keeps its controls at the **top level** of the menu. Every additional display gets its own **submenu** named *Display 2*, *Display 3*, etc. (with the device name appended if available, e.g., *Display 2 (DELL U2723D)*).
+When two or more displays are connected, Spice adapts its tray menu to your operating system and labels every monitor with its hardware/localized name (e.g., **Display 1 (U34G2G1)** or **Display 2 (Studio Display)**):
 
-Each display submenu contains the same full set of controls — Next, Prev, Pause Play, Source, Attribution, Add to Favorites, and Delete And Block — all acting independently on that specific display.
+* **macOS (Separate Spaces enabled — default):** Each display has its own menu bar. Clicking the Spice icon on any display opens a **flat, context-aware menu** scoped directly to that display, headed by its **Display *N* (*Name*)** label—no submenus required.
+* **Windows (and macOS with Separate Spaces disabled):** A single tray icon lives on the primary display. **Display 1 (Primary)** controls appear at the top level of the menu under a **Display 1 (*Name*)** header, while **Display 2, Display 3, …** each get their own **submenu** containing the same full set of controls (*Next*, *Prev*, *Pause Play*, *Shuffle*, *Source*, *Attribution*, *Add to Favorites*, *Tune Image*, and *Delete And Block*).
+* **Active-Display Window Placement:** Opening **Preferences**, **Tune Image**, or **About Spice** centers the window directly on the display you are actively using (the display under your cursor), rather than always jumping back to the primary monitor.
 
 > **Tip:** When Spice starts with multiple monitors, it staggers wallpaper changes by a random offset so they don't all flash at the same time (configurable in Settings).
 
@@ -339,9 +341,8 @@ The "Favorites" provider is the heart of Spice's localized content. It acts as a
 
 #### Local Folders
 Want to use your own photography or personal collection?
-1. Open **Preferences → Wallpaper → Local**.
-2. Click **Add Folder** to select a directory on your computer.
-   - **Note for Windows Users:** Due to OS limitations, the folder picker requires you to select a specific file. Navigate to your desired folder, click on **any image file** inside it, and click "Open". Spice will automatically add the entire folder containing that image to your rotation, not just the single file.
+1. Open **Preferences → Wallpaper → Personal**.
+2. Click **Add Folder** to select a directory on your computer using the native OS folder dialog.
 3. Spice will search for high-resolution images (`.jpg`, `.png`, `.webp`) and add them to your rotation.
 4. **Tip**: Click the folder name in the list to open that directory directly in your file explorer.
 
@@ -364,10 +365,12 @@ When Spice starts, it detects all connected displays automatically. If you conne
 - **Pausing is per-display.** You can pause Display 2 while Display 1 keeps rotating.
 - **Favorites and Delete are per-display.** The action always applies to the wallpaper currently shown on the targeted display.
 
-### Tray Menu with Multiple Displays
+### Tray Menu & Window Placement with Multiple Displays
 
-- **Display 1** controls appear at the **top level** of the tray menu (no submenu needed).
-- **Display 2, 3, …** each have their own **submenu** with identical controls.
+- **Hardware Display Names:** Spice automatically queries your display's hardware/localized name (e.g., *Display 1 (DELL U2723QE)*, *Display 2 (Built-in Retina Display)*) and displays it in the tray menu header, display submenus, and the **Tune Image** window title and subtitle.
+- **macOS Per-Screen Menu Bar:** When *"Displays have separate Spaces"* is enabled in macOS System Settings, clicking the Spice menu bar icon on any monitor controls **that specific monitor** directly at the top level of the menu.
+- **Windows / Single-Tray Submenus:** On Windows, **Display 1** (always your OS primary display) appears at the top level of the tray menu, and **Display 2, 3, …** each have their own **submenu** with identical controls.
+- **Active-Display Windows:** **Preferences**, **Tune Image**, and **About Spice** open centered on the display under your cursor rather than defaulting to Display 1.
 
 ### Stagger Setting
 

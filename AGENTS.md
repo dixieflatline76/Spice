@@ -85,4 +85,8 @@ wp.monMu -> mc.mu -> store.mu -> saveMu
      ```
    - To verify locally that no test leaks live network calls, run with a dead proxy (`HTTP_PROXY=http://127.0.0.1:1 HTTPS_PROXY=http://127.0.0.1:1 NO_PROXY=127.0.0.1,localhost go test ./...`).
 
+4. **Keep Scratch Plans & Private Roadmaps Out of Git (`plans/`)**:
+   - Never commit AI task plans, risk assessments, brainstorming docs, or unreleased product roadmaps to the public repository. Store them in the conversation artifact/scratch directory or in the local gitignored `plans/` folder. Only polished user and contributor documentation for shipped features belongs in `docs/`.
+
+
 
