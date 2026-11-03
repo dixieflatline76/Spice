@@ -1322,7 +1322,7 @@ func (wp *Plugin) startMonitorWatcher() {
 	}
 }
 
-func (wp *Plugin) updateTrayMenuUI(img provider.Image, monitorID int) {
+func (wp *Plugin) updateTrayMenuUI(_ provider.Image, _ int) {
 	if wp.manager != nil {
 		wp.manager.RefreshTrayMenu()
 	}

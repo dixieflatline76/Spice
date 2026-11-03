@@ -115,18 +115,10 @@ func (r *recordingNotifier) count() int {
 	return len(r.msgs)
 }
 
-func (r *recordingNotifier) last() (string, string) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if len(r.msgs) == 0 {
-		return "", ""
-	}
-	return r.titles[len(r.titles)-1], r.msgs[len(r.msgs)-1]
-}
-
 // helper: builds a minimal Plugin with mock monitor controllers for testing
 // the gate without spinning up the entire wallpaper engine.
 func newTestGatePlugin(t *testing.T, monitorCount int) (*Plugin, *recordingNotifier) {
+	t.Helper()
 	p := NewMockPreferences()
 	cfg := &Config{
 		Preferences:        p,
