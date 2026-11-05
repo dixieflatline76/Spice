@@ -499,6 +499,10 @@ func (b *PrefsPanelBuilder) BuildProviderTabs() (schema.AccordionSchema, schema.
 		}
 	}
 
+	// Clear any unconsumed pending state so stale values never linger across rebuilds.
+	b.plugin.pendingAddUrl = ""
+	b.plugin.focusProviderName = ""
+
 	return schema.AccordionSchema{Items: onlineItems, EmptyMessage: i18n.T("No providers in this category.")},
 		schema.AccordionSchema{Items: localItems, EmptyMessage: i18n.T("No providers in this category.")},
 		schema.AccordionSchema{Items: museumItems, EmptyMessage: i18n.T("No providers in this category.")},
@@ -519,8 +523,10 @@ func (b *PrefsPanelBuilder) createProviderAccordionItem(p provider.ImageProvider
 	isPending := false
 	pendingURL := ""
 
-	// Check pending state
-	if b.plugin.pendingAddUrl != "" {
+	// Check pending state: only providers that support user queries (and match focusProviderName if set)
+	// may consume pendingAddUrl. This prevents non-query providers (e.g. Getty, NPM) from stealing
+	// pendingAddUrl when BuildProviderTabs iterates alphabetically.
+	if b.plugin.pendingAddUrl != "" && p.SupportsUserQueries() && (b.plugin.focusProviderName == "" || b.plugin.focusProviderName == p.ID()) {
 		if _, err := p.ParseURL(b.plugin.pendingAddUrl); err == nil {
 			pendingURL = b.plugin.pendingAddUrl
 			isPending = true

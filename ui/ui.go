@@ -621,7 +621,9 @@ func (sa *SpiceApp) CreatePreferencesWindow(initialTab string) {
 		sa.prefsWindow = prefsWindow // Store reference
 
 		// Build and bind the UI contents first, so the layout engine knows existing elements.
-		sa.RebuildPreferencesContent(initialTab)
+		// Dialogs requested while building (e.g. the browser extension's Add Query dialog) are
+		// queued until the window has its real size; see showQueuedDialogs below.
+		sm := sa.rebuildPreferencesContent(initialTab, true)
 
 		// Fyne is notoriously stubborn about window minimum sizes.
 		// Since UI scales dynamically, we cannot rely on hardcoded logical or physical sizes.
@@ -675,17 +677,31 @@ func (sa *SpiceApp) CreatePreferencesWindow(initialTab string) {
 		prefsWindow.Resize(fyne.NewSize(targetWidth, targetHeight))
 		centerWindowOnMonitor(prefsWindow, monBounds)
 		prefsWindow.Show()
+
+		// Only now does the window have its real size. A dialog shown earlier would be
+		// permanently clamped by Fyne to the tiny pre-Show canvas (narrow Add Query popup).
+		if sm != nil {
+			sm.showQueuedDialogs()
+		}
 	}()
 }
 
 // RebuildPreferencesContent rebuilds the content of the preferences window.
 // This allows refreshing the UI (e.g. to show "Add Query" dialogs) even if the window is already open.
 func (sa *SpiceApp) RebuildPreferencesContent(initialTab string) {
+	sa.rebuildPreferencesContent(initialTab, false)
+}
+
+// rebuildPreferencesContent rebuilds the preferences content. When queueDialogs is true (brand-new,
+// not-yet-shown window), dialogs requested during the build are held until the caller invokes
+// showQueuedDialogs() on the returned SettingsManager after the window has been sized and shown.
+func (sa *SpiceApp) rebuildPreferencesContent(initialTab string, queueDialogs bool) *SettingsManager {
 	if sa.prefsWindow == nil {
-		return
+		return nil
 	}
 
 	sm := NewSettingsManager(sa.prefsWindow)
+	sm.(*SettingsManager).queueDialogs = queueDialogs
 	sm.RegisterOnSettingsSaved(func() {
 		sa.RebuildTrayMenu()
 	})
@@ -919,6 +935,7 @@ func (sa *SpiceApp) RebuildPreferencesContent(initialTab string) {
 	// on a 1440px screen at 100% scaling).
 	sa.prefsWindow.SetContent(newMinSizeContainer(prefsWindowLayout))
 	sm.GetCheckAndEnableApplyFunc()() // Trigger initial UI dependency refresh
+	return sm.(*SettingsManager)
 }
 
 // minSizeContainer wraps a CanvasObject and overrides its MinSize to prevent

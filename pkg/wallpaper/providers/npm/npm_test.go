@@ -145,3 +145,10 @@ func TestSelectBestCanvasID(t *testing.T) {
 		})
 	}
 }
+
+func TestNPMProvider_ParseURL_RejectsArbitraryURLs(t *testing.T) {
+	p := NewProvider(nil, http.DefaultClient)
+	if _, err := p.ParseURL("https://wallhaven.cc/search?q=cyberpunk"); err == nil {
+		t.Fatal("expected ParseURL to return error for non-query curated museum provider")
+	}
+}

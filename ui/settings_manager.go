@@ -39,6 +39,12 @@ type SettingsManager struct {
 	applyFuncs          map[string]func(interface{}) // Type-safe wrappers for native apply functions
 	isRenderingCompact  bool                         // Tracks if the current section being rendered is compact
 	assetMgr            *asset.Manager
+
+	// queueDialogs holds back dialogs requested while a brand-new preferences window is still
+	// being built (no content/size yet). Fyne permanently clamps an overlay shown on a not-yet-sized
+	// canvas to that tiny size, so CreatePreferencesWindow shows them via showQueuedDialogs() after Show().
+	queueDialogs  bool
+	queuedDialogs []func()
 }
 
 type managedWidget struct {
@@ -945,14 +951,20 @@ func (sm *SettingsManager) fullRefresh() {
 // because it will NOT trigger engine-level side effects like wallpaper rotation or
 // collection syncs. It only updates the visual state of the UI (e.g., enabling/disabling
 // dependent fields, updating accordion titles).
+//
+// Thread-safety: RefreshUI may be called from any goroutine (e.g., a provider's background
+// sync goroutine). The work is always marshalled onto the Fyne main thread via fyne.Do,
+// because the query list rebuilds its rows (mutating container objects) during Refresh.
 func (sm *SettingsManager) RefreshUI() {
-	// 1. Evaluate all UI dependencies (EnabledIf/VisibleIf)
-	sm.refreshWidgetStates()
+	fyne.Do(func() {
+		// 1. Evaluate all UI dependencies (EnabledIf/VisibleIf)
+		sm.refreshWidgetStates()
 
-	// 2. Repaint all managed widgets (no registered callbacks)
-	for _, w := range sm.allWidgets {
-		w.Refresh()
-	}
+		// 2. Repaint all managed widgets (no registered callbacks)
+		for _, w := range sm.allWidgets {
+			w.Refresh()
+		}
+	})
 }
 
 // renderAsyncButton creates a button that handles background tasks and UI thread transitions.
@@ -1081,7 +1093,6 @@ func (sm *SettingsManager) SetSettingStatus(name string, message string, importa
 // RenderSchema takes a pure Go UI definition and renders it to a Fyne container.
 func (sm *SettingsManager) RenderSchema(p schema.PanelSchema) fyne.CanvasObject {
 	var topItems []fyne.CanvasObject
-	var expandingList fyne.CanvasObject
 
 	createLabel := func(text string) fyne.CanvasObject {
 		if text == "" || sm.isRenderingCompact {
@@ -1374,7 +1385,8 @@ func (sm *SettingsManager) RenderSchema(p schema.PanelSchema) fyne.CanvasObject 
 			case schema.QueryListItem:
 				list := sm.renderQueryList(v)
 				sm.RegisterRefreshFunc(func() { list.Refresh() })
-				expandingList = list
+				sectionContainer.Add(list)
+				sectionHasItems = true
 				// Always register in allWidgets so RefreshUI() can repaint the list
 				// (e.g., after an async sync operation completes in a provider goroutine).
 				widgetID := v.ID
@@ -1446,15 +1458,8 @@ func (sm *SettingsManager) RenderSchema(p schema.PanelSchema) fyne.CanvasObject 
 
 	topContainer := container.NewVBox(topItems...)
 
-	if expandingList != nil {
-		// ONLY use Border + VScroll for providers with editable query tables (Pexels, Wallhaven, etc.)
-		content := container.NewBorder(topContainer, nil, nil, nil, expandingList)
-		return container.NewVScroll(content)
-	}
-
-	// Wrap non-list panels (App tab, General accordion sections, Museums) in VScroll
-	// so content clips cleanly to its viewport and shows a vertical scrollbar when the
-	// window is shorter than the section's natural height (e.g. at 200% HiDPI scaling).
+	// Wrap panels in VScroll so the entire section (including provider settings + query rows)
+	// scrolls smoothly as a single cohesive view without crushing query lists on small screens.
 	return container.NewVScroll(topContainer)
 }
 
@@ -2038,6 +2043,13 @@ func (sm *SettingsManager) ShowConfirm(title, message string, callback func(bool
 
 // ShowAddQueryDialog opens the modal for adding image queries.
 func (sm *SettingsManager) ShowAddQueryDialog(cfg schema.AddQueryConfig, initialURL, initialDesc string, onAdded func()) {
+	if sm.queueDialogs {
+		utilLog.Debugf("ShowAddQueryDialog: window not shown yet, queueing dialog for URL: %s", initialURL)
+		sm.queuedDialogs = append(sm.queuedDialogs, func() {
+			sm.ShowAddQueryDialog(cfg, initialURL, initialDesc, onAdded)
+		})
+		return
+	}
 	utilLog.Debugf("ShowAddQueryDialog: Triggered with URL: %s", initialURL)
 
 	urlEntry := widget.NewEntry()
@@ -2178,139 +2190,203 @@ func (sm *SettingsManager) ShowAddQueryDialog(cfg schema.AddQueryConfig, initial
 	d.Show()
 }
 
-// renderQueryList builds a scroll-safe widget.List for query management.
-// It handles baseline seeding, pending state preservation across Fyne cell recycling,
+// showQueuedDialogs stops queueing and shows any dialogs requested while the window was being built.
+// Must be called once the preferences window has its content, size and has been shown.
+func (sm *SettingsManager) showQueuedDialogs() {
+	sm.queueDialogs = false
+	queued := sm.queuedDialogs
+	sm.queuedDialogs = nil
+	for _, show := range queued {
+		show()
+	}
+}
+
+type queryRowWidgets struct {
+	id           string
+	row          *fyne.Container
+	urlLink      *widget.Hyperlink
+	activeCheck  *widget.Check
+	deleteButton *widget.Button
+}
+
+// queryListWidget renders query rows in a non-scrolling VBox so its MinSize reflects all rows
+// and it scrolls naturally as part of the enclosing panel VScroll (avoiding 1-row widget.List collapse).
+type queryListWidget struct {
+	widget.BaseWidget
+	box    *fyne.Container
+	rows   []queryRowWidgets
+	syncFn func()
+}
+
+func (q *queryListWidget) CreateRenderer() fyne.WidgetRenderer {
+	return widget.NewSimpleRenderer(q.box)
+}
+
+func (q *queryListWidget) Refresh() {
+	if q.syncFn != nil {
+		q.syncFn()
+	}
+	q.BaseWidget.Refresh()
+}
+
+// renderQueryList builds a VBox-backed query list widget for query management.
+// It handles baseline seeding, pending state preservation across refreshes,
 // and wires up the enable/disable/delete interactions with the SettingsManager.
-func (sm *SettingsManager) renderQueryList(v schema.QueryListItem) *widget.List {
-	var queryList *widget.List
-	queryList = widget.NewList(
-		// Length
-		func() int {
-			return len(v.GetQueries())
-		},
-		// CreateItem — builds the cell template (no data binding here)
-		func() fyne.CanvasObject {
-			urlLink := widget.NewHyperlink(i18n.T("Placeholder"), nil)
-			activeCheck := widget.NewCheck(i18n.T("Active"), nil)
-			deleteButton := widget.NewButton(i18n.T("Delete"), func() {})
-			return container.NewHBox(urlLink, layout.NewSpacer(), activeCheck, deleteButton)
-		},
-		// UpdateItem — binds data to a recycled cell (scroll-safe)
-		func(i int, o fyne.CanvasObject) {
-			queries := v.GetQueries()
-			if i >= len(queries) {
-				return
+func (sm *SettingsManager) renderQueryList(v schema.QueryListItem) fyne.CanvasObject {
+	ql := &queryListWidget{
+		box: container.NewVBox(),
+	}
+	ql.ExtendBaseWidget(ql)
+
+	bindRow := func(rw *queryRowWidgets, query schema.Query) {
+		queryKey := query.ID
+
+		// Set display text
+		if v.GetDisplayText != nil {
+			rw.urlLink.SetText(v.GetDisplayText(query))
+		} else {
+			rw.urlLink.SetText(query.Description)
+		}
+
+		// Set clickable URL
+		if v.GetDisplayURL != nil {
+			if u := v.GetDisplayURL(query); u != nil {
+				rw.urlLink.SetURL(u)
 			}
-			query := queries[i]
-			queryKey := query.ID
-
-			c := o.(*fyne.Container)
-			urlLink := c.Objects[0].(*widget.Hyperlink)
-			activeCheck := c.Objects[2].(*widget.Check)
-			deleteButton := c.Objects[3].(*widget.Button)
-
-			// Set display text
-			if v.GetDisplayText != nil {
-				urlLink.SetText(v.GetDisplayText(query))
-			} else {
-				urlLink.SetText(query.Description)
+		} else {
+			if u, err := url.Parse(query.URL); err == nil {
+				rw.urlLink.SetURL(u)
 			}
+		}
 
-			// Set clickable URL
-			if v.GetDisplayURL != nil {
-				if u := v.GetDisplayURL(query); u != nil {
-					urlLink.SetURL(u)
-				}
-			} else {
-				if u, err := url.Parse(query.URL); err == nil {
-					urlLink.SetURL(u)
-				}
-			}
+		// Seed baseline if not yet seeded
+		if sm.GetBaseline(queryKey) == nil {
+			sm.SeedBaseline(queryKey, query.Active)
+		}
 
-			// --- Scroll-Safe State Management ---
-			if sm.GetBaseline(queryKey) == nil {
-				sm.SeedBaseline(queryKey, query.Active)
-			}
+		// Clear OnChanged before SetChecked to prevent recursive callback triggers
+		rw.activeCheck.OnChanged = nil
 
-			// MUST clear OnChanged before SetChecked to prevent recycling bugs
-			activeCheck.OnChanged = nil
+		if sm.HasPendingChange(queryKey) {
+			rw.activeCheck.SetChecked(!sm.GetBaseline(queryKey).(bool))
+		} else {
+			rw.activeCheck.SetChecked(query.Active)
+		}
 
-			if sm.HasPendingChange(queryKey) {
-				activeCheck.SetChecked(!sm.GetBaseline(queryKey).(bool))
-			} else {
-				activeCheck.SetChecked(query.Active)
-			}
-
-			// Wire checkbox toggle
-			activeCheck.OnChanged = func(b bool) {
-				if b != sm.GetBaseline(queryKey).(bool) {
-					sm.SetSettingChangedCallback(queryKey, func() {
-						var err error
-						if b {
-							err = v.EnableQuery(query.ID)
-						} else {
-							err = v.DisableQuery(query.ID)
-						}
-						if err != nil {
-							utilLog.Printf("Failed to update query status: %v", err)
-						} else {
-							sm.SeedBaseline(queryKey, b)
-							query.Active = b
-						}
-					})
-					sm.SetRefreshFlag(queryKey)
-				} else {
-					sm.RemoveSettingChangedCallback(queryKey)
-					sm.UnsetRefreshFlag(queryKey)
-				}
-				sm.checkAndEnableApply()
-				sm.RefreshUI() // Update UI states (accordion titles) without triggering wallpaper changes
-			}
-
-			// Wire action button
-			label := i18n.T("Delete")
-			if v.DeleteLabel != "" {
-				label = v.DeleteLabel
-			}
-			deleteButton.SetText(label)
-
-			deleteButton.OnTapped = func() {
-				confirmTitle := i18n.T("Please Confirm")
-				confirmMsg := i18n.Tf("Are you sure you want to delete {{.Description}}?", map[string]any{"Description": query.Description})
-
-				if v.DeleteConfirmMessage != "" {
-					confirmMsg = v.DeleteConfirmMessage
-				} else if query.Managed || v.ForceActionEnabled {
-					if v.DeleteLabel == i18n.T("Clear") {
-						confirmMsg = i18n.T("Are you sure you want to delete all saved favorites?")
-					}
-				}
-
-				sm.ShowConfirm(confirmTitle, confirmMsg, func(b bool) {
+		// Wire checkbox toggle
+		rw.activeCheck.OnChanged = func(b bool) {
+			if b != sm.GetBaseline(queryKey).(bool) {
+				sm.SetSettingChangedCallback(queryKey, func() {
+					var err error
 					if b {
-						if query.Active {
-							sm.SetRefreshFlag(queryKey)
-							sm.checkAndEnableApply()
-						}
-						if err := v.RemoveQuery(query.ID); err != nil {
-							utilLog.Printf("Failed to remove query: %v", err)
-						}
-						queryList.Refresh()
+						err = v.EnableQuery(query.ID)
+					} else {
+						err = v.DisableQuery(query.ID)
+					}
+					if err != nil {
+						utilLog.Printf("Failed to update query status: %v", err)
+					} else {
+						sm.SeedBaseline(queryKey, b)
+						query.Active = b
 					}
 				})
+				sm.SetRefreshFlag(queryKey)
+			} else {
+				sm.RemoveSettingChangedCallback(queryKey)
+				sm.UnsetRefreshFlag(queryKey)
+			}
+			sm.checkAndEnableApply()
+			sm.RefreshUI() // Update UI states (accordion titles) without triggering wallpaper changes
+		}
+
+		// Wire action button
+		label := i18n.T("Delete")
+		if v.DeleteLabel != "" {
+			label = v.DeleteLabel
+		}
+		rw.deleteButton.SetText(label)
+
+		rw.deleteButton.OnTapped = func() {
+			confirmTitle := i18n.T("Please Confirm")
+			confirmMsg := i18n.Tf("Are you sure you want to delete {{.Description}}?", map[string]any{"Description": query.Description})
+
+			if v.DeleteConfirmMessage != "" {
+				confirmMsg = v.DeleteConfirmMessage
+			} else if query.Managed || v.ForceActionEnabled {
+				if v.DeleteLabel == i18n.T("Clear") {
+					confirmMsg = i18n.T("Are you sure you want to delete all saved favorites?")
+				}
 			}
 
-			// Managed/synced queries: show a disabled Delete button for visual consistency.
-			// Non-managed queries: enable the Delete button.
-			if query.Managed && !v.ForceActionEnabled {
-				deleteButton.Disable()
-			} else {
-				deleteButton.Enable()
+			sm.ShowConfirm(confirmTitle, confirmMsg, func(b bool) {
+				if b {
+					if query.Active {
+						sm.SetRefreshFlag(queryKey)
+						sm.checkAndEnableApply()
+					}
+					if err := v.RemoveQuery(query.ID); err != nil {
+						utilLog.Printf("Failed to remove query: %v", err)
+					}
+					ql.Refresh()
+				}
+			})
+		}
+
+		// Managed/synced queries: show a disabled Delete button for visual consistency.
+		// Non-managed queries: enable the Delete button.
+		if query.Managed && !v.ForceActionEnabled {
+			rw.deleteButton.Disable()
+		} else {
+			rw.deleteButton.Enable()
+		}
+		rw.deleteButton.Refresh()
+	}
+
+	ql.syncFn = func() {
+		queries := v.GetQueries()
+		sameIDs := len(queries) == len(ql.rows)
+		if sameIDs {
+			for i, q := range queries {
+				if ql.rows[i].id != q.ID {
+					sameIDs = false
+					break
+				}
 			}
-			deleteButton.Refresh()
-		},
-	)
-	return queryList
+		}
+
+		if sameIDs {
+			for i, q := range queries {
+				bindRow(&ql.rows[i], q)
+			}
+			return
+		}
+
+		newRows := make([]queryRowWidgets, len(queries))
+		objects := make([]fyne.CanvasObject, len(queries))
+		for i, q := range queries {
+			urlLink := widget.NewHyperlink(i18n.T("Placeholder"), nil)
+			// Truncate long descriptions so they never inflate the panel's (and window's) minimum width.
+			urlLink.Truncation = fyne.TextTruncateEllipsis
+			activeCheck := widget.NewCheck(i18n.T("Active"), nil)
+			deleteButton := widget.NewButton(i18n.T("Delete"), func() {})
+			row := container.NewBorder(nil, nil, nil, container.NewHBox(activeCheck, deleteButton), urlLink)
+			newRows[i] = queryRowWidgets{
+				id:           q.ID,
+				row:          row,
+				urlLink:      urlLink,
+				activeCheck:  activeCheck,
+				deleteButton: deleteButton,
+			}
+			bindRow(&newRows[i], q)
+			objects[i] = row
+		}
+		ql.rows = newRows
+		ql.box.Objects = objects
+		ql.box.Refresh()
+	}
+
+	ql.syncFn()
+	return ql
 }
 
 // RenderTabs takes a declarative tabs schema and renders it into a Fyne container.

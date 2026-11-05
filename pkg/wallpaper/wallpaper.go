@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -1453,8 +1454,15 @@ func (wp *Plugin) startEnrichmentWorker() {
 
 // OpenAddCollectionUI parses the given URL and opens the settings panel to add it as a query.
 func (wp *Plugin) OpenAddCollectionUI(testURL string) error {
-	for name, p := range wp.providers {
-		if !p.SupportsUserQueries() {
+	names := make([]string, 0, len(wp.providers))
+	for name := range wp.providers {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	for _, name := range names {
+		p := wp.providers[name]
+		if p == nil || !p.SupportsUserQueries() {
 			continue
 		}
 		result, err := p.ParseURL(testURL)

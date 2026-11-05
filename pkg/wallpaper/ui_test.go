@@ -4,7 +4,9 @@ package wallpaper
 
 import (
 	"context"
+	"fmt"
 	"image"
+	"strings"
 	"testing"
 
 	"fyne.io/fyne/v2"
@@ -540,4 +542,128 @@ func TestActionBinder_NotLive_UsesSnapshotID(t *testing.T) {
 	got = -1
 	wp.newActionBinder(1, false).guard(func(id int) { got = id })()
 	assert.Equal(t, 1, got)
+}
+
+type urlRoutingMockProvider struct {
+	MockProvider
+	providerType provider.ProviderType
+	supportsUser bool
+	domainSubstr string
+	acceptsAny   bool // Mimics the old buggy Getty/NPM stubs: ParseURL accepted every URL
+}
+
+func (u *urlRoutingMockProvider) Type() provider.ProviderType { return u.providerType }
+func (u *urlRoutingMockProvider) SupportsUserQueries() bool   { return u.supportsUser }
+func (u *urlRoutingMockProvider) ParseURL(raw string) (string, error) {
+	if u.acceptsAny {
+		return raw, nil
+	}
+	if !u.supportsUser {
+		return "", fmt.Errorf("user queries not supported for %s", u.IDVal)
+	}
+	if strings.Contains(raw, u.domainSubstr) {
+		return raw, nil
+	}
+	return "", fmt.Errorf("unsupported url for %s", u.IDVal)
+}
+func (u *urlRoutingMockProvider) CreateQueryPanel(sm setting.SettingsManager, pendingURL string) *schema.PanelSchema {
+	if u.supportsUser && pendingURL != "" {
+		sm.ShowAddQueryDialog(schema.AddQueryConfig{Title: "Add " + u.TitleVal}, pendingURL, "", nil)
+	}
+	return &schema.PanelSchema{}
+}
+
+func TestOpenAddCollectionUI_FocusesProviderAndShowsAddQueryDialog(t *testing.T) {
+	ResetConfig()
+	prefs := NewMockPreferences()
+	cfg := GetConfig(prefs)
+	mgr := &MockPluginManager{}
+	mgr.On("OpenPreferences", "Wallpaper").Return()
+
+	wp := &Plugin{
+		cfg:       cfg,
+		manager:   mgr,
+		providers: make(map[string]provider.ImageProvider),
+	}
+
+	// Register non-query curated museums that sort alphabetically BEFORE Pexels/Wallhaven/Wikimedia.
+	// acceptsAny reproduces the original bug's precondition (stub ParseURL returning nil for any URL),
+	// so this test proves the builder guard itself prevents them from stealing pendingAddUrl.
+	wp.providers["Getty"] = &urlRoutingMockProvider{
+		MockProvider: MockProvider{IDVal: "Getty", TitleVal: "The J. Paul Getty Museum"},
+		providerType: provider.TypeMuseum,
+		supportsUser: false,
+		acceptsAny:   true,
+	}
+	wp.providers["NPM"] = &urlRoutingMockProvider{
+		MockProvider: MockProvider{IDVal: "NPM", TitleVal: "National Palace Museum"},
+		providerType: provider.TypeMuseum,
+		supportsUser: false,
+		acceptsAny:   true,
+	}
+	// Register query-supporting Online providers
+	wp.providers["Pexels"] = &urlRoutingMockProvider{
+		MockProvider: MockProvider{IDVal: "Pexels", TitleVal: "Pexels"},
+		providerType: provider.TypeCommunity,
+		supportsUser: true,
+		domainSubstr: "pexels.com",
+	}
+	wp.providers["Wallhaven"] = &urlRoutingMockProvider{
+		MockProvider: MockProvider{IDVal: "Wallhaven", TitleVal: "Wallhaven"},
+		providerType: provider.TypeCommunity,
+		supportsUser: true,
+		domainSubstr: "wallhaven.cc",
+	}
+	wp.providers["Wikimedia"] = &urlRoutingMockProvider{
+		MockProvider: MockProvider{IDVal: "Wikimedia", TitleVal: "Wikimedia Commons"},
+		providerType: provider.TypeMuseum,
+		supportsUser: true,
+		domainSubstr: "wikimedia.org",
+	}
+
+	cases := []struct {
+		name           string
+		url            string
+		expectProvider string
+		expectTabIndex int
+	}{
+		{
+			name:           "Wallhaven URL opens Wallhaven Add Query dialog",
+			url:            "https://wallhaven.cc/search?q=cyberpunk",
+			expectProvider: "Wallhaven",
+			expectTabIndex: 2, // Online tab
+		},
+		{
+			name:           "Pexels URL opens Pexels Add Query dialog",
+			url:            "https://www.pexels.com/search/mountains/",
+			expectProvider: "Pexels",
+			expectTabIndex: 2, // Online tab
+		},
+		{
+			name:           "Wikimedia Commons URL opens Wikimedia Add Query dialog",
+			url:            "https://commons.wikimedia.org/wiki/Category:Featured_pictures_on_Wikimedia_Commons",
+			expectProvider: "Wikimedia",
+			expectTabIndex: 1, // Museums tab
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := wp.OpenAddCollectionUI(tc.url)
+			assert.NoError(t, err)
+			assert.Equal(t, tc.expectProvider, wp.focusProviderName)
+			assert.Equal(t, tc.url, wp.pendingAddUrl)
+
+			sm := NewMockSettingsManager()
+			sm.On("ShowAddQueryDialog", mock.Anything, tc.url, "", mock.Anything).Return().Once()
+
+			tabsSchema := wp.CreatePrefsSchema(sm)
+			assert.NotNil(t, tabsSchema)
+			assert.Equal(t, tc.expectTabIndex, tabsSchema.Selected, "Expected provider tab to be selected")
+
+			sm.AssertExpectations(t)
+			assert.Empty(t, wp.pendingAddUrl, "pendingAddUrl must be cleared after schema build")
+			assert.Empty(t, wp.focusProviderName, "focusProviderName must be cleared after schema build")
+		})
+	}
 }
