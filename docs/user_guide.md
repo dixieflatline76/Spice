@@ -9,10 +9,11 @@
 2. [Keyboard Shortcuts](#keyboard-shortcuts)
 3. [Preferences: App Tab](#preferences-app-tab)
 4. [Preferences: Wallpaper Tab](#preferences-wallpaper-tab)
+   - [Activity & Power (Automatic Pausing)](#activity--power-automatic-pausing)
    - [General](#general-settings)
-   - [Smart Crop Anchors](#smart-crop-anchors)
-   - [Online Sources](#online-sources)
-   - [Local Sources](#local-sources)
+   - [Tune Image & Virtual Museum Frame](#tune-image--virtual-museum-frame)
+   - [Online Sources (Museums & Community)](#online-sources)
+   - [Local Sources (Personal)](#local-sources)
      - [Local Favorites](#local-favorites)
 5. [Multi-Display Setup](#multi-display-setup)
 6. [Browser Extensions](#browser-extensions)
@@ -225,7 +226,7 @@ You can set crop anchors directly from the keyboard using the same targeted modi
 
 ### Online Sources
 
-The **Online** tab lists each cloud and institutional image provider as an expandable accordion card. Click a provider name to expand its settings.
+The **Museums**, **Community**, and **Personal** sub-tabs list each cloud and institutional image provider as an expandable accordion card. Click a provider name to expand its settings.
 
 #### Wallhaven
  
@@ -299,7 +300,7 @@ Each museum provides curated collections designed to showcase institutional high
 - **High Resolution Art**: Masterpieces chosen for their exceptional detail and scale.
 
 **How to Use:**
-1. Open **Preferences → Wallpaper → Online**.
+1. Open **Preferences → Wallpaper → Museums**.
 2. Expand a museum card.
 3. Use the **Map** link to "Plan a Visit" and explore the institution's location.
 4. (Optional) Check **"Download & Frame Mismatched Images"** to automatically salvage extreme portraits/landscapes for this specific museum by wrapping them in the Virtual Museum Frame.
@@ -315,7 +316,7 @@ Google Photos is for your personal memories. Spice uses the **Google Photos Pick
 - **High Resolution**: Images are downloaded at their original resolution (where supported) to ensure your memories look stunning on high-DPI displays.
 
 **How to Use:**
-1. Open **Preferences → Wallpaper → Online → Google Photos**. (Note: May require beta allowlisting).
+1. Open **Preferences → Wallpaper → Personal → Google Photos**. (Note: May require beta allowlisting).
 2. Click **Connect to Google Photos**.
 3. In your browser, select the albums or specific photos you want to use.
 4. Back in Spice, toggle your Google Photos source and click **Apply**.
@@ -324,7 +325,7 @@ Google Photos is for your personal memories. Spice uses the **Google Photos Pick
 
 ### Local Sources
  
-Sometimes the best wallpapers are the ones you already own or have carefully curated into your favorites. These can be managed in the **Local** tab of the Spice Preferences.
+Sometimes the best wallpapers are the ones you already own or have carefully curated into your favorites. These can be managed in the **Personal** sub-tab of the Spice Preferences.
 
 #### Local Favorites
 The "Favorites" provider is the heart of Spice's localized content. It acts as a persistent archive of images you've "loved" from other providers.
@@ -336,7 +337,7 @@ The "Favorites" provider is the heart of Spice's localized content. It acts as a
 
 **How to Use:**
 - **Adding**: Click the Heart icon in the tray menu or use `Alt` + `N` + `↑` (Windows) / `Command` + `N` + `↑` (macOS).
-- **Managing**: Go to the **Local** tab to see your library. You can toggle your favorites on/off or clear your entire collection using the **Clear** button.
+- **Managing**: Go to the **Personal** sub-tab to see your library. You can toggle your favorites on/off or clear your entire collection using the **Clear** button.
 - **Quick-Access**: Click the **"❤️ Personal Favorites"** name in the list to immediately open your local favorites folder in the OS file explorer.
 
 #### Local Folders

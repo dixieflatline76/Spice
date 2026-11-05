@@ -271,8 +271,9 @@ When a query is deleted, a callback chain fires: `Config.onQueryRemoved` → `st
 ### 7.3 Provider Categorization
 
 Providers are categorized by `provider.ProviderType` for UI placement:
-- **TypeOnline**: Remote APIs (Pexels, Wallhaven, Wikimedia, Museums). "Online" tab
-- **TypeLocal**: Local filesystem (Favorites, Local Folders). "Local" tab
+- **TypeMuseum**: Institutional Open-Access collections (The Met, Art Institute of Chicago, Cleveland Museum of Art, Rijksmuseum, SMK, National Palace Museum, J. Paul Getty Museum). "Museums" tab
+- **TypeCommunity**: Community/curated search APIs (Wallhaven, Pexels, Wikimedia Commons). "Community" tab
+- **TypePersonal**: Personal libraries and local storage (Google Photos, Local Folders, Favorites). "Personal" tab
 
 ### 7.4 Smart Fit — Image Processing Pipeline
 
