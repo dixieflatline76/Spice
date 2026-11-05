@@ -23,6 +23,7 @@ Spice uses a **hybrid concurrency model**. The hot path (image ingestion from do
 | Fetch goroutines | Up to 5 (semaphore) | `downloadMutex`, `sourcesMutex` | Per fetch cycle |
 | Favorites worker | 1 | `favProvider.mu` via favMap | Provider lifetime |
 | Enrichment worker | 1 | None (channel-driven) | `Activate()` → `Deactivate()` |
+| ActivityGate worker | 1 (15s ticker + `wakeCh`) | `gate.mu`; sets atomic `wp.gateSuppressed` (`*util.SafeFlag`) | `Activate()` → `Deactivate()` |
 
 > **Note**: The Pipeline stateManager is the serialized writer for the hot path (`Add`, `MarkSeen`, `Remove`, `Clear`). The Plugin itself also writes to the store directly for admin operations (`Update`, `RemoveByQueryID`, `ResetFavorites`, `Wipe`, `Sync`) under the store's `RWMutex`.
 
@@ -40,10 +41,26 @@ favProvider.mu (independent — accessed via Favoriter interface)
 
 **Key invariants:**
 - `mc.mu.RLock()` is safe from any goroutine **except** the MC's own actor goroutine (which holds `mc.mu.Lock()` in `handleCommand`).
+- **Dual-Lock Invariant on `mc.Monitor`**: All writers of `mc.Monitor` (`SyncActionUpdate`, `SyncActionRefresh` in `SyncMonitors`) acquire **both** `wp.monMu.Lock()` and `mc.mu.Lock()` (in that order). Readers of `mc.Monitor` may safely hold either `wp.monMu.RLock()` or `mc.mu.RLock()`.
 - `store.mu` is always the innermost lock — no code holds `store.mu` while acquiring another lock.
 - `downloadMutex` protects `queryPages`, `stopNightlyRefresh`, and fetch state. Never nested with `monMu`.
 - **`monMu` must never be held when calling into Fyne's main thread** (via `fyne.Do`, menu updates, or widget operations). The Fyne main thread may itself need `monMu` to read monitor state, creating a deadlock. `CreateTrayMenuItems` snapshots all monitor state under `monMu` at the top, releases it, then builds menu items lock-free. `updateTrayMenuUI`'s `fyne.Do` callback must not acquire `monMu`.
 - **`OpenPreferences` must use `fyne.Do`** to marshal window creation onto Fyne's main thread. This is called from the local API HTTP server (browser extension), which runs on a background goroutine. macOS forbids window creation from background threads.
+
+### 1.7 Multi-Monitor Coordinate Spaces, Sync Actions & Per-Screen Tray (`resolution.go`, `sync_policy.go`, `ui.go`)
+
+- **`Monitor.Rect` vs. `Monitor.Bounds`**:
+  - `Monitor.Rect` holds **physical pixel dimensions** (`(0, 0, physW, physH)` on macOS/Linux; virtual desktop pixel rect on Windows) and is used strictly for image fitting and resolution-change detection (`mc.Monitor.Rect != m.Rect`).
+  - `Monitor.Bounds` holds **desktop coordinates in native OS window/cursor units** (Quartz points on macOS via `CGDisplayBounds`, virtual desktop pixels on Windows/X11) and is used for target-monitor window placement (`desktop.Window.RequestPosition` + `CenterOnScreen` in `ShowTuneImagePopup`) and cursor hit-testing (`MonitorAtPoint`).
+  - `Monitor.Primary` marks the OS primary display, and `ID: 0` (`Display 1`) is guaranteed to be the primary display on every OS (`sortAndIndexMonitors` on Windows; `[NSScreen screens][0]` on macOS).
+- **Sync Policy Actions (`sync_policy.go`)**:
+  - `SyncActionUpdate`: `Rect` changed (resolution change) → updates `mc.Monitor` and triggers `SetNextWallpaper`.
+  - `SyncActionRefresh`: Only `Bounds`, `Primary`, or `Name` changed (e.g. displays rearranged without resolution change) → updates `mc.Monitor` under `monMu + mc.mu` and rebuilds tray labels without rotating wallpapers.
+  - `SyncActionReplace`: Non-empty `DevicePath` changed behind the same monitor `ID` (e.g. Windows primary monitor switched) → stops old `MonitorController` and creates a new one so pause state and history follow the physical display.
+- **Per-Screen Tray (`TrayCapableOS`) & `actionBinder` (`follow` / `guard`)**:
+  - Platforms with a menu bar on every display (macOS with *"Displays have separate Spaces"*, cached via `sync.Once`) implement `TrayCapableOS`. `PlanTrayMonitors` renders a flat menu for the active cursor display with zero `Display N ▸` submenus.
+  - Because AppKit runs open menus in `NSEventTrackingRunLoopMode` (which blocks `systray` main-thread calls), tray menu rebuilds happen on screen-crossing edges while the menu is closed via `RebuildTrayMenuImmediate()` (polled at 100ms only when `len(monitors) >= 2`).
+  - As defense-in-depth at click time, `actionBinder.follow` retargets stateless actions (`Next`, `Prev`, `Shuffle`, `Tune Image`, `View on Web`) to the live cursor display, while `actionBinder.guard` fails closed and triggers `RebuildTrayMenuImmediate()` for state-labelled actions (`Pause/Resume`, `Add/Remove Favorite`, `Delete And Block`) if the cursor monitor differs from the snapshot monitor.
 
 ### 1.6 OpenGL Safety Guard (Windows)
 
@@ -303,6 +320,7 @@ Providers never import or create Fyne widgets directly. They declare their UI ne
 | `QueryListItem` | Full query management list (toggle, delete, display) |
 | `OAuthPickerItem` | OAuth + Picker workflow (Google Photos) |
 | `FolderPickerItem` | Native directory selector (Local Folders) |
+| `AppPickerItem` | Native executable/application selector with per-entry list and individual `Delete` buttons |
 | `HorizontalRowItem` | Groups items side-by-side |
 
 ### 6.3 The Registry Pattern (Deferred Save)
@@ -545,3 +563,20 @@ When a user opens the Tune Image dialog, they may change global settings (like s
 If the image was originally downloaded under Quality Mode and mathematically rejected (e.g., tagged with `incompatible:3440x1440` in Gate 2), the system cannot blindly trust that stale tag. To solve this, the pipeline implements a **3rd Compatibility Gate** immediately before generating derivatives (`Step 3: Ensure Derivatives`).
 
 This 3rd gate dynamically re-evaluates the math using the *current* global settings. If the user switched to Flexibility Mode, the image may now pass the math check. The 3rd gate ignores the stale `incompatible` tag, allows the crop to proceed, and overwrites the metadata. This guarantees the UI lock state correctly syncs with the underlying pipeline logic.
+
+## 15. Activity Gate & OS Activity Detection (`pkg/activity` & `pkg/wallpaper/activity_gate.go`)
+
+The `ActivityGate` automatically suppresses automatic wallpaper rotation (`CmdNextAuto`) and background fetches (`RequestFetch` / nightly refresh) during games, fullscreen apps, presentations, or low battery.
+
+### 15.1 Suppression vs. User Pause Invariant
+- `ActivityGate` sets an atomic flag `wp.gateSuppressed` (`*util.SafeFlag`) and **never** mutates `mc.State.Paused` or `cfg.MonitorPauseStates`.
+- This guarantees that user-paused monitors remain paused after a game exits, and crash/restart cannot persist temporary gate suppression as a permanent user pause.
+- Manual `CmdNext` and `CmdPrev` bypass `IsSuppressed()`; manual unpausing via the tray menu calls `gate.NotifyUserUnpaused()` to immediately release suppression and start the configurable grace period (`GateGraceMinutesPrefKey`).
+
+### 15.2 Detection Signals (15-Second Polling + Out-of-Band `Wakeup()`)
+1. **Foreground Allowlist (`GameProcesses` in `Config`)**: Immediate engagement when `ForegroundProcess()` matches an executable in `cfg.GetGameProcesses()`. On Windows, falls back to `CreateToolhelp32Snapshot` (`processExeNameBySnapshot`) when `OpenProcess` is denied by elevated or anti-cheat game processes.
+2. **OS Shell & Window Geometry**:
+   - **Windows**: Combines `SHQueryUserNotificationState` (`QUNS_BUSY`, `QUNS_RUNNING_D3D_FULL_SCREEN`, `QUNS_PRESENTATION_MODE`) with foreground borderless-fullscreen geometry (`(style & wsCaption) == wsCaption`).
+   - **macOS**: Evaluates `CGWindowListCopyWindowInfo` with >=50% display/window overlap attribution and `pmset -g batt`.
+3. **3D GPU Load (Windows S5)**: Samples PDH `\GPU Engine(*engtype_3D*)\Utilization Percentage` (`PdhGetFormattedCounterArrayW`) and engages when the foreground PID sustains >=30% 3D utilization across 2 consecutive ticks.
+4. **Battery Saver**: Engages when discharging at or below threshold (10/15/20/25%) and latches until AC power is connected or charge recovers by +10%.

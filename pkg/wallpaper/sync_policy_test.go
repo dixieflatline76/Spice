@@ -101,3 +101,58 @@ func TestSyncPolicy_DetectsRemovedMonitor(t *testing.T) {
 	assert.Equal(t, SyncActionRemove, actions[0].Type)
 	assert.Equal(t, 1, actions[0].MonitorID)
 }
+
+// Rearranging displays on macOS/Linux changes Bounds but not Rect.
+// Must refresh metadata WITHOUT triggering a resolution-change Update.
+func TestSyncPolicy_BoundsOnlyChange_EmitsRefresh(t *testing.T) {
+	policy := NewDefaultSyncPolicy()
+	existing := map[int]*MonitorController{
+		0: {Monitor: Monitor{ID: 0, Name: "Built-in", Rect: image.Rect(0, 0, 3456, 2234), Bounds: image.Rect(0, 0, 1728, 1117), Primary: true}},
+		1: {Monitor: Monitor{ID: 1, Name: "Studio", Rect: image.Rect(0, 0, 5120, 2880), Bounds: image.Rect(1728, 0, 4288, 1440)}},
+	}
+	current := []Monitor{
+		{ID: 0, Name: "Built-in", Rect: image.Rect(0, 0, 3456, 2234), Bounds: image.Rect(0, 0, 1728, 1117), Primary: true},
+		{ID: 1, Name: "Studio", Rect: image.Rect(0, 0, 5120, 2880), Bounds: image.Rect(-2560, 0, 0, 1440)},
+	}
+
+	actions := policy.Evaluate(current, existing, false)
+	require.Len(t, actions, 1)
+	assert.Equal(t, SyncActionRefresh, actions[0].Type)
+	assert.Equal(t, 1, actions[0].MonitorID)
+	assert.Equal(t, image.Rect(-2560, 0, 0, 1440), actions[0].Monitor.Bounds)
+}
+
+func TestSyncPolicy_NoChange_EmitsNothing(t *testing.T) {
+	policy := NewDefaultSyncPolicy()
+	m := Monitor{ID: 0, Name: "A", DevicePath: "p0", Rect: image.Rect(0, 0, 1920, 1080), Bounds: image.Rect(0, 0, 1920, 1080), Primary: true}
+	existing := map[int]*MonitorController{0: {Monitor: m}}
+	assert.Empty(t, policy.Evaluate([]Monitor{m}, existing, false))
+}
+
+// When the physical device behind an ID changes (e.g. Windows primary switched),
+// the controller must be replaced so State/pause follow the physical screen.
+func TestSyncPolicy_DevicePathChange_EmitsReplace(t *testing.T) {
+	policy := NewDefaultSyncPolicy()
+	existing := map[int]*MonitorController{
+		0: {Monitor: Monitor{ID: 0, DevicePath: "path-A", Rect: image.Rect(0, 0, 2560, 1440), Bounds: image.Rect(0, 0, 2560, 1440), Primary: true}},
+	}
+	current := []Monitor{
+		{ID: 0, DevicePath: "path-B", Rect: image.Rect(0, 0, 1920, 1080), Bounds: image.Rect(0, 0, 1920, 1080), Primary: true},
+	}
+	actions := policy.Evaluate(current, existing, false)
+	require.Len(t, actions, 1)
+	assert.Equal(t, SyncActionReplace, actions[0].Type)
+	assert.Equal(t, "path-B", actions[0].Monitor.DevicePath)
+}
+
+// Empty DevicePaths (fallback monitors, legacy tests) must never trigger Replace.
+func TestSyncPolicy_EmptyDevicePath_NoReplace(t *testing.T) {
+	policy := NewDefaultSyncPolicy()
+	existing := map[int]*MonitorController{
+		0: {Monitor: Monitor{ID: 0, DevicePath: "", Rect: image.Rect(0, 0, 1920, 1080)}},
+	}
+	current := []Monitor{{ID: 0, DevicePath: "path-B", Rect: image.Rect(0, 0, 1920, 1080)}}
+	for _, a := range policy.Evaluate(current, existing, false) {
+		assert.NotEqual(t, SyncActionReplace, a.Type)
+	}
+}

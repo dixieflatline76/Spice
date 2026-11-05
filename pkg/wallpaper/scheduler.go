@@ -91,6 +91,11 @@ func (wp *Plugin) checkAndRunRefresh(now time.Time, lastRefreshDay int, isInitia
 	if shouldRun {
 		log.Debugf("Decision: Refresh needed. Reason: %s", reason)
 
+		if wp.IsGateSuppressed() {
+			log.Print("Nightly refresh check: ActivityGate suppression active. Deferring refresh cycle.")
+			return lastRefreshDay
+		}
+
 		// Network Check
 		if !wp.isNetworkAvailable() {
 			log.Print("Nightly refresh check: Network appears to be unavailable. Skipping refresh cycle.")

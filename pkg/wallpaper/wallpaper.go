@@ -14,8 +14,10 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -80,6 +82,8 @@ type Plugin struct {
 
 	// Configuration and State
 	fetchingInProgress *util.SafeFlag
+	gateSuppressed     *util.SafeFlag // Set while ActivityGate holds rotation/downloads in pause
+	gate               *ActivityGate  // Decision engine for gaming/battery pausing
 
 	// Session State (Local Navigation)
 	lastTriggeredSeenCount  int // Anti-loop state
@@ -87,8 +91,10 @@ type Plugin struct {
 	lastTriggerTime         time.Time // Anti-loop cooldown state
 
 	// Monitors (Actor Model)
-	Monitors map[int]*MonitorController
-	monMu    sync.RWMutex // Protects the Monitors map itself
+	Monitors            map[int]*MonitorController
+	monMu               sync.RWMutex // Protects the Monitors map itself
+	activeTrayMonitorID atomic.Int64 // Monitor under the cursor (per-screen tray platforms only)
+	lastMissResync      atomic.Int64 // UnixNano of the last cursor-miss-triggered SyncMonitors
 
 	// Internal State
 	enrichmentSignal chan int // Signal for lazy enrichment worker
@@ -193,12 +199,19 @@ func getPlugin() *Plugin {
 			actionChan:         make(chan func(), 5),
 			store:              store,
 			fetchingInProgress: util.NewSafeBool(),
+			gateSuppressed:     util.NewSafeBoolWithValue(false),
 			focusProviderName:  "",
 		}
 
 		wpInstance.imgPulseOp = func() { wpInstance.SetNextWallpaper(-1, true) }
 	})
 	return wpInstance
+}
+
+// IsGateSuppressed reports whether the Activity Gate is currently inhibiting
+// automatic rotation and background fetches.
+func (wp *Plugin) IsGateSuppressed() bool {
+	return wp.gateSuppressed != nil && wp.gateSuppressed.Value()
 }
 
 // RequestFetch safely triggers a background fetch if conditions are met.
@@ -210,6 +223,12 @@ func (wp *Plugin) RequestFetch(providerID ...string) {
 	targetProvider := ""
 	if len(providerID) > 0 {
 		targetProvider = providerID[0]
+	}
+
+	// 0. Activity Gate suppression (paused for games/presentations/battery)
+	if wp.gateSuppressed != nil && wp.gateSuppressed.Value() {
+		log.Debugf("Fetch skipped: ActivityGate suppression active")
+		return
 	}
 
 	// 1. Basic Debounce (Avoid spamming from UI or multiple monitors)
@@ -423,6 +442,7 @@ func (wp *Plugin) Activate() {
 		mc.OnFetchRequest = func() {
 			wp.RequestFetch()
 		}
+		mc.IsGateSuppressed = wp.IsGateSuppressed
 		mc.Start()
 		wp.Monitors[m.ID] = mc
 		log.Printf("Monitor Actor %d started: %s %v", m.ID, m.Name, m.Rect)
@@ -483,6 +503,10 @@ func (wp *Plugin) Activate() {
 	}
 	wp.ChangeWallpaperFrequency(wp.cfg.GetWallpaperChangeFrequency(), false)
 
+	// Start Activity Gate
+	wp.gate = NewActivityGate(wp, nil)
+	wp.gate.Start()
+
 	// Start monitor watcher
 	go wp.startMonitorWatcher()
 
@@ -530,6 +554,12 @@ func (wp *Plugin) Deactivate() {
 	}
 	// Note: CancelFetchContext() already called at top of Deactivate().
 
+	// Stop Activity Gate
+	if wp.gate != nil {
+		wp.gate.Stop()
+		wp.gate = nil
+	}
+
 	// Stop Monitors
 	wp.monMu.Lock() // Write lock needed for map modification if we were to delete, but here just stopping
 	for _, mc := range wp.Monitors {
@@ -555,6 +585,11 @@ func (wp *Plugin) SetNextWallpaper(monitorID int, forceImmediate bool) {
 
 	if forceImmediate {
 		wp.resetTimer()
+	}
+
+	if !forceImmediate && wp.IsGateSuppressed() {
+		log.Debugf("SetNextWallpaper skipped: ActivityGate suppression active")
+		return
 	}
 
 	if monitorID != -1 {
@@ -625,14 +660,50 @@ func (wp *Plugin) TogglePauseMonitorAction(monitorID int) {
 		return
 	}
 
+	// If the Activity Gate is currently engaged, clicking Resume Play in the
+	// tray releases the gate and starts the grace period.
+	if wp.gate != nil && wp.gate.IsEngaged() {
+		wp.gate.NotifyUserUnpaused()
+		if monitorID == -1 {
+			allManuallyPaused := true
+			wp.monMu.RLock()
+			if len(wp.Monitors) == 0 {
+				allManuallyPaused = false
+			}
+			for _, mc := range wp.Monitors {
+				mc.mu.RLock()
+				paused := mc.State.Paused
+				mc.mu.RUnlock()
+				if !paused {
+					allManuallyPaused = false
+					break
+				}
+			}
+			wp.monMu.RUnlock()
+			if !allManuallyPaused {
+				return
+			}
+		} else if !wp.IsMonitorPaused(monitorID) {
+			return
+		}
+	}
+
 	// Case 1: Global Toggle
 	if monitorID == -1 {
 		wp.monMu.RLock()
 		// Determine target state based on monitor 0's status (or first available)
 		targetPaused := true
-		for id := range wp.Monitors {
-			targetPaused = !wp.IsMonitorPaused(id)
-			break
+		if mc, ok := wp.Monitors[0]; ok {
+			mc.mu.RLock()
+			targetPaused = !mc.State.Paused
+			mc.mu.RUnlock()
+		} else {
+			for _, mc := range wp.Monitors {
+				mc.mu.RLock()
+				targetPaused = !mc.State.Paused
+				mc.mu.RUnlock()
+				break
+			}
 		}
 		wp.monMu.RUnlock()
 
@@ -1032,31 +1103,39 @@ func (wp *Plugin) SyncMonitors(force bool) {
 	for _, action := range actions {
 		switch action.Type {
 		case SyncActionCreate:
-			m := action.Monitor
-			log.Printf("[Sync] New Monitor detected: %d (%s) at %v", m.ID, m.Name, m.Rect)
-			mc := NewMonitorController(m.ID, m, wp.store, wp.fm, wp.os, wp.cfg, wp.imgProcessor)
-			mc.OnWallpaperChanged = func(img provider.Image, monitorID int) {
-				go wp.updateTrayMenuUI(img, monitorID)
-			}
-			mc.OnFavoriteRequest = func(img provider.Image) {
-				go wp.ToggleFavorite(img) // Defensive: ensure never called under mc.mu
-			}
-			mc.OnFetchRequest = func() {
-				wp.RequestFetch()
-			}
-			mc.Start()
-			wp.Monitors[m.ID] = mc
+			wp.createMonitorControllerLocked(action.Monitor, force)
 			changed = true
-			go wp.SetNextWallpaper(m.ID, force)
 
 		case SyncActionUpdate:
 			m := action.Monitor
 			if mc, ok := wp.Monitors[action.MonitorID]; ok {
 				log.Printf("[Sync] Resolution change for Monitor %d: %v -> %v", m.ID, mc.Monitor.Rect, m.Rect)
+				mc.mu.Lock() // lock order: monMu -> mc.mu
 				mc.Monitor = m
+				mc.mu.Unlock()
 				changed = true
 				go wp.SetNextWallpaper(m.ID, force)
 			}
+
+		case SyncActionRefresh:
+			m := action.Monitor
+			if mc, ok := wp.Monitors[action.MonitorID]; ok {
+				log.Printf("[Sync] Metadata change for Monitor %d: bounds %v primary %v name %q", m.ID, m.Bounds, m.Primary, m.Name)
+				mc.mu.Lock()
+				mc.Monitor = m
+				mc.mu.Unlock()
+				changed = true // rebuild tray labels; no wallpaper change
+			}
+
+		case SyncActionReplace:
+			m := action.Monitor
+			if mc, ok := wp.Monitors[action.MonitorID]; ok {
+				log.Printf("[Sync] Device behind Monitor %d changed (%s -> %s). Replacing actor.", m.ID, mc.Monitor.DevicePath, m.DevicePath)
+				mc.Stop()
+				delete(wp.Monitors, action.MonitorID)
+			}
+			wp.createMonitorControllerLocked(m, force)
+			changed = true
 
 		case SyncActionRemove:
 			id := action.MonitorID
@@ -1082,15 +1161,154 @@ func (wp *Plugin) SyncMonitors(force bool) {
 
 	if changed {
 		log.Print("[Sync] Display setup synchronized. Triggering Tray Rebuild.")
-		wp.manager.RebuildTrayMenu()
+		if wp.manager != nil {
+			wp.manager.RebuildTrayMenu()
+		}
 	}
+}
+
+// createMonitorControllerLocked creates, wires, and starts a controller.
+// Caller must hold wp.monMu (write).
+func (wp *Plugin) createMonitorControllerLocked(m Monitor, force bool) {
+	log.Printf("[Sync] New Monitor detected: %d (%s) at %v", m.ID, m.Name, m.Rect)
+	mc := NewMonitorController(m.ID, m, wp.store, wp.fm, wp.os, wp.cfg, wp.imgProcessor)
+	mc.OnWallpaperChanged = func(img provider.Image, monitorID int) {
+		go wp.updateTrayMenuUI(img, monitorID)
+	}
+	mc.OnFavoriteRequest = func(img provider.Image) {
+		go wp.ToggleFavorite(img) // Defensive: ensure never called under mc.mu
+	}
+	mc.OnFetchRequest = func() {
+		wp.RequestFetch()
+	}
+	mc.IsGateSuppressed = wp.IsGateSuppressed
+	mc.Start()
+	wp.Monitors[m.ID] = mc
+	go wp.SetNextWallpaper(m.ID, force)
 }
 
 // syncMonitorsLocked is removed as it is now integrated into SyncMonitors with Policy.
 
+func (wp *Plugin) trayOS() (TrayCapableOS, bool) {
+	tc, ok := wp.os.(TrayCapableOS)
+	if !ok || !tc.HasPerScreenTray() {
+		return nil, false
+	}
+	return tc, true
+}
+
+func (wp *Plugin) hasPerScreenTray() bool {
+	_, ok := wp.trayOS()
+	return ok
+}
+
+// cursorMonitorID returns the monitor under the cursor on per-screen tray
+// platforms. Returns ok=false on single-tray platforms or with < 2 monitors
+// (nothing to disambiguate, so no cursor query at all).
+func (wp *Plugin) cursorMonitorID() (int, bool) {
+	tc, ok := wp.trayOS()
+	if !ok {
+		return 0, false
+	}
+	wp.monMu.RLock()
+	monitors := make([]Monitor, 0, len(wp.Monitors))
+	for _, mc := range wp.Monitors {
+		monitors = append(monitors, mc.Monitor) // safe: writers hold monMu
+	}
+	wp.monMu.RUnlock()
+	if len(monitors) < 2 {
+		return 0, false
+	}
+	pt, ok := tc.GetCursorPosition()
+	if !ok {
+		return 0, false
+	}
+	id, hit := MonitorAtPoint(pt, monitors)
+	if !hit {
+		wp.requestMissResync()
+	}
+	return id, true
+}
+
+// ActiveMonitorBounds returns the desktop bounds of the currently active monitor
+// (the monitor under the cursor on per-screen tray platforms, or the primary monitor).
+func (wp *Plugin) ActiveMonitorBounds() image.Rectangle {
+	targetID := int(wp.activeTrayMonitorID.Load())
+	if id, ok := wp.cursorMonitorID(); ok {
+		targetID = id
+	}
+
+	wp.monMu.RLock()
+	defer wp.monMu.RUnlock()
+
+	if mc, ok := wp.Monitors[targetID]; ok && !mc.Monitor.Bounds.Empty() {
+		return mc.Monitor.Bounds
+	}
+	if mc, ok := wp.Monitors[0]; ok && !mc.Monitor.Bounds.Empty() {
+		return mc.Monitor.Bounds
+	}
+	for _, mc := range wp.Monitors {
+		if !mc.Monitor.Bounds.Empty() {
+			return mc.Monitor.Bounds
+		}
+	}
+	return image.Rectangle{}
+}
+
+// MonitorDisplayLabel returns the canonical user-facing display label for monitorID
+// (e.g. "Display 1 (U34G2G1)"), falling back to "Display N" if the monitor is not found.
+func (wp *Plugin) MonitorDisplayLabel(monitorID int) string {
+	wp.monMu.RLock()
+	mc, ok := wp.Monitors[monitorID]
+	var mon Monitor
+	if ok {
+		mon = mc.Monitor
+	}
+	wp.monMu.RUnlock()
+	mon.ID = monitorID
+	return mon.DisplayLabel()
+}
+
+// requestMissResync triggers SyncMonitors (at most every 5s) when the cursor is
+// outside every known monitor, i.e. the display arrangement changed.
+func (wp *Plugin) requestMissResync() {
+	now := time.Now().UnixNano()
+	last := wp.lastMissResync.Load()
+	if now-last < int64(5*time.Second) || !wp.lastMissResync.CompareAndSwap(last, now) {
+		return
+	}
+	go wp.SyncMonitors(false)
+}
+
+// syncActiveTrayMonitor updates activeTrayMonitorID and rebuilds the tray menu
+// immediately if the cursor moved to a different monitor. Returns true on change.
+func (wp *Plugin) syncActiveTrayMonitor() bool {
+	cur, ok := wp.cursorMonitorID()
+	if !ok {
+		return false
+	}
+	if wp.activeTrayMonitorID.Swap(int64(cur)) == int64(cur) {
+		return false
+	}
+	if wp.manager != nil {
+		wp.manager.RebuildTrayMenuImmediate()
+	}
+	return true
+}
+
 func (wp *Plugin) startMonitorWatcher() {
 	ticker := time.NewTicker(90 * time.Second)
 	defer ticker.Stop()
+
+	// Cursor polling only on per-screen tray platforms. A nil channel blocks
+	// forever, so Windows/Linux pay nothing. cursorMonitorID itself returns
+	// early with < 2 monitors, so single-display Macs only pay a map length check.
+	var cursorC <-chan time.Time
+	if wp.hasPerScreenTray() {
+		ct := time.NewTicker(100 * time.Millisecond)
+		defer ct.Stop()
+		cursorC = ct.C
+	}
 
 	for {
 		select {
@@ -1099,11 +1317,13 @@ func (wp *Plugin) startMonitorWatcher() {
 			return
 		case <-ticker.C:
 			wp.SyncMonitors(false)
+		case <-cursorC:
+			wp.syncActiveTrayMonitor()
 		}
 	}
 }
 
-func (wp *Plugin) updateTrayMenuUI(img provider.Image, monitorID int) {
+func (wp *Plugin) updateTrayMenuUI(_ provider.Image, _ int) {
 	if wp.manager != nil {
 		wp.manager.RefreshTrayMenu()
 	}
@@ -1234,8 +1454,15 @@ func (wp *Plugin) startEnrichmentWorker() {
 
 // OpenAddCollectionUI parses the given URL and opens the settings panel to add it as a query.
 func (wp *Plugin) OpenAddCollectionUI(testURL string) error {
-	for name, p := range wp.providers {
-		if !p.SupportsUserQueries() {
+	names := make([]string, 0, len(wp.providers))
+	for name := range wp.providers {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	for _, name := range names {
+		p := wp.providers[name]
+		if p == nil || !p.SupportsUserQueries() {
 			continue
 		}
 		result, err := p.ParseURL(testURL)

@@ -227,6 +227,22 @@ type FolderPickerItem struct {
 
 func (FolderPickerItem) isItemSchema() {}
 
+// AppPickerItem represents a button that launches a native application/executable selection dialog
+// and displays a list of selected applications where each entry has its own Delete button.
+// Additions and removals are staged in the UI and persisted only when ApplyFunc is invoked via Apply Changes.
+type AppPickerItem struct {
+	Name         string
+	Label        string
+	Help         string
+	ButtonText   string
+	InitialValue []string
+	ApplyFunc    func([]string)
+	EnabledIf    func() bool
+	VisibleIf    func() bool
+}
+
+func (AppPickerItem) isItemSchema() {}
+
 // Query represents a generic abstract query data record to break dependency chains.
 type Query struct {
 	ID          string

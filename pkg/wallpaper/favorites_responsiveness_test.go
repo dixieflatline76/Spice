@@ -1,6 +1,7 @@
 package wallpaper
 
 import (
+	"image"
 	"net/url"
 	"testing"
 
@@ -77,6 +78,9 @@ func (m *mockManager) OpenPreferences(name string) {
 func (m *mockManager) RebuildTrayMenu() {
 }
 
+func (m *mockManager) RebuildTrayMenuImmediate() {
+}
+
 func (m *mockManager) RefreshTrayMenu() {
 }
 
@@ -88,7 +92,7 @@ func (m *mockManager) GetAssetManager() *asset.Manager {
 	return nil
 }
 
-func (m *mockManager) ShowTuneImagePopup(_ int, _ provider.TuningOptions, _ provider.TuningOptions, _ [9]string, _ [9]provider.CropAnchor, _ bool, _ func(provider.TuningOptions, func()), _ func()) {
+func (m *mockManager) ShowTuneImagePopup(_ int, _ string, _ image.Rectangle, _ provider.TuningOptions, _ provider.TuningOptions, _ [9]string, _ [9]provider.CropAnchor, _ bool, _ func(provider.TuningOptions, func()), _ func()) {
 }
 
 func TestToggleFavorite_ResetsPageAndTriggersFetch(t *testing.T) {

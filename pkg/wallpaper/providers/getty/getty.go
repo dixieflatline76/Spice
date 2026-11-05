@@ -77,7 +77,7 @@ func (p *Provider) GetAttributionType() provider.AttributionType {
 func (p *Provider) SupportsUserQueries() bool { return false }
 
 func (p *Provider) ParseURL(url string) (string, error) {
-	return url, nil
+	return "", fmt.Errorf("user queries not supported for Getty")
 }
 
 // GetAPIPacing implements the PacedProvider interface.

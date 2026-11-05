@@ -82,7 +82,7 @@ func (p *Provider) GetProcessPacing() time.Duration { return 1500 * time.Millise
 
 // ParseURL checks if a URL matches.
 func (p *Provider) ParseURL(url string) (string, error) {
-	return url, nil
+	return "", fmt.Errorf("user queries not supported for NPM")
 }
 
 // FetchImages fetches wallpaper candidates.

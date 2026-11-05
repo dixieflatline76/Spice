@@ -271,8 +271,9 @@ When a query is deleted, a callback chain fires: `Config.onQueryRemoved` → `st
 ### 7.3 Provider Categorization
 
 Providers are categorized by `provider.ProviderType` for UI placement:
-- **TypeOnline**: Remote APIs (Pexels, Wallhaven, Wikimedia, Museums). "Online" tab
-- **TypeLocal**: Local filesystem (Favorites, Local Folders). "Local" tab
+- **TypeMuseum**: Institutional Open-Access collections (The Met, Art Institute of Chicago, Cleveland Museum of Art, Rijksmuseum, SMK, National Palace Museum, J. Paul Getty Museum). "Museums" tab
+- **TypeCommunity**: Community/curated search APIs (Wallhaven, Pexels, Wikimedia Commons). "Community" tab
+- **TypePersonal**: Personal libraries and local storage (Google Photos, Local Folders, Favorites). "Personal" tab
 
 ### 7.4 Smart Fit — Image Processing Pipeline
 
@@ -365,6 +366,8 @@ Spice features a robust **Curation Engine** (`pkg/curation/manager.go`) that man
 | **Fetch Logic** | `pkg/wallpaper/fetch_logic.go` | Provider queries, pagination, dedup |
 | **Dispatcher** | `pkg/wallpaper/dispatcher.go` | Fair queue, per-provider rate limiting |
 | **Scheduler** | `pkg/wallpaper/scheduler.go` | Nightly maintenance, refresh cycles |
+| **ActivityGate** | `pkg/wallpaper/activity_gate.go` | Automatic game/fullscreen/battery suppression engine |
+| **Activity** | `pkg/activity/activity.go` | Pure OS fullscreen, process allowlist, battery & GPU 3D load detection |
 | **Schema** | `pkg/ui/schema/schema.go` | PORT: Framework-agnostic UI contract |
 | **Settings** | `pkg/ui/setting/setting_manager.go` | PORT: SettingsManager interface |
 | **Engine** | `ui/settings_manager.go` | ADAPTER: Fyne rendering engine |

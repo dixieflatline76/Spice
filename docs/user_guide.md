@@ -9,10 +9,11 @@
 2. [Keyboard Shortcuts](#keyboard-shortcuts)
 3. [Preferences: App Tab](#preferences-app-tab)
 4. [Preferences: Wallpaper Tab](#preferences-wallpaper-tab)
+   - [Activity & Power (Automatic Pausing)](#activity--power-automatic-pausing)
    - [General](#general-settings)
-   - [Smart Crop Anchors](#smart-crop-anchors)
-   - [Online Sources](#online-sources)
-   - [Local Sources](#local-sources)
+   - [Tune Image & Virtual Museum Frame](#tune-image--virtual-museum-frame)
+   - [Online Sources (Museums & Community)](#online-sources)
+   - [Local Sources (Personal)](#local-sources)
      - [Local Favorites](#local-favorites)
 5. [Multi-Display Setup](#multi-display-setup)
 6. [Browser Extensions](#browser-extensions)
@@ -46,9 +47,11 @@ When one display is connected, the tray menu shows actions directly:
 
 ### Multiple Displays
 
-When more than one display is connected, Display 1 (the primary) keeps its controls at the **top level** of the menu. Every additional display gets its own **submenu** named *Display 2*, *Display 3*, etc. (with the device name appended if available, e.g., *Display 2 (DELL U2723D)*).
+When two or more displays are connected, Spice adapts its tray menu to your operating system and labels every monitor with its hardware/localized name (e.g., **Display 1 (U34G2G1)** or **Display 2 (Studio Display)**):
 
-Each display submenu contains the same full set of controls — Next, Prev, Pause Play, Source, Attribution, Add to Favorites, and Delete And Block — all acting independently on that specific display.
+* **macOS (Separate Spaces enabled — default):** Each display has its own menu bar. Clicking the Spice icon on any display opens a **flat, context-aware menu** scoped directly to that display, headed by its **Display *N* (*Name*)** label—no submenus required.
+* **Windows (and macOS with Separate Spaces disabled):** A single tray icon lives on the primary display. **Display 1 (Primary)** controls appear at the top level of the menu under a **Display 1 (*Name*)** header, while **Display 2, Display 3, …** each get their own **submenu** containing the same full set of controls (*Next*, *Prev*, *Pause Play*, *Shuffle*, *Source*, *Attribution*, *Add to Favorites*, *Tune Image*, and *Delete And Block*).
+* **Active-Display Window Placement:** Opening **Preferences**, **Tune Image**, or **About Spice** centers the window directly on the display you are actively using (the display under your cursor), rather than always jumping back to the primary monitor.
 
 > **Tip:** When Spice starts with multiple monitors, it staggers wallpaper changes by a random offset so they don't all flash at the same time (configurable in Settings).
 
@@ -135,7 +138,21 @@ The **App** tab controls application-wide behaviour, independent of any wallpape
 
 ## Preferences: Wallpaper Tab
 
-The **Wallpaper** plugin tab appears immediately after the App tab. It contains four sub-sections accessed via a side navigation bar: **General**, **Online**, **Local**, and **AI**.
+The **Wallpaper** plugin tab appears immediately after the App tab. It contains four sub-sections accessed via a side navigation bar: **General**, **Museums**, **Community**, and **Personal**.
+
+### Activity & Power (Automatic Pausing)
+
+Spice includes an intelligent **Activity Gate** that pauses wallpaper rotation and background downloads to save battery, preserve performance during games, and prevent distractions during presentations:
+
+| Setting | Description | Default |
+| :--- | :--- | :--- |
+| **Pause when busy** | Automatically pauses rotation and downloads when a fullscreen application, borderless fullscreen window, game, video, or presentation is active (and on Windows, when the foreground app drives sustained 3D GPU load). | On |
+| **Battery saver** | Pauses rotation and background processing when running on battery below the chosen threshold. Automatically resumes once connected to AC or charged 10% above the threshold. | On |
+| **Battery threshold** | The charge percentage (10%, 15%, 20%, or 25%) that triggers battery saver mode. | 20% |
+| **Pause for specific apps & games** | Click **Add App or Game...** to pick any `.exe` or `.app` via the native file dialog. Added entries appear in a list with individual **Delete** buttons and immediately pause rotation whenever that app is in the foreground (even in windowed mode), automatically resuming once you switch away or close it. | *(empty)* |
+| **Manual resume grace period (mins)** | Minutes to keep wallpaper rotation active after you manually click **Resume Play** while a fullscreen app or game is active. | 2 |
+
+> **Ownership Guarantee**: If you manually pause a display before or during a game, the Activity Gate will **never** unpause that display when your game ends. It only resumes displays that it paused itself.
 
 ### General Settings
 
@@ -209,7 +226,7 @@ You can set crop anchors directly from the keyboard using the same targeted modi
 
 ### Online Sources
 
-The **Online** tab lists each cloud and institutional image provider as an expandable accordion card. Click a provider name to expand its settings.
+The **Museums**, **Community**, and **Personal** sub-tabs list each cloud and institutional image provider as an expandable accordion card. Click a provider name to expand its settings.
 
 #### Wallhaven
  
@@ -283,7 +300,7 @@ Each museum provides curated collections designed to showcase institutional high
 - **High Resolution Art**: Masterpieces chosen for their exceptional detail and scale.
 
 **How to Use:**
-1. Open **Preferences → Wallpaper → Online**.
+1. Open **Preferences → Wallpaper → Museums**.
 2. Expand a museum card.
 3. Use the **Map** link to "Plan a Visit" and explore the institution's location.
 4. (Optional) Check **"Download & Frame Mismatched Images"** to automatically salvage extreme portraits/landscapes for this specific museum by wrapping them in the Virtual Museum Frame.
@@ -299,7 +316,7 @@ Google Photos is for your personal memories. Spice uses the **Google Photos Pick
 - **High Resolution**: Images are downloaded at their original resolution (where supported) to ensure your memories look stunning on high-DPI displays.
 
 **How to Use:**
-1. Open **Preferences → Wallpaper → Online → Google Photos**. (Note: May require beta allowlisting).
+1. Open **Preferences → Wallpaper → Personal → Google Photos**. (Note: May require beta allowlisting).
 2. Click **Connect to Google Photos**.
 3. In your browser, select the albums or specific photos you want to use.
 4. Back in Spice, toggle your Google Photos source and click **Apply**.
@@ -308,7 +325,7 @@ Google Photos is for your personal memories. Spice uses the **Google Photos Pick
 
 ### Local Sources
  
-Sometimes the best wallpapers are the ones you already own or have carefully curated into your favorites. These can be managed in the **Local** tab of the Spice Preferences.
+Sometimes the best wallpapers are the ones you already own or have carefully curated into your favorites. These can be managed in the **Personal** sub-tab of the Spice Preferences.
 
 #### Local Favorites
 The "Favorites" provider is the heart of Spice's localized content. It acts as a persistent archive of images you've "loved" from other providers.
@@ -320,14 +337,13 @@ The "Favorites" provider is the heart of Spice's localized content. It acts as a
 
 **How to Use:**
 - **Adding**: Click the Heart icon in the tray menu or use `Alt` + `N` + `↑` (Windows) / `Command` + `N` + `↑` (macOS).
-- **Managing**: Go to the **Local** tab to see your library. You can toggle your favorites on/off or clear your entire collection using the **Clear** button.
+- **Managing**: Go to the **Personal** sub-tab to see your library. You can toggle your favorites on/off or clear your entire collection using the **Clear** button.
 - **Quick-Access**: Click the **"❤️ Personal Favorites"** name in the list to immediately open your local favorites folder in the OS file explorer.
 
 #### Local Folders
 Want to use your own photography or personal collection?
-1. Open **Preferences → Wallpaper → Local**.
-2. Click **Add Folder** to select a directory on your computer.
-   - **Note for Windows Users:** Due to OS limitations, the folder picker requires you to select a specific file. Navigate to your desired folder, click on **any image file** inside it, and click "Open". Spice will automatically add the entire folder containing that image to your rotation, not just the single file.
+1. Open **Preferences → Wallpaper → Personal**.
+2. Click **Add Folder** to select a directory on your computer using the native OS folder dialog.
 3. Spice will search for high-resolution images (`.jpg`, `.png`, `.webp`) and add them to your rotation.
 4. **Tip**: Click the folder name in the list to open that directory directly in your file explorer.
 
@@ -350,10 +366,12 @@ When Spice starts, it detects all connected displays automatically. If you conne
 - **Pausing is per-display.** You can pause Display 2 while Display 1 keeps rotating.
 - **Favorites and Delete are per-display.** The action always applies to the wallpaper currently shown on the targeted display.
 
-### Tray Menu with Multiple Displays
+### Tray Menu & Window Placement with Multiple Displays
 
-- **Display 1** controls appear at the **top level** of the tray menu (no submenu needed).
-- **Display 2, 3, …** each have their own **submenu** with identical controls.
+- **Hardware Display Names:** Spice automatically queries your display's hardware/localized name (e.g., *Display 1 (DELL U2723QE)*, *Display 2 (Built-in Retina Display)*) and displays it in the tray menu header, display submenus, and the **Tune Image** window title and subtitle.
+- **macOS Per-Screen Menu Bar:** When *"Displays have separate Spaces"* is enabled in macOS System Settings, clicking the Spice menu bar icon on any monitor controls **that specific monitor** directly at the top level of the menu.
+- **Windows / Single-Tray Submenus:** On Windows, **Display 1** (always your OS primary display) appears at the top level of the tray menu, and **Display 2, 3, …** each have their own **submenu** with identical controls.
+- **Active-Display Windows:** **Preferences**, **Tune Image**, and **About Spice** open centered on the display under your cursor rather than defaulting to Display 1.
 
 ### Stagger Setting
 

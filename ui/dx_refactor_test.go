@@ -2,11 +2,15 @@ package ui
 
 import (
 	"fmt"
+	"image"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/widget"
 	"github.com/dixieflatline76/Spice/v2/pkg/ui/schema"
@@ -405,9 +409,12 @@ func TestSchemaRendering(t *testing.T) {
 	// 3. Verify the generated tree
 	assert.NotNil(t, rendered)
 
-	// For panels without an expanding list (like museums), we expect a direct VBox
-	mainBox, ok := rendered.(*fyne.Container)
-	assert.True(t, ok, "Rendered output should be a VBox container")
+	// For panels without an expanding list (App tab, General sections, Museums),
+	// we expect a VScroll wrapping the VBox so short/HiDPI windows scroll cleanly.
+	scroll, ok := rendered.(*container.Scroll)
+	assert.True(t, ok, "Rendered output should be a VScroll container")
+	mainBox, ok := scroll.Content.(*fyne.Container)
+	assert.True(t, ok, "VScroll content should be a VBox container")
 	assert.Equal(t, 2, len(mainBox.Objects), "VBox should have 2 sections")
 
 	// Check registry: The RenderSchema should have registered the widgets
@@ -481,4 +488,223 @@ func TestSecretItemStateTransitions(t *testing.T) {
 	// Since RenderSchema is declarative, calling sm.RefreshUI() and re-rendering would show the Save UI again.
 	sm.ResetSettings(setting.SettingReset{Name: "myKey", Value: ""})
 	assert.Equal(t, "", sm.GetBaseline("myKey"), "Baseline should be empty after reset")
+}
+
+// spyDesktopWindow wraps a test window and records RequestPosition calls.
+// desktop.Window requires all three methods below.
+type spyDesktopWindow struct {
+	fyne.Window
+	posCalled  bool
+	posX, posY int
+}
+
+func (s *spyDesktopWindow) RequestPosition(x, y int)    { s.posCalled, s.posX, s.posY = true, x, y }
+func (s *spyDesktopWindow) RequestFullScreenSecondary() {}
+func (s *spyDesktopWindow) RequestAlwaysOnTop()         {}
+
+var _ desktop.Window = (*spyDesktopWindow)(nil)
+
+func TestCenterWindowOnMonitor(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+
+	spy := &spyDesktopWindow{Window: app.NewWindow("t")}
+	centerWindowOnMonitor(spy, image.Rect(1920, 0, 4480, 1440))
+	assert.True(t, spy.posCalled)
+	assert.Equal(t, 1984, spy.posX)
+	assert.Equal(t, 64, spy.posY)
+
+	spy2 := &spyDesktopWindow{Window: app.NewWindow("t2")}
+	centerWindowOnMonitor(spy2, image.Rectangle{})
+	assert.False(t, spy2.posCalled)
+}
+
+func TestQueryListRendering_FullHeightInSingleVScroll(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	testWin := app.NewWindow("QueryListTest")
+	sm := NewSettingsManager(testWin)
+
+	queries := []schema.Query{
+		{ID: "q1", Description: "Query 1", URL: "https://wallhaven.cc/1", Active: true},
+		{ID: "q2", Description: "Query 2", URL: "https://wallhaven.cc/2", Active: false},
+		{ID: "q3", Description: "Query 3", URL: "https://wallhaven.cc/3", Active: true},
+		{ID: "q4", Description: "Query 4", URL: "https://wallhaven.cc/4", Active: true},
+	}
+
+	buildPanel := func() schema.PanelSchema {
+		return schema.PanelSchema{
+			Sections: []schema.SectionSchema{
+				{
+					Title: "Wallhaven Settings",
+					Items: []schema.ItemSchema{
+						schema.BoolItem{
+							Name:         "sketchy",
+							Label:        "Include Sketchy",
+							InitialValue: false,
+						},
+						schema.QueryListItem{
+							ID: "queries",
+							GetQueries: func() []schema.Query {
+								return queries
+							},
+							EnableQuery: func(id string) error {
+								for i := range queries {
+									if queries[i].ID == id {
+										queries[i].Active = true
+									}
+								}
+								return nil
+							},
+							DisableQuery: func(id string) error {
+								for i := range queries {
+									if queries[i].ID == id {
+										queries[i].Active = false
+									}
+								}
+								return nil
+							},
+							RemoveQuery: func(id string) error {
+								for i := range queries {
+									if queries[i].ID == id {
+										queries = append(queries[:i], queries[i+1:]...)
+										break
+									}
+								}
+								return nil
+							},
+						},
+					},
+				},
+			},
+		}
+	}
+
+	rendered4 := sm.RenderSchema(buildPanel())
+	scroll4, ok := rendered4.(*container.Scroll)
+	assert.True(t, ok, "Panel with QueryListItem must be wrapped in a single outer VScroll")
+
+	heightWith4 := scroll4.Content.MinSize().Height
+
+	// Compare against 1 query row: 4 query rows must have a substantially larger content MinSize.Height
+	queries = queries[:1]
+	sm1 := NewSettingsManager(testWin)
+	rendered1 := sm1.RenderSchema(buildPanel())
+	scroll1 := rendered1.(*container.Scroll)
+	heightWith1 := scroll1.Content.MinSize().Height
+
+	assert.Greater(t, heightWith4, heightWith1+60, "QueryListWidget MinSize.Height must scale with all rows instead of collapsing to 1 row")
+}
+
+// newTestQueryPanel builds a single QueryListItem panel backed by an in-memory query slice.
+func newTestQueryPanel(queries *[]schema.Query, removed *[]string, enabled, disabled *[]string) schema.PanelSchema {
+	return schema.PanelSchema{Sections: []schema.SectionSchema{{Items: []schema.ItemSchema{
+		schema.QueryListItem{
+			ID:         "queries",
+			GetQueries: func() []schema.Query { return append([]schema.Query(nil), (*queries)...) },
+			EnableQuery: func(id string) error {
+				*enabled = append(*enabled, id)
+				return nil
+			},
+			DisableQuery: func(id string) error {
+				*disabled = append(*disabled, id)
+				return nil
+			},
+			RemoveQuery: func(id string) error {
+				*removed = append(*removed, id)
+				for i := range *queries {
+					if (*queries)[i].ID == id {
+						*queries = append((*queries)[:i], (*queries)[i+1:]...)
+						break
+					}
+				}
+				return nil
+			},
+		},
+	}}}}
+}
+
+func TestQueryListRendering_LongDescriptionDoesNotWidenPanel(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	w := app.NewWindow("QueryListWidth")
+
+	measure := func(desc string) float32 {
+		queries := []schema.Query{{ID: "q1", Description: desc, URL: "https://wallhaven.cc/1", Active: true}}
+		var removed, enabled, disabled []string
+		return NewSettingsManager(w).RenderSchema(newTestQueryPanel(&queries, &removed, &enabled, &disabled)).MinSize().Width
+	}
+
+	short := measure("Cats")
+	long := measure(strings.Repeat("W", 100)) // 100 chars == max description length
+	assert.InDelta(t, short, long, 1, "Long query descriptions must be truncated, not inflate the panel/window minimum width")
+}
+
+func TestQueryListRendering_ToggleStagesAndDeleteRebuilds(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	w := app.NewWindow("QueryListInteract")
+	smi := NewSettingsManager(w)
+	sm := smi.(*SettingsManager)
+
+	queries := []schema.Query{
+		{ID: "q1", Description: "Query 1", URL: "https://wallhaven.cc/1", Active: true},
+		{ID: "q2", Description: "Query 2", URL: "https://wallhaven.cc/2", Active: false},
+	}
+	var removed, enabled, disabled []string
+	smi.RenderSchema(newTestQueryPanel(&queries, &removed, &enabled, &disabled))
+
+	ql := sm.allWidgets["queries"].(*queryListWidget)
+	assert.Len(t, ql.rows, 2)
+	assert.True(t, ql.rows[0].activeCheck.Checked)
+	assert.False(t, ql.rows[1].activeCheck.Checked)
+
+	// Toggle q2 on: must be STAGED (no domain call) and light up Apply.
+	firstCheck := ql.rows[1].activeCheck
+	test.Tap(firstCheck)
+	assert.True(t, sm.HasPendingChange("q2"), "Toggling Active must stage a pending change")
+	assert.Empty(t, enabled, "EnableQuery must not be called before Apply")
+	assert.False(t, sm.GetApplySettingsButton().Disabled(), "Apply must be enabled after staging a toggle")
+
+	// A UI refresh with unchanged query IDs must update rows in place (same widget instances)
+	// and preserve the staged checkbox state.
+	sm.RefreshUI()
+	assert.Same(t, firstCheck, ql.rows[1].activeCheck, "Rows must be rebound in place when query IDs are unchanged")
+	assert.True(t, ql.rows[1].activeCheck.Checked, "Staged toggle must survive RefreshUI")
+
+	// Apply commits the staged toggle.
+	test.Tap(sm.GetApplySettingsButton())
+	assert.Equal(t, []string{"q2"}, enabled)
+
+	// Delete q1 via its button + confirm dialog: list must rebuild to 1 row.
+	test.Tap(ql.rows[0].deleteButton)
+	overlays := w.Canvas().Overlays().List()
+	assert.NotEmpty(t, overlays, "Delete must show a confirmation dialog")
+	confirmBtn := findButtonByText(overlays[len(overlays)-1], "Yes")
+	if assert.NotNil(t, confirmBtn, "Confirmation dialog must have a Yes button") {
+		test.Tap(confirmBtn)
+	}
+	assert.Equal(t, []string{"q1"}, removed)
+	assert.Len(t, ql.rows, 1)
+	assert.Equal(t, "q2", ql.rows[0].id)
+}
+
+// findButtonByText walks a canvas object tree and returns the first button with the given text.
+func findButtonByText(obj fyne.CanvasObject, text string) *widget.Button {
+	if b, ok := obj.(*widget.Button); ok && b.Text == text {
+		return b
+	}
+	var children []fyne.CanvasObject
+	switch o := obj.(type) {
+	case *fyne.Container:
+		children = o.Objects
+	case fyne.Widget:
+		children = test.WidgetRenderer(o).Objects()
+	}
+	for _, c := range children {
+		if b := findButtonByText(c, text); b != nil {
+			return b
+		}
+	}
+	return nil
 }
