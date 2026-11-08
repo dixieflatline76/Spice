@@ -2,6 +2,7 @@ package wallhaven
 
 import (
 	"net/http"
+	"os"
 	"testing"
 	"time"
 
@@ -9,6 +10,10 @@ import (
 )
 
 func TestLiveRateLimit(t *testing.T) {
+	if os.Getenv("SPICE_LIVE_TESTS") == "" {
+		t.Skip("Skipping live network test in CI. Run with SPICE_LIVE_TESTS=1 to execute.")
+	}
+
 	apiURL := "https://wallhaven.cc/api/v1/search?q=anime&sorting=random"
 	client := &http.Client{Timeout: 10 * time.Second}
 

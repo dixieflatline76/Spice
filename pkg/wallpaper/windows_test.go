@@ -4,6 +4,7 @@ package wallpaper
 
 import (
 	"testing"
+	"unsafe"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -37,14 +38,24 @@ func TestWindowsSetWallpaper_InvalidID(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid monitor ID")
 
-	// Check boundary condition (MaxUint32 + 1 if we could pass it, but int is signed)
-	// We can't easy pass overflow via int, but we can pass a valid int that is likely not a real monitor
-	// This exercises the GetMonitorDevicePathAt failure path
+	// A positive index beyond the enumerated monitor list should fail the range check.
 	err = osImpl.SetWallpaper("C:\\fake\\path.jpg", 999999)
 	assert.Error(t, err)
-	// The error might be "invalid monitor ID" (from our check) or "GetMonitorDevicePathAt failed" depending on logic
-	// Our code: checks if monitorID < 0 || uint64(monitorID) > math.MaxUint32
-	// 999999 is valid int but invalid monitor index.
-	// So it should pass the first check and fail at GetMonitorDevicePathAt
-	assert.Contains(t, err.Error(), "GetMonitorDevicePathAt failed")
+	assert.Contains(t, err.Error(), "out of range")
+}
+
+func TestWindowsDisplayConfigStructSizes(t *testing.T) {
+	assert.Equal(t, uintptr(72), unsafe.Sizeof(displayConfigPathInfo{}))
+	assert.Equal(t, uintptr(64), unsafe.Sizeof(displayConfigModeInfo{}))
+	assert.Equal(t, uintptr(420), unsafe.Sizeof(displayConfigTargetDeviceName{}))
+}
+
+func TestWindowsGetMonitors_PrimaryIsIDZero(t *testing.T) {
+	monitors, err := getOS().GetMonitors()
+	assert.NoError(t, err)
+	if assert.NotEmpty(t, monitors) {
+		assert.Equal(t, 0, monitors[0].ID)
+		assert.True(t, monitors[0].Primary)
+		assert.False(t, monitors[0].Bounds.Empty())
+	}
 }

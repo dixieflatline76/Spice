@@ -31,6 +31,14 @@ const (
 	LogLevelPrefKey                  = pluginPrefix + "log_level_key"
 	MaxConcurrentProcessorsPrefKey   = pluginPrefix + "max_concurrent_processors_key"
 
+	// Activity Gate keys (Milestone 3.0 Engine Intelligence)
+	PauseWhenBusyPrefKey     = pluginPrefix + "pause_when_busy_key"     // bool, default true
+	BatterySaverPrefKey      = pluginPrefix + "battery_saver_key"       // bool, default true
+	BatterySaverLevelPrefKey = pluginPrefix + "battery_saver_level_key" // int index (0=10%, 1=15%, 2=20%, 3=25%), default 2 (20%)
+	GameModePrefKey          = pluginPrefix + "game_mode_key"           // bool manual toggle, default false
+	GateGameProcessesPrefKey = pluginPrefix + "gate_game_processes_key" // string comma-separated allowlist, default ""
+	GateGraceMinutesPrefKey  = pluginPrefix + "gate_grace_key"          // int minutes to ignore busy after manual unpause, default 2
+
 	// Provider keys (Shared)
 	WallhavenConfigPrefKey          = "wallhaven_image_queries"
 	WallhavenSyncEnabledPrefKey     = pluginPrefix + "wallhaven_sync_enabled_key"

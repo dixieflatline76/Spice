@@ -4,6 +4,10 @@
 // NativeMonitorInfo carries screen metadata from Objective-C to Go.
 typedef struct {
     int index;
+    int boundsX; // Quartz global origin X in points (top-left origin; matches GLFW GetPos & CGEventGetLocation)
+    int boundsY; // Quartz global origin Y in points
+    int boundsW; // Width in points
+    int boundsH; // Height in points
     int width;   // Physical pixels (frame.width * backingScaleFactor)
     int height;  // Physical pixels (frame.height * backingScaleFactor)
     char name[256];
@@ -19,5 +23,8 @@ int nativeGetScreenInfo(int index, NativeMonitorInfo *info);
 // nativeSetWallpaper sets the desktop wallpaper for the screen at the given index.
 // Returns 0 on success, -1 if index is out of bounds, -2 if NSWorkspace fails.
 int nativeSetWallpaper(const char *imagePath, int screenIndex);
+
+int nativeGetCursorPos(int *x, int *y);
+int nativeScreensHaveSeparateSpaces(void);
 
 #endif

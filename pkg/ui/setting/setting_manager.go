@@ -50,6 +50,8 @@ type SettingsManager interface {
 	// text edits) — will not trigger wallpaper changes or other engine-level side effects.
 	// This is the ONLY refresh method available to providers. Engine-internal code uses
 	// fullRefresh() for committed state changes that need registered callbacks.
+	// Thread-safe: may be called from background goroutines; the work is marshalled onto the UI thread
+	// (asynchronously, so callers must not rely on the repaint having completed when it returns).
 	RefreshUI()
 	// CommitSetting atomically reads the current UI value, applies it to the native setter, and updates the baseline.
 	CommitSetting(name string)

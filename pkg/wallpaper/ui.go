@@ -2,7 +2,6 @@ package wallpaper
 
 import (
 	"sort"
-	"strings"
 
 	"github.com/dixieflatline76/Spice/v2/pkg/i18n"
 	"github.com/dixieflatline76/Spice/v2/pkg/provider"
@@ -11,12 +10,66 @@ import (
 	utilLog "github.com/dixieflatline76/Spice/v2/util/log"
 )
 
+// actionBinder wires tray actions to a monitor ID.
+//
+// On per-screen tray platforms (live=true), the menu was built for the monitor
+// under the cursor at build time, but the user may flick to another display and
+// click before the rebuild lands. At click time the cursor is on the menu, which
+// is on the display whose tray icon was clicked, so the live cursor monitor is
+// the true target.
+//
+//	follow: stateless actions (Next, Prev, Shuffle, Tune, View on Web) retarget
+//	        to the live monitor.
+//	guard:  actions whose label reflects snapshot state (Pause/Resume,
+//	        Add/Remove Favorite, Delete And Block) fail closed on mismatch and
+//	        trigger an immediate rebuild instead of acting on the wrong image.
+//
+// When live=false both simply use the snapshot ID.
+type actionBinder struct {
+	wp   *Plugin
+	id   int
+	live bool
+}
+
+func (wp *Plugin) newActionBinder(id int, live bool) actionBinder {
+	return actionBinder{wp: wp, id: id, live: live}
+}
+
+func (b actionBinder) follow(fn func(id int)) func() {
+	return func() {
+		if b.live {
+			if cur, ok := b.wp.cursorMonitorID(); ok {
+				fn(cur)
+				return
+			}
+		}
+		fn(b.id)
+	}
+}
+
+func (b actionBinder) guard(fn func(id int)) func() {
+	return func() {
+		if b.live {
+			if cur, ok := b.wp.cursorMonitorID(); ok && cur != b.id {
+				utilLog.Printf("[Tray] Ignoring action for monitor %d: cursor is on monitor %d. Rebuilding menu.", b.id, cur)
+				b.wp.activeTrayMonitorID.Store(int64(cur))
+				if b.wp.manager != nil {
+					b.wp.manager.RebuildTrayMenuImmediate()
+				}
+				return
+			}
+		}
+		fn(b.id)
+	}
+}
+
 // CreateTrayMenu creates the declarative schema for the tray menu.
 // All monMu usage is confined to a fast snapshot at the top; the rest is lock-free.
 func (wp *Plugin) CreateTrayMenu() *schema.MenuSchema {
 	// ── Snapshot phase: read all needed monitor data under monMu ──
 	type monSnap struct {
 		id          int
+		mon         Monitor
 		mc          *MonitorController
 		image       provider.Image
 		initialized bool
@@ -30,6 +83,7 @@ func (wp *Plugin) CreateTrayMenu() *schema.MenuSchema {
 		mc.mu.RLock()
 		s := monSnap{
 			id:          id,
+			mon:         mc.Monitor,
 			mc:          mc,
 			image:       mc.State.CurrentImage,
 			initialized: mc.State.CurrentID != "" || mc.State.CurrentImage.ID != "",
@@ -38,10 +92,8 @@ func (wp *Plugin) CreateTrayMenu() *schema.MenuSchema {
 		mc.mu.RUnlock()
 
 		// Build display name while we have the monitor reference
-		s.displayName = i18n.Tf("Display {{.ID}}", map[string]any{"ID": id + 1})
-		if mc.Monitor.Name != "" && mc.Monitor.Name != "Primary" && !strings.HasPrefix(mc.Monitor.Name, "Monitor ") {
-			s.displayName = i18n.Tf("Display {{.ID}} ({{.Name}})", map[string]any{"ID": id + 1, "Name": mc.Monitor.Name})
-		}
+		s.mon.ID = id
+		s.displayName = s.mon.DisplayLabel()
 
 		snaps = append(snaps, s)
 	}
@@ -53,8 +105,8 @@ func (wp *Plugin) CreateTrayMenu() *schema.MenuSchema {
 	var items []schema.MenuItemSchema
 
 	// --- HELPER: Create Monitor Section Items ---
-	createMonitorItems := func(snap monSnap) []schema.MenuItemSchema {
-		mID := snap.id
+	createMonitorItems := func(snap monSnap, live bool) []schema.MenuItemSchema {
+		b := wp.newActionBinder(snap.id, live)
 		currentImage := snap.image
 		isInitialized := snap.initialized
 		isPaused := snap.paused
@@ -63,12 +115,12 @@ func (wp *Plugin) CreateTrayMenu() *schema.MenuSchema {
 		nextItem := schema.MenuItemSchema{
 			Label:    i18n.T("Next Wallpaper"),
 			IconName: "next.png",
-			Action:   func() { go wp.SetNextWallpaper(mID, true) },
+			Action:   b.follow(func(id int) { go wp.SetNextWallpaper(id, true) }),
 		}
 		prevItem := schema.MenuItemSchema{
 			Label:    i18n.T("Prev Wallpaper"),
 			IconName: "prev.png",
-			Action:   func() { go wp.SetPreviousWallpaper(mID, true) },
+			Action:   b.follow(func(id int) { go wp.SetPreviousWallpaper(id, true) }),
 		}
 
 		// Initial Labels with state awareness
@@ -117,7 +169,7 @@ func (wp *Plugin) CreateTrayMenu() *schema.MenuSchema {
 			}
 		}
 
-		if isPaused {
+		if isPaused || wp.IsGateSuppressed() {
 			pauseLabel = i18n.T("Resume Play")
 			pauseIcon = "play.png"
 		}
@@ -125,9 +177,9 @@ func (wp *Plugin) CreateTrayMenu() *schema.MenuSchema {
 		pauseItem := schema.MenuItemSchema{
 			Label:    pauseLabel,
 			IconName: pauseIcon,
-			Action: func() {
-				wp.TogglePauseMonitorAction(mID)
-			},
+			Action: b.guard(func(id int) {
+				wp.TogglePauseMonitorAction(id)
+			}),
 		}
 
 		var providerAction func()
@@ -148,25 +200,25 @@ func (wp *Plugin) CreateTrayMenu() *schema.MenuSchema {
 		artistMenuItem := schema.MenuItemSchema{
 			Label:    artistLabel,
 			IconName: "view.png",
-			Action: func() {
-				go wp.ViewCurrentImageOnWeb(mID)
-			},
+			Action: b.follow(func(id int) {
+				go wp.ViewCurrentImageOnWeb(id)
+			}),
 		}
 
 		deleteItem := schema.MenuItemSchema{
 			Label:    i18n.T("Delete And Block"),
 			IconName: "delete.png",
-			Action: func() {
-				go wp.DeleteCurrentImage(mID)
-			},
+			Action: b.guard(func(id int) {
+				go wp.DeleteCurrentImage(id)
+			}),
 		}
 
 		shuffleItem := schema.MenuItemSchema{
 			Label:    i18n.T("Shuffle"),
 			IconName: "shuffle.png",
-			Action: func() {
-				go wp.TriggerShuffle(mID)
-			},
+			Action: b.follow(func(id int) {
+				go wp.TriggerShuffle(id)
+			}),
 		}
 
 		res := []schema.MenuItemSchema{
@@ -184,18 +236,18 @@ func (wp *Plugin) CreateTrayMenu() *schema.MenuSchema {
 			res = append(res, schema.MenuItemSchema{
 				Label:    favoriteLabel,
 				IconName: favoriteIcon,
-				Action: func() {
-					go wp.TriggerFavorite(mID)
-				},
+				Action: b.guard(func(id int) {
+					go wp.TriggerFavorite(id)
+				}),
 			})
 		}
 		if wp.cfg.GetSmartFitMode() != SmartFitOff {
 			anchorItem := schema.MenuItemSchema{
 				Label:    i18n.T("Tune Image"),
 				IconName: "anchor.png",
-				Action: func() {
-					wp.showTuneImagePopup(mID)
-				},
+				Action: b.follow(func(id int) {
+					wp.showTuneImagePopup(id)
+				}),
 			}
 			res = append(res, anchorItem)
 		}
@@ -204,29 +256,44 @@ func (wp *Plugin) CreateTrayMenu() *schema.MenuSchema {
 		return res
 	}
 
-	// --- 1. Primary Monitor (Monitor 0) ---
-	for _, snap := range snaps {
-		if snap.id == 0 {
-			items = append(items, createMonitorItems(snap)...)
-			break
-		}
+	if len(snaps) == 0 {
+		return &schema.MenuSchema{Items: items}
 	}
 
-	// --- 2. Other Monitors (Submenus) ---
-	if len(snaps) > 1 {
-		items = append(items, schema.MenuItemSchema{IsSeparator: true})
-		for _, snap := range snaps {
-			if snap.id == 0 {
-				continue // Skip primary
-			}
+	monitors := make([]Monitor, len(snaps))
+	byID := make(map[int]monSnap, len(snaps))
+	for i, s := range snaps {
+		monitors[i] = s.mon
+		byID[s.id] = s
+	}
 
-			subMenuItems := createMonitorItems(snap)
+	perScreen := wp.hasPerScreenTray()
+	rootID, submenuMonitors := PlanTrayMonitors(monitors, perScreen, int(wp.activeTrayMonitorID.Load()))
+
+	if root, ok := byID[rootID]; ok {
+		if len(snaps) > 1 {
+			items = append(items, schema.MenuItemSchema{
+				Label:      root.displayName,
+				IconName:   "display.png",
+				IsDisabled: true,
+			})
+		}
+		items = append(items, createMonitorItems(root, perScreen)...)
+	}
+
+	if len(submenuMonitors) > 0 {
+		items = append(items, schema.MenuItemSchema{IsSeparator: true})
+		for _, m := range submenuMonitors {
+			snap, ok := byID[m.ID]
+			if !ok {
+				continue
+			}
 			items = append(items, schema.MenuItemSchema{
 				Label:    snap.displayName,
 				IconName: "display.png",
 				SubMenu: &schema.MenuSchema{
 					Label: snap.displayName,
-					Items: subMenuItems,
+					Items: createMonitorItems(snap, false),
 				},
 			})
 		}

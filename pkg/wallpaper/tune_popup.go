@@ -36,9 +36,15 @@ func (wp *Plugin) showTuneImagePopup(monitorID int) {
 	}
 
 	mc.mu.RLock()
-	resKey := fmt.Sprintf("%dx%d", mc.Monitor.Rect.Dx(), mc.Monitor.Rect.Dy())
-	currentOpts := mc.State.CurrentImage.GetTuning(resKey)
+	mon := mc.Monitor
+	img := mc.State.CurrentImage
 	mc.mu.RUnlock()
+
+	mon.ID = monitorID
+	displayLabel := mon.DisplayLabel()
+	resKey := fmt.Sprintf("%dx%d", mon.Rect.Dx(), mon.Rect.Dy())
+	currentOpts := img.GetTuning(resKey)
+	monBounds := mon.Bounds
 
 	if wp.manager == nil {
 		log.Printf("[WARN] showTuneImagePopup: No plugin manager available")
@@ -48,7 +54,7 @@ func (wp *Plugin) showTuneImagePopup(monitorID int) {
 	effectiveOpts := currentOpts
 
 	if effectiveOpts.FrameOverride == provider.FrameOverrideInherit {
-		if mc.State.CurrentImage.ProcessingFlags["VirtualFramed:"+resKey] {
+		if img.ProcessingFlags["VirtualFramed:"+resKey] {
 			effectiveOpts.FrameOverride = provider.FrameOverrideForceOn
 		} else {
 			effectiveOpts.FrameOverride = provider.FrameOverrideForceOff
@@ -76,7 +82,7 @@ func (wp *Plugin) showTuneImagePopup(monitorID int) {
 	if effectiveOpts.FrameOverride == provider.FrameOverrideForceOn {
 		// Only lock if the image is actually incompatible with the current SmartFit mode.
 		// A perfectly 16:9 museum piece doesn't need to be locked even if framed by museum mode.
-		if err := wp.imgProcessor.CheckCompatibility(mc.State.CurrentImage.Width, mc.State.CurrentImage.Height, mc.Monitor.Rect.Dx(), mc.Monitor.Rect.Dy()); err != nil {
+		if err := wp.imgProcessor.CheckCompatibility(img.Width, img.Height, mon.Rect.Dx(), mon.Rect.Dy()); err != nil {
 			lockFrame = true
 		}
 	}
@@ -84,7 +90,7 @@ func (wp *Plugin) showTuneImagePopup(monitorID int) {
 	// Send CmdTuningStart to pause the controller
 	mc.Commands <- CmdTuningStart
 
-	wp.manager.ShowTuneImagePopup(monitorID, currentOpts, effectiveOpts, anchorLabels, anchorValues, lockFrame,
+	wp.manager.ShowTuneImagePopup(monitorID, displayLabel, monBounds, currentOpts, effectiveOpts, anchorLabels, anchorValues, lockFrame,
 		func(opts provider.TuningOptions, onDone func()) {
 			log.Debugf("showTuneImagePopup: User selected options %v for monitor %d", opts, monitorID)
 			go func() {

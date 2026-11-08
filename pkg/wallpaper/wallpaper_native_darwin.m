@@ -1,5 +1,6 @@
 #import "wallpaper_native.h"
 #import <AppKit/AppKit.h>
+#import <CoreGraphics/CoreGraphics.h>
 #import <Foundation/Foundation.h>
 
 // ensureMainThread runs a block on the main thread synchronously.
@@ -38,6 +39,21 @@ int nativeGetScreenInfo(int index, NativeMonitorInfo *info) {
             info->index = index;
             info->width  = (int)(frame.size.width  * scale);
             info->height = (int)(frame.size.height * scale);
+
+            NSNumber *screenNum = [[screen deviceDescription] objectForKey:@"NSScreenNumber"];
+            if (screenNum != nil) {
+                CGRect b = CGDisplayBounds((CGDirectDisplayID)[screenNum unsignedIntValue]);
+                info->boundsX = (int)b.origin.x;
+                info->boundsY = (int)b.origin.y;
+                info->boundsW = (int)b.size.width;
+                info->boundsH = (int)b.size.height;
+            } else {
+                // NSScreen frame uses bottom-left origin; only correct for the main screen.
+                info->boundsX = (int)frame.origin.x;
+                info->boundsY = (int)frame.origin.y;
+                info->boundsW = (int)frame.size.width;
+                info->boundsH = (int)frame.size.height;
+            }
 
             // localizedName is available on macOS 10.15+; our min target is 12.0.
             NSString *name = @"Display";
@@ -119,4 +135,29 @@ int nativeSetWallpaper(const char *imagePath, int screenIndex) {
     // This is acceptable since the Go layer only logs SetWallpaper errors
     // and doesn't use the return value for recovery.
     return 0;
+}
+
+// nativeGetCursorPos returns the global cursor position in Quartz points
+// (top-left origin). CGEventCreate/CGEventGetLocation are thread-safe, so this
+// never touches the main thread and works while a tray menu is tracking.
+int nativeGetCursorPos(int *x, int *y) {
+    CGEventRef event = CGEventCreate(NULL);
+    if (event == NULL) {
+        return -1;
+    }
+    CGPoint loc = CGEventGetLocation(event);
+    CFRelease(event);
+    if (x) *x = (int)loc.x;
+    if (y) *y = (int)loc.y;
+    return 0;
+}
+
+// nativeScreensHaveSeparateSpaces reports System Settings > Desktop & Dock >
+// "Displays have separate Spaces". Changing it requires logout, so callers cache it.
+int nativeScreensHaveSeparateSpaces(void) {
+    __block int result = 1;
+    ensureMainThread(^{
+        result = [NSScreen screensHaveSeparateSpaces] ? 1 : 0;
+    });
+    return result;
 }

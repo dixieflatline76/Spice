@@ -174,7 +174,7 @@ func TestFIFOEviction(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		name := fmt.Sprintf("img_%d", i)
 		srcPath := filepath.Join(sourceDir, name+".jpg")
-		require.NoError(t, os.WriteFile(srcPath, []byte(fmt.Sprintf("content_%d", i)), 0644))
+		require.NoError(t, os.WriteFile(srcPath, fmt.Appendf(nil, "content_%d", i), 0644))
 
 		img := provider.Image{
 			ID:       name,

@@ -16,5 +16,11 @@ A clear and concise description of what you want to happen.
 **Describe alternatives you've considered**
 A clear and concise description of any alternative solutions or features you've considered.
 
+**Impact**
+How many users would benefit from this feature? (e.g. all users, specific user group)
+
+**Accessibility Considerations**
+How will this feature work for users with disabilities?
+
 **Additional context**
 Add any other context or screenshots about the feature request here.

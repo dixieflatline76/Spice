@@ -50,6 +50,7 @@ func main() {
 					collected[pkgPath] = trimValue(value)
 				}
 			}
+			_ = scanner.Err()
 		}
 	}
 

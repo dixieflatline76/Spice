@@ -9,8 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
-	"strconv"
 	"strings"
 
 	"github.com/dixieflatline76/Spice/v2/pkg/sysinfo"
@@ -47,38 +45,10 @@ func (l *linuxOS) GetMonitors() ([]Monitor, error) {
 }
 
 func (l *linuxOS) parseXRandr(output string) ([]Monitor, error) {
-	lines := strings.Split(output, "\n")
-	var monitors []Monitor
-
-	// Regex: 0: +*HDMI-1 1920/531x1080/299+0+0  HDMI-1
-	// Groups: 1=ID, 2=Name, 3=W, 4=H, 5=X, 6=Y
-	re := regexp.MustCompile(`(\d+):\s+\+\*?(\S+)\s+(\d+)/\d+x(\d+)/\d+\+(\d+)\+(\d+)`)
-
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		matches := re.FindStringSubmatch(line)
-		if len(matches) < 7 {
-			continue
-		}
-
-		id, _ := strconv.Atoi(matches[1])
-		name := matches[2]
-		w, _ := strconv.Atoi(matches[3])
-		h, _ := strconv.Atoi(matches[4])
-		// x, _ := strconv.Atoi(matches[5])
-		// y, _ := strconv.Atoi(matches[6])
-
-		monitors = append(monitors, Monitor{
-			ID:   id,
-			Name: name,
-			Rect: image.Rect(0, 0, w, h),
-		})
-	}
-
+	monitors, _ := ParseXRandrMonitors(output)
 	if len(monitors) == 0 {
 		return l.GetPrimaryMonitorFallback()
 	}
-
 	return monitors, nil
 }
 
@@ -87,7 +57,7 @@ func (l *linuxOS) GetPrimaryMonitorFallback() ([]Monitor, error) {
 	if err != nil {
 		return nil, err
 	}
-	return []Monitor{{ID: 0, Name: "Primary", Rect: image.Rect(0, 0, width, height)}}, nil
+	return []Monitor{{ID: 0, Name: "Primary", Primary: true, Rect: image.Rect(0, 0, width, height), Bounds: image.Rect(0, 0, width, height)}}, nil
 }
 
 // SetWallpaper sets the desktop wallpaper on Linux.

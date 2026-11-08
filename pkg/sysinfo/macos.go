@@ -3,6 +3,29 @@
 
 package sysinfo
 
+/*
+#cgo LDFLAGS: -framework CoreGraphics
+#include <CoreGraphics/CoreGraphics.h>
+
+static void getMainDisplayResolution(int *outW, int *outH) {
+	CGDirectDisplayID mainID = CGMainDisplayID();
+	CGDisplayModeRef mode = CGDisplayCopyDisplayMode(mainID);
+	if (mode != NULL) {
+		size_t pw = CGDisplayModeGetPixelWidth(mode);
+		size_t ph = CGDisplayModeGetPixelHeight(mode);
+		CGDisplayModeRelease(mode);
+		if (pw > 0 && ph > 0) {
+			*outW = (int)pw;
+			*outH = (int)ph;
+			return;
+		}
+	}
+	*outW = (int)CGDisplayPixelsWide(mainID);
+	*outH = (int)CGDisplayPixelsHigh(mainID);
+}
+*/
+import "C"
+
 import (
 	"encoding/json"
 	"fmt"
@@ -32,7 +55,14 @@ type displayInfo struct {
 }
 
 // GetScreenDimensions returns the primary desktop dimensions on macOS.
+// Uses CoreGraphics directly (~0.01ms) instead of spawning system_profiler (~2s).
 func GetScreenDimensions() (int, int, error) {
+	var w, h C.int
+	C.getMainDisplayResolution(&w, &h)
+	if w > 0 && h > 0 {
+		return int(w), int(h), nil
+	}
+
 	cmd := exec.Command("system_profiler", "SPDisplaysDataType", "-json")
 	out, err := cmd.Output()
 	if err != nil {

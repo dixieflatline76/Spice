@@ -1,5 +1,3 @@
-//go:build !linux
-
 package wallpaper
 
 import (
@@ -98,8 +96,28 @@ func (m *MockPluginManager) RebuildTrayMenu() {
 	}
 }
 
-func (m *MockPluginManager) ShowTuneImagePopup(_ int, _ provider.TuningOptions, _ provider.TuningOptions, _ [9]string, _ [9]provider.CropAnchor, _ bool, _ func(provider.TuningOptions, func()), _ func()) {
+func (m *MockPluginManager) RebuildTrayMenuImmediate() {
+	for _, call := range m.ExpectedCalls {
+		if call.Method == "RebuildTrayMenuImmediate" {
+			m.Called()
+			return
+		}
+	}
 }
+
+func (m *MockPluginManager) ShowTuneImagePopup(_ int, _ string, _ image.Rectangle, _ provider.TuningOptions, _ provider.TuningOptions, _ [9]string, _ [9]provider.CropAnchor, _ bool, _ func(provider.TuningOptions, func()), _ func()) {
+}
+
+// mockTrayOS is a MockOS that also implements TrayCapableOS.
+type mockTrayOS struct {
+	*MockOS
+	perScreen bool
+	cursor    image.Point
+	cursorOK  bool
+}
+
+func (m *mockTrayOS) HasPerScreenTray() bool                 { return m.perScreen }
+func (m *mockTrayOS) GetCursorPosition() (image.Point, bool) { return m.cursor, m.cursorOK }
 
 // MockOS is a mock implementation of the OS interface.
 type MockOS struct {
