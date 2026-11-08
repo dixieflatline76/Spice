@@ -41,6 +41,7 @@ Acquire locks strictly in this order to prevent deadlocks:
 wp.monMu -> mc.mu -> store.mu -> saveMu
 ```
 - `wp.downloadMutex`, `wp.globalFetchMu`, `wp.queryCancelMu`, `favProvider.mu`, and `gate.mu` are independent and must **never** be nested with `wp.monMu` or `mc.mu`.
+- `wp.shownMu` (guards `wp.shownImages`, the cross-monitor "image on screen" record used by `claimImage`) is a **leaf lock**: it may be taken while holding `wp.monMu` or `mc.mu`, but nothing else may be acquired while holding it.
 - **Never hold `wp.monMu` when calling into Fyne (`fyne.Do`, widget updates, or tray menu updates)**. Snapshot state under `monMu`, release the lock, and then invoke Fyne.
 - Window creation or UI mutation from background goroutines (e.g., HTTP API handlers or OS file picker goroutines) **must** use `fyne.Do(...)`.
 - **Strict Actor Channel Discipline (`MonitorController` in `pkg/wallpaper/monitor_controller.go`)**:

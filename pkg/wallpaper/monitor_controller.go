@@ -91,6 +91,9 @@ type MonitorState struct {
 	Paused           bool
 	TuningInProgress bool
 	ManualRecovery   bool // True if WaitingForImages was triggered by a manual request
+	// DuplicateFallback is true when the current image is also shown on another
+	// monitor because nothing else was available; the next store update retries.
+	DuplicateFallback bool
 }
 
 // MonitorController is an Actor that manages one specific monitor.
@@ -114,7 +117,11 @@ type MonitorController struct {
 	OnFavoriteRequest  func(img provider.Image)
 	OnFetchRequest     func()
 	IsGateSuppressed   func() bool
-	pendingUpdate      bool // Flag to indicate Store content has changed
+	// ClaimImage atomically records imageID as shown on monitorID. Unless force
+	// is set, it returns false (and records nothing) when another monitor is
+	// already showing imageID. Nil disables cross-monitor de-duplication.
+	ClaimImage    func(monitorID int, imageID string, force bool) bool
+	pendingUpdate bool // Flag to indicate Store content has changed
 }
 
 // NewMonitorController creates a new actor for managing a specific monitor's state.
@@ -183,6 +190,10 @@ func (mc *MonitorController) Run(ctx context.Context) {
 			if mc.State.WaitingForImages {
 				log.Debugf("[Monitor %d] Store updated while starving. Retrying next(manual=%v)...", mc.ID, mc.State.ManualRecovery)
 				mc.next(mc.State.ManualRecovery)
+			} else if mc.State.DuplicateFallback {
+				// Automatic (manual=false) so a paused or gate-suppressed monitor stays put.
+				log.Debugf("[Monitor %d] Store updated while showing a duplicate. Retrying next...", mc.ID)
+				mc.next(false)
 			}
 		case cmd := <-mc.Commands:
 			mc.mu.Lock()
@@ -303,6 +314,13 @@ func (mc *MonitorController) next(manual bool) {
 	mc.pendingUpdate = false // Always consume the pending update
 
 	// 4. Pick Next (with Skip/Retry Logic for Blocked/Missing images)
+	// Images currently shown on another monitor are skipped so that monitors
+	// sharing a resolution bucket don't display the same wallpaper. If every
+	// candidate is already on screen elsewhere (e.g. cold start with a single
+	// downloaded image), fall back to the first such candidate and retry once
+	// the store grows.
+	var fallbackID string
+	var fallbackImg provider.Image
 	for attempts := 0; attempts < len(mc.State.ShuffleIDs); attempts++ {
 		if mc.State.RandomPos >= len(mc.State.ShuffleIDs) {
 			mc.State.RandomPos = 0
@@ -319,24 +337,45 @@ func (mc *MonitorController) next(manual bool) {
 		}
 
 		if img, ok := mc.Store.GetByID(nextID); ok {
-			mc.State.CurrentID = nextID
-			mc.State.History = append(mc.State.History, nextID)
-
-			// 5. Cap History (Resource Management)
-			if len(mc.State.History) > 100 {
-				mc.State.History = mc.State.History[1:]
+			if mc.ClaimImage != nil && !mc.ClaimImage(mc.ID, nextID, false) {
+				log.Debugf("[Monitor %d] Skipping image shown on another monitor: %s", mc.ID, nextID)
+				if fallbackID == "" {
+					fallbackID, fallbackImg = nextID, img
+				}
+				continue
 			}
-
-			mc.applyImage(img)
+			mc.State.DuplicateFallback = false
+			mc.showImage(nextID, img)
 			return // Successfully found and applied an image
 		} else {
 			log.Debugf("[Monitor %d] Skipping image missing from store (likely recently deleted): %s", mc.ID, nextID)
 		}
 	}
 
+	if fallbackID != "" {
+		log.Printf("[Monitor %d] Only images already shown on other monitors are available. Showing duplicate until more images arrive.", mc.ID)
+		mc.ClaimImage(mc.ID, fallbackID, true)
+		mc.State.DuplicateFallback = true
+		mc.showImage(fallbackID, fallbackImg)
+		return
+	}
+
 	log.Printf("[Monitor %d] All images in shuffle list are blocked or missing. Waiting for fetch...", mc.ID)
 	mc.State.WaitingForImages = true
 	mc.State.ManualRecovery = manual
+}
+
+// showImage records img as the current image for this monitor and applies it.
+func (mc *MonitorController) showImage(id string, img provider.Image) {
+	mc.State.CurrentID = id
+	mc.State.History = append(mc.State.History, id)
+
+	// Cap History (Resource Management)
+	if len(mc.State.History) > 100 {
+		mc.State.History = mc.State.History[1:]
+	}
+
+	mc.applyImage(img)
 }
 
 // rebuildShuffle performs a full shuffle of all IDs and resets position to 0.
@@ -507,6 +546,12 @@ func (mc *MonitorController) applyImage(img provider.Image) {
 	if path == "" {
 		log.Printf("[ERROR] [Monitor %d] Cannot apply image %s: Path is empty (Derivatives: %v)", mc.ID, img.ID, img.DerivativePaths)
 		return
+	}
+
+	// Keep the cross-monitor record current for every path that applies an
+	// image (Prev, favorites, re-tuning), not just next().
+	if mc.ClaimImage != nil && img.ID != "" {
+		mc.ClaimImage(mc.ID, img.ID, true)
 	}
 
 	// Check if file physically exists before calling OS to avoid generic errors

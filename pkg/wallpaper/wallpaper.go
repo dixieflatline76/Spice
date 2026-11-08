@@ -92,9 +92,11 @@ type Plugin struct {
 
 	// Monitors (Actor Model)
 	Monitors            map[int]*MonitorController
-	monMu               sync.RWMutex // Protects the Monitors map itself
-	activeTrayMonitorID atomic.Int64 // Monitor under the cursor (per-screen tray platforms only)
-	lastMissResync      atomic.Int64 // UnixNano of the last cursor-miss-triggered SyncMonitors
+	monMu               sync.RWMutex   // Protects the Monitors map itself
+	shownMu             sync.Mutex     // Protects shownImages
+	shownImages         map[int]string // Monitor ID -> image ID currently on screen (cross-monitor de-dup)
+	activeTrayMonitorID atomic.Int64   // Monitor under the cursor (per-screen tray platforms only)
+	lastMissResync      atomic.Int64   // UnixNano of the last cursor-miss-triggered SyncMonitors
 
 	// Internal State
 	enrichmentSignal chan int // Signal for lazy enrichment worker
@@ -206,6 +208,27 @@ func getPlugin() *Plugin {
 		wpInstance.imgPulseOp = func() { wpInstance.SetNextWallpaper(-1, true) }
 	})
 	return wpInstance
+}
+
+// claimImage atomically records imageID as the image on monitorID. Unless
+// force is set, it refuses (returns false, records nothing) when another
+// monitor is already showing imageID. Used by MonitorController.next to keep
+// monitors that share a resolution bucket from showing the same wallpaper.
+func (wp *Plugin) claimImage(monitorID int, imageID string, force bool) bool {
+	wp.shownMu.Lock()
+	defer wp.shownMu.Unlock()
+	if wp.shownImages == nil {
+		wp.shownImages = make(map[int]string)
+	}
+	if !force {
+		for id, shown := range wp.shownImages {
+			if id != monitorID && shown == imageID {
+				return false
+			}
+		}
+	}
+	wp.shownImages[monitorID] = imageID
+	return true
 }
 
 // IsGateSuppressed reports whether the Activity Gate is currently inhibiting
@@ -430,6 +453,9 @@ func (wp *Plugin) Activate() {
 	}
 	// Rebuild map
 	wp.Monitors = make(map[int]*MonitorController)
+	wp.shownMu.Lock()
+	wp.shownImages = make(map[int]string) // Drop records for monitors that no longer exist
+	wp.shownMu.Unlock()
 	for _, m := range monitors {
 		// Create actor for each monitor
 		mc := NewMonitorController(m.ID, m, wp.store, wp.fm, wp.os, wp.cfg, wp.imgProcessor)
@@ -443,6 +469,7 @@ func (wp *Plugin) Activate() {
 			wp.RequestFetch()
 		}
 		mc.IsGateSuppressed = wp.IsGateSuppressed
+		mc.ClaimImage = wp.claimImage
 		mc.Start()
 		wp.Monitors[m.ID] = mc
 		log.Printf("Monitor Actor %d started: %s %v", m.ID, m.Name, m.Rect)
