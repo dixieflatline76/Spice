@@ -119,7 +119,8 @@ type MonitorController struct {
 	IsGateSuppressed   func() bool
 	// ClaimImage atomically records imageID as shown on monitorID. Unless force
 	// is set, it returns false (and records nothing) when another monitor is
-	// already showing imageID. Nil disables cross-monitor de-duplication.
+	// already showing imageID. An empty imageID clears the monitor's record.
+	// Nil disables cross-monitor de-duplication.
 	ClaimImage    func(monitorID int, imageID string, force bool) bool
 	pendingUpdate bool // Flag to indicate Store content has changed
 }
@@ -189,11 +190,15 @@ func (mc *MonitorController) Run(ctx context.Context) {
 			mc.pendingUpdate = true
 			if mc.State.WaitingForImages {
 				log.Debugf("[Monitor %d] Store updated while starving. Retrying next(manual=%v)...", mc.ID, mc.State.ManualRecovery)
+				mc.mu.Lock()
 				mc.next(mc.State.ManualRecovery)
+				mc.mu.Unlock()
 			} else if mc.State.DuplicateFallback {
 				// Automatic (manual=false) so a paused or gate-suppressed monitor stays put.
 				log.Debugf("[Monitor %d] Store updated while showing a duplicate. Retrying next...", mc.ID)
+				mc.mu.Lock()
 				mc.next(false)
+				mc.mu.Unlock()
 			}
 		case cmd := <-mc.Commands:
 			mc.mu.Lock()
@@ -353,6 +358,17 @@ func (mc *MonitorController) next(manual bool) {
 	}
 
 	if fallbackID != "" {
+		// Store updates fire for every new image, including ones that only fit
+		// other monitors. If we're already showing a valid duplicate, keep it
+		// rather than re-applying it (or flip-flopping between duplicates).
+		// CurrentImage is only set once an image is actually applied, so a
+		// duplicate whose file turned out to be missing doesn't count.
+		if !manual && mc.State.DuplicateFallback && mc.State.CurrentImage.ID == mc.State.CurrentID {
+			if _, ok := mc.Store.GetByID(mc.State.CurrentID); ok {
+				log.Debugf("[Monitor %d] No distinct image yet. Keeping current duplicate.", mc.ID)
+				return
+			}
+		}
 		log.Printf("[Monitor %d] Only images already shown on other monitors are available. Showing duplicate until more images arrive.", mc.ID)
 		mc.ClaimImage(mc.ID, fallbackID, true)
 		mc.State.DuplicateFallback = true
@@ -548,15 +564,14 @@ func (mc *MonitorController) applyImage(img provider.Image) {
 		return
 	}
 
-	// Keep the cross-monitor record current for every path that applies an
-	// image (Prev, favorites, re-tuning), not just next().
-	if mc.ClaimImage != nil && img.ID != "" {
-		mc.ClaimImage(mc.ID, img.ID, true)
-	}
-
 	// Check if file physically exists before calling OS to avoid generic errors
 	if _, err := mc.os.Stat(path); os.IsNotExist(err) {
 		log.Printf("[Monitor %d] ERROR: Wallpaper file missing: %s. Metadata is stale. Requesting refetch...", mc.ID, path)
+		// next() may already have claimed img.ID; point the record back at
+		// what is actually still on screen.
+		if mc.ClaimImage != nil {
+			mc.ClaimImage(mc.ID, mc.State.CurrentImage.ID, true)
+		}
 		// Clear local metadata that is proven stale so it's not chosen again
 		mc.Store.ClearDerivatives(img.ID)
 		if mc.OnFetchRequest != nil {
@@ -565,12 +580,26 @@ func (mc *MonitorController) applyImage(img provider.Image) {
 		return
 	}
 
+	// Keep the cross-monitor record current for every path that applies an
+	// image (Prev, favorites, re-tuning), not just next().
+	prev := mc.State.CurrentImage
+	if mc.ClaimImage != nil && img.ID != "" {
+		mc.ClaimImage(mc.ID, img.ID, true)
+	}
+
 	mc.State.CurrentImage = img
 	mc.State.CurrentImage.FilePath = path // Ensure state reflects actual file used
 
 	log.Printf("[Monitor %d] Setting wallpaper: %s", mc.ID, path)
 	if err := mc.os.SetWallpaper(path, mc.ID); err != nil {
 		log.Printf("[ERROR] [Monitor %d] Failed to set wallpaper: %v", mc.ID, err)
+		// The previous image is still on screen. Keep CurrentImage and the
+		// cross-monitor record pointing at it, so a failed duplicate is
+		// retried and other monitors aren't kept away from an unshown image.
+		mc.State.CurrentImage = prev
+		if mc.ClaimImage != nil {
+			mc.ClaimImage(mc.ID, prev.ID, true)
+		}
 	}
 	mc.Store.MarkSeen(path)
 

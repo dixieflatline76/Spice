@@ -212,11 +212,16 @@ func getPlugin() *Plugin {
 
 // claimImage atomically records imageID as the image on monitorID. Unless
 // force is set, it refuses (returns false, records nothing) when another
-// monitor is already showing imageID. Used by MonitorController.next to keep
-// monitors that share a resolution bucket from showing the same wallpaper.
+// monitor is already showing imageID. An empty imageID clears monitorID's
+// record. Used by MonitorController.next to keep monitors that share a
+// resolution bucket from showing the same wallpaper.
 func (wp *Plugin) claimImage(monitorID int, imageID string, force bool) bool {
 	wp.shownMu.Lock()
 	defer wp.shownMu.Unlock()
+	if imageID == "" {
+		delete(wp.shownImages, monitorID)
+		return true
+	}
 	if wp.shownImages == nil {
 		wp.shownImages = make(map[int]string)
 	}
@@ -229,6 +234,12 @@ func (wp *Plugin) claimImage(monitorID int, imageID string, force bool) bool {
 	}
 	wp.shownImages[monitorID] = imageID
 	return true
+}
+
+// releaseImage forgets the image recorded for monitorID so other monitors may
+// show it again. Called when a monitor's actor is stopped and removed.
+func (wp *Plugin) releaseImage(monitorID int) {
+	wp.claimImage(monitorID, "", true)
 }
 
 // IsGateSuppressed reports whether the Activity Gate is currently inhibiting
@@ -1158,8 +1169,7 @@ func (wp *Plugin) SyncMonitors(force bool) {
 			m := action.Monitor
 			if mc, ok := wp.Monitors[action.MonitorID]; ok {
 				log.Printf("[Sync] Device behind Monitor %d changed (%s -> %s). Replacing actor.", m.ID, mc.Monitor.DevicePath, m.DevicePath)
-				mc.Stop()
-				delete(wp.Monitors, action.MonitorID)
+				wp.retireMonitorLocked(mc)
 			}
 			wp.createMonitorControllerLocked(m, force)
 			changed = true
@@ -1168,8 +1178,7 @@ func (wp *Plugin) SyncMonitors(force bool) {
 			id := action.MonitorID
 			log.Printf("[Sync] Monitor %d removed. Stopping actor.", id)
 			if mc, ok := wp.Monitors[id]; ok {
-				mc.Stop()
-				delete(wp.Monitors, id)
+				wp.retireMonitorLocked(mc)
 				changed = true
 			}
 		}
@@ -1194,6 +1203,20 @@ func (wp *Plugin) SyncMonitors(force bool) {
 	}
 }
 
+// retireMonitorLocked stops mc, removes it from wp.Monitors and releases its
+// claimed image. Stop() does not wait for the actor to exit, so ClaimImage is
+// cleared under mc.mu first: a next() still in flight finishes before the
+// release, and the stopped actor can't record a claim afterwards.
+// Caller must hold wp.monMu (write).
+func (wp *Plugin) retireMonitorLocked(mc *MonitorController) {
+	mc.Stop()
+	mc.mu.Lock()
+	mc.ClaimImage = nil
+	mc.mu.Unlock()
+	delete(wp.Monitors, mc.ID)
+	wp.releaseImage(mc.ID)
+}
+
 // createMonitorControllerLocked creates, wires, and starts a controller.
 // Caller must hold wp.monMu (write).
 func (wp *Plugin) createMonitorControllerLocked(m Monitor, force bool) {
@@ -1209,6 +1232,7 @@ func (wp *Plugin) createMonitorControllerLocked(m Monitor, force bool) {
 		wp.RequestFetch()
 	}
 	mc.IsGateSuppressed = wp.IsGateSuppressed
+	mc.ClaimImage = wp.claimImage
 	mc.Start()
 	wp.Monitors[m.ID] = mc
 	go wp.SetNextWallpaper(m.ID, force)
