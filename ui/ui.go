@@ -57,6 +57,7 @@ type SpiceApp struct {
 	tabItems     map[string]*container.TabItem
 	trayMu       sync.Mutex
 	trayDebounce *time.Timer
+	trayIconSet  bool
 }
 
 // OS interface defines methods for transforming the application state
@@ -284,23 +285,30 @@ func (sa *SpiceApp) CreateTrayMenu() {
 	items = append(items, fyne.NewMenuItemSeparator(), quitItem)
 
 	sa.trayMenu = fyne.NewMenu("", items...)
-	trayIcon, err := sa.assetMgr.GetIcon("tray.png")
-	if err != nil {
-		utilLog.Printf("ERROR: Failed to load tray icon: %v", err)
-	}
+	if !sa.trayIconSet {
+		trayIcon, err := sa.assetMgr.GetIcon("tray.png")
+		if err != nil {
+			utilLog.Printf("ERROR: Failed to load tray icon: %v", err)
+		} else if trayIcon != nil {
+			sa.SetIcon(trayIcon)
+		}
 
-	sa.SetIcon(trayIcon)
+		utilLog.Debug("Calling desk.SetSystemTrayMenu...")
+		desk.SetSystemTrayMenu(sa.trayMenu)
+		utilLog.Debug("desk.SetSystemTrayMenu finished.")
 
-	utilLog.Debug("Calling desk.SetSystemTrayMenu...")
-	desk.SetSystemTrayMenu(sa.trayMenu)
-	utilLog.Debug("desk.SetSystemTrayMenu finished.")
-
-	if trayIcon != nil {
-		utilLog.Debug("Calling desk.SetSystemTrayIcon...")
-		desk.SetSystemTrayIcon(trayIcon)
-		utilLog.Debug("desk.SetSystemTrayIcon finished.")
+		if trayIcon != nil {
+			utilLog.Debug("Calling desk.SetSystemTrayIcon...")
+			desk.SetSystemTrayIcon(trayIcon)
+			utilLog.Debug("desk.SetSystemTrayIcon finished.")
+			sa.trayIconSet = true
+		} else {
+			utilLog.Debug("Skipping desk.SetSystemTrayIcon (icon is nil)")
+		}
 	} else {
-		utilLog.Debug("Skipping desk.SetSystemTrayIcon (icon is nil)")
+		utilLog.Debug("Calling desk.SetSystemTrayMenu...")
+		desk.SetSystemTrayMenu(sa.trayMenu)
+		utilLog.Debug("desk.SetSystemTrayMenu finished.")
 	}
 	utilLog.Debug("System Tray Menu and Icon setup process completed.")
 }
@@ -393,11 +401,12 @@ func (sa *SpiceApp) deactivateAllPlugins() {
 	}
 }
 
-// CreateMenuItem creates a menu item with the given label, action, and icon
+// CreateMenuItem creates a menu item with the given label, action, and icon.
+// Fyne's desktop systray driver already dispatches MenuItem.Action onto the
+// main goroutine via runOnMain, so action is passed directly without re-queueing
+// through fyne.Do.
 func (sa *SpiceApp) CreateMenuItem(label string, action func(), iconName string) *fyne.MenuItem {
-	mi := fyne.NewMenuItem(label, func() {
-		fyne.Do(action)
-	})
+	mi := fyne.NewMenuItem(label, action)
 	if iconName == "" {
 		return mi
 	}
@@ -431,17 +440,17 @@ func (sa *SpiceApp) CreateToggleMenuItem(label string, action func(bool), iconNa
 	}
 	mi.Checked = checked
 	mi.Action = func() {
-		fyne.Do(func() {
-			newChecked := !mi.Checked
-			if newChecked {
-				mi.Label = fmt.Sprintf("%s ✔", label)
-			} else {
-				mi.Label = label
-			}
-			mi.Checked = newChecked
+		newChecked := !mi.Checked
+		if newChecked {
+			mi.Label = fmt.Sprintf("%s ✔", label)
+		} else {
+			mi.Label = label
+		}
+		mi.Checked = newChecked
+		if action != nil {
 			action(newChecked)
-			sa.trayMenu.Refresh()
-		})
+		}
+		sa.trayMenu.Refresh()
 	}
 
 	return mi
