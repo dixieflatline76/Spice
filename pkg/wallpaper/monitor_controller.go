@@ -303,18 +303,11 @@ func (mc *MonitorController) next(manual bool) {
 	mc.State.ManualRecovery = false
 
 	// 3. Reconcile Shuffle with Bucket
-	// Incremental strategy: when the pool grows, scatter new images into the
-	// unplayed portion of the deck. This prevents provider clustering when
-	// images arrive in same-provider bursts. Full rebuilds only happen on
-	// deck exhaustion or pool shrinkage.
-	if len(mc.State.ShuffleIDs) != len(bucketIDs) {
-		if len(bucketIDs) > len(mc.State.ShuffleIDs) && len(mc.State.ShuffleIDs) > 0 {
-			mc.growShuffle(bucketIDs)
-		} else {
-			// Pool shrank or was empty — full rebuild
-			log.Debugf("[Monitor %d] Shuffle full rebuild (Bucket: %d, Current: %d).", mc.ID, len(bucketIDs), len(mc.State.ShuffleIDs))
-			mc.rebuildShuffle(bucketIDs)
-		}
+	// Incremental strategy: when the pool grows or swaps entries at cache cap,
+	// scatter new images into the unplayed portion of the deck while preserving
+	// played items. Full rebuilds only happen on deck exhaustion or pure shrinkage.
+	if len(mc.State.ShuffleIDs) != len(bucketIDs) || mc.pendingUpdate {
+		mc.reconcileShuffle(bucketIDs)
 	}
 	mc.pendingUpdate = false // Always consume the pending update
 
@@ -322,10 +315,15 @@ func (mc *MonitorController) next(manual bool) {
 	// Images currently shown on another monitor are skipped so that monitors
 	// sharing a resolution bucket don't display the same wallpaper. If every
 	// candidate is already on screen elsewhere (e.g. cold start with a single
-	// downloaded image), fall back to the first such candidate and retry once
-	// the store grows.
-	var fallbackID string
-	var fallbackImg provider.Image
+	// downloaded image), fall back to the first valid such candidate and retry
+	// once the store grows.
+	type candidate struct {
+		id  string
+		img provider.Image
+	}
+	var duplicateFallbacks []candidate
+	sameImageCandidate := false
+
 	for attempts := 0; attempts < len(mc.State.ShuffleIDs); attempts++ {
 		if mc.State.RandomPos >= len(mc.State.ShuffleIDs) {
 			mc.State.RandomPos = 0
@@ -341,38 +339,56 @@ func (mc *MonitorController) next(manual bool) {
 			continue
 		}
 
-		if img, ok := mc.Store.GetByID(nextID); ok {
-			if mc.ClaimImage != nil && !mc.ClaimImage(mc.ID, nextID, false) {
-				log.Debugf("[Monitor %d] Skipping image shown on another monitor: %s", mc.ID, nextID)
-				if fallbackID == "" {
-					fallbackID, fallbackImg = nextID, img
-				}
-				continue
-			}
-			mc.State.DuplicateFallback = false
-			mc.showImage(nextID, img)
-			return // Successfully found and applied an image
-		} else {
+		img, ok := mc.Store.GetByID(nextID)
+		if !ok {
 			log.Debugf("[Monitor %d] Skipping image missing from store (likely recently deleted): %s", mc.ID, nextID)
+			continue
+		}
+
+		if mc.ClaimImage != nil && !mc.ClaimImage(mc.ID, nextID, false) {
+			log.Debugf("[Monitor %d] Skipping image shown on another monitor: %s", mc.ID, nextID)
+			duplicateFallbacks = append(duplicateFallbacks, candidate{id: nextID, img: img})
+			continue
+		}
+
+		if mc.State.CurrentImage.ID != "" && nextID == mc.State.CurrentImage.ID {
+			log.Debugf("[Monitor %d] Deferring image already on screen: %s", mc.ID, nextID)
+			sameImageCandidate = true
+			continue
+		}
+
+		if mc.showImage(nextID, img) {
+			mc.State.DuplicateFallback = false
+			return // Successfully found and applied an image
 		}
 	}
 
-	if fallbackID != "" {
+	if sameImageCandidate {
+		log.Debugf("[Monitor %d] Only the image already on screen is available (%s). Keeping current wallpaper.", mc.ID, mc.State.CurrentImage.ID)
+		mc.State.DuplicateFallback = false
+		return
+	}
+
+	if len(duplicateFallbacks) > 0 {
 		// Store updates fire for every new image, including ones that only fit
 		// other monitors. If we're already showing a valid duplicate, keep it
 		// rather than re-applying it (or flip-flopping between duplicates).
 		// CurrentImage is only set once an image is actually applied, so a
 		// duplicate whose file turned out to be missing doesn't count.
-		if !manual && mc.State.DuplicateFallback && mc.State.CurrentImage.ID == mc.State.CurrentID {
+		if !manual && mc.State.DuplicateFallback && mc.State.CurrentImage.ID != "" && mc.State.CurrentImage.ID == mc.State.CurrentID {
 			if _, ok := mc.Store.GetByID(mc.State.CurrentID); ok {
 				log.Debugf("[Monitor %d] No distinct image yet. Keeping current duplicate.", mc.ID)
 				return
 			}
 		}
 		log.Printf("[Monitor %d] Only images already shown on other monitors are available. Showing duplicate until more images arrive.", mc.ID)
-		mc.ClaimImage(mc.ID, fallbackID, true)
-		mc.State.DuplicateFallback = true
-		mc.showImage(fallbackID, fallbackImg)
+		for _, fb := range duplicateFallbacks {
+			mc.ClaimImage(mc.ID, fb.id, true)
+			mc.State.DuplicateFallback = true
+			if mc.showImage(fb.id, fb.img) {
+				return
+			}
+		}
 		return
 	}
 
@@ -381,8 +397,12 @@ func (mc *MonitorController) next(manual bool) {
 	mc.State.ManualRecovery = manual
 }
 
-// showImage records img as the current image for this monitor and applies it.
-func (mc *MonitorController) showImage(id string, img provider.Image) {
+// showImage applies img and, if successful, records id as the current image for this monitor.
+func (mc *MonitorController) showImage(id string, img provider.Image) bool {
+	if !mc.applyImage(img) {
+		return false
+	}
+
 	mc.State.CurrentID = id
 	mc.State.History = append(mc.State.History, id)
 
@@ -391,7 +411,81 @@ func (mc *MonitorController) showImage(id string, img provider.Image) {
 		mc.State.History = mc.State.History[1:]
 	}
 
-	mc.applyImage(img)
+	return true
+}
+
+// reconcileShuffle updates ShuffleIDs to match bucketIDs without resetting RandomPos
+// whenever new images arrive (including at the cache size cap when old images are evicted).
+func (mc *MonitorController) reconcileShuffle(bucketIDs []string) {
+	if len(mc.State.ShuffleIDs) == 0 {
+		log.Debugf("[Monitor %d] Shuffle full rebuild (Bucket: %d, Current: 0).", mc.ID, len(bucketIDs))
+		mc.rebuildShuffle(bucketIDs)
+		return
+	}
+
+	bucketSet := make(map[string]bool, len(bucketIDs))
+	for _, id := range bucketIDs {
+		bucketSet[id] = true
+	}
+
+	existing := make(map[string]bool, len(mc.State.ShuffleIDs))
+	removed := 0
+	for _, id := range mc.State.ShuffleIDs {
+		existing[id] = true
+		if !bucketSet[id] {
+			removed++
+		}
+	}
+
+	var newIDs []string
+	for _, id := range bucketIDs {
+		if !existing[id] {
+			newIDs = append(newIDs, id)
+		}
+	}
+
+	switch {
+	case removed == 0 && len(newIDs) == 0:
+		return
+	case removed == 0 && len(newIDs) > 0:
+		mc.growShuffle(bucketIDs)
+	case removed > 0 && len(newIDs) == 0:
+		log.Debugf("[Monitor %d] Shuffle full rebuild (Bucket: %d, Current: %d).", mc.ID, len(bucketIDs), len(mc.State.ShuffleIDs))
+		mc.rebuildShuffle(bucketIDs)
+	default:
+		pos := mc.State.RandomPos
+		if pos > len(mc.State.ShuffleIDs) {
+			pos = len(mc.State.ShuffleIDs)
+		}
+		seen := make(map[string]bool, len(bucketIDs))
+		played := make([]string, 0, pos)
+		for _, id := range mc.State.ShuffleIDs[:pos] {
+			if bucketSet[id] && !seen[id] {
+				seen[id] = true
+				played = append(played, id)
+			}
+		}
+		unplayed := make([]string, 0, len(mc.State.ShuffleIDs)-pos+len(newIDs))
+		for _, id := range mc.State.ShuffleIDs[pos:] {
+			if bucketSet[id] && !seen[id] {
+				seen[id] = true
+				unplayed = append(unplayed, id)
+			}
+		}
+		for _, id := range newIDs {
+			if !seen[id] {
+				seen[id] = true
+				unplayed = append(unplayed, id)
+			}
+		}
+		rand.Shuffle(len(unplayed), func(i, j int) {
+			unplayed[i], unplayed[j] = unplayed[j], unplayed[i]
+		})
+		mc.State.RandomPos = len(played)
+		mc.State.ShuffleIDs = append(played, unplayed...)
+		log.Debugf("[Monitor %d] Incremental swap shuffle: pruned %d evicted, inserted %d new images (Pos: %d, Total: %d)",
+			mc.ID, removed, len(newIDs), mc.State.RandomPos, len(mc.State.ShuffleIDs))
+	}
 }
 
 // rebuildShuffle performs a full shuffle of all IDs and resets position to 0.
@@ -544,7 +638,7 @@ func (mc *MonitorController) syncState() {
 	}
 }
 
-func (mc *MonitorController) applyImage(img provider.Image) {
+func (mc *MonitorController) applyImage(img provider.Image) bool {
 	// Determine resolution-specific path
 	path := img.FilePath
 	if len(img.DerivativePaths) > 0 {
@@ -561,23 +655,30 @@ func (mc *MonitorController) applyImage(img provider.Image) {
 
 	if path == "" {
 		log.Printf("[ERROR] [Monitor %d] Cannot apply image %s: Path is empty (Derivatives: %v)", mc.ID, img.ID, img.DerivativePaths)
-		return
+		if mc.ClaimImage != nil {
+			mc.ClaimImage(mc.ID, mc.State.CurrentImage.ID, true)
+		}
+		return false
 	}
 
 	// Check if file physically exists before calling OS to avoid generic errors
-	if _, err := mc.os.Stat(path); os.IsNotExist(err) {
-		log.Printf("[Monitor %d] ERROR: Wallpaper file missing: %s. Metadata is stale. Requesting refetch...", mc.ID, path)
+	if _, err := mc.os.Stat(path); err != nil {
+		if os.IsNotExist(err) {
+			log.Printf("[Monitor %d] ERROR: Wallpaper file missing: %s. Metadata is stale. Requesting refetch...", mc.ID, path)
+			// Clear local metadata that is proven stale so it's not chosen again
+			mc.Store.ClearDerivatives(img.ID)
+			if mc.OnFetchRequest != nil {
+				mc.OnFetchRequest()
+			}
+		} else {
+			log.Printf("[Monitor %d] ERROR: Cannot stat wallpaper file %s: %v", mc.ID, path, err)
+		}
 		// next() may already have claimed img.ID; point the record back at
 		// what is actually still on screen.
 		if mc.ClaimImage != nil {
 			mc.ClaimImage(mc.ID, mc.State.CurrentImage.ID, true)
 		}
-		// Clear local metadata that is proven stale so it's not chosen again
-		mc.Store.ClearDerivatives(img.ID)
-		if mc.OnFetchRequest != nil {
-			mc.OnFetchRequest()
-		}
-		return
+		return false
 	}
 
 	// Keep the cross-monitor record current for every path that applies an
@@ -600,6 +701,7 @@ func (mc *MonitorController) applyImage(img provider.Image) {
 		if mc.ClaimImage != nil {
 			mc.ClaimImage(mc.ID, prev.ID, true)
 		}
+		return false
 	}
 	mc.Store.MarkSeen(path)
 
@@ -607,6 +709,7 @@ func (mc *MonitorController) applyImage(img provider.Image) {
 		log.Debugf("[Monitor %d] Triggering async UI refresh for %s", mc.ID, path)
 		mc.OnWallpaperChanged(img, mc.ID)
 	}
+	return true
 }
 
 // reprocessWithTuning updates the tuning options on the current image, re-runs FitImage,

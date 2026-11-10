@@ -55,3 +55,7 @@ func getOS() OS {
 func (d *darwinOS) SetupLifecycle(app fyne.App, sa *SpiceApp) {
 	// No specific lifecycle hooks for macOS yet.
 }
+
+// SetTrayTooltip is a no-op on macOS.
+func (d *darwinOS) SetTrayTooltip(_ string) {
+}

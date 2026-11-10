@@ -28,6 +28,10 @@ func (l *linuxOS) SetupLifecycle(app fyne.App, sa *SpiceApp) {
 	// No-op for standard Linux
 }
 
+// SetTrayTooltip is a no-op on Linux.
+func (l *linuxOS) SetTrayTooltip(_ string) {
+}
+
 // chromeOS implements the OS interface for Chrome OS (Crostini).
 type chromeOS struct {
 	linuxOS
