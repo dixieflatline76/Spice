@@ -112,11 +112,10 @@ func (wp *Plugin) FetchNewImages(force bool, providerID ...string) {
 
 			wg.Wait()
 
-			// Batch Reshuffle Optimization (User Approach):
-			// Signal monitors to update their shuffle lists only after the entire batch is processed.
+			// Notify user once the batch has been queued; monitors reconcile new arrivals
+			// incrementally via reconcileShuffle/growShuffle without resetting RandomPos.
 			if totalQueued.Value() > 0 && (wp.interrupt == nil || !wp.interrupt.Value()) {
-				log.Debugf("[Fetch] Processed %d new images. Broadcasting shuffle update to monitors...", totalQueued.Value())
-				wp.dispatch(-1, CmdUpdateShuffle)
+				log.Debugf("[Fetch] Queued %d new images for download.", totalQueued.Value())
 
 				sources := []string{}
 				for s := range activeSources {
