@@ -26,6 +26,9 @@ Independent locks (never nest with `wp.monMu` or `mc.mu`):
 - `favProvider.mu`
 - `gate.mu`
 
+Leaf lock (may be taken while holding `wp.monMu` or `mc.mu`; acquire nothing else while holding it):
+- `wp.shownMu` — guards `wp.shownImages`, the cross-monitor "image on screen" record used by `claimImage`
+
 ### Fyne Main-Thread Deadlock Rule
 - **Never** hold `wp.monMu` while calling `fyne.Do`, updating Fyne widgets, or rebuilding the system tray menu (`CreateTrayMenuItems` / `RebuildTrayMenu` / `RebuildTrayMenuImmediate`).
 - Always snapshot monitor/engine state under `wp.monMu.RLock()`, release `wp.monMu`, and then call into Fyne or build menu schemas lock-free.
