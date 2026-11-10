@@ -477,7 +477,7 @@ func (wp *Plugin) Activate() {
 			go wp.ToggleFavorite(img) // Defensive: ensure never called under mc.mu
 		}
 		mc.OnFetchRequest = func() {
-			wp.RequestFetch()
+			go wp.RequestFetch() // Defensive: ensure never called under mc.mu
 		}
 		mc.IsGateSuppressed = wp.IsGateSuppressed
 		mc.ClaimImage = wp.claimImage
@@ -1229,7 +1229,7 @@ func (wp *Plugin) createMonitorControllerLocked(m Monitor, force bool) {
 		go wp.ToggleFavorite(img) // Defensive: ensure never called under mc.mu
 	}
 	mc.OnFetchRequest = func() {
-		wp.RequestFetch()
+		go wp.RequestFetch() // Defensive: ensure never called under mc.mu
 	}
 	mc.IsGateSuppressed = wp.IsGateSuppressed
 	mc.ClaimImage = wp.claimImage
