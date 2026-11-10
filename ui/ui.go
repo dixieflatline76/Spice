@@ -72,6 +72,8 @@ type OS interface {
 	// SetupLifecycle sets up OS-specific lifecycle hooks.
 	// This is where Chrome OS "fake tray" logic resides.
 	SetupLifecycle(app fyne.App, sa *SpiceApp)
+	// SetTrayTooltip sets the system tray hover tooltip where supported by the OS.
+	SetTrayTooltip(tooltip string)
 }
 
 var (
@@ -301,6 +303,9 @@ func (sa *SpiceApp) CreateTrayMenu() {
 			utilLog.Debug("Calling desk.SetSystemTrayIcon...")
 			desk.SetSystemTrayIcon(trayIcon)
 			utilLog.Debug("desk.SetSystemTrayIcon finished.")
+			if sa.os != nil {
+				sa.os.SetTrayTooltip("Spice Wallpaper Manager")
+			}
 			sa.trayIconSet = true
 		} else {
 			utilLog.Debug("Skipping desk.SetSystemTrayIcon (icon is nil)")

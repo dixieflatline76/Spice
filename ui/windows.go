@@ -3,7 +3,10 @@
 
 package ui
 
-import "fyne.io/fyne/v2"
+import (
+	"fyne.io/fyne/v2"
+	"fyne.io/systray"
+)
 
 // implements the OS interface for Windows.
 type windowsOS struct{}
@@ -26,4 +29,9 @@ func getOS() OS {
 // SetupLifecycle sets up OS-specific lifecycle hooks.
 func (w *windowsOS) SetupLifecycle(app fyne.App, sa *SpiceApp) {
 	// No specific lifecycle hooks for Windows.
+}
+
+// SetTrayTooltip sets the native Windows system tray hover tooltip.
+func (w *windowsOS) SetTrayTooltip(tooltip string) {
+	systray.SetTooltip(tooltip)
 }

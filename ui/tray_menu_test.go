@@ -67,17 +67,30 @@ func (a *spyDesktopApp) SetSystemTrayIcon(icon fyne.Resource) {
 
 func (a *spyDesktopApp) SetSystemTrayWindow(_ fyne.Window) {}
 
+type spyOS struct {
+	tooltips []string
+}
+
+var _ OS = (*spyOS)(nil)
+
+func (s *spyOS) TransformToForeground()                 {}
+func (s *spyOS) TransformToBackground()                 {}
+func (s *spyOS) SetupLifecycle(_ fyne.App, _ *SpiceApp) {}
+func (s *spyOS) SetTrayTooltip(tooltip string) {
+	s.tooltips = append(s.tooltips, tooltip)
+}
+
 type mockTrayPlugin struct {
 	artistLabel string
 	favLabel    string
 	favIcon     string
 }
 
-func (p *mockTrayPlugin) ID() string                     { return "wallpaper" }
-func (p *mockTrayPlugin) Name() string                   { return "Wallpaper" }
-func (p *mockTrayPlugin) Activate()                      {}
-func (p *mockTrayPlugin) Deactivate()                    {}
-func (p *mockTrayPlugin) Init(_ ui.PluginManager)        {}
+func (p *mockTrayPlugin) ID() string              { return "wallpaper" }
+func (p *mockTrayPlugin) Name() string            { return "Wallpaper" }
+func (p *mockTrayPlugin) Activate()               {}
+func (p *mockTrayPlugin) Deactivate()             {}
+func (p *mockTrayPlugin) Init(_ ui.PluginManager) {}
 func (p *mockTrayPlugin) CreatePrefsSchema(_ setting.SettingsManager) *schema.TabsSchema {
 	return nil
 }
@@ -196,4 +209,29 @@ func TestCreateTrayMenu_RebuildsDynamicItemsEveryTime_SetsTrayIconOnce(t *testin
 	assert.Equal(t, "By: Vermeer", spyApp.menus[3].Items[1].Label)
 	assert.Equal(t, "favorite.png", spyApp.menus[3].Items[2].Icon.Name())
 	assert.Len(t, spyApp.trayIcons, 1, "Static tray.png icon must still only have been set once")
+}
+
+func TestCreateTrayMenu_SetsTrayTooltipOnceWhenOSPresent(t *testing.T) {
+	spyApp := newSpyDesktopApp(t)
+	osSpy := &spyOS{}
+	plugin := &mockTrayPlugin{
+		artistLabel: "By: Monet",
+		favLabel:    "Add to Favorites",
+		favIcon:     "favorite.png",
+	}
+	sa := &SpiceApp{
+		App:      spyApp,
+		os:       osSpy,
+		assetMgr: asset.NewManager(),
+		plugins:  []ui.Plugin{plugin},
+	}
+
+	// 1. Initial CreateTrayMenu sets tooltip once alongside the tray icon
+	sa.CreateTrayMenu()
+	assert.Equal(t, []string{"Spice Wallpaper Manager"}, osSpy.tooltips)
+
+	// 2. Subsequent menu rebuilds do not re-set the static tray tooltip
+	plugin.artistLabel = "By: Hokusai"
+	sa.CreateTrayMenu()
+	assert.Equal(t, []string{"Spice Wallpaper Manager"}, osSpy.tooltips)
 }
