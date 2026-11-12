@@ -4,6 +4,9 @@
 <h1 align="center">Spice 🌶️ | A highly-concurrent, plugin-driven desktop environment engine for macOS and Windows, written in Go.</h1>
 
 <p align="center">
+  <a href="https://apps.apple.com/us/app/spice-wallpaper-manager/id6760980759?mt=12"><img src="https://img.shields.io/badge/Mac_App_Store-Download-0D96F6?style=flat&logo=apple&logoColor=white" alt="Mac App Store"></a>
+  <a href="https://apps.microsoft.com/detail/9NPBQ3C91WPF"><img src="https://img.shields.io/badge/Microsoft_Store-Download-0078D4?style=flat&logo=windows&logoColor=white" alt="Microsoft Store"></a>
+  <a href="https://spicebox.dev"><img src="https://img.shields.io/badge/Website-spicebox.dev-ff4d00?style=flat" alt="Website"></a>
   <a href="https://github.com/dixieflatline76/Spice/actions/workflows/ci.yml"><img src="https://github.com/dixieflatline76/Spice/actions/workflows/ci.yml/badge.svg" alt="Build Status"></a>
   <a href="https://pkg.go.dev/github.com/dixieflatline76/Spice/v2"><img src="https://pkg.go.dev/badge/github.com/dixieflatline76/Spice/v2.svg" alt="Go Reference"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Source--Available-blue.svg" alt="License"></a>
@@ -12,7 +15,7 @@
   <a href="https://addons.mozilla.org/en-US/firefox/addon/spice-wallpaper-manager/"><img src="https://img.shields.io/amo/v/spice-wallpaper-manager?style=flat&color=orange&label=Firefox%20Add-ons" alt="Firefox Add-ons"></a>
 </p>
 
-Spice is a premium wallpaper manager that automatically cycles high-quality wallpapers from 13 sources: Wallhaven, Pexels, curated world museum collections (The Met, Art Institute of Chicago, Cleveland Museum of Art, Rijksmuseum, National Palace Museum, Statens Museum for Kunst, J. Paul Getty Museum), your personal Google Photos, Wikimedia Commons, local folders, and favorites. It is available on the **Mac App Store** and **Microsoft Store** and runs quietly in the background, keeping your workspace fresh without interrupting your flow.
+Spice is a premium wallpaper manager that automatically cycles high-quality wallpapers from 13 sources: Wallhaven, Pexels, curated world museum collections (The Met, Art Institute of Chicago, Cleveland Museum of Art, Rijksmuseum, National Palace Museum, Statens Museum for Kunst, J. Paul Getty Museum), your personal Google Photos, Wikimedia Commons, local folders, and favorites. Official builds are available on the [**Mac App Store**](https://apps.apple.com/us/app/spice-wallpaper-manager/id6760980759?mt=12) and [**Microsoft Store**](https://apps.microsoft.com/detail/9NPBQ3C91WPF) and run quietly in the background, keeping every display fresh without interrupting your flow.
 
 **Note:** Spice lives in your **Windows system tray** or **macOS menu bar**, giving you instant control over your desktop environment.
 
@@ -108,16 +111,17 @@ These actions affect all displays simultaneously.
 ## 📦 Installation
 
 ### For macOS
-The easiest way to install Spice is via Homebrew:
+Install the official signed & sandboxed build directly from the [**Mac App Store**](https://apps.apple.com/us/app/spice-wallpaper-manager/id6760980759?mt=12) *(recommended — includes automatic updates, bundled Safari companion extension, and pre-configured Google Photos / Pexels OAuth credentials, while supporting ongoing development)*.
+
+Alternatively, install via Homebrew or download from [GitHub Releases](https://github.com/dixieflatline76/Spice/releases/latest):
 ```bash
 brew install --cask spice
 ```
-*Alternatively, download the `.dmg` from the [Releases Page](https://github.com/dixieflatline76/Spice/releases/latest).*
 
 ### For Windows
-Install directly from the [**Microsoft Store**](https://apps.microsoft.com/detail/9NPBQ3C91WPF).
+Install the official build directly from the [**Microsoft Store**](https://apps.microsoft.com/detail/9NPBQ3C91WPF) *(recommended — includes automatic updates, signed package delivery, and pre-configured cloud OAuth credentials, while supporting ongoing development)*.
 
-Alternatively, install silently via Winget:
+Alternatively, install via WinGet or download from [GitHub Releases](https://github.com/dixieflatline76/Spice/releases/latest):
 ```powershell
 winget install DixieFlatline76.Spice
 ```
